@@ -3,7 +3,7 @@ import { getFlower, RARITY_CONFIG } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
 import { buyFromShop, buyFertilizer, buyAllFromShop, buyAllFertilizer, getSpeciesCompletion } from "../store/gameStore";
-import { edgeBuyFlower, edgeBuyFertilizer } from "../lib/edgeFunctions";
+import { edgeBuyFlower, edgeBuyFertilizer, edgeSyncShop } from "../lib/edgeFunctions";
 import type { ShopSlot } from "../store/gameStore";
 import type { Rarity } from "../data/flowers";
 
@@ -76,7 +76,22 @@ export function ShopSlotCard({ slot }: Props) {
       const savedFertilizers = cur.fertilizers;
       perform(
         optimistic,
-        async () => { try { return await edgeBuyFertilizer(slot.fertilizerType!); } finally { buyingRef.current = false; } },
+        async () => {
+          try {
+            return await edgeBuyFertilizer(slot.fertilizerType!);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("not in stock")) {
+              // Server shop is stale (sync failed) — push current shop and retry
+              const s = getState();
+              await edgeSyncShop(s.shop, s.lastShopReset);
+              return await edgeBuyFertilizer(slot.fertilizerType!);
+            }
+            throw err;
+          } finally {
+            buyingRef.current = false;
+          }
+        },
         () => flashBought(),
         {
           serialize: true,
@@ -96,7 +111,21 @@ export function ShopSlotCard({ slot }: Props) {
       const savedFertilizers = cur.fertilizers;
       perform(
         optimistic,
-        async () => { try { return await edgeBuyFertilizer(slot.fertilizerType!, true); } finally { buyingRef.current = false; } },
+        async () => {
+          try {
+            return await edgeBuyFertilizer(slot.fertilizerType!, true);
+          } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            if (msg.includes("not in stock")) {
+              const s = getState();
+              await edgeSyncShop(s.shop, s.lastShopReset);
+              return await edgeBuyFertilizer(slot.fertilizerType!, true);
+            }
+            throw err;
+          } finally {
+            buyingRef.current = false;
+          }
+        },
         () => flashBought(),
         {
           serialize: true,
@@ -190,7 +219,22 @@ export function ShopSlotCard({ slot }: Props) {
     const savedInventory = cur.inventory;
     perform(
       optimistic,
-      async () => { try { return await edgeBuyFlower(slot.speciesId); } finally { buyingRef.current = false; } },
+      async () => {
+        try {
+          return await edgeBuyFlower(slot.speciesId);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("not in stock")) {
+            // Server shop is stale (sync failed) — push current shop and retry
+            const s = getState();
+            await edgeSyncShop(s.shop, s.lastShopReset);
+            return await edgeBuyFlower(slot.speciesId);
+          }
+          throw err;
+        } finally {
+          buyingRef.current = false;
+        }
+      },
       () => flashBought(),
       {
         serialize: true,
@@ -210,7 +254,21 @@ export function ShopSlotCard({ slot }: Props) {
     const savedInventory = cur.inventory;
     perform(
       optimistic,
-      async () => { try { return await edgeBuyFlower(slot.speciesId, true); } finally { buyingRef.current = false; } },
+      async () => {
+        try {
+          return await edgeBuyFlower(slot.speciesId, true);
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : String(err);
+          if (msg.includes("not in stock")) {
+            const s = getState();
+            await edgeSyncShop(s.shop, s.lastShopReset);
+            return await edgeBuyFlower(slot.speciesId, true);
+          }
+          throw err;
+        } finally {
+          buyingRef.current = false;
+        }
+      },
       () => flashBought(),
       {
         serialize: true,

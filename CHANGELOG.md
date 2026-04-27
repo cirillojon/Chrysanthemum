@@ -1,3 +1,13 @@
+## [v2.1.2] — 2026-04-27 — Bug Fixes & UI
+
+### Fixed
+- **Shop "Flower not in stock" errors (final fix)** — if the post-restock server sync failed silently, the buy handler now auto-resyncs the shop and retries once before rolling back; no page refresh needed
+
+### Changed
+- **🏪 Marketplace moved into Social tab** — all player-to-player features (Search, Friends, Gifts, Ranks, Market, My Profile) are now under one tab; main nav reduced from 7 tabs to 6
+
+---
+
 ## [v2.1.1] — 2026-04-27 — Bug Fixes
 
 ### Fixed
