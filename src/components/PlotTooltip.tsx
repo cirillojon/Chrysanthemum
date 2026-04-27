@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import {
   type PlantedFlower,
   getCurrentStage,
@@ -37,6 +37,21 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
   const [showFertPicker,  setShowFertPicker]  = useState(false);
   const [confirmRemove,   setConfirmRemove]   = useState(false);
   const [removing,        setRemoving]        = useState(false);
+  const [nudge,           setNudge]           = useState(0);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const vw  = document.documentElement.clientWidth;
+    const pad = 8;
+    if (rect.left < pad) {
+      setNudge(pad - rect.left);
+    } else if (rect.right > vw - pad) {
+      setNudge(vw - pad - rect.right);
+    }
+  }, []);
 
   const now     = Date.now();
   const species = getFlower(plant.speciesId);
@@ -96,7 +111,11 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
   }
 
   return (
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-40 pointer-events-none">
+    <div
+      ref={tooltipRef}
+      className="absolute bottom-full left-1/2 mb-2 z-40 pointer-events-none"
+      style={{ transform: `translateX(calc(-50% + ${nudge}px))` }}
+    >
       <div className="pointer-events-auto bg-card border border-border rounded-xl p-3 shadow-xl w-48 space-y-2">
 
         {/* Header */}
