@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useGame } from "../store/GameContext";
 import {
   msUntilSupplyReset,
@@ -9,13 +9,17 @@ import {
   RARITY_CONFIG,
   MUTATIONS,
 } from "../data/flowers";
+import type { Rarity } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
-import { GEAR, getMaxSupplyRarity } from "../data/gear";
+import { GEAR, getMaxSupplyRarity, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked } from "../data/gear";
 import {
   getNextSupplySlotUpgrade,
   MAX_SUPPLY_SLOTS,
+  SUPPLY_SLOT_UPGRADES,
 } from "../data/upgrades";
 import type { ShopSlot } from "../store/gameStore";
+import { RatesModal } from "./RatesModal";
+import type { RateRow } from "./RatesModal";
 
 function formatCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1_000));
@@ -177,20 +181,43 @@ function SupplyCard({ slot }: { slot: ShopSlot }) {
 
 // ── Supply Shop ─────────────────────────────────────────────────────────────
 
+/** Returns the supply slot count at which `rarity` first becomes available */
+function supplyUnlockSlots(rarity: Rarity): number | null {
+  // Rarities available from the start (1–2 slots unlock up to Rare)
+  if (isRarityUnlocked(rarity, 2)) return null;
+  const upgrade = SUPPLY_SLOT_UPGRADES.find((u) => isRarityUnlocked(rarity, u.slots));
+  return upgrade?.slots ?? null;
+}
+
 export function SupplyShop() {
   const { state, update } = useGame();
-  const [countdown, setCountdown] = useState(() => msUntilSupplyReset(state));
+  const [countdown,  setCountdown]  = useState(() => msUntilSupplyReset(state));
+  const [showRates,  setShowRates]  = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setCountdown(msUntilSupplyReset(state)), 1_000);
     return () => clearInterval(id);
   }, [state.lastSupplyReset]);
 
-  const nextSlotUpgrade = getNextSupplySlotUpgrade(state.supplySlots ?? 2);
+  const supplySlots     = state.supplySlots ?? 2;
+  const nextSlotUpgrade = getNextSupplySlotUpgrade(supplySlots);
   const canAffordSlot   = nextSlotUpgrade ? state.coins >= nextSlotUpgrade.cost : false;
-  const atMaxSlots      = (state.supplySlots ?? 2) >= MAX_SUPPLY_SLOTS;
-  const maxRarity       = getMaxSupplyRarity(state.supplySlots ?? 2);
+  const atMaxSlots      = supplySlots >= MAX_SUPPLY_SLOTS;
+  const maxRarity       = getMaxSupplyRarity(supplySlots);
   const maxRarityConfig = RARITY_CONFIG[maxRarity];
+
+  // Build rate rows — locked tiers show the slot count needed to unlock them
+  const rateRows = useMemo((): RateRow[] =>
+    (Object.entries(SUPPLY_RARITY_WEIGHTS) as [Rarity, number][]).map(([rarity, weight]) => {
+      const unlockAt = supplyUnlockSlots(rarity);
+      const locked   = !isRarityUnlocked(rarity, supplySlots);
+      return {
+        rarity,
+        weight,
+        unlocksAt: locked && unlockAt ? `${unlockAt} supply slots` : undefined,
+      };
+    }),
+  [supplySlots]);
 
   function handleUpgradeSlots() {
     const next = upgradeSupplySlots(state);
@@ -202,6 +229,15 @@ export function SupplyShop() {
   return (
     <div className="flex flex-col gap-6">
 
+      {showRates && (
+        <RatesModal
+          title="Supply shop drop rates"
+          subtitle="Chance per slot roll each restock"
+          rows={rateRows}
+          onClose={() => setShowRates(false)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -210,11 +246,20 @@ export function SupplyShop() {
             Fertilizers &amp; gear — restocks every 10 min
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-muted-foreground font-mono">Restocks in</p>
-          <p className="text-sm font-mono font-semibold text-primary">
-            {formatCountdown(countdown)}
-          </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowRates(true)}
+            className="text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg border border-border hover:border-primary/40"
+            title="View drop rates"
+          >
+            📊 Rates
+          </button>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground font-mono">Restocks in</p>
+            <p className="text-sm font-mono font-semibold text-primary">
+              {formatCountdown(countdown)}
+            </p>
+          </div>
         </div>
       </div>
 

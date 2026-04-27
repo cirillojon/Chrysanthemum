@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useGame } from "../store/GameContext";
-import { msUntilShopReset, upgradeShopSlots } from "../store/gameStore";
+import { msUntilShopReset, upgradeShopSlots, SHOP_RARITY_WEIGHTS } from "../store/gameStore";
 import { edgeUpgradeShopSlots } from "../lib/edgeFunctions";
 import { getNextShopSlotUpgrade, MAX_SHOP_SLOTS } from "../data/upgrades";
 import { ShopSlotCard } from "./ShopSlotCard";
 import { SupplyShop } from "./SupplyShop";
+import { RatesModal } from "./RatesModal";
+import type { RateRow } from "./RatesModal";
+import type { Rarity } from "../data/flowers";
 
 function formatCountdown(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1000));
@@ -14,13 +17,24 @@ function formatCountdown(ms: number): string {
   return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
 }
 
+const SEED_RATE_ROWS: RateRow[] = [
+  // Rarities that actually roll in the seed shop
+  ...(Object.entries(SHOP_RARITY_WEIGHTS) as [Rarity, number][]).map(
+    ([rarity, weight]) => ({ rarity, weight })
+  ),
+  // Rarities that never appear in the seed shop
+  { rarity: "exalted"   as Rarity, weight: 0, unavailable: true },
+  { rarity: "prismatic" as Rarity, weight: 0, unavailable: true },
+];
+
 interface ShopProps {
   view: "seeds" | "supply";
 }
 
 export function Shop({ view }: ShopProps) {
   const { state, perform } = useGame();
-  const [countdown, setCountdown] = useState(() => msUntilShopReset(state));
+  const [countdown,  setCountdown]  = useState(() => msUntilShopReset(state));
+  const [showRates,  setShowRates]  = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setCountdown(msUntilShopReset(state)), 1_000);
@@ -45,6 +59,15 @@ export function Shop({ view }: ShopProps) {
   return (
     <div className="flex flex-col gap-6">
 
+      {showRates && (
+        <RatesModal
+          title="Seed shop drop rates"
+          subtitle="Chance per slot roll each restock"
+          rows={SEED_RATE_ROWS}
+          onClose={() => setShowRates(false)}
+        />
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -53,11 +76,20 @@ export function Shop({ view }: ShopProps) {
             {`${activeCount} seed${activeCount !== 1 ? "s" : ""} available`}
           </p>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-muted-foreground font-mono">Restocks in</p>
-          <p className="text-sm font-mono font-semibold text-primary">
-            {formatCountdown(countdown)}
-          </p>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowRates(true)}
+            className="text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg border border-border hover:border-primary/40"
+            title="View drop rates"
+          >
+            📊 Rates
+          </button>
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground font-mono">Restocks in</p>
+            <p className="text-sm font-mono font-semibold text-primary">
+              {formatCountdown(countdown)}
+            </p>
+          </div>
         </div>
       </div>
 
