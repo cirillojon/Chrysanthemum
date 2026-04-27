@@ -149,6 +149,32 @@ export function edgeBotanyConvertAll(rarity: string) {
   return callEdge<BotanyResult>("botany-convert", { action: "convert_all", rarity });
 }
 
+// ── Gifting ───────────────────────────────────────────────────────────────────
+
+export interface SendGiftResult {
+  ok:        true;
+  inventory: GameState["inventory"];
+}
+
+export interface ClaimGiftResult {
+  ok:         true;
+  inventory:  GameState["inventory"];
+  discovered: GameState["discovered"];
+}
+
+export function edgeSendGift(
+  receiverId: string,
+  speciesId:  string,
+  mutation:   string | undefined,
+  message:    string | undefined,
+) {
+  return callEdge<SendGiftResult>("send-gift", { receiverId, speciesId, mutation, message });
+}
+
+export function edgeClaimGift(giftId: string) {
+  return callEdge<ClaimGiftResult>("claim-gift", { giftId });
+}
+
 // ── Marketplace ───────────────────────────────────────────────────────────────
 
 export interface MarketplaceListResult {

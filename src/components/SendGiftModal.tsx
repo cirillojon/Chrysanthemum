@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { useGame } from "../store/GameContext";
-import { sendGift } from "../store/cloudSave";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
-import { sellFlower } from "../store/gameStore";
+import { edgeSendGift } from "../lib/edgeFunctions";
 import type { MutationType } from "../data/flowers";
 
 interface Props {
@@ -20,9 +19,9 @@ export function SendGiftModal({ receiverId, receiverUsername, onClose, onSent }:
   const [sending, setSending]         = useState(false);
   const [error, setError]             = useState("");
 
-  // Only show flowers (items without mutation that are harvested blooms)
-  // Actually show all inventory items — seeds and harvested are the same type
-  const items = state.inventory.filter((i) => i.quantity > 0);
+  // Only blooms can be gifted — filter out seeds so they don't appear
+  // as blooms (the modal always renders the bloom emoji regardless of isSeed)
+  const items = state.inventory.filter((i) => i.quantity > 0 && !i.isSeed);
 
   async function handleSend() {
     if (!user || selectedIdx === null) return;
@@ -32,33 +31,20 @@ export function SendGiftModal({ receiverId, receiverUsername, onClose, onSent }:
     setSending(true);
     setError("");
 
-    // Remove from local inventory first
-    const next = sellFlower(state, item.speciesId, 1, item.mutation as MutationType | undefined);
-    if (!next) {
-      setError("Failed to remove item from inventory.");
+    try {
+      const result = await edgeSendGift(
+        receiverId,
+        item.speciesId,
+        item.mutation,
+        message.trim() || undefined,
+      );
+      // Server has validated inventory, deducted the item, and inserted the gift row
+      update({ ...state, inventory: result.inventory });
+      onSent();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to send gift. Try again.");
       setSending(false);
-      return;
     }
-
-    // Insert gift row
-    const ok = await sendGift(
-      user.id,
-      receiverId,
-      item.speciesId,
-      item.mutation,
-      message.trim() || undefined
-    );
-
-    if (!ok) {
-      setError("Failed to send gift. Try again.");
-      setSending(false);
-      return;
-    }
-
-    // Commit inventory change
-    update(next);
-    setSending(false);
-    onSent();
   }
 
   return (

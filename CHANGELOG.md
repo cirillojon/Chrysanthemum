@@ -1,3 +1,14 @@
+## [v2.1.4] — 2026-04-27 — Gifting Fixes
+
+### Fixed
+- **Coins awarded on gift** — gifting a flower no longer runs the sell logic; the item is removed from inventory with no coin change
+- **Gift duplication on reload** — send-gift edge function now atomically deducts the item from the sender's DB inventory and inserts the gift row in a single server call; a page reload between steps can no longer leave the item in both places
+- **Can gift a listed item** — server validates the item exists in the sender's DB inventory before the gift is created, closing the stale-client-state loophole
+- **Gifted flowers blocked from Botany** — claim-gift edge function now writes the flower directly to the receiver's DB inventory; it's available for Botany immediately without waiting for an auto-save
+- **Mutation emoji missing on friend cards** — friend profile flowers in the Social → Friends tab now show the mutation emoji overlay, matching the leaderboard
+
+---
+
 ## [v2.1.3] — 2026-04-27 — Marketplace & Garden
 
 ### Added
