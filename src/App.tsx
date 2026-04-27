@@ -52,6 +52,7 @@ export default function App() {
   const [socialView, setSocialView] = useState<SocialView>("search");
   const [showBanner, setShowBanner] = useState(true);
   const [showForecast, setShowForecast] = useState(false);
+  const [navDirection, setNavDirection] = useState<"left" | "right" | null>(null);
 
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
 
@@ -77,11 +78,12 @@ export default function App() {
   const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
 
   const handleSwipeLeft = useCallback(() => {
-    if (profileUsername) { setProfileUsername(null); return; }
+    if (profileUsername) { setNavDirection(null); setProfileUsername(null); return; }
+    setNavDirection("left");
     if (tab === "social") {
       const idx = SOCIAL_VIEWS.indexOf(socialView);
       if (idx < SOCIAL_VIEWS.length - 1) { setSocialView(SOCIAL_VIEWS[idx + 1]); return; }
-      return; // already at end
+      return;
     }
     const idx = MAIN_TABS.indexOf(tab);
     if (idx < MAIN_TABS.length - 1) {
@@ -92,11 +94,12 @@ export default function App() {
   }, [tab, socialView, profileUsername]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSwipeRight = useCallback(() => {
-    if (profileUsername) { setProfileUsername(null); return; }
+    if (profileUsername) { setNavDirection(null); setProfileUsername(null); return; }
+    setNavDirection("right");
     if (tab === "social") {
       const idx = SOCIAL_VIEWS.indexOf(socialView);
       if (idx > 0) { setSocialView(SOCIAL_VIEWS[idx - 1]); return; }
-      setTab("codex"); return; // social:search → codex
+      setTab("codex"); return;
     }
     const idx = MAIN_TABS.indexOf(tab);
     if (idx > 0) setTab(MAIN_TABS[idx - 1]);
@@ -104,17 +107,31 @@ export default function App() {
 
   const swipeHandlers = useSwipe(handleSwipeLeft, handleSwipeRight);
 
+  // Flat index across the entire nav (used to infer slide direction on clicks)
+  function flatNavIndex(t: Tab, sv: SocialView): number {
+    const tabs: Tab[] = ["garden", "shop", "inventory", "botany", "codex", "social"];
+    const views: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
+    if (t !== "social") return tabs.indexOf(t);
+    return tabs.length - 1 + views.indexOf(sv);
+  }
+
   function handleViewProfile(username: string) {
+    setNavDirection(null);
     setTab("social");
     setProfileUsername(username);
   }
 
   function handleTabChange(t: Tab) {
+    const dir = flatNavIndex(t, "search") > flatNavIndex(tab, socialView) ? "left" : "right";
+    setNavDirection(dir);
     setTab(t);
+    if (t === "social") setSocialView("search");
     setProfileUsername(null);
   }
 
   function handleSocialViewChange(v: SocialView) {
+    const dir = flatNavIndex("social", v) > flatNavIndex("social", socialView) ? "left" : "right";
+    setNavDirection(dir);
     setSocialView(v);
     setProfileUsername(null);
   }
@@ -288,9 +305,13 @@ export default function App() {
 
       {/* Content */}
       <main
-        className="flex-1 w-full sm:max-w-2xl sm:mx-auto px-3 sm:px-4 py-6 sm:py-8"
+        className="flex-1 w-full sm:max-w-2xl sm:mx-auto px-3 sm:px-4 py-6 sm:py-8 overflow-x-hidden"
         {...swipeHandlers}
       >
+        <div
+          key={`${tab}-${tab === "social" ? (profileUsername ?? socialView) : ""}`}
+          className={navDirection === "left" ? "slide-from-right" : navDirection === "right" ? "slide-from-left" : ""}
+        >
         <>
           {tab === "garden"      && <Garden />}
           {tab === "shop"        && <Shop />}
@@ -383,6 +404,7 @@ export default function App() {
             </>
           )}
         </>
+        </div>
       </main>
     </div>
   );
