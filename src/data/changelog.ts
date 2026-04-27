@@ -14,19 +14,6 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
-    version: "2.1.1",
-    title:   "Weather & Balance Fixes",
-    items: [
-      { type: "fixed",   text: "Botany conversion race condition (#61) — simultaneous conversions no longer produce errors" },
-      { type: "fixed",   text: "Weather forecast slots 5–8 showing \"Pending\" (#62) — SQL now generates enough entries for all 8 slots" },
-      { type: "fixed",   text: "Golden Hour, Prismatic Skies, and Star Shower were occasionally appearing outside their allowed time windows — time gating now uses Eastern Time throughout" },
-      { type: "fixed",   text: "Forecast relative times now show hours/minutes (e.g. \"in 2h 30m\") and days/hours (e.g. \"in 1d 6h\") for longer durations" },
-      { type: "fixed",   text: "Plot tooltip growth time now shows days/hours (e.g. \"2d 6h\") when remaining time exceeds 24 hours" },
-      { type: "changed", text: "Fertilizer speed multipliers rebalanced — Basic 1.1×, Advanced 1.25×, Premium 1.5×, Elite 1.75×, Miracle 2×" },
-      { type: "changed", text: "Clear skies is now more common; special weather events are slightly rarer" },
-    ],
-  },
-  {
     version: "2.1.0",
     title:   "Marketplace",
     items: [
@@ -37,6 +24,13 @@ export const CHANGELOGS: ChangelogEntry[] = [
       { type: "added",   text: "Price history chart — tap any listing to see the last 30 sale prices for that flower" },
       { type: "added",   text: "My Listings tab — view your active listings, cancel them, and see sold/expired history" },
       { type: "added",   text: "Search, rarity filter, and sort (newest, price ↑, price ↓) on the Browse tab" },
+      { type: "fixed",   text: "Botany conversion race condition (#61) — simultaneous conversions no longer produce errors" },
+      { type: "fixed",   text: "Forecast slots 5–8 showing \"Pending\" (#62) — SQL now generates enough entries for all 8 slots" },
+      { type: "fixed",   text: "Golden Hour, Prismatic Skies, and Star Shower now correctly gate by Eastern Time — they no longer appear outside their allowed time windows" },
+      { type: "fixed",   text: "Forecast relative times now show hours/minutes (e.g. \"in 2h 30m\") and days/hours (e.g. \"in 1d 6h\") for longer durations" },
+      { type: "fixed",   text: "Plot tooltip growth time now shows days/hours (e.g. \"2d 6h\") when remaining time exceeds 24 hours" },
+      { type: "changed", text: "Fertilizer speed multipliers rebalanced — Basic 1.1×, Advanced 1.25×, Premium 1.5×, Elite 1.75×, Miracle 2×" },
+      { type: "changed", text: "Clear skies is now more common; special weather events are slightly rarer" },
     ],
   },
   {
