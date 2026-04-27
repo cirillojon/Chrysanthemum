@@ -6,10 +6,12 @@ import {
   loadGame,
   saveGame,
   tickShop,
+  tickSupplyShop,
   msUntilShopReset,
   applyOfflineTick,
   defaultState,
   buyWeatherForecastSlot,
+  pruneExpiredGear,
 } from "./gameStore";
 import {
   loadCloudSave,
@@ -269,26 +271,35 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state]);
 
-  // ── Shop tick ─────────────────────────────────────────────────────────────
+  // ── Shop + supply tick ────────────────────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
       if (!saveEnabled.current) return;
       setState((prev) => {
-        const msLeft = msUntilShopReset(prev);
+        let next = prev;
+
+        // Seed shop restock
+        const msLeft = msUntilShopReset(next);
         if (msLeft === 0) {
-          const next = tickShop(prev);
-          if (next !== prev) {
+          const ticked = tickShop(next);
+          if (ticked !== next) {
             setShopJustRestocked(true);
-            // Queue the sync behind any in-flight harvests — this ensures a
-            // buy that's also serialized won't fire before the new shop is
-            // written to the server (which caused "Flower not in stock" errors).
             harvestQueue.current = harvestQueue.current
-              .then(() => edgeSyncShop(next.shop, next.lastShopReset))
+              .then(() => edgeSyncShop(ticked.shop, ticked.lastShopReset))
               .catch(() => {});
+            next = ticked;
           }
-          return next;
         }
-        return prev;
+
+        // Supply shop restock
+        const supplyTicked = tickSupplyShop(next);
+        if (supplyTicked !== next) next = supplyTicked;
+
+        // Prune expired gear from grid
+        const prunedGrid = pruneExpiredGear(next.grid, Date.now());
+        if (prunedGrid !== next.grid) next = { ...next, grid: prunedGrid };
+
+        return next;
       });
     }, 1_000);
     return () => clearInterval(interval);
