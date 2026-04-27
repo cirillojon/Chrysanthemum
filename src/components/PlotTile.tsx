@@ -8,7 +8,7 @@ import {
 } from "../store/gameStore";
 import { getFlower, RARITY_CONFIG, MUTATIONS, type MutationType } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
-import { GEAR, isGearExpired } from "../data/gear";
+import { GEAR, isGearExpired, type FanDirection } from "../data/gear";
 import { PlotTooltip } from "./PlotTooltip";
 import { GearTooltip } from "./GearTooltip";
 import { useGame } from "../store/GameContext";
@@ -40,6 +40,8 @@ interface Props {
   isUnderGrowLamp?: boolean;
   /** True when this cell is within a fan's range. */
   isUnderFan?: boolean;
+  /** Direction the fan covering this cell is blowing. */
+  fanDirection?: FanDirection;
   /** True when this cell is within a harvest bell's radius. */
   isUnderHarvestBell?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
@@ -54,7 +56,7 @@ export function PlotTile({
   isSelected, isHighlighted,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
-  isUnderFan, isUnderHarvestBell,
+  isUnderFan, fanDirection, isUnderHarvestBell,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
 }: Props) {
@@ -320,14 +322,16 @@ export function PlotTile({
                 <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "1.5s"  }}>✦</span>
               </>
             )}
-            {/* Fan: 💨 gusts drifting across */}
-            {isUnderFan && (
-              <>
-                <span className="gear-wind" style={{ top: "18%", animationDelay: "0s"    }}>💨</span>
-                <span className="gear-wind" style={{ top: "50%", animationDelay: "0.7s"  }}>💨</span>
-                <span className="gear-wind" style={{ top: "76%", animationDelay: "1.4s"  }}>💨</span>
-              </>
-            )}
+            {/* Fan: 💨 gusts drifting in the fan's direction */}
+            {isUnderFan && (() => {
+              const dir  = fanDirection ?? "right";
+              const cls  = `gear-wind-${dir}`;
+              const horiz = dir === "left" || dir === "right";
+              const axis  = horiz ? "top" : "left";
+              return (["18%", "50%", "76%"] as const).map((pos, i) => (
+                <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.65}s` }}>💨</span>
+              ));
+            })()}
           </div>
         )}
 

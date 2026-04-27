@@ -125,7 +125,7 @@ export function Garden() {
       const scarecrow = new Set<string>();
       const composter = new Set<string>();
       const growLamp  = new Set<string>();
-      const fan       = new Set<string>();
+      const fan       = new Map<string, FanDirection>();
       const harvestBell = new Set<string>();
       const now = Date.now();
       for (let ri = 0; ri < state.grid.length; ri++) {
@@ -151,7 +151,8 @@ export function Garden() {
           } else if (def.passiveSubtype === "grow_lamp") {
             keys.forEach((k) => growLamp.add(k));
           } else if (def.passiveSubtype === "fan") {
-            keys.forEach((k) => fan.add(k));
+            const dir = g.direction ?? "right";
+            keys.forEach((k) => fan.set(k, dir));
           } else if (def.passiveSubtype === "harvest_bell") {
             keys.forEach((k) => harvestBell.add(k));
           }
@@ -374,6 +375,7 @@ export function Garden() {
                 isUnderComposter={composterCoveredCells.has(`${row}-${col}`)}
                 isUnderGrowLamp={growLampKeys.has(`${row}-${col}`)}
                 isUnderFan={fanCoveredCells.has(`${row}-${col}`)}
+                fanDirection={fanCoveredCells.get(`${row}-${col}`)}
                 isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}

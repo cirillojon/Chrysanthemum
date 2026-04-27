@@ -165,20 +165,47 @@
   pointer-events: none;
 }
 
-/* Fan: 💨 gusts drift across the cell */
-@keyframes gear-wind-gust {
-  0%   { transform: translate(-8px, 0)  opacity: 0;   }
-  10%  {                                opacity: 0.75; }
-  80%  {                                opacity: 0.5;  }
-  100% { transform: translate(56px, 0); opacity: 0;   }
+/* Fan: 💨 gusts drift in the fan's facing direction */
+@keyframes gear-wind-right {
+  0%   { transform: translateX(-4px); opacity: 0;    }
+  10%  {                              opacity: 0.75;  }
+  80%  {                              opacity: 0.5;   }
+  100% { transform: translateX(60px); opacity: 0;    }
 }
-.gear-wind {
-  animation: gear-wind-gust 1.6s ease-in-out infinite;
+@keyframes gear-wind-left {
+  0%   { transform: translateX(4px);  opacity: 0;    }
+  10%  {                              opacity: 0.75;  }
+  80%  {                              opacity: 0.5;   }
+  100% { transform: translateX(-60px); opacity: 0;   }
+}
+@keyframes gear-wind-up {
+  0%   { transform: translateY(4px);  opacity: 0;    }
+  10%  {                              opacity: 0.75;  }
+  80%  {                              opacity: 0.5;   }
+  100% { transform: translateY(-60px); opacity: 0;   }
+}
+@keyframes gear-wind-down {
+  0%   { transform: translateY(-4px); opacity: 0;    }
+  10%  {                              opacity: 0.75;  }
+  80%  {                              opacity: 0.5;   }
+  100% { transform: translateY(60px); opacity: 0;    }
+}
+.gear-wind-right,
+.gear-wind-left,
+.gear-wind-up,
+.gear-wind-down {
+  animation-duration: 1.6s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
   position: absolute;
   font-size: 9px;
   line-height: 1;
   pointer-events: none;
 }
+.gear-wind-right { animation-name: gear-wind-right; left:   0; }
+.gear-wind-left  { animation-name: gear-wind-left;  right:  0; }
+.gear-wind-up    { animation-name: gear-wind-up;    bottom: 0; }
+.gear-wind-down  { animation-name: gear-wind-down;  top:    0; }
 
 /* ── Base resets ───────────────────────────────────────────────────────── */
 @layer base {
