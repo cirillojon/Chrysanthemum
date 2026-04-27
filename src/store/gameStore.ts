@@ -1,8 +1,14 @@
 import { FLOWERS, MUTATIONS, getFlower, type GrowthStage, type MutationType, type Rarity } from "../data/flowers";
-import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplaceSlotUpgrade, DEFAULT_SHOP_SLOTS, type FertilizerType } from "../data/upgrades";
+import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplaceSlotUpgrade, getNextSupplySlotUpgrade, DEFAULT_SHOP_SLOTS, DEFAULT_SUPPLY_SLOTS, type FertilizerType } from "../data/upgrades";
 import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
+import {
+  GEAR, isGearExpired, getGearAffectingCell, isRegularSprinkler, isMutationSprinkler,
+  isScarecrow, isGrowLamp, isComposter, rollComposterFertilizer,
+  SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
+  type GearType, type PlacedGear, type GearInventoryItem,
+} from "../data/gear";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -25,9 +31,13 @@ export interface PlantedFlower {
 }
 
 export interface Plot {
-  id: string;
+  id:    string;
   plant: PlantedFlower | null;
+  /** A piece of gear occupying this slot — mutually exclusive with plant */
+  gear:  PlacedGear | null;
 }
+
+export type { GearType, PlacedGear, GearInventoryItem };
 
 export interface InventoryItem {
   speciesId: string;
@@ -42,25 +52,28 @@ export interface FertilizerItem {
 }
 
 export interface ShopSlot {
-  speciesId: string;
-  price: number;
-  quantity: number;
+  speciesId:     string;
+  price:         number;
+  quantity:      number;
   isFertilizer?: boolean;
   fertilizerType?: FertilizerType;
-  isEmpty?: boolean;
+  isEmpty?:      boolean;
+  /** Supply shop: this slot is a gear item */
+  isGear?:       boolean;
+  gearType?:     GearType;
 }
 
 export interface GameState {
-  coins: number;
+  coins:    number;
   farmSize: number; // column count (max 6)
   farmRows: number; // row count (equals farmSize for square grids, can exceed for 7×6+)
-  shopSlots: number;
-  grid: Plot[][];
-  inventory: InventoryItem[];
+  shopSlots:   number;
+  grid:        Plot[][];
+  inventory:   InventoryItem[];
   fertilizers: FertilizerItem[];
-  shop: ShopSlot[];
+  shop:          ShopSlot[];
   lastShopReset: number;
-  lastSaved: number;
+  lastSaved:     number;
   // Codex — tracks every species + mutation combo ever harvested
   // Format: "speciesId" for base, "speciesId:mutationId" for mutated
   discovered: string[];
@@ -68,6 +81,11 @@ export interface GameState {
   weatherForecastSlots: number;
   // Marketplace — number of active listing slots the player has purchased (0 = not unlocked)
   marketplaceSlots: number;
+  // Supply shop (fertilizers + gear)
+  supplySlots:      number;
+  supplyShop:       ShopSlot[];
+  lastSupplyReset:  number;
+  gearInventory:    GearInventoryItem[];
 }
 
 export interface OfflineSummary {
@@ -86,8 +104,9 @@ const SHOP_RESET_INTERVAL = 5 * 60 * 1_000; // 5 minutes
 export function makeGrid(rows: number, cols: number): Plot[][] {
   return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: cols }, (_, col) => ({
-      id: `${row}-${col}`,
+      id:    `${row}-${col}`,
       plant: null,
+      gear:  null,
     }))
   );
 }
@@ -96,7 +115,7 @@ export function resizeGrid(old: Plot[][], newRows: number, newCols: number): Plo
   return Array.from({ length: newRows }, (_, row) =>
     Array.from({ length: newCols }, (_, col) => {
       const existing = old[row]?.[col];
-      return existing ?? { id: `${row}-${col}`, plant: null };
+      return existing ?? { id: `${row}-${col}`, plant: null, gear: null };
     })
   );
 }
@@ -237,10 +256,69 @@ function generateShop(shopSlots: number = DEFAULT_SHOP_SLOTS): ShopSlot[] {
 
   return chosen;
 }
+// ── Supply shop generation ─────────────────────────────────────────────────
+
+export const SUPPLY_RESET_INTERVAL = 10 * 60 * 1_000; // 10 minutes
+
+export function msUntilSupplyReset(state: GameState): number {
+  return Math.max(0, SUPPLY_RESET_INTERVAL - (Date.now() - (state.lastSupplyReset ?? 0)));
+}
+
+function generateSupplyShop(supplySlots: number = DEFAULT_SUPPLY_SLOTS): ShopSlot[] {
+  const chosen: ShopSlot[] = [];
+
+  const eligibleRarities = (Object.entries(SUPPLY_RARITY_WEIGHTS) as [Rarity, number][])
+    .filter(([rarity]) => isRarityUnlocked(rarity, supplySlots) && (SUPPLY_POOLS[rarity]?.length ?? 0) > 0);
+
+  let attempts = 0;
+  while (chosen.length < supplySlots && attempts < 1000) {
+    attempts++;
+
+    if (eligibleRarities.length === 0) break;
+
+    // Roll a rarity by weight
+    const totalWeight = eligibleRarities.reduce((s, [, w]) => s + w, 0);
+    let roll = Math.random() * totalWeight;
+    let chosenRarity: Rarity = eligibleRarities[eligibleRarities.length - 1][0];
+    for (const [rarity, weight] of eligibleRarities) {
+      roll -= weight;
+      if (roll <= 0) { chosenRarity = rarity; break; }
+    }
+
+    const pool = SUPPLY_POOLS[chosenRarity];
+    if (!pool || pool.length === 0) continue;
+
+    const item = pool[Math.floor(Math.random() * pool.length)];
+
+    if (item.kind === "fertilizer") {
+      const fert = FERTILIZERS[item.fertilizerType];
+      chosen.push({
+        speciesId:    `supply_fert_${item.fertilizerType}_${chosen.length}`,
+        isFertilizer: true,
+        fertilizerType: item.fertilizerType,
+        price:        fert.shopPrice,
+        quantity:     Math.floor(Math.random() * 3) + 1,
+      });
+    } else {
+      const gearDef = GEAR[item.gearType];
+      chosen.push({
+        speciesId: `supply_gear_${item.gearType}_${chosen.length}`,
+        isGear:    true,
+        gearType:  item.gearType,
+        price:     gearDef.shopPrice,
+        quantity:  1,
+      });
+    }
+  }
+
+  return chosen;
+}
+
 // ── Default state ──────────────────────────────────────────────────────────
 
 export function defaultState(): GameState {
   const size = 3;
+  const now  = Date.now();
   return {
     coins:                100,
     farmSize:             size,
@@ -250,11 +328,15 @@ export function defaultState(): GameState {
     inventory:            [],
     fertilizers:          [{ type: "basic", quantity: 3 }],
     shop:                 generateShop(DEFAULT_SHOP_SLOTS),
-    lastShopReset:        Date.now(),
-    lastSaved:            Date.now(),
+    lastShopReset:        now,
+    lastSaved:            now,
     discovered:           [],
     weatherForecastSlots: 0,
     marketplaceSlots:     0,
+    supplySlots:          DEFAULT_SUPPLY_SLOTS,
+    supplyShop:           generateSupplyShop(DEFAULT_SUPPLY_SLOTS),
+    lastSupplyReset:      now,
+    gearInventory:        [],
   };
 }
 
@@ -305,13 +387,20 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
     save.grid.length    !== expectedRows ||
     save.grid[0]?.length !== expectedCols;
 
+  const now2 = Date.now();
   let updated: GameState = {
     ...save,
     farmRows:             expectedRows,
-    grid:                 needsRebuild ? makeGrid(expectedRows, expectedCols) : save.grid,
+    grid:                 needsRebuild ? makeGrid(expectedRows, expectedCols) : save.grid.map((row) =>
+      row.map((plot) => plot.gear !== undefined ? plot : { ...plot, gear: null })
+    ),
     discovered:           save.discovered           ?? [],
     shopSlots:            save.shopSlots            ?? DEFAULT_SHOP_SLOTS,
     weatherForecastSlots: save.weatherForecastSlots ?? 0,
+    supplySlots:          save.supplySlots          ?? DEFAULT_SUPPLY_SLOTS,
+    supplyShop:           save.supplyShop           ?? generateSupplyShop(save.supplySlots ?? DEFAULT_SUPPLY_SLOTS),
+    lastSupplyReset:      save.lastSupplyReset       ?? now2,
+    gearInventory:        save.gearInventory         ?? [],
   };
 
   let shopRestocked    = false;
@@ -321,6 +410,15 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
     updated       = { ...updated, shop: generateShop(updated.shopSlots), lastShopReset: now };
     shopRestocked = true;
   }
+
+  // Tick supply shop reset
+  const timeSinceSupplyReset = now - (updated.lastSupplyReset ?? 0);
+  if (timeSinceSupplyReset >= SUPPLY_RESET_INTERVAL) {
+    updated = { ...updated, supplyShop: generateSupplyShop(updated.supplySlots), lastSupplyReset: now };
+  }
+
+  // Prune expired gear from grid on load
+  updated = { ...updated, grid: pruneExpiredGear(updated.grid, now) };
 
   const readyToHarvest = updated.grid
     .flat()
@@ -376,6 +474,32 @@ export function msUntilShopReset(state: GameState): number {
   return Math.max(0, SHOP_RESET_INTERVAL - (Date.now() - state.lastShopReset));
 }
 
+export function tickSupplyShop(state: GameState): GameState {
+  const now = Date.now();
+  if (now - (state.lastSupplyReset ?? 0) < SUPPLY_RESET_INTERVAL) return state;
+  return {
+    ...state,
+    supplyShop:     generateSupplyShop(state.supplySlots),
+    lastSupplyReset: now,
+  };
+}
+
+/** Remove gear that has expired from the grid (called on load and each tick). */
+export function pruneExpiredGear(grid: Plot[][], now: number): Plot[][] {
+  let changed = false;
+  const newGrid = grid.map((row) =>
+    row.map((plot) => {
+      if (!plot.gear) return plot;
+      if (isGearExpired(plot.gear, now)) {
+        changed = true;
+        return { ...plot, gear: null };
+      }
+      return plot;
+    })
+  );
+  return changed ? newGrid : grid;
+}
+
 // ── Growth calculation ─────────────────────────────────────────────────────
 
 /**
@@ -385,10 +509,38 @@ export function msUntilShopReset(state: GameState): number {
  * This means the progress bar can never snap by more than ~1 tick of error
  * (as long as stampStageTransitions runs every ~1 s to refresh checkpoints).
  */
+/**
+ * Returns the combined growth multiplier from sprinklers and grow lamps
+ * affecting the cell at (row, col). Pass sprinklerMult=1.0 when no grid context.
+ */
+export function getPassiveGrowthMultiplier(
+  grid: Plot[][],
+  row: number,
+  col: number,
+  now: number
+): number {
+  const night = isNighttime();
+  let best = 1.0;
+
+  const sources = getGearAffectingCell(grid, row, col, now);
+  for (const { def } of sources) {
+    // Regular sprinkler: take the highest multiplier (priority rule)
+    if (isRegularSprinkler(def) && def.growthMultiplier) {
+      best = Math.max(best, def.growthMultiplier);
+    }
+    // Grow lamp: only boosts during night periods
+    if (isGrowLamp(def) && night && def.nightMultiplier) {
+      best = Math.max(best, def.nightMultiplier);
+    }
+  }
+  return best;
+}
+
 function computeGrowthMs(
   plant: PlantedFlower,
   now: number,
-  weatherType: WeatherType
+  weatherType: WeatherType,
+  gearMultiplier = 1.0
 ): number {
   const species = getFlower(plant.speciesId);
   if (!species) return 0;
@@ -397,10 +549,10 @@ function computeGrowthMs(
     return species.growthTime.seed + species.growthTime.sprout; // fully grown
   }
 
-  const fertMultiplier    = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
-  const weatherMultiplier = WEATHER[weatherType].growthMultiplier;
+  const fertMultiplier     = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
+  const weatherMultiplier  = WEATHER[weatherType].growthMultiplier;
   const masteredMultiplier = plant.masteredBonus ?? 1.0;
-  const multiplier        = fertMultiplier * weatherMultiplier * masteredMultiplier;
+  const multiplier         = fertMultiplier * weatherMultiplier * masteredMultiplier * gearMultiplier;
 
   if (plant.growthMs !== undefined && plant.lastTickAt !== undefined) {
     // Extrapolate from last saved checkpoint (delta is always small — updated every ~1 s)
@@ -418,14 +570,15 @@ function computeGrowthMs(
 export function getCurrentStage(
   plant: PlantedFlower,
   now: number,
-  weatherType: WeatherType = "clear"
+  weatherType: WeatherType = "clear",
+  gearMultiplier = 1.0
 ): GrowthStage {
   if (plant.bloomedAt && now >= plant.bloomedAt) return "bloom";
 
   const species = getFlower(plant.speciesId);
   if (!species) return "seed";
 
-  const gMs    = computeGrowthMs(plant, now, weatherType);
+  const gMs    = computeGrowthMs(plant, now, weatherType, gearMultiplier);
   const seedMs = species.growthTime.seed;
 
   if (gMs >= seedMs + species.growthTime.sprout) return "bloom";
@@ -436,15 +589,16 @@ export function getCurrentStage(
 export function getStageProgress(
   plant: PlantedFlower,
   now: number,
-  weatherType: WeatherType = "clear"
+  weatherType: WeatherType = "clear",
+  gearMultiplier = 1.0
 ): number {
   if (plant.bloomedAt && now >= plant.bloomedAt) return 1;
 
   const species = getFlower(plant.speciesId);
   if (!species) return 0;
 
-  const gMs     = computeGrowthMs(plant, now, weatherType);
-  const seedMs  = species.growthTime.seed;
+  const gMs      = computeGrowthMs(plant, now, weatherType, gearMultiplier);
+  const seedMs   = species.growthTime.seed;
   const sproutMs = species.growthTime.sprout;
 
   if (gMs >= seedMs + sproutMs) return 1;
@@ -455,29 +609,28 @@ export function getStageProgress(
 export function getMsUntilNextStage(
   plant: PlantedFlower,
   now: number,
-  weatherType: WeatherType = "clear"
+  weatherType: WeatherType = "clear",
+  gearMultiplier = 1.0
 ): number {
   if (plant.bloomedAt && now >= plant.bloomedAt) return 0;
 
   const species = getFlower(plant.speciesId);
   if (!species) return 0;
 
-  const fertMultiplier    = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
-  const weatherMultiplier = WEATHER[weatherType].growthMultiplier;
+  const fertMultiplier     = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
+  const weatherMultiplier  = WEATHER[weatherType].growthMultiplier;
   const masteredMultiplier = plant.masteredBonus ?? 1.0;
-  const multiplier        = fertMultiplier * weatherMultiplier * masteredMultiplier;
+  const multiplier         = fertMultiplier * weatherMultiplier * masteredMultiplier * gearMultiplier;
 
-  const gMs     = computeGrowthMs(plant, now, weatherType);
-  const seedMs  = species.growthTime.seed;
+  const gMs      = computeGrowthMs(plant, now, weatherType, gearMultiplier);
+  const seedMs   = species.growthTime.seed;
   const sproutMs = species.growthTime.sprout;
 
   if (gMs >= seedMs + sproutMs) return 0;
   if (gMs >= seedMs) {
-    // In sprout — remaining base ms converted to real ms at current speed
     const remainingBase = (seedMs + sproutMs) - gMs;
     return Math.max(0, Math.ceil(remainingBase / multiplier));
   }
-  // In seed
   const remainingBase = seedMs - gMs;
   return Math.max(0, Math.ceil(remainingBase / multiplier));
 }
@@ -491,7 +644,7 @@ export function plantSeed(
   speciesId: string
 ): GameState | null {
   const plot = state.grid[row]?.[col];
-  if (!plot || plot.plant) return null;
+  if (!plot || plot.plant || plot.gear) return null;
 
   const invItem = state.inventory.find(
     (i) => i.speciesId === speciesId && i.isSeed
@@ -569,35 +722,36 @@ export function stampStageTransitions(
   now: number,
   weatherType: WeatherType = "clear"
 ): GameState {
-  const MIN_TICK_MS = 100; // don't save growthMs for sub-100 ms deltas (prevents render loops)
+  const MIN_TICK_MS = 100;
   let changed = false;
+  const newlyBloomedCells: [number, number][] = [];
 
-  const newGrid = state.grid.map((row) =>
-    row.map((plot) => {
+  let newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
       if (!plot.plant || plot.plant.bloomedAt) return plot; // fully grown — nothing to do
 
       const plant   = plot.plant;
       const species = getFlower(plant.speciesId);
       if (!species) return plot;
 
-      const fertMultiplier    = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
-      const weatherMultiplier = WEATHER[weatherType].growthMultiplier;
+      const gearMult           = getPassiveGrowthMultiplier(state.grid, ri, ci, now);
+      const fertMultiplier     = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
+      const weatherMultiplier  = WEATHER[weatherType].growthMultiplier;
       const masteredMultiplier = plant.masteredBonus ?? 1.0;
-      const multiplier        = fertMultiplier * weatherMultiplier * masteredMultiplier;
+      const multiplier         = fertMultiplier * weatherMultiplier * masteredMultiplier * gearMult;
 
       const seedMs   = species.growthTime.seed;
       const sproutMs = species.growthTime.sprout;
 
       // ── Step 1: compute new growthMs ──────────────────────────────────────
       let newGrowthMs: number;
-      let newLastTickAt = now;
+      const newLastTickAt = now;
 
       if (plant.growthMs !== undefined && plant.lastTickAt !== undefined) {
         const delta = Math.max(0, now - plant.lastTickAt);
         if (delta < MIN_TICK_MS) return plot; // too soon — skip to prevent render loop
         newGrowthMs = plant.growthMs + delta * multiplier;
       } else {
-        // First encounter — backfill from known timestamps (use current multiplier as best guess)
         if (plant.sproutedAt !== undefined) {
           newGrowthMs = seedMs + Math.max(0, now - plant.sproutedAt) * multiplier;
         } else {
@@ -605,26 +759,68 @@ export function stampStageTransitions(
         }
       }
 
-      let updated      = { ...plant, growthMs: newGrowthMs, lastTickAt: newLastTickAt };
-      let plantChanged = true; // growthMs always changes after MIN_TICK_MS guard
+      let updated: PlantedFlower = { ...plant, growthMs: newGrowthMs, lastTickAt: newLastTickAt };
 
-      // ── Step 2: stamp sproutedAt on first sprout transition ───────────────
+      // ── Step 2: stamp sproutedAt ──────────────────────────────────────────
       if (!plant.sproutedAt && newGrowthMs >= seedMs) {
         updated = { ...updated, sproutedAt: now };
       }
 
-      // ── Step 3: stamp bloomedAt on first bloom transition ─────────────────
+      // ── Step 3: stamp bloomedAt ───────────────────────────────────────────
       if (!plant.bloomedAt && newGrowthMs >= seedMs + sproutMs) {
         updated = { ...updated, bloomedAt: now };
+        newlyBloomedCells.push([ri, ci]);
       }
 
-      if (plantChanged) {
-        changed = true;
-        return { ...plot, plant: updated };
-      }
-      return plot;
+      changed = true;
+      return { ...plot, plant: updated };
     })
   );
+
+  // ── Feed composters from newly bloomed plants ──────────────────────────
+  if (newlyBloomedCells.length > 0) {
+    const gridRows = newGrid.length;
+    const gridCols = newGrid[0]?.length ?? 0;
+
+    for (const [bloomRow, bloomCol] of newlyBloomedCells) {
+      const bloomedPlant = newGrid[bloomRow][bloomCol].plant;
+      if (!bloomedPlant) continue;
+      const bloomedSpecies = getFlower(bloomedPlant.speciesId);
+      if (!bloomedSpecies) continue;
+
+      // Check all 3×3 neighbours for active composters
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const cr = bloomRow + dr;
+          const cc = bloomCol + dc;
+          if (cr < 0 || cr >= gridRows || cc < 0 || cc >= gridCols) continue;
+
+          const compPlot = newGrid[cr][cc];
+          if (!compPlot.gear) continue;
+          const gDef = GEAR[compPlot.gear.gearType];
+          if (!isComposter(gDef)) continue;
+          if (isGearExpired(compPlot.gear, now)) continue;
+
+          const stored    = compPlot.gear.storedFertilizers ?? [];
+          const maxStore  = gDef.maxStorage ?? 10;
+          if (stored.length >= maxStore) continue;
+
+          const fertType = rollComposterFertilizer(bloomedSpecies.rarity);
+          const updatedGear: PlacedGear = {
+            ...compPlot.gear,
+            storedFertilizers: [...stored, fertType],
+          };
+          newGrid = newGrid.map((r, ri2) =>
+            r.map((p, ci2) =>
+              ri2 === cr && ci2 === cc ? { ...p, gear: updatedGear } : p
+            )
+          );
+          changed = true;
+        }
+      }
+    }
+  }
 
   return changed ? { ...state, grid: newGrid } : state;
 }
@@ -683,16 +879,20 @@ export function tickWeatherMutations(
 
   const now = Date.now();
 
-  const newGrid = state.grid.map((row) =>
-    row.map((plot) => {
+  const newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
       if (!plot.plant) return plot;
 
       // Weather mutations only apply at bloom — the plant must be at peak to be affected
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
 
+      // Scarecrow fully blocks all weather mutations on covered plants
+      const scarecrowSources = getGearAffectingCell(state.grid, ri, ci, now);
+      const hasScarecrow = scarecrowSources.some(({ def }) => isScarecrow(def));
+      if (hasScarecrow) return plot;
+
       // Thunderstorm combo: wet flowers have a ~50% chance to become shocked
-      // over the full 20-min storm duration (p ≈ 0.000578 per tick)
       if (weatherType === "thunderstorm" && plot.plant.mutation === "wet") {
         if (Math.random() < 0.000578) {
           changed = true;
@@ -704,14 +904,12 @@ export function tickWeatherMutations(
       // Skip if already has any other mutation (string); allow null and undefined
       if (typeof plot.plant.mutation === "string") return plot;
 
-      // Thunderstorm: unmutated (null) plants can also become wet — same rate as rain.
-      // Those wet plants can then upgrade to shocked via the combo roll on the next tick.
+      // Thunderstorm: unmutated (null) plants can become wet
       if (weatherType === "thunderstorm" && plot.plant.mutation === null) {
         if (Math.random() < 0.00076) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
         }
-        // fall through to the direct shocked roll below
       }
 
       // Roll weather mutation
@@ -722,11 +920,59 @@ export function tickWeatherMutations(
         }
       }
 
-      // Moonlit at night (outside star_shower — that's already covered above)
+      // Moonlit at night (outside star_shower)
       if (night && weatherType !== "star_shower") {
         if (Math.random() < MOONLIT_NIGHT_CHANCE) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "moonlit" as MutationType } };
+        }
+      }
+
+      return plot;
+    })
+  );
+
+  return changed ? { ...state, grid: newGrid } : state;
+}
+
+/**
+ * Called every tick. Rolls mutation chances from active mutation sprinklers
+ * and wet chances from regular sprinklers for all bloomed, unmutated plants.
+ * Stacks additively with weather mutations (sprinklers are not blocked by scarecrows).
+ */
+export function tickSprinklerMutations(
+  state: GameState,
+  weatherType: WeatherType = "clear"
+): GameState {
+  const now     = Date.now();
+  let changed   = false;
+
+  const newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
+      if (!plot.plant) return plot;
+
+      const stage = getCurrentStage(plot.plant, now, weatherType);
+      if (stage !== "bloom") return plot;
+      // Only roll for unmutated plants (mutation === undefined or null)
+      if (typeof plot.plant.mutation === "string") return plot;
+
+      const sources = getGearAffectingCell(state.grid, ri, ci, now);
+
+      // Regular sprinklers — wet mutation chance
+      for (const { def } of sources) {
+        if (!isRegularSprinkler(def) || !def.wetChancePerTick) continue;
+        if (Math.random() < def.wetChancePerTick) {
+          changed = true;
+          return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
+        }
+      }
+
+      // Mutation sprinklers
+      for (const { def } of sources) {
+        if (!isMutationSprinkler(def) || !def.mutationType || !def.mutationChancePerTick) continue;
+        if (Math.random() < def.mutationChancePerTick) {
+          changed = true;
+          return { ...plot, plant: { ...plot.plant, mutation: def.mutationType } };
         }
       }
 
@@ -862,7 +1108,7 @@ export function plantAll(state: GameState): GameState {
 
   for (let row = 0; row < current.grid.length; row++) {
     for (let col = 0; col < current.grid[row].length; col++) {
-      if (current.grid[row][col].plant) continue;
+      if (current.grid[row][col].plant || current.grid[row][col].gear) continue;
 
       // Find next available seed
       const seedItem = seeds.find((s) => {
@@ -1237,6 +1483,166 @@ export function botanyConvertAll(
 
   if (outputs.length === 0) return null;
   return { state: current, outputSpeciesIds: outputs };
+}
+
+// ── Gear actions ───────────────────────────────────────────────────────────
+
+export function placeGear(
+  state: GameState,
+  row: number,
+  col: number,
+  gearType: GearType
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot || plot.plant || plot.gear) return null;
+
+  const invItem = state.gearInventory.find((g) => g.gearType === gearType);
+  if (!invItem || invItem.quantity < 1) return null;
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col
+        ? { ...p, gear: { gearType, placedAt: Date.now() } }
+        : p
+    )
+  );
+
+  const newGearInv = state.gearInventory
+    .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)
+    .filter((g) => g.quantity > 0);
+
+  return { ...state, grid: newGrid, gearInventory: newGearInv };
+}
+
+export function removeGear(
+  state: GameState,
+  row: number,
+  col: number
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot?.gear) return null;
+
+  const { gearType } = plot.gear;
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col ? { ...p, gear: null } : p
+    )
+  );
+
+  // Return gear to inventory
+  const existing = state.gearInventory.find((g) => g.gearType === gearType);
+  const newGearInv = existing
+    ? state.gearInventory.map((g) =>
+        g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g
+      )
+    : [...state.gearInventory, { gearType, quantity: 1 }];
+
+  // If it's a composter, also return stored fertilizers
+  const stored = plot.gear.storedFertilizers ?? [];
+  let newFertilizers = state.fertilizers;
+  for (const fertType of stored) {
+    const fert = newFertilizers.find((f) => f.type === fertType);
+    newFertilizers = fert
+      ? newFertilizers.map((f) => f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f)
+      : [...newFertilizers, { type: fertType, quantity: 1 }];
+  }
+
+  return { ...state, grid: newGrid, gearInventory: newGearInv, fertilizers: newFertilizers };
+}
+
+/** Collect all fertilizers stored in a composter and add them to player inventory. */
+export function collectFromComposter(
+  state: GameState,
+  row: number,
+  col: number
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot?.gear) return null;
+
+  const gDef = GEAR[plot.gear.gearType];
+  if (!isComposter(gDef)) return null;
+
+  const stored = plot.gear.storedFertilizers ?? [];
+  if (stored.length === 0) return null;
+
+  let newFertilizers = state.fertilizers;
+  for (const fertType of stored) {
+    const fert = newFertilizers.find((f) => f.type === fertType);
+    newFertilizers = fert
+      ? newFertilizers.map((f) => f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f)
+      : [...newFertilizers, { type: fertType, quantity: 1 }];
+  }
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col
+        ? { ...p, gear: { ...p.gear!, storedFertilizers: [] } }
+        : p
+    )
+  );
+
+  return { ...state, grid: newGrid, fertilizers: newFertilizers };
+}
+
+export function buyFromSupplyShop(
+  state: GameState,
+  slotSpeciesId: string
+): GameState | null {
+  const slot = state.supplyShop.find((s) => s.speciesId === slotSpeciesId);
+  if (!slot || slot.quantity < 1) return null;
+  if (state.coins < slot.price) return null;
+
+  const newSupplyShop = state.supplyShop.map((s) =>
+    s.speciesId === slotSpeciesId ? { ...s, quantity: s.quantity - 1 } : s
+  );
+
+  if (slot.isFertilizer && slot.fertilizerType) {
+    const existing = state.fertilizers.find((f) => f.type === slot.fertilizerType);
+    const newFertilizers = existing
+      ? state.fertilizers.map((f) =>
+          f.type === slot.fertilizerType ? { ...f, quantity: f.quantity + 1 } : f
+        )
+      : [...state.fertilizers, { type: slot.fertilizerType, quantity: 1 }];
+
+    return {
+      ...state,
+      coins:       state.coins - slot.price,
+      supplyShop:  newSupplyShop,
+      fertilizers: newFertilizers,
+    };
+  }
+
+  if (slot.isGear && slot.gearType) {
+    const existing = state.gearInventory.find((g) => g.gearType === slot.gearType);
+    const newGearInv = existing
+      ? state.gearInventory.map((g) =>
+          g.gearType === slot.gearType ? { ...g, quantity: g.quantity + 1 } : g
+        )
+      : [...state.gearInventory, { gearType: slot.gearType!, quantity: 1 }];
+
+    return {
+      ...state,
+      coins:        state.coins - slot.price,
+      supplyShop:   newSupplyShop,
+      gearInventory: newGearInv,
+    };
+  }
+
+  return null;
+}
+
+export function upgradeSupplySlots(state: GameState): GameState | null {
+  const next = getNextSupplySlotUpgrade(state.supplySlots);
+  if (!next) return null;
+  if (state.coins < next.cost) return null;
+
+  return {
+    ...state,
+    coins:      state.coins - next.cost,
+    supplySlots: next.slots,
+    supplyShop:  generateSupplyShop(next.slots),
+  };
 }
 
 export function upgradeFarm(state: GameState): GameState | null {
