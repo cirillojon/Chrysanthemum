@@ -20,12 +20,19 @@ export type PassiveGearType =
   | "scarecrow_rare"
   | "scarecrow_legendary"
   | "composter_uncommon"
-  | "composter_rare";
+  | "composter_rare"
+  | "fan_uncommon"
+  | "fan_rare"
+  | "harvest_bell_rare"
+  | "harvest_bell_legendary";
 
 export type GearType = SprinklerGearType | PassiveGearType;
 
 export type GearCategory  = "sprinkler_regular" | "sprinkler_mutation" | "passive";
-export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter";
+export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell";
+
+/** Which way a Fan is pointing — set at placement time */
+export type FanDirection = "up" | "down" | "left" | "right";
 
 // ── Placed gear (what lives in a grid cell) ────────────────────────────────
 
@@ -34,6 +41,8 @@ export interface PlacedGear {
   placedAt: number; // wall-clock timestamp
   /** Fertilizers waiting to be collected — composter only, max 10 */
   storedFertilizers?: FertilizerType[];
+  /** Which direction the fan is blowing — fan gear only */
+  direction?: FanDirection;
 }
 
 // ── Player's gear supply inventory ────────────────────────────────────────
@@ -74,6 +83,10 @@ export interface GearDefinition {
   nightMultiplier?: number;
   /** Composter: max fertilizers that can be stored before collection is needed */
   maxStorage?: number;
+  /** Fan: how many cells it reaches in the chosen direction */
+  fanRange?: number;
+  /** Fan: per-tick probability to strip mutation (or apply windstruck if none) */
+  fanStripChancePerTick?: number;
 }
 
 // ── Radius pattern helpers ─────────────────────────────────────────────────
@@ -125,6 +138,7 @@ const MUT_CHANCE_TARGET  = 0.50; // 50% over full duration
 const DURATION_1H  = 1 * 60 * 60 * 1_000;
 const DURATION_2H  = 2 * 60 * 60 * 1_000;
 const DURATION_4H  = 4 * 60 * 60 * 1_000;
+const DURATION_8H  = 8 * 60 * 60 * 1_000;
 
 // ── Gear catalog ───────────────────────────────────────────────────────────
 
@@ -340,8 +354,69 @@ export const GEAR: Record<GearType, GearDefinition> = {
     category:       "passive",
     passiveSubtype: "composter",
     radiusOffsets:  OFFSETS_3X3,
-    durationMs:     8 * 60 * 60 * 1_000,
+    durationMs:     DURATION_8H,
     maxStorage:     20,
+  },
+
+  // ── Fan ──────────────────────────────────────────────────────────────────
+  // Blows in a player-chosen direction. Each tick: strips mutation from
+  // a bloomed plant in range, OR applies Windstruck if the plant has none.
+
+  fan_uncommon: {
+    id:                    "fan_uncommon",
+    name:                  "Fan",
+    description:           "Blows in one direction across 2 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 2 hours.",
+    emoji:                 "💨",
+    rarity:                "uncommon",
+    shopPrice:             250,
+    category:              "passive",
+    passiveSubtype:        "fan",
+    durationMs:            DURATION_2H,
+    fanRange:              2,
+    fanStripChancePerTick: perTickChance(0.50, DURATION_2H),
+  },
+
+  fan_rare: {
+    id:                    "fan_rare",
+    name:                  "Fan",
+    description:           "Blows in one direction across 3 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 4 hours.",
+    emoji:                 "💨",
+    rarity:                "rare",
+    shopPrice:             1_200,
+    category:              "passive",
+    passiveSubtype:        "fan",
+    durationMs:            DURATION_4H,
+    fanRange:              3,
+    fanStripChancePerTick: perTickChance(0.70, DURATION_4H),
+  },
+
+  // ── Harvest Bell ─────────────────────────────────────────────────────────
+  // Automatically harvests bloomed plants in range, even while offline.
+
+  harvest_bell_rare: {
+    id:             "harvest_bell_rare",
+    name:           "Harvest Bell",
+    description:    "Automatically harvests bloomed plants on adjacent cells, even while offline. Lasts 4 hours.",
+    emoji:          "🔔",
+    rarity:         "rare",
+    shopPrice:      2_500,
+    category:       "passive",
+    passiveSubtype: "harvest_bell",
+    radiusOffsets:  OFFSETS_CROSS,
+    durationMs:     DURATION_4H,
+  },
+
+  harvest_bell_legendary: {
+    id:             "harvest_bell_legendary",
+    name:           "Harvest Bell",
+    description:    "Automatically harvests bloomed plants in surrounding cells, even while offline. Lasts 8 hours.",
+    emoji:          "🔔",
+    rarity:         "legendary",
+    shopPrice:      18_000,
+    category:       "passive",
+    passiveSubtype: "harvest_bell",
+    radiusOffsets:  OFFSETS_3X3,
+    durationMs:     DURATION_8H,
   },
 };
 
@@ -358,17 +433,35 @@ export function isGearExpired(gear: PlacedGear, now: number): boolean {
 /**
  * Returns all [row, col] pairs that a piece of gear at (gearRow, gearCol)
  * affects, clamped to the grid dimensions.
+ * For fans, `direction` must be supplied to compute the line of cells.
  */
 export function getAffectedCells(
   gearType:  GearType,
   gearRow:   number,
   gearCol:   number,
   gridRows:  number,
-  gridCols:  number
+  gridCols:  number,
+  direction?: FanDirection
 ): [number, number][] {
   const def = GEAR[gearType];
-  if (!def.radiusOffsets) return [];
 
+  // Fan: compute a line of cells in the chosen direction
+  if (def.passiveSubtype === "fan" && def.fanRange) {
+    if (!direction) return []; // direction required for fans
+    const range = def.fanRange;
+    const offsets: [number, number][] = [];
+    for (let i = 1; i <= range; i++) {
+      if (direction === "up")    offsets.push([-i,  0]);
+      if (direction === "down")  offsets.push([ i,  0]);
+      if (direction === "left")  offsets.push([ 0, -i]);
+      if (direction === "right") offsets.push([ 0,  i]);
+    }
+    return offsets
+      .map(([dr, dc]): [number, number] => [gearRow + dr, gearCol + dc])
+      .filter(([r, c]) => r >= 0 && r < gridRows && c >= 0 && c < gridCols);
+  }
+
+  if (!def.radiusOffsets) return [];
   return def.radiusOffsets
     .map(([dr, dc]): [number, number] => [gearRow + dr, gearCol + dc])
     .filter(([r, c]) => r >= 0 && r < gridRows && c >= 0 && c < gridCols);
@@ -408,7 +501,7 @@ export function getGearAffectingCell<G extends GearDefinition = GearDefinition>(
       const def = GEAR[placedGear.gearType];
       if (filter && !filter(def)) continue;
 
-      const affected = getAffectedCells(placedGear.gearType, sr, sc, gridRows, gridCols);
+      const affected = getAffectedCells(placedGear.gearType, sr, sc, gridRows, gridCols, placedGear.direction);
       if (affected.some(([r, c]) => r === targetRow && c === targetCol)) {
         results.push({ gearType: placedGear.gearType, def, sourceRow: sr, sourceCol: sc, placedGear });
       }
@@ -440,6 +533,14 @@ export function isComposter(def: GearDefinition): boolean {
   return def.passiveSubtype === "composter";
 }
 
+export function isFan(def: GearDefinition): boolean {
+  return def.passiveSubtype === "fan";
+}
+
+export function isHarvestBell(def: GearDefinition): boolean {
+  return def.passiveSubtype === "harvest_bell";
+}
+
 // ── Supply shop pools ──────────────────────────────────────────────────────
 
 export type SupplyItem =
@@ -455,6 +556,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "fertilizer", fertilizerType: "advanced" },
     { kind: "gear",       gearType: "grow_lamp_uncommon" },
     { kind: "gear",       gearType: "composter_uncommon" },
+    { kind: "gear",       gearType: "fan_uncommon" },
   ],
   rare: [
     { kind: "fertilizer", fertilizerType: "premium" },
@@ -462,6 +564,8 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear",       gearType: "scarecrow_rare" },
     { kind: "gear",       gearType: "sprinkler_rare" },
     { kind: "gear",       gearType: "composter_rare" },
+    { kind: "gear",       gearType: "fan_rare" },
+    { kind: "gear",       gearType: "harvest_bell_rare" },
   ],
   legendary: [
     { kind: "fertilizer", fertilizerType: "elite" },
@@ -469,6 +573,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear",       gearType: "sprinkler_legendary" },
     { kind: "gear",       gearType: "sprinkler_flame" },
     { kind: "gear",       gearType: "sprinkler_frost" },
+    { kind: "gear",       gearType: "harvest_bell_legendary" },
   ],
   mythic: [
     { kind: "fertilizer", fertilizerType: "miracle" },

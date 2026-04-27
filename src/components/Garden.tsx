@@ -13,6 +13,8 @@ import {
   assignBloomMutations,
   tickWeatherMutations,
   tickSprinklerMutations,
+  tickFanMutations,
+  tickHarvestBells,
   stampStageTransitions,
   placeGear,
 } from "../store/gameStore";
@@ -21,20 +23,22 @@ import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
 import { getAffectedCells, GEAR, isGearExpired } from "../data/gear";
 import { MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
-import type { GearType } from "../data/gear";
+import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden() {
   const { state, update, perform, getState, awaitHarvests, activeWeather } = useGame();
   useGrowthTick(5_000);
 
-  // Every render: stamp transitions, roll weather mutations, roll sprinkler mutations
+  // Every render: stamp transitions, roll weather mutations, roll sprinkler/fan mutations, auto-harvest bells
   useEffect(() => {
     const now     = Date.now();
     const weather = activeWeather ?? "clear";
     let next = stampStageTransitions(state, now, weather);
     next = tickWeatherMutations(next, weather);
     next = tickSprinklerMutations(next, weather);
+    next = tickFanMutations(next, weather);
     next = assignBloomMutations(next, weather);
+    next = tickHarvestBells(next, weather);
     if (next !== state) update(next);
   });
 
@@ -42,6 +46,8 @@ export function Garden() {
   const [harvestPopup, setHarvestPopup]     = useState<{ speciesId: string; mutation?: MutationType } | null>(null);
   /** Which gear cell has its tooltip open — used to highlight affected cells */
   const [highlightSource, setHighlightSource] = useState<{ row: number; col: number; gearType: GearType } | null>(null);
+  /** Pending fan placement — waits for the player to choose a direction */
+  const [pendingFan, setPendingFan] = useState<{ gearType: GearType; row: number; col: number } | null>(null);
 
   // Track plots with a harvest in-flight so we don't open the seed picker
   // before the server has removed the plant from the DB.
@@ -60,25 +66,29 @@ export function Garden() {
   const highlightedCells = useMemo((): Set<string> => {
     if (!highlightSource) return new Set();
     const { row, col, gearType } = highlightSource;
-    const affected = getAffectedCells(gearType, row, col, state.farmRows, state.farmSize);
+    // Look up direction from the placed gear (needed for fans)
+    const direction = state.grid[row]?.[col]?.gear?.direction;
+    const affected = getAffectedCells(gearType, row, col, state.farmRows, state.farmSize, direction);
     return new Set(affected.map(([r, c]) => `${r}-${c}`));
-  }, [highlightSource, state.farmRows, state.farmSize]);
+  }, [highlightSource, state.farmRows, state.farmSize, state.grid]);
 
   // Per-cell gear coverage — used for plant indicator icons
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys } =
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells } =
     useMemo(() => {
       const regular  = new Set<string>();
       const mutation = new Map<string, string[]>(); // cellKey → unique mutation emojis
       const scarecrow = new Set<string>();
       const composter = new Set<string>();
       const growLamp  = new Set<string>();
+      const fan       = new Set<string>();
+      const harvestBell = new Set<string>();
       const now = Date.now();
       for (let ri = 0; ri < state.grid.length; ri++) {
         for (let ci = 0; ci < state.grid[ri].length; ci++) {
           const g = state.grid[ri][ci].gear;
           if (!g || isGearExpired(g, now)) continue;
           const def     = GEAR[g.gearType];
-          const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize);
+          const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize, g.direction);
           const keys    = affected.map(([r, c]) => `${r}-${c}`);
           if (def.category === "sprinkler_regular") {
             keys.forEach((k) => regular.add(k));
@@ -95,10 +105,14 @@ export function Garden() {
             keys.forEach((k) => composter.add(k));
           } else if (def.passiveSubtype === "grow_lamp") {
             keys.forEach((k) => growLamp.add(k));
+          } else if (def.passiveSubtype === "fan") {
+            keys.forEach((k) => fan.add(k));
+          } else if (def.passiveSubtype === "harvest_bell") {
+            keys.forEach((k) => harvestBell.add(k));
           }
         }
       }
-      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp };
+      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell };
     }, [state.grid, state.farmRows, state.farmSize]);
 
   function handlePlotClick(row: number, col: number) {
@@ -118,12 +132,23 @@ export function Garden() {
 
   function handleGearSelect(gearType: GearType) {
     if (!selectedPlot) return;
-    const { row, col } = selectedPlot;
-    const optimistic = placeGear(getState(), row, col, gearType);
+    const def = GEAR[gearType];
+    if (def.passiveSubtype === "fan") {
+      // Fan needs a direction — show direction picker first
+      setPendingFan({ gearType, row: selectedPlot.row, col: selectedPlot.col });
+      setSelectedPlot(null);
+      return;
+    }
+    placeGearAt(selectedPlot.row, selectedPlot.col, gearType);
+    setSelectedPlot(null);
+  }
+
+  function placeGearAt(row: number, col: number, gearType: GearType, direction?: FanDirection) {
+    const optimistic = placeGear(getState(), row, col, gearType, direction);
     if (!optimistic) return;
     perform(
       optimistic,
-      () => edgePlaceGear(row, col, gearType),
+      () => edgePlaceGear(row, col, gearType, direction),
       undefined,
       {
         rollback: (cur) => ({
@@ -139,7 +164,6 @@ export function Garden() {
         }),
       }
     );
-    setSelectedPlot(null);
   }
 
   function handleUpgrade() {
@@ -304,6 +328,8 @@ export function Garden() {
                 isUnderScarecrow={scarecrowCoveredCells.has(`${row}-${col}`)}
                 isUnderComposter={composterCoveredCells.has(`${row}-${col}`)}
                 isUnderGrowLamp={growLampKeys.has(`${row}-${col}`)}
+                isUnderFan={fanCoveredCells.has(`${row}-${col}`)}
+                isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}
@@ -323,6 +349,24 @@ export function Garden() {
                 onSelect={handleSeedSelect}
                 onGearSelect={handleGearSelect}
                 onClose={() => setSelectedPlot(null)}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* Fan direction picker modal */}
+        {pendingFan && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm"
+            onClick={() => setPendingFan(null)}
+          >
+            <div onClick={(e) => e.stopPropagation()}>
+              <FanDirectionPicker
+                onDirection={(dir) => {
+                  placeGearAt(pendingFan.row, pendingFan.col, pendingFan.gearType, dir);
+                  setPendingFan(null);
+                }}
+                onClose={() => setPendingFan(null)}
               />
             </div>
           </div>
@@ -364,6 +408,71 @@ export function Garden() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Fan direction picker ───────────────────────────────────────────────────
+
+function FanDirectionPicker({
+  onDirection,
+  onClose,
+}: {
+  onDirection: (dir: FanDirection) => void;
+  onClose: () => void;
+}) {
+  const dirs: { dir: FanDirection; label: string; arrow: string }[] = [
+    { dir: "up",    label: "Up",    arrow: "↑" },
+    { dir: "down",  label: "Down",  arrow: "↓" },
+    { dir: "left",  label: "Left",  arrow: "←" },
+    { dir: "right", label: "Right", arrow: "→" },
+  ];
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 w-64 shadow-xl z-50 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-semibold">Which way does it blow?</p>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
+      </div>
+      <p className="text-xs text-muted-foreground">Choose the direction the fan faces.</p>
+      <div className="grid grid-cols-3 gap-2">
+        {/* Top row: just Up */}
+        <div />
+        <button
+          onClick={() => onDirection("up")}
+          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+        >
+          <span className="text-lg font-bold leading-none">↑</span>
+          <span className="text-[10px] text-muted-foreground">Up</span>
+        </button>
+        <div />
+        {/* Middle row: Left, Fan, Right */}
+        <button
+          onClick={() => onDirection("left")}
+          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+        >
+          <span className="text-lg font-bold leading-none">←</span>
+          <span className="text-[10px] text-muted-foreground">Left</span>
+        </button>
+        <div className="flex items-center justify-center text-2xl">💨</div>
+        <button
+          onClick={() => onDirection("right")}
+          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+        >
+          <span className="text-lg font-bold leading-none">→</span>
+          <span className="text-[10px] text-muted-foreground">Right</span>
+        </button>
+        {/* Bottom row: just Down */}
+        <div />
+        <button
+          onClick={() => onDirection("down")}
+          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+        >
+          <span className="text-lg font-bold leading-none">↓</span>
+          <span className="text-[10px] text-muted-foreground">Down</span>
+        </button>
+        <div />
+      </div>
     </div>
   );
 }

@@ -154,8 +154,8 @@ export interface GearActionResult {
   fertilizers?:  GameState["fertilizers"];
 }
 
-export function edgePlaceGear(row: number, col: number, gearType: string) {
-  return callEdge<GearActionResult>("gear-action", { action: "place", row, col, gearType });
+export function edgePlaceGear(row: number, col: number, gearType: string, direction?: string) {
+  return callEdge<GearActionResult>("gear-action", { action: "place", row, col, gearType, direction });
 }
 
 export function edgeRemoveGear(row: number, col: number) {

@@ -4,10 +4,12 @@ import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
 import {
-  GEAR, isGearExpired, getGearAffectingCell, isRegularSprinkler, isMutationSprinkler,
-  isScarecrow, isGrowLamp, isComposter, rollComposterFertilizer,
+  GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
+  isRegularSprinkler, isMutationSprinkler,
+  isScarecrow, isGrowLamp, isComposter, isFan, isHarvestBell,
+  rollComposterFertilizer,
   SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
-  type GearType, type PlacedGear, type GearInventoryItem,
+  type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
 } from "../data/gear";
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -436,6 +438,9 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
 
   // Prune expired gear from grid on load
   updated = { ...updated, grid: pruneExpiredGear(updated.grid, now) };
+
+  // Auto-harvest via any active Harvest Bells (captures offline progress)
+  updated = tickHarvestBells(updated, "clear");
 
   const readyToHarvest = updated.grid
     .flat()
@@ -1013,6 +1018,82 @@ export function tickSprinklerMutations(
   return changed ? { ...state, grid: newGrid } : state;
 }
 
+/** Called every tick. Fans either strip existing mutations from bloomed plants, or apply
+ *  Windstruck to bloomed plants that have no mutation. Each covered cell rolls independently. */
+export function tickFanMutations(
+  state: GameState,
+  weatherType: WeatherType = "clear"
+): GameState {
+  const now = Date.now();
+  let changed = false;
+
+  const newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
+      if (!plot.plant) return plot;
+
+      const stage = getCurrentStage(plot.plant, now, weatherType);
+      if (stage !== "bloom") return plot;
+
+      const sources = getGearAffectingCell(state.grid, ri, ci, now);
+
+      for (const { def } of sources) {
+        if (!isFan(def) || !def.fanStripChancePerTick) continue;
+        if (Math.random() < def.fanStripChancePerTick) {
+          changed = true;
+          if (typeof plot.plant.mutation === "string") {
+            // Strip the mutation (set to null — marks "Giant already tried")
+            return { ...plot, plant: { ...plot.plant, mutation: null } };
+          } else {
+            // No mutation — apply Windstruck
+            return { ...plot, plant: { ...plot.plant, mutation: "windstruck" as MutationType } };
+          }
+        }
+      }
+
+      return plot;
+    })
+  );
+
+  return changed ? { ...state, grid: newGrid } : state;
+}
+
+/** Scans for active Harvest Bells and auto-harvests any bloomed plants in range.
+ *  Called both in the live tick and in applyOfflineTick for offline progress. */
+export function tickHarvestBells(
+  state: GameState,
+  weatherType: WeatherType = "clear"
+): GameState {
+  const now     = Date.now();
+  let   updated = state;
+
+  for (let ri = 0; ri < state.grid.length; ri++) {
+    for (let ci = 0; ci < state.grid[ri].length; ci++) {
+      const bellPlot = updated.grid[ri][ci];
+      if (!bellPlot.gear) continue;
+
+      const def = GEAR[bellPlot.gear.gearType];
+      if (!isHarvestBell(def)) continue;
+      if (isGearExpired(bellPlot.gear, now)) continue;
+
+      const gridRows = updated.grid.length;
+      const gridCols = updated.grid[0]?.length ?? 0;
+      const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols);
+
+      for (const [ar, ac] of affected) {
+        const targetPlot = updated.grid[ar]?.[ac];
+        if (!targetPlot?.plant) continue;
+        const stage = getCurrentStage(targetPlot.plant, now, weatherType);
+        if (stage !== "bloom") continue;
+
+        const result = harvestPlant(updated, ar, ac, weatherType);
+        if (result) updated = result.state;
+      }
+    }
+  }
+
+  return updated;
+}
+
 /** Called every tick. Assigns Giant to newly-bloomed plants that have no mutation yet.
  *  Giant is weather-independent — it's a flat chance at the moment of bloom. */
 export function assignBloomMutations(
@@ -1521,7 +1602,8 @@ export function placeGear(
   state: GameState,
   row: number,
   col: number,
-  gearType: GearType
+  gearType: GearType,
+  direction?: FanDirection
 ): GameState | null {
   const plot = state.grid[row]?.[col];
   if (!plot || plot.plant || plot.gear) return null;
@@ -1529,11 +1611,13 @@ export function placeGear(
   const invItem = state.gearInventory.find((g) => g.gearType === gearType);
   if (!invItem || invItem.quantity < 1) return null;
 
+  const placedGear: PlacedGear = direction
+    ? { gearType, placedAt: Date.now(), direction }
+    : { gearType, placedAt: Date.now() };
+
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>
-      ri === row && ci === col
-        ? { ...p, gear: { gearType, placedAt: Date.now() } }
-        : p
+      ri === row && ci === col ? { ...p, gear: placedGear } : p
     )
   );
 

@@ -38,6 +38,10 @@ interface Props {
   isUnderComposter?: boolean;
   /** True when this cell is within a grow lamp's radius. */
   isUnderGrowLamp?: boolean;
+  /** True when this cell is within a fan's range. */
+  isUnderFan?: boolean;
+  /** True when this cell is within a harvest bell's radius. */
+  isUnderHarvestBell?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -50,6 +54,7 @@ export function PlotTile({
   isSelected, isHighlighted,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
+  isUnderFan, isUnderHarvestBell,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
 }: Props) {
@@ -258,6 +263,8 @@ export function PlotTile({
           isUnderGrowLamp={isUnderGrowLamp}
           isUnderScarecrow={isUnderScarecrow}
           isUnderComposter={isUnderComposter}
+          isUnderFan={isUnderFan}
+          isUnderHarvestBell={isUnderHarvestBell}
         />
       )}
 
@@ -340,7 +347,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map((emoji, i) => (
@@ -349,6 +356,8 @@ export function PlotTile({
             {isUnderScarecrow && <span className="text-[9px]" title="Under scarecrow">🧹</span>}
             {isUnderComposter && <span className="text-[9px]" title="Near composter">🧺</span>}
             {isUnderGrowLamp && <span className="text-[9px]" title="Under grow lamp">💡</span>}
+            {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
+            {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
           </div>
         )}
 
