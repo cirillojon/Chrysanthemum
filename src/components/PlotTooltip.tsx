@@ -38,6 +38,7 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
   const [confirmRemove,   setConfirmRemove]   = useState(false);
   const [removing,        setRemoving]        = useState(false);
   const [nudge,           setNudge]           = useState(0);
+  const [flipped,         setFlipped]         = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -46,10 +47,19 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
     const rect = el.getBoundingClientRect();
     const vw  = document.documentElement.clientWidth;
     const pad = 8;
+
+    // Horizontal clamping
     if (rect.left < pad) {
       setNudge(pad - rect.left);
     } else if (rect.right > vw - pad) {
       setNudge(vw - pad - rect.right);
+    }
+
+    // Vertical: flip below the plot if tooltip is hidden behind the sticky nav
+    const navEl = document.querySelector<HTMLElement>("[data-sticky-nav]");
+    const navBottom = navEl ? navEl.getBoundingClientRect().bottom : 0;
+    if (rect.top < navBottom + pad) {
+      setFlipped(true);
     }
   }, []);
 
@@ -113,7 +123,7 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
   return (
     <div
       ref={tooltipRef}
-      className="absolute bottom-full left-1/2 mb-2 z-40 pointer-events-none"
+      className={`absolute ${flipped ? "top-full mt-2" : "bottom-full mb-2"} left-1/2 z-40 pointer-events-none`}
       style={{ transform: `translateX(calc(-50% + ${nudge}px))` }}
     >
       <div className="pointer-events-auto bg-card border border-border rounded-xl p-3 shadow-xl w-48 space-y-2">
