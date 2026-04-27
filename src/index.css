@@ -73,6 +73,15 @@
 .rainbow-border { animation: rainbow-border-cycle 3s linear infinite; }
 .rainbow-glow   { animation: rainbow-glow-cycle   3s linear infinite; }
 .rainbow-bg     { animation: rainbow-bg-cycle     3s linear infinite; }
+/* Combined class for tile elements that need border + bg + glow together.
+   Using separate classes would cause the `animation` shorthand to clobber each other
+   (last class in the stylesheet wins). This runs all three in one declaration. */
+.rainbow-tile {
+  animation:
+    rainbow-border-cycle 3s linear infinite,
+    rainbow-bg-cycle     3s linear infinite,
+    rainbow-glow-cycle   3s linear infinite;
+}
 
 /* ── Tab slide transitions ─────────────────────────────────────────────── */
 @keyframes slide-from-right {

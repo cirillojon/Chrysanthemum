@@ -49,6 +49,13 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
   const def    = GEAR[gear.gearType];
   const rarity = RARITY_CONFIG[def.rarity];
 
+  // Map rarity text-color class → background-color class for the expiry bar.
+  // Prismatic uses "rainbow-text" which doesn't follow text-* and whose rainbow-bg
+  // keyframes are only 12% opacity (designed for tile backgrounds, not bar fills).
+  const rarityBarBg = rarity.color === "rainbow-text"
+    ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
+    : rarity.color.replace("text-", "bg-");
+
   const msRemaining    = def.durationMs ? Math.max(0, gear.placedAt + def.durationMs - now) : null;
   const expiryProgress = (def.durationMs && msRemaining !== null)
     ? msRemaining / def.durationMs
@@ -222,7 +229,7 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
             {expiryProgress !== null && !expired && (
               <div className="h-1 bg-border rounded-full overflow-hidden">
                 <div
-                  className={`h-full rounded-full transition-all duration-1000 ${rarity.color.replace("text-", "bg-")}`}
+                  className={`h-full rounded-full ${rarityBarBg}`}
                   style={{ width: `${expiryProgress * 100}%` }}
                 />
               </div>

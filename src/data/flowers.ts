@@ -1550,5 +1550,8 @@ export const RARITY_CONFIG: Record<Rarity, {
   legendary: { label: "Legendary", color: "text-yellow-400", glow: "shadow-[0_0_12px_rgba(250,204,21,0.6)]",                                                              borderGrowing: "border-yellow-400/30",  borderBloom: "border-yellow-400/80",  bgBloom: "bg-yellow-400/10"  },
   mythic:    { label: "Mythic",    color: "text-pink-400",   glow: "shadow-[0_0_16px_rgba(244,114,182,0.7)]",                                                             borderGrowing: "border-pink-400/30",    borderBloom: "border-pink-400/80",    bgBloom: "bg-pink-400/10"    },
   exalted:   { label: "Exalted",   color: "text-black",      glow: "shadow-[0_0_24px_rgba(226,232,240,0.6)]",                                                             borderGrowing: "border-slate-300/25",   borderBloom: "border-slate-300/70",   bgBloom: "bg-slate-300/10"   },
-  prismatic: { label: "Prismatic", color: "rainbow-text", glow: "rainbow-glow", borderGrowing: "rainbow-border", borderBloom: "rainbow-border", bgBloom: "rainbow-bg" },
+  // borderBloom / bgBloom / glow are all applied to the same element, and each
+  // rainbow-* class uses the `animation` shorthand — last one wins and kills the others.
+  // rainbow-tile runs all three keyframes in a single declaration so they coexist.
+  prismatic: { label: "Prismatic", color: "rainbow-text", glow: "", borderGrowing: "rainbow-border", borderBloom: "", bgBloom: "" },
 };

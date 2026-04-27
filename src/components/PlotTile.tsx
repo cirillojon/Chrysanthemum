@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   type Plot,
   type PlantedFlower,
@@ -161,6 +161,17 @@ export function PlotTile({
       ? Math.max(0, (gear.placedAt + def.durationMs - now) / def.durationMs)
       : null;
 
+    // Prismatic uses "rainbow-text" which doesn't follow text-* — map to gradient fill
+    const gearBarBg = gearRarity.color === "rainbow-text"
+      ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
+      : gearRarity.color.replace("text-", "bg-");
+
+    // Prismatic gear: drive all three rainbow animations via inline style so CSS cascade
+    // order doesn't matter (inline style wins over any class-based `animation` shorthand).
+    const prismaticGearStyle: React.CSSProperties | undefined = def.rarity === "prismatic"
+      ? { animation: "rainbow-border-cycle 3s linear infinite, rainbow-bg-cycle 3s linear infinite, rainbow-glow-cycle 3s linear infinite" }
+      : undefined;
+
     return (
       <div ref={tileRef} className="relative">
         {gearOpen && (
@@ -178,8 +189,9 @@ export function PlotTile({
             if (next) onGearInspect?.(row, col, gear.gearType);
             else      onGearInspectClose?.();
           }}
+          style={prismaticGearStyle}
           className={`
-            relative ${cellSize} rounded-xl border-2 transition-all duration-200
+            relative ${cellSize} rounded-xl border-2 transition-[transform,opacity] duration-200
             flex flex-col items-center justify-center
             ${gearOpen
               ? `${gearRarity.borderBloom} ${gearRarity.bgBloom} scale-105`
@@ -203,7 +215,7 @@ export function PlotTile({
           {expiryProgress !== null && !expired && (
             <div className="absolute bottom-1 left-2 right-2 h-1 bg-border rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all duration-1000 ${gearRarity.color.replace("text-", "bg-")}`}
+                className={`h-full rounded-full ${gearBarBg}`}
                 style={{ width: `${expiryProgress * 100}%` }}
               />
             </div>
@@ -272,6 +284,10 @@ export function PlotTile({
 
       <button
         onClick={handleClick}
+        style={isBloomed && species?.rarity === "prismatic"
+          ? { animation: "rainbow-border-cycle 3s linear infinite, rainbow-bg-cycle 3s linear infinite, rainbow-glow-cycle 3s linear infinite" }
+          : undefined
+        }
         className={`
           relative ${cellSize} rounded-xl border-2 transition-all duration-200
           flex flex-col items-center justify-center gap-0.5
