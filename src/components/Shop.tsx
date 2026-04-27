@@ -13,7 +13,11 @@ function formatCountdown(ms: number): string {
   return h > 0 ? `${h}:${m}:${s}` : `${m}:${s}`;
 }
 
-export function Shop() {
+interface ShopProps {
+  view: "seeds" | "fertilizers";
+}
+
+export function Shop({ view }: ShopProps) {
   const { state, perform } = useGame();
   const [countdown, setCountdown] = useState(() => msUntilShopReset(state));
 
@@ -41,9 +45,13 @@ export function Shop() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold">Flower Shop</h2>
+          <h2 className="text-lg font-bold">
+            {view === "seeds" ? "Seeds" : "Fertilizers"}
+          </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Buy seeds and fertilizer for your garden
+            {view === "seeds"
+              ? `${activeCount} seed${activeCount !== 1 ? "s" : ""} available`
+              : "Speed up your plants' growth"}
           </p>
         </div>
         <div className="text-right">
@@ -62,62 +70,64 @@ export function Shop() {
         </span>
       </div>
 
-      {/* Flower seeds */}
-      {flowerSlots.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            Seeds ({activeCount} available)
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {flowerSlots.map((slot) => (
-              <ShopSlotCard key={slot.speciesId} slot={slot} />
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Seeds view */}
+      {view === "seeds" && (
+        <>
+          {flowerSlots.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {flowerSlots.map((slot) => (
+                <ShopSlotCard key={slot.speciesId} slot={slot} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-12">No seeds in stock right now.</p>
+          )}
 
-      {/* Fertilizers */}
-      {fertilizerSlots.length > 0 && (
-        <div className="flex flex-col gap-3">
-          <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            Fertilizers
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {fertilizerSlots.map((slot) => (
-              <ShopSlotCard key={slot.speciesId} slot={slot} />
-            ))}
+          {/* Shop slot upgrade — seeds view only */}
+          <div className="border border-border rounded-xl p-4 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold">Expand Shop</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {atMaxSlots
+                  ? `Maximum size reached (${MAX_SHOP_SLOTS} slots)`
+                  : `${state.shopSlots} seed slots — upgrade to ${nextSlotUpgrade!.slots}`}
+              </p>
+            </div>
+            {!atMaxSlots && (
+              <button
+                onClick={handleUpgradeShopSlots}
+                disabled={!canAffordSlot}
+                className={`shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all
+                  ${canAffordSlot
+                    ? "bg-primary text-primary-foreground hover:opacity-90"
+                    : "bg-card border border-border text-muted-foreground cursor-not-allowed opacity-50"
+                  }`}
+              >
+                🟡 {nextSlotUpgrade!.cost.toLocaleString()}
+              </button>
+            )}
           </div>
-        </div>
-      )}
 
-      {/* Shop slot upgrade */}
-      <div className="border border-border rounded-xl p-4 flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm font-semibold">Expand Shop</p>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {atMaxSlots
-              ? `Maximum size reached (${MAX_SHOP_SLOTS} slots)`
-              : `${state.shopSlots} seed slots — upgrade to ${nextSlotUpgrade!.slots}`}
+          <p className="text-xs text-muted-foreground text-center pb-4">
+            Shop stock is random every 10 minutes. Rarer flowers appear less often.
           </p>
-        </div>
-        {!atMaxSlots && (
-          <button
-            onClick={handleUpgradeShopSlots}
-            disabled={!canAffordSlot}
-            className={`shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all
-              ${canAffordSlot
-                ? "bg-primary text-primary-foreground hover:opacity-90"
-                : "bg-card border border-border text-muted-foreground cursor-not-allowed opacity-50"
-              }`}
-          >
-            🟡 {nextSlotUpgrade!.cost.toLocaleString()}
-          </button>
-        )}
-      </div>
+        </>
+      )}
 
-      <p className="text-xs text-muted-foreground text-center pb-4">
-        Shop stock is random every 10 minutes. Rarer flowers appear less often.
-      </p>
+      {/* Fertilizers view */}
+      {view === "fertilizers" && (
+        <>
+          {fertilizerSlots.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {fertilizerSlots.map((slot) => (
+                <ShopSlotCard key={slot.fertilizerType ?? slot.speciesId} slot={slot} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground text-center py-12">No fertilizers in stock right now.</p>
+          )}
+        </>
+      )}
     </div>
   );
 }

@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.1.5",
+    title:   "Mobile UX",
+    items: [
+      { type: "added",   text: "📱 Swipe left or right to navigate between tabs on mobile — also works between Seeds ↔ Fertilizers in the Shop and between sub-views in Social" },
+      { type: "added",   text: "Slide animations when switching tabs — the incoming view slides in from the direction you're navigating; the sub-nav stays put" },
+      { type: "added",   text: "🌿 Shop split into Seeds and Fertilizers sub-tabs — each has its own grid and empty state" },
+      { type: "added",   text: "Sticky header & nav — the header and navigation bar stay pinned to the top of the screen while you scroll" },
+      { type: "changed", text: "Day/night ambient tint now cross-fades smoothly over 3 seconds when the time period changes, instead of snapping instantly" },
+    ],
+  },
+  {
     version: "2.1.4",
     title:   "Gifting Fixes",
     items: [

@@ -1,3 +1,16 @@
+## [v2.1.5] — 2026-04-27 — Mobile UX
+
+### Added
+- **📱 Swipe navigation** — swipe left or right to move between tabs on mobile; swipe also works within the Shop (Seeds ↔ Fertilizers) and Social sub-views
+- **Slide animations** — switching tabs slides the incoming view in from the direction you're navigating; sub-views inside Social and Shop animate independently so the sub-nav stays stable
+- **🌿 Shop sub-tabs** — Seeds and Fertilizers are now separate tabs inside the Shop, each with its own grid and empty state
+- **Sticky header & nav** — the header and navigation bar stay pinned to the top of the screen while you scroll
+
+### Changed
+- **Day/night transitions** — the ambient tint now cross-fades smoothly over 3 seconds instead of snapping instantly when the period changes
+
+---
+
 ## [v2.1.4] — 2026-04-27 — Gifting Fixes
 
 ### Fixed
