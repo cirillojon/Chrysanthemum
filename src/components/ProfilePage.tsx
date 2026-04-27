@@ -440,6 +440,11 @@ function SettingsPanel() {
       label:       "Mastery badge",
       description: "⚡ shown on tiles with a mastery speed bonus",
     },
+    {
+      key:         "plotFertilizerIndicator",
+      label:       "Fertilizer badge",
+      description: "Fertilizer emoji shown on tiles with an active fertilizer",
+    },
   ];
 
   return (

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useSettings } from "../store/SettingsContext";
 import { getCurrentStage, getStageProgress } from "../store/gameStore";
 import type { Plot } from "../store/gameStore";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
@@ -15,6 +16,7 @@ interface Props {
 export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   const now  = Date.now();
   const rows = farmRows ?? farmSize;
+  const { settings } = useSettings();
 
   // Compute gear coverage in one pass
   const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys } = useMemo(() => {
@@ -160,7 +162,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               title={`${species?.name} — ${stage}`}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-              {(underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter) && (
+              {settings.plotAnimations && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
                   {underGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
                   {underSprinkler && (
@@ -195,21 +197,21 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               </span>
 
               {/* Fertilizer — top-left */}
-              {hasFert && !isBloomed && (
+              {settings.plotFertilizerIndicator && hasFert && !isBloomed && (
                 <span className="absolute top-0.5 left-0.5 text-[9px] leading-none">
                   {FERTILIZERS[plant.fertilizer!].emoji}
                 </span>
               )}
 
               {/* Mastery — top-right */}
-              {plant.masteredBonus && (
+              {settings.plotMasteryIndicator && plant.masteredBonus && (
                 <span className="absolute top-0.5 right-0.5 text-[9px] leading-none text-yellow-400" title="Mastered">
                   ⚡
                 </span>
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {(underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp) && (
+              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp) && (
                 <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2"}`}>
                   {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
                   {mutEmojis.map((emoji, i) => (
@@ -237,7 +239,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Mutation emoji */}
-              {mut && (
+              {settings.plotMutationIndicator && mut && (
                 <span className="absolute -bottom-1 -right-1 text-sm leading-none">
                   {mut.emoji}
                 </span>

@@ -9,6 +9,8 @@ export interface Settings {
   plotMutationIndicator: boolean;
   /** ⚡ mastery badge on tiles */
   plotMasteryIndicator:  boolean;
+  /** Fertilizer emoji badge on growing tiles */
+  plotFertilizerIndicator: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -16,6 +18,7 @@ const DEFAULTS: Settings = {
   plotGearIndicator:     true,
   plotMutationIndicator: true,
   plotMasteryIndicator:  true,
+  plotFertilizerIndicator: true,
 };
 
 const LS_KEY = "chrysanthemum_settings";

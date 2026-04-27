@@ -323,7 +323,7 @@ export function PlotTile({
         </span>
 
         {/* Fertilizer indicator — top-left */}
-        {hasFert && !isBloomed && (
+        {settings.plotFertilizerIndicator && hasFert && !isBloomed && (
           <span className="absolute top-0.5 left-0.5 text-[10px] leading-none">
             {FERTILIZERS[(plant as PlantedFlower).fertilizer!].emoji}
           </span>
