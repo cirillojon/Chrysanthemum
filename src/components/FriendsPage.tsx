@@ -6,7 +6,8 @@ import {
   removeFriendship,
   type FriendWithProfile,
 } from "../store/cloudSave";
-import { getFlower, RARITY_CONFIG } from "../data/flowers";
+import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
+import type { MutationType } from "../data/flowers";
 
 interface Props {
   onViewProfile: (username: string) => void;
@@ -184,6 +185,7 @@ function FriendRow({
   const { profile } = entry;
   const flower  = getFlower(profile.display_flower);
   const rarity  = flower ? RARITY_CONFIG[flower.rarity] : null;
+  const mutObj  = profile.display_mutation ? MUTATIONS[profile.display_mutation as MutationType] : null;
 
   return (
     <div className="flex items-center gap-3 bg-card/60 border border-border rounded-xl px-4 py-3 hover:border-primary/30 transition-colors">
@@ -191,8 +193,11 @@ function FriendRow({
         onClick={() => onViewProfile(profile.username)}
         className="flex items-center gap-3 flex-1 min-w-0 text-left"
       >
-        <div className={`w-10 h-10 rounded-xl border flex items-center justify-center text-xl flex-shrink-0 border-border bg-background ${rarity?.glow ?? ""}`}>
+        <div className={`relative w-10 h-10 rounded-xl border flex items-center justify-center text-xl flex-shrink-0 border-border bg-background ${rarity?.glow ?? ""}`}>
           {flower?.emoji.bloom ?? "🌱"}
+          {mutObj && (
+            <span className="absolute -top-1 -right-1 text-sm leading-none">{mutObj.emoji}</span>
+          )}
         </div>
         <div className="min-w-0">
           <p className="text-sm font-semibold truncate hover:text-primary transition-colors">
