@@ -141,15 +141,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Record sale history
-    void supabaseAdmin.from("marketplace_sales").insert({
-      species_id: listing.species_id,
-      mutation:   listing.mutation ?? null,
-      item_type:  "flower",
-      price:      listing.ask_price,
-    });
-
-    // Credit seller in parallel with updating buyer save
+    // Credit seller, update buyer save, record sale history — all in parallel
     const sellerCredit = supabaseAdmin.rpc("add_coins_to_user", {
       target_user_id: listing.seller_id,
       amount:         listing.ask_price,
@@ -160,7 +152,18 @@ Deno.serve(async (req: Request) => {
       .update({ coins: buyerCoins, inventory: buyerInventory, discovered: buyerDiscovered, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
 
-    const [sellerResult, buyerResult] = await Promise.all([sellerCredit, buyerUpdate]);
+    const saleRecord = supabaseAdmin.from("marketplace_sales").insert({
+      species_id: listing.species_id,
+      mutation:   listing.mutation ?? null,
+      item_type:  "flower",
+      price:      listing.ask_price,
+    });
+
+    const [sellerResult, buyerResult, saleResult] = await Promise.all([sellerCredit, buyerUpdate, saleRecord]);
+
+    if (saleResult.error) {
+      console.error("marketplace-buy: sale record failed", saleResult.error);
+    }
 
     if (buyerResult.error) {
       // This is bad — listing is sold but buyer save failed. Log it.
