@@ -1,3 +1,10 @@
+## [v2.1.6] — 2026-04-27 — Bug Fixes
+
+### Fixed
+- **Plot tooltip hidden behind sticky nav** — tapping a plot near the top of the garden on mobile now opens the tooltip below the plot instead of behind the navigation bar
+
+---
+
 ## [v2.1.5] — 2026-04-27 — Mobile UX
 
 ### Added

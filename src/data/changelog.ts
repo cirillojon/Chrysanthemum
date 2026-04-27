@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.1.6",
+    title:   "Bug Fixes",
+    items: [
+      { type: "fixed", text: "Plot tooltip no longer hides behind the navigation bar on mobile — it now flips below the plot when it would be covered by the sticky nav" },
+    ],
+  },
+  {
     version: "2.1.5",
     title:   "Mobile UX",
     items: [
