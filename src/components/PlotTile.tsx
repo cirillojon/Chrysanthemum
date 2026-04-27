@@ -12,6 +12,7 @@ import { GEAR, isGearExpired } from "../data/gear";
 import { PlotTooltip } from "./PlotTooltip";
 import { GearTooltip } from "./GearTooltip";
 import { useGame } from "../store/GameContext";
+import { useSettings } from "../store/SettingsContext";
 import { edgeHarvest } from "../lib/edgeFunctions";
 
 interface Props {
@@ -53,6 +54,7 @@ export function PlotTile({
   cellSize = "w-16 h-16",
 }: Props) {
   const { perform, getState, activeWeather } = useGame();
+  const { settings } = useSettings();
   const now    = Date.now();
   const plant  = plot.plant;
   const gear   = plot.gear;
@@ -281,7 +283,7 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter) && (
+        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -328,7 +330,7 @@ export function PlotTile({
         )}
 
         {/* ⚡ Mastery bonus indicator — top-right */}
-        {(plant as PlantedFlower).masteredBonus && (
+        {settings.plotMasteryIndicator && (plant as PlantedFlower).masteredBonus && (
           <span
             className="absolute top-0.5 right-0.5 text-[10px] leading-none text-yellow-400"
             title="Mastered — grows 20% faster"
@@ -338,7 +340,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map((emoji, i) => (
@@ -368,7 +370,7 @@ export function PlotTile({
         )}
 
         {/* Mutation emoji — bottom-right */}
-        {isBloomed && (plant as PlantedFlower).mutation && (
+        {settings.plotMutationIndicator && isBloomed && (plant as PlantedFlower).mutation && (
           <span className="absolute -bottom-1 -right-1 text-sm leading-none">
             {MUTATIONS[(plant as PlantedFlower).mutation!].emoji}
           </span>

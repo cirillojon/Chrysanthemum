@@ -23,6 +23,7 @@ import { WeatherBanner } from "./components/WeatherBanner";
 import { WeatherForecastPanel } from "./components/WeatherForecastPanel";
 import { DayNightOverlay } from "./components/DayNightOverlay";
 import { useGame } from "./store/GameContext";
+import { SettingsProvider } from "./store/SettingsContext";
 import { useFriendRequests } from "./hooks/useFriendRequests";
 import { useGiftNotifications } from "./hooks/useGiftNotifications";
 import { useDayNight } from "./hooks/useDayNight";
@@ -38,6 +39,10 @@ type SocialView = "search" | "friends" | "gifts" | "leaderboard" | "marketplace"
 
 
 export default function App() {
+  return <SettingsProvider><AppInner /></SettingsProvider>;
+}
+
+function AppInner() {
   const {
     state, offlineSummary, clearSummary,
     shopJustRestocked, clearShopNotification,
