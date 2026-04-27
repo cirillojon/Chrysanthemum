@@ -157,6 +157,7 @@ Deno.serve(async (req: Request) => {
       mutation:   listing.mutation ?? null,
       item_type:  "flower",
       price:      listing.ask_price,
+      sold_at:    new Date().toISOString(),
     });
 
     const [sellerResult, buyerResult, saleResult] = await Promise.all([sellerCredit, buyerUpdate, saleRecord]);

@@ -59,7 +59,7 @@ export function PriceHistoryChart({ speciesId, mutation, baseValue }: Props) {
 
     const q = mutation
       ? base.eq("mutation", mutation)
-      : base.is("mutation", null);
+      : base.filter("mutation", "is", null);
 
     q.order("sold_at", { ascending: false })
       .limit(30)
