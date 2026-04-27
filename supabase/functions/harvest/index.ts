@@ -13,7 +13,7 @@ function b64url(s: string): string {
 
 // ── Fertilizer speed multipliers (mirrors src/data/upgrades.ts) ──────────────
 const FERTILIZER_MULTIPLIERS: Record<string, number> = {
-  basic: 1.2, advanced: 1.5, premium: 2.0, elite: 3.0, miracle: 4.0,
+  basic: 1.1, advanced: 1.25, premium: 1.5, elite: 1.75, miracle: 2.0,
 };
 
 // ── Mutation value multipliers (mirrors src/data/flowers.ts) ─────────────────

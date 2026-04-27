@@ -93,7 +93,9 @@ export function Garden() {
         harvestingPlots.current.delete(`${row}-${col}`);
         continue;
       }
-      const savedCell = cur.grid[row][col];
+      const savedCell           = cur.grid[row][col];
+      const harvestedSpeciesId  = savedCell.plant?.speciesId;
+      const harvestedMutation   = savedCell.plant?.mutation ?? undefined;
       perform(
         opt.state,
         async () => {
@@ -111,6 +113,19 @@ export function Garden() {
             grid: c.grid.map((r2, ri2) =>
               r2.map((p2, ci2) => ri2 === row && ci2 === col ? savedCell : p2)
             ),
+            // Undo the optimistic inventory add for this specific flower.
+            // (inventory is no longer overwritten on success, so rollback must clean it up.)
+            inventory: harvestedSpeciesId
+              ? c.inventory
+                  .map((item) =>
+                    item.speciesId === harvestedSpeciesId &&
+                    item.mutation  === harvestedMutation  &&
+                    !item.isSeed
+                      ? { ...item, quantity: item.quantity - 1 }
+                      : item
+                  )
+                  .filter((item) => item.quantity > 0)
+              : c.inventory,
           }),
         }
       );

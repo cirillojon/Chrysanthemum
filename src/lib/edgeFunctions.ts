@@ -78,8 +78,14 @@ export interface BotanyResult {
 
 // ── Typed callers ─────────────────────────────────────────────────────────────
 
-export function edgeHarvest(row: number, col: number, clientMutation?: string) {
-  return callEdge<HarvestResult>("harvest", { row, col, clientMutation });
+export async function edgeHarvest(row: number, col: number, clientMutation?: string): Promise<Omit<HarvestResult, "inventory">> {
+  // Strip inventory from the merge delta. Each serialized harvest returns the DB
+  // snapshot at that moment, which would overwrite optimistic flowers added by
+  // subsequent harvests that haven't hit the server yet — causing the "count one
+  // by one" effect. The client's optimistic inventory is correct; rollback handles
+  // the failure case.
+  const { inventory: _omit, ...delta } = await callEdge<HarvestResult>("harvest", { row, col, clientMutation });
+  return delta;
 }
 
 export function edgeSyncShop(shop: GameState["shop"], lastShopReset: number) {

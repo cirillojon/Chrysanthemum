@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.1.1",
+    title:   "Bug Fixes",
+    items: [
+      { type: "fixed", text: "Collect All now adds all harvested blooms to your inventory at once instead of one by one" },
+      { type: "fixed", text: "A failed harvest no longer leaves a ghost flower in your inventory" },
+      { type: "fixed", text: "Shop \"Flower not in stock\" errors after a restock are fixed — buys now wait for the shop sync to complete first" },
+    ],
+  },
+  {
     version: "2.1.0",
     title:   "Marketplace",
     items: [

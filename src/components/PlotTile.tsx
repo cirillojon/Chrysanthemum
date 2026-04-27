@@ -73,7 +73,9 @@ export function PlotTile({ plot, row, col, onEmptyClick, onHarvest, onHarvestSta
       if (optimistic) {
         // Capture the original cell so we can do a surgical rollback if the
         // server call fails — restoring only THIS plot, not the whole grid.
-        const savedCell = currentState.grid[row][col];
+        const savedCell          = currentState.grid[row][col];
+        const harvestedSpeciesId = savedCell.plant?.speciesId;
+        const harvestedMutation  = savedCell.plant?.mutation ?? undefined;
         harvestingRef.current = true;
         onHarvestStart?.();
         perform(
@@ -91,13 +93,23 @@ export function PlotTile({ plot, row, col, onEmptyClick, onHarvest, onHarvestSta
             // Serialize: prevents concurrent harvests from overwriting each
             // other's grid changes in the DB (non-atomic read-modify-write).
             serialize: true,
-            // Surgical rollback: only restore this plot — don't clobber other
-            // plots that may have been successfully cleared concurrently.
+            // Surgical rollback: restore the plot cell and undo the inventory add.
             rollback: (cur) => ({
               ...cur,
               grid: cur.grid.map((r, ri) =>
                 r.map((p, ci) => ri === row && ci === col ? savedCell : p)
               ),
+              inventory: harvestedSpeciesId
+                ? cur.inventory
+                    .map((item) =>
+                      item.speciesId === harvestedSpeciesId &&
+                      item.mutation  === harvestedMutation  &&
+                      !item.isSeed
+                        ? { ...item, quantity: item.quantity - 1 }
+                        : item
+                    )
+                    .filter((item) => item.quantity > 0)
+                : cur.inventory,
             }),
           }
         );
