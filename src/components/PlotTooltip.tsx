@@ -202,13 +202,13 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
                   <button
                     onClick={handleRemove}
                     disabled={removing}
-                    className="flex-1 text-[10px] py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-40"
+                    className="flex-1 text-[10px] py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-40 text-center"
                   >
                     {removing ? "Removing..." : "Yes, remove"}
                   </button>
                   <button
                     onClick={() => setConfirmRemove(false)}
-                    className="flex-1 text-[10px] py-1 rounded-lg bg-card border border-border text-muted-foreground hover:border-primary/30 transition-colors"
+                    className="flex-1 text-[10px] py-1 rounded-lg bg-card border border-border text-muted-foreground hover:border-primary/30 transition-colors text-center"
                   >
                     Cancel
                   </button>
@@ -217,7 +217,7 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
             ) : (
               <button
                 onClick={() => { setShowFertPicker(false); setConfirmRemove(true); }}
-                className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors w-full text-left"
+                className="text-[10px] text-red-400 hover:text-red-300 transition-colors w-full text-left"
               >
                 🗑 Remove plant
               </button>
