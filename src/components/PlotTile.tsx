@@ -169,12 +169,10 @@ export function PlotTile({
         )}
         <button
           onClick={() => {
-            setGearOpen((v) => {
-              const next = !v;
-              if (next) onGearInspect?.(row, col, gear.gearType);
-              else      onGearInspectClose?.();
-              return next;
-            });
+            const next = !gearOpen;
+            setGearOpen(next);
+            if (next) onGearInspect?.(row, col, gear.gearType);
+            else      onGearInspectClose?.();
           }}
           className={`
             relative ${cellSize} rounded-xl border-2 transition-all duration-200

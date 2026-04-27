@@ -1097,6 +1097,44 @@ export function tickHarvestBells(
   return updated;
 }
 
+/** Pure read — returns the grid cells that an active Harvest Bell should harvest right now.
+ *  Does NOT mutate state. Used by the live garden tick so each harvest goes through
+ *  perform() + edgeHarvest() and the server stays in sync. */
+export function findHarvestBellTargets(
+  state: GameState,
+  weatherType: WeatherType = "clear"
+): Array<{ row: number; col: number }> {
+  const now = Date.now();
+  const targets: Array<{ row: number; col: number }> = [];
+
+  for (let ri = 0; ri < state.grid.length; ri++) {
+    for (let ci = 0; ci < state.grid[ri].length; ci++) {
+      const bellPlot = state.grid[ri][ci];
+      if (!bellPlot.gear) continue;
+      const def = GEAR[bellPlot.gear.gearType];
+      if (!isHarvestBell(def)) continue;
+      if (isGearExpired(bellPlot.gear, now)) continue;
+
+      const gridRows = state.grid.length;
+      const gridCols = state.grid[0]?.length ?? 0;
+      const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols);
+
+      for (const [ar, ac] of affected) {
+        if (ar === ri && ac === ci) continue;
+        const targetPlot = state.grid[ar]?.[ac];
+        if (!targetPlot?.plant) continue;
+        const stage = getCurrentStage(targetPlot.plant, now, weatherType);
+        if (stage !== "bloom") continue;
+        // Grace period: skip plants that bloomed < 5 s ago (avoids same-tick self-harvest)
+        if (!targetPlot.plant.bloomedAt || now - targetPlot.plant.bloomedAt < 5_000) continue;
+        targets.push({ row: ar, col: ac });
+      }
+    }
+  }
+
+  return targets;
+}
+
 /** Called every tick. Assigns Giant to newly-bloomed plants that have no mutation yet.
  *  Giant is weather-independent — it's a flat chance at the moment of bloom. */
 export function assignBloomMutations(

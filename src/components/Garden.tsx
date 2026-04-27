@@ -14,7 +14,7 @@ import {
   tickWeatherMutations,
   tickSprinklerMutations,
   tickFanMutations,
-  tickHarvestBells,
+  findHarvestBellTargets,
   stampStageTransitions,
   placeGear,
 } from "../store/gameStore";
@@ -29,7 +29,7 @@ export function Garden() {
   const { state, update, perform, getState, awaitHarvests, activeWeather } = useGame();
   useGrowthTick(5_000);
 
-  // Every render: stamp transitions, roll weather mutations, roll sprinkler/fan mutations, auto-harvest bells
+  // Every render: stamp transitions, roll weather mutations, roll sprinkler/fan mutations
   useEffect(() => {
     const now     = Date.now();
     const weather = activeWeather ?? "clear";
@@ -38,8 +38,53 @@ export function Garden() {
     next = tickSprinklerMutations(next, weather);
     next = tickFanMutations(next, weather);
     next = assignBloomMutations(next, weather);
-    next = tickHarvestBells(next, weather);
     if (next !== state) update(next);
+
+    // Bell harvests — goes through perform() + edgeHarvest() so the server stays in sync
+    const bellTargets = findHarvestBellTargets(next, weather);
+    for (const { row, col } of bellTargets) {
+      const key = `${row}-${col}`;
+      if (harvestingPlots.current.has(key)) continue;
+      harvestingPlots.current.add(key);
+      const cur = getState();
+      if (!cur.grid[row]?.[col]?.plant) { harvestingPlots.current.delete(key); continue; }
+      const savedCell          = cur.grid[row][col];
+      const harvestedSpeciesId = savedCell.plant?.speciesId;
+      const harvestedMutation  = savedCell.plant?.mutation ?? undefined;
+      const opt = harvestPlant(cur, row, col, weather);
+      if (!opt) { harvestingPlots.current.delete(key); continue; }
+      perform(
+        opt.state,
+        async () => {
+          try {
+            return await edgeHarvest(row, col);
+          } finally {
+            harvestingPlots.current.delete(key);
+          }
+        },
+        undefined,
+        {
+          serialize: true,
+          rollback: (c) => ({
+            ...c,
+            grid: c.grid.map((r2, ri2) =>
+              r2.map((p2, ci2) => ri2 === row && ci2 === col ? savedCell : p2)
+            ),
+            inventory: harvestedSpeciesId
+              ? c.inventory
+                  .map((item) =>
+                    item.speciesId === harvestedSpeciesId &&
+                    item.mutation  === harvestedMutation  &&
+                    !item.isSeed
+                      ? { ...item, quantity: item.quantity - 1 }
+                      : item
+                  )
+                  .filter((item) => item.quantity > 0)
+              : c.inventory,
+          }),
+        }
+      );
+    }
   });
 
   const [selectedPlot, setSelectedPlot]     = useState<{ row: number; col: number } | null>(null);
