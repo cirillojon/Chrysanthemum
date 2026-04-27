@@ -216,7 +216,7 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
             onClick={handleRemove}
             className="text-[10px] text-red-400 hover:text-red-300 transition-colors w-full text-left"
           >
-            🗑 Remove {def.passiveSubtype === "composter" && hasStored ? "(returns fertilizers)" : "(returns to inventory)"}
+            🗑 Destroy {def.passiveSubtype === "composter" && hasStored ? "(returns fertilizers)" : ""}
           </button>
         </div>
       </div>
