@@ -279,9 +279,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           const next = tickShop(prev);
           if (next !== prev) {
             setShopJustRestocked(true);
-            // Sync new shop to DB — signed-in users don't auto-save, so without
-            // this the server rejects buys with "Flower not in stock".
-            edgeSyncShop(next.shop, next.lastShopReset).catch(() => {});
+            // Queue the sync behind any in-flight harvests — this ensures a
+            // buy that's also serialized won't fire before the new shop is
+            // written to the server (which caused "Flower not in stock" errors).
+            harvestQueue.current = harvestQueue.current
+              .then(() => edgeSyncShop(next.shop, next.lastShopReset))
+              .catch(() => {});
           }
           return next;
         }
