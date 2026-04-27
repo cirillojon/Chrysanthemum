@@ -7,6 +7,8 @@ import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, type InventoryItem } from "../store/gameStore";
 import { edgeSellFlower } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
+import { GEAR } from "../data/gear";
+import type { GearInventoryItem } from "../data/gear";
 
 type Tab = 0 | 1 | 2;
 const TAB_LABELS = ["Seeds", "Blooms", "Supplies"] as const;
@@ -19,10 +21,12 @@ export function Inventory() {
   const seeds       = items.filter((i) => i.isSeed);
   const blooms      = items.filter((i) => !i.isSeed);
   const fertilizers = state.fertilizers.filter((f) => f.quantity > 0);
+  const gearItems   = (state.gearInventory ?? []).filter((g) => g.quantity > 0);
 
   const seedCount   = seeds.reduce((s, i) => s + i.quantity, 0);
   const bloomCount  = blooms.reduce((s, i) => s + i.quantity, 0);
-  const supplyCount = fertilizers.reduce((s, f) => s + f.quantity, 0);
+  const supplyCount = fertilizers.reduce((s, f) => s + f.quantity, 0)
+                    + gearItems.reduce((s, g) => s + g.quantity, 0);
 
   const totalBloomValue = blooms.reduce((sum, item) => {
     const species = getFlower(item.speciesId);
@@ -47,7 +51,7 @@ export function Inventory() {
     }
   }
 
-  const isEmpty = items.length === 0 && fertilizers.length === 0;
+  const isEmpty = items.length === 0 && fertilizers.length === 0 && gearItems.length === 0;
 
   if (isEmpty) {
     return (
@@ -151,31 +155,36 @@ export function Inventory() {
 
         {/* ── Supplies ────────────────────────────────────────────────────── */}
         {tab === 2 && (
-          fertilizers.length > 0 ? (
-            fertilizers.map((f) => {
-              const fert = FERTILIZERS[f.type];
-              return (
-                <div
-                  key={f.type}
-                  className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${fert.cardBorder}`}
-                >
-                  <span className="text-3xl flex-shrink-0">{fert.emoji}</span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-sm">{fert.name}</h3>
-                      <span className={`text-xs font-mono ${fert.color}`}>
-                        {fert.speedMultiplier}× speed
-                      </span>
+          fertilizers.length > 0 || gearItems.length > 0 ? (
+            <>
+              {fertilizers.map((f) => {
+                const fert = FERTILIZERS[f.type];
+                return (
+                  <div
+                    key={f.type}
+                    className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${fert.cardBorder}`}
+                  >
+                    <span className="text-3xl flex-shrink-0">{fert.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-sm">{fert.name}</h3>
+                        <span className={`text-xs font-mono ${fert.color}`}>
+                          {fert.speedMultiplier}× speed
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        ×{f.quantity} · Apply to a growing plant in the garden
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      ×{f.quantity} · Apply to a growing plant in the garden
-                    </p>
                   </div>
-                </div>
-              );
-            })
+                );
+              })}
+              {gearItems.map((g) => (
+                <GearInventoryRow key={g.gearType} item={g} />
+              ))}
+            </>
           ) : (
-            <EmptyTab emoji="🧪" message="No supplies" hint="Buy fertilizers from the Supply Shop." />
+            <EmptyTab emoji="🧪" message="No supplies" hint="Buy fertilizers and gear from the Supply Shop." />
           )
         )}
 
@@ -191,6 +200,26 @@ function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hi
       <span className="text-4xl">{emoji}</span>
       <p className="font-medium text-muted-foreground text-sm">{message}</p>
       <p className="text-xs text-muted-foreground max-w-xs">{hint}</p>
+    </div>
+  );
+}
+
+function GearInventoryRow({ item }: { item: GearInventoryItem }) {
+  const def    = GEAR[item.gearType];
+  const rarity = RARITY_CONFIG[def.rarity];
+  return (
+    <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${rarity?.glow ?? ""} border-border`}>
+      <span className="text-3xl flex-shrink-0">{def.emoji}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-sm">{def.name}</h3>
+          <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{def.description}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          ×{item.quantity} · Place in your garden to activate
+        </p>
+      </div>
     </div>
   );
 }
