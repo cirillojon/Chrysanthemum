@@ -16,6 +16,9 @@ interface Props {
   username: string;
 }
 
+const USERNAME_MAX = 20;
+const STATUS_MAX   = 80;
+
 export function ProfilePage({ username }: Props) {
   const { user, profile: myProfile, state, refreshProfile } = useGame();
 
@@ -26,6 +29,22 @@ export function ProfilePage({ username }: Props) {
   const [showGiftModal, setShowGiftModal] = useState(false);
   const [giftSent, setGiftSent]           = useState(false);
 
+  // ── Flower picker ────────────────────────────────────────────────────────
+  const [flowerOpen,     setFlowerOpen]     = useState(false);
+  const [pendingSpecies, setPendingSpecies] = useState<string | null>(null);
+  const [savingFlower,   setSavingFlower]   = useState(false);
+
+  // ── Username editor ──────────────────────────────────────────────────────
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [usernameValue,   setUsernameValue]   = useState("");
+  const [usernameError,   setUsernameError]   = useState<string | null>(null);
+  const [savingUsername,  setSavingUsername]  = useState(false);
+
+  // ── Status editor ────────────────────────────────────────────────────────
+  const [editingStatus, setEditingStatus] = useState(false);
+  const [statusValue,   setStatusValue]   = useState("");
+  const [savingStatus,  setSavingStatus]  = useState(false);
+
   const isOwnProfile = !!(user && profile && user.id === profile.id);
 
   useEffect(() => {
@@ -34,6 +53,9 @@ export function ProfilePage({ username }: Props) {
       setNotFound(false);
       setProfile(null);
       setSave(null);
+      setFlowerOpen(false);
+      setEditingUsername(false);
+      setEditingStatus(false);
 
       const p = await getProfileByUsername(username);
       if (!p) { setNotFound(true); setLoading(false); return; }
@@ -47,7 +69,6 @@ export function ProfilePage({ username }: Props) {
     load();
   }, [username, user?.id]);
 
-  // Keep local profile in sync with context after display flower change
   useEffect(() => {
     if (myProfile && profile && myProfile.id === profile.id) {
       setProfile(myProfile);
@@ -56,9 +77,7 @@ export function ProfilePage({ username }: Props) {
 
   if (loading) return (
     <div className="flex items-center justify-center py-24">
-      <p className="text-muted-foreground text-sm font-mono animate-pulse">
-        Loading profile...
-      </p>
+      <p className="text-muted-foreground text-sm font-mono animate-pulse">Loading profile...</p>
     </div>
   );
 
@@ -69,6 +88,7 @@ export function ProfilePage({ username }: Props) {
     </div>
   );
 
+  // ── Derived display values ───────────────────────────────────────────────
   const displayFlower   = getFlower(profile.display_flower);
   const displayRarity   = displayFlower ? RARITY_CONFIG[displayFlower.rarity] : null;
   const totalItems      = save?.inventory.reduce((s, i) => s + i.quantity, 0) ?? 0;
@@ -76,61 +96,313 @@ export function ProfilePage({ username }: Props) {
   const displayMutation = profile.display_mutation as MutationType | null;
   const mutObj          = displayMutation ? MUTATIONS[displayMutation] : null;
 
+  // ── Flower picker data ───────────────────────────────────────────────────
+  const discovered        = save?.discovered ?? state.discovered;
+  const unlockedFlowers   = FLOWERS.filter((f) => discovered.includes(f.id));
+  const activeSpecies     = pendingSpecies ?? profile.display_flower;
+  const unlockedMutations = Object.values(MUTATIONS).filter((m) =>
+    discovered.includes(`${activeSpecies}:${m.id}`)
+  );
+
+  // ── Handlers ─────────────────────────────────────────────────────────────
+  async function handlePickFlower(speciesId: string, mutation: string | null) {
+    if (!user) return;
+    setSavingFlower(true);
+    await updateDisplayFlower(user.id, speciesId, mutation);
+    await refreshProfile();
+    setSavingFlower(false);
+    setPendingSpecies(null);
+    setFlowerOpen(false);
+  }
+
+  async function handleSaveUsername() {
+    if (!user) return;
+    setSavingUsername(true);
+    setUsernameError(null);
+    const result = await updateUsername(user.id, usernameValue.trim());
+    if (!result.ok) {
+      setUsernameError(result.error ?? "Something went wrong");
+      setSavingUsername(false);
+      return;
+    }
+    await refreshProfile();
+    setSavingUsername(false);
+    setEditingUsername(false);
+  }
+
+  async function handleSaveStatus() {
+    if (!user) return;
+    setSavingStatus(true);
+    await updateStatus(user.id, statusValue);
+    await refreshProfile();
+    setSavingStatus(false);
+    setEditingStatus(false);
+  }
+
+  // Avatar border classes shared between button and div
+  const avatarBorderClass = displayFlower
+    ? displayFlower.rarity === "common"    ? "border-gray-400/60 bg-gray-400/10"
+    : displayFlower.rarity === "uncommon"  ? "border-green-400/60 bg-green-400/10"
+    : displayFlower.rarity === "rare"      ? "border-blue-400/60 bg-blue-400/10"
+    : displayFlower.rarity === "legendary" ? "border-yellow-400/60 bg-yellow-400/10"
+    : displayFlower.rarity === "mythic"    ? "border-pink-400/60 bg-pink-400/10"
+    : "border-black/60 bg-black/10"
+    : "border-border bg-card";
+
   return (
     <div className="flex flex-col gap-6">
 
-      {/* Profile card */}
-      <div className="bg-card/60 border border-border rounded-2xl p-5 flex items-center gap-5">
-      <div className={`
-        relative w-16 h-16 rounded-2xl border-2 flex items-center justify-center text-4xl flex-shrink-0
-        ${displayRarity?.glow ?? ""}
-        ${displayFlower
-          ? displayFlower.rarity === "common"    ? "border-gray-400/60 bg-gray-400/10"
-          : displayFlower.rarity === "uncommon"  ? "border-green-400/60 bg-green-400/10"
-          : displayFlower.rarity === "rare"      ? "border-blue-400/60 bg-blue-400/10"
-          : displayFlower.rarity === "legendary" ? "border-yellow-400/60 bg-yellow-400/10"
-          : displayFlower.rarity === "mythic"    ? "border-pink-400/60 bg-pink-400/10"
-          : "border-black/60 bg-black/10"
-          : "border-border bg-card"
-        }
-      `}>
-          {displayFlower?.emoji.bloom ?? "🌱"}
-          {mutObj && (
-            <span className="absolute -top-1 -right-1 text-lg">{mutObj.emoji}</span>
+      {/* ── Profile card ─────────────────────────────────────────────────── */}
+      <div className="bg-card/60 border border-border rounded-2xl p-5">
+        <div className="flex items-start gap-5">
+
+          {/* Avatar — clickable on own profile */}
+          {isOwnProfile ? (
+            <button
+              onClick={() => { setFlowerOpen((v) => !v); setPendingSpecies(null); }}
+              title="Change display flower"
+              className={`
+                relative w-16 h-16 rounded-2xl border-2 flex items-center justify-center text-4xl
+                flex-shrink-0 transition-all hover:brightness-110
+                ${displayRarity?.glow ?? ""} ${avatarBorderClass}
+                ${flowerOpen ? "ring-2 ring-primary/50" : ""}
+              `}
+            >
+              {displayFlower?.emoji.bloom ?? "🌱"}
+              {mutObj && (
+                <span className="absolute -top-1 -right-1 text-lg">{mutObj.emoji}</span>
+              )}
+              <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-card border border-border flex items-center justify-center text-[10px] text-muted-foreground">
+                ✎
+              </span>
+            </button>
+          ) : (
+            <div className={`
+              relative w-16 h-16 rounded-2xl border-2 flex items-center justify-center text-4xl flex-shrink-0
+              ${displayRarity?.glow ?? ""} ${avatarBorderClass}
+            `}>
+              {displayFlower?.emoji.bloom ?? "🌱"}
+              {mutObj && (
+                <span className="absolute -top-1 -right-1 text-lg">{mutObj.emoji}</span>
+              )}
+            </div>
           )}
+
+          {/* Info column */}
+          <div className="flex-1 min-w-0 space-y-1">
+
+            {/* Username row */}
+            {isOwnProfile && editingUsername ? (
+              <div className="flex flex-col gap-1.5">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    autoFocus
+                    value={usernameValue}
+                    onChange={(e) => { setUsernameValue(e.target.value.slice(0, USERNAME_MAX)); setUsernameError(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") handleSaveUsername(); if (e.key === "Escape") setEditingUsername(false); }}
+                    className="flex-1 min-w-0 bg-background border border-border rounded-lg px-2 py-1 text-sm font-mono focus:outline-none focus:border-primary transition-colors"
+                  />
+                  <button
+                    onClick={handleSaveUsername}
+                    disabled={savingUsername || usernameValue.trim() === profile.username}
+                    className="text-xs px-2 py-1 rounded-lg bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 transition-colors disabled:opacity-40"
+                  >
+                    {savingUsername ? "…" : "Save"}
+                  </button>
+                  <button
+                    onClick={() => { setEditingUsername(false); setUsernameError(null); }}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground font-mono">{usernameValue.trim().length}/{USERNAME_MAX}</span>
+                  {usernameError && <span className="text-[10px] text-red-400">{usernameError}</span>}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-bold truncate">{profile.username}</h2>
+                {isOwnProfile && (
+                  <>
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30">
+                      You
+                    </span>
+                    <button
+                      onClick={() => { setUsernameValue(profile.username); setEditingUsername(true); }}
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                      title="Edit username"
+                    >
+                      ✎
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Display flower line */}
+            {displayFlower && (
+              <p className={`text-xs font-mono ${displayRarity?.color}`}>
+                {displayFlower.emoji.bloom} {displayFlower.name}
+                {mutObj && (
+                  <span className={`ml-1 ${MUTATIONS[displayMutation as MutationType].color}`}>
+                    · {mutObj.emoji} {mutObj.name}
+                  </span>
+                )}
+                {" · "}{displayRarity?.label}
+              </p>
+            )}
+
+            {/* Status row */}
+            {isOwnProfile && editingStatus ? (
+              <div className="space-y-1 pt-0.5">
+                <textarea
+                  autoFocus
+                  value={statusValue}
+                  onChange={(e) => setStatusValue(e.target.value.slice(0, STATUS_MAX))}
+                  rows={2}
+                  placeholder="What's on your mind?"
+                  className="w-full bg-background border border-border rounded-lg px-2 py-1 text-xs resize-none focus:outline-none focus:border-primary transition-colors"
+                />
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] text-muted-foreground font-mono">{statusValue.length}/{STATUS_MAX}</span>
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => setEditingStatus(false)}
+                      className="text-[10px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveStatus}
+                      disabled={savingStatus || statusValue === (profile.status ?? "")}
+                      className="text-[10px] px-2 py-0.5 rounded-lg bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 transition-colors disabled:opacity-40"
+                    >
+                      {savingStatus ? "…" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {profile.status ? (
+                  <p className="text-xs text-muted-foreground italic">"{profile.status}"</p>
+                ) : isOwnProfile ? (
+                  <p className="text-xs text-muted-foreground">No status set</p>
+                ) : null}
+                {isOwnProfile && (
+                  <button
+                    onClick={() => { setStatusValue(profile.status ?? ""); setEditingStatus(true); }}
+                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors flex-shrink-0"
+                    title="Edit status"
+                  >
+                    {profile.status ? "✎" : "+ Add"}
+                  </button>
+                )}
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Joined {new Date(profile.created_at).toLocaleDateString(undefined, { month: "short", year: "numeric" })}
+            </p>
+          </div>
         </div>
 
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg font-bold truncate">{profile.username}</h2>
-            {isOwnProfile && (
-              <span className="text-xs px-2 py-0.5 rounded-full bg-primary/20 text-primary border border-primary/30">
-                You
-              </span>
+        {/* ── Flower picker — expands inline ───────────────────────────── */}
+        {isOwnProfile && flowerOpen && (
+          <div className="mt-4 pt-4 border-t border-border">
+            {unlockedFlowers.length === 0 ? (
+              <div className="flex items-center gap-3 py-2">
+                <span className="text-2xl">🌱</span>
+                <p className="text-xs text-muted-foreground">Harvest your first flower to unlock display options.</p>
+              </div>
+            ) : pendingSpecies ? (
+              /* Step 2: pick a mutation */
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 mb-1">
+                  <button
+                    onClick={() => setPendingSpecies(null)}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    ← Back
+                  </button>
+                  <p className="text-xs text-muted-foreground">
+                    Choose a mutation for{" "}
+                    <span className="text-foreground font-medium">{getFlower(pendingSpecies)?.name}</span>
+                  </p>
+                </div>
+
+                {/* No mutation */}
+                <button
+                  onClick={() => handlePickFlower(pendingSpecies, null)}
+                  disabled={savingFlower}
+                  className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl border transition-all text-left
+                    ${pendingSpecies === profile.display_flower && !profile.display_mutation
+                      ? "border-primary bg-primary/20"
+                      : "border-border hover:border-primary/50 bg-background"
+                    }`}
+                >
+                  <span className="text-2xl leading-none w-9 text-center">{getFlower(pendingSpecies)?.emoji.bloom}</span>
+                  <div>
+                    <p className="text-sm font-medium">No mutation</p>
+                    <p className="text-xs text-muted-foreground font-mono">Base bloom</p>
+                  </div>
+                </button>
+
+                {unlockedMutations.length === 0 ? (
+                  <p className="text-xs text-muted-foreground px-1 pt-1">No mutations discovered for this flower yet.</p>
+                ) : unlockedMutations.map((mut) => (
+                  <button
+                    key={mut.id}
+                    onClick={() => handlePickFlower(pendingSpecies, mut.id)}
+                    disabled={savingFlower}
+                    className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl border transition-all text-left
+                      ${pendingSpecies === profile.display_flower && mut.id === profile.display_mutation
+                        ? "border-primary bg-primary/20"
+                        : "border-border hover:border-primary/50 bg-background"
+                      }`}
+                  >
+                    <div className="relative w-9 text-center flex-shrink-0">
+                      <span className="text-2xl leading-none">{getFlower(pendingSpecies)?.emoji.bloom}</span>
+                      <span className="absolute -top-1 -right-0 text-sm leading-none">{mut.emoji}</span>
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium ${mut.color}`}>{mut.name}</p>
+                      <p className="text-xs text-muted-foreground font-mono">×{mut.valueMultiplier} value</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              /* Step 1: pick a species */
+              <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
+                {unlockedFlowers.map((flower) => {
+                  const rarity    = RARITY_CONFIG[flower.rarity];
+                  const isCurrent = profile.display_flower === flower.id;
+                  return (
+                    <button
+                      key={flower.id}
+                      onClick={() => setPendingSpecies(flower.id)}
+                      disabled={savingFlower}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left
+                        ${isCurrent ? "border-primary bg-primary/20" : "border-border hover:border-primary/50 bg-background"}`}
+                    >
+                      <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
+                        <span className="text-2xl leading-none">{flower.emoji.bloom}</span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{flower.name}</p>
+                        <p className={`text-xs font-mono ${rarity.color}`}>{rarity.label}</p>
+                      </div>
+                      {isCurrent && <span className="text-xs text-primary font-mono flex-shrink-0">current</span>}
+                    </button>
+                  );
+                })}
+              </div>
             )}
           </div>
-          {displayFlower && (
-            <p className={`text-xs font-mono mt-0.5 ${displayRarity?.color}`}>
-              {displayFlower.emoji.bloom} {displayFlower.name}
-              {mutObj && (
-                <span className={` ml-1 ${MUTATIONS[displayMutation as MutationType].color}`}>
-                  · {mutObj.emoji} {mutObj.name}
-                </span>
-              )}
-              {" · "}{displayRarity?.label}
-            </p>
-          )}
-          {profile.status && (
-            <p className="text-xs text-muted-foreground mt-1 italic">
-              "{profile.status}"
-            </p>
-          )}
-          <p className="text-xs text-muted-foreground mt-1">
-            Joined {new Date(profile.created_at).toLocaleDateString(undefined, {
-              month: "short", year: "numeric",
-            })}
-          </p>
-        </div>
+        )}
       </div>
 
       {/* Friend + gift buttons — other players only */}
@@ -169,39 +441,15 @@ export function ProfilePage({ username }: Props) {
         </div>
       )}
 
-      {/* Display flower picker — own profile only */}
-      {isOwnProfile && (
-        <DisplayFlowerPicker
-          discovered={save?.discovered ?? state.discovered}
-          currentFlower={profile.display_flower}
-          currentMutation={profile.display_mutation}
-          onUpdated={refreshProfile}
-        />
-      )}
-
-      {/* Username editor — own profile only */}
-      {isOwnProfile && (
-        <UsernameEditor
-          currentUsername={profile.username}
-          onUpdated={refreshProfile}
-        />
-      )}
-
-      {/* Status editor — own profile only */}
-      {isOwnProfile && (
-        <StatusEditor
-          currentStatus={profile.status ?? ""}
-          onUpdated={refreshProfile}
-        />
-      )}
-
       {/* Visual settings — own profile only */}
       {isOwnProfile && <SettingsPanel />}
 
       {/* Garden */}
       {save && save.grid.length > 0 && (
         <div className="bg-card/60 border border-border rounded-2xl p-5">
-          <h3 className="text-sm font-semibold mb-4">Your Garden</h3>
+          <h3 className="text-sm font-semibold mb-4">
+            {isOwnProfile ? "Your Garden" : `${profile.username}'s Garden`}
+          </h3>
           <ReadOnlyGarden grid={save.grid} farmSize={save.farmSize} farmRows={save.farmRows} />
         </div>
       )}
@@ -236,10 +484,7 @@ export function ProfilePage({ username }: Props) {
 
       {/* Codex preview */}
       {save && (
-        <Codex
-          compact
-          discoveredOverride={save.discovered ?? []}
-        />
+        <Codex compact discoveredOverride={save.discovered ?? []} />
       )}
 
       {/* Gift modal */}
@@ -259,163 +504,7 @@ export function ProfilePage({ username }: Props) {
   );
 }
 
-// ── Status editor ─────────────────────────────────────────────────────────
-
-// ── Username editor ───────────────────────────────────────────────────────
-
-interface UsernameEditorProps {
-  currentUsername: string;
-  onUpdated: () => Promise<void>;
-}
-
-function UsernameEditor({ currentUsername, onUpdated }: UsernameEditorProps) {
-  const { user } = useGame();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue]     = useState(currentUsername);
-  const [saving, setSaving]   = useState(false);
-  const [error, setError]     = useState<string | null>(null);
-
-  const MAX = 20;
-  const changed = value.trim() !== currentUsername;
-
-  async function handleSave() {
-    if (!user || !changed) return;
-    setSaving(true);
-    setError(null);
-    const result = await updateUsername(user.id, value);
-    if (!result.ok) {
-      setError(result.error ?? "Something went wrong");
-      setSaving(false);
-      return;
-    }
-    await onUpdated();
-    setSaving(false);
-    setEditing(false);
-  }
-
-  return (
-    <div className="bg-card/60 border border-border rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-semibold">Username</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            3–20 characters · letters, numbers, _ and -
-          </p>
-        </div>
-        <button
-          onClick={() => { setEditing((v) => !v); setValue(currentUsername); setError(null); }}
-          className="text-xs text-primary hover:underline flex-shrink-0"
-        >
-          {editing ? "Cancel" : "Change"}
-        </button>
-      </div>
-
-      {!editing ? (
-        <p className="text-sm font-mono text-foreground">{currentUsername}</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          <input
-            value={value}
-            onChange={(e) => { setValue(e.target.value.slice(0, MAX)); setError(null); }}
-            placeholder="New username"
-            className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-primary transition-colors font-mono"
-          />
-          {error && (
-            <p className="text-xs text-red-400 font-mono">{error}</p>
-          )}
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-mono">
-              {value.trim().length}/{MAX}
-            </span>
-            <button
-              onClick={handleSave}
-              disabled={saving || !changed}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Status editor ─────────────────────────────────────────────────────────
-
-interface StatusEditorProps {
-  currentStatus: string;
-  onUpdated: () => Promise<void>;
-}
-
-function StatusEditor({ currentStatus, onUpdated }: StatusEditorProps) {
-  const { user } = useGame();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue]     = useState(currentStatus);
-  const [saving, setSaving]   = useState(false);
-
-  const MAX = 80;
-
-  async function handleSave() {
-    if (!user) return;
-    setSaving(true);
-    await updateStatus(user.id, value);
-    await onUpdated();
-    setSaving(false);
-    setEditing(false);
-  }
-
-  return (
-    <div className="bg-card/60 border border-border rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-semibold">Status</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            A short message shown on your profile
-          </p>
-        </div>
-        <button
-          onClick={() => { setEditing((v) => !v); setValue(currentStatus); }}
-          className="text-xs text-primary hover:underline flex-shrink-0"
-        >
-          {editing ? "Cancel" : currentStatus ? "Edit" : "Add"}
-        </button>
-      </div>
-
-      {!editing ? (
-        currentStatus ? (
-          <p className="text-sm text-muted-foreground italic">"{currentStatus}"</p>
-        ) : (
-          <p className="text-xs text-muted-foreground">No status set.</p>
-        )
-      ) : (
-        <div className="flex flex-col gap-2">
-          <textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value.slice(0, MAX))}
-            placeholder="What's on your mind?"
-            rows={2}
-            className="w-full bg-background border border-border rounded-xl px-3 py-2 text-sm resize-none focus:outline-none focus:border-primary transition-colors"
-          />
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-muted-foreground font-mono">
-              {value.length}/{MAX}
-            </span>
-            <button
-              onClick={handleSave}
-              disabled={saving || value === currentStatus}
-              className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
-            >
-              {saving ? "Saving..." : "Save"}
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Visual settings panel ─────────────────────────────────────────────
+// ── Visual settings panel ─────────────────────────────────────────────────
 
 function SettingsPanel() {
   const { settings, setSetting } = useSettings();
@@ -470,7 +559,6 @@ function SettingsPanel() {
                   ${active ? "border-primary scale-[1.03]" : "border-border hover:border-primary/40"}
                 `}
               >
-                {/* Swatch */}
                 <div
                   className="w-full h-7 rounded-lg mb-1.5 relative overflow-hidden"
                   style={{ backgroundColor: t.swatch[0] }}
@@ -480,9 +568,7 @@ function SettingsPanel() {
                     style={{ backgroundColor: t.swatch[1] }}
                   />
                 </div>
-                <p className="text-[10px] font-medium leading-none">
-                  {t.emoji} {t.name}
-                </p>
+                <p className="text-[10px] font-medium leading-none">{t.emoji} {t.name}</p>
               </button>
             );
           })}
@@ -506,7 +592,7 @@ function SettingsPanel() {
                 }
               `}
               role="switch"
-              aria-checked={settings[key]}
+              aria-checked={settings[key] as boolean}
             >
               <span
                 className={`
@@ -521,188 +607,6 @@ function SettingsPanel() {
           </div>
         ))}
       </div>
-    </div>
-  );
-}
-
-// ── Display flower picker ─────────────────────────────────────────────────
-
-interface PickerProps {
-  discovered: string[];
-  currentFlower: string;
-  currentMutation: string | null | undefined;
-  onUpdated: () => Promise<void>;
-}
-
-function DisplayFlowerPicker({ discovered, currentFlower, currentMutation, onUpdated }: PickerProps) {
-  const { user } = useGame();
-  const [open, setOpen]                   = useState(false);
-  const [saving, setSaving]               = useState(false);
-  // Step 1: species selection. null = not yet picked in this session
-  const [pendingSpecies, setPendingSpecies] = useState<string | null>(null);
-
-  const unlockedFlowers = FLOWERS.filter((f) => discovered.includes(f.id));
-
-  // Species shown in step 1
-  const activeSpecies = pendingSpecies ?? currentFlower;
-
-  // Mutations the player has discovered for the actively-selected species
-  const unlockedMutations = Object.values(MUTATIONS).filter((m) =>
-    discovered.includes(`${activeSpecies}:${m.id}`)
-  );
-
-  function handleOpen() {
-    setPendingSpecies(null);
-    setOpen(true);
-  }
-
-  function handleCancel() {
-    setPendingSpecies(null);
-    setOpen(false);
-  }
-
-  function handlePickSpecies(speciesId: string) {
-    // If changing species, clear pending mutation choice and move to step 2
-    setPendingSpecies(speciesId);
-  }
-
-  async function handlePickMutation(mutation: string | null) {
-    if (!user) return;
-    setSaving(true);
-    await updateDisplayFlower(user.id, pendingSpecies ?? currentFlower, mutation);
-    await onUpdated();
-    setSaving(false);
-    setPendingSpecies(null);
-    setOpen(false);
-  }
-
-  return (
-    <div className="bg-card/60 border border-border rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h3 className="text-sm font-semibold">Display Flower</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {unlockedFlowers.length > 0
-              ? `${unlockedFlowers.length} flower${unlockedFlowers.length !== 1 ? "s" : ""} unlocked`
-              : "Harvest flowers to unlock display options"
-            }
-          </p>
-        </div>
-        {unlockedFlowers.length > 0 && (
-          <button
-            onClick={open ? handleCancel : handleOpen}
-            className="text-xs text-primary hover:underline flex-shrink-0"
-          >
-            {open ? "Cancel" : "Change"}
-          </button>
-        )}
-      </div>
-
-      {unlockedFlowers.length === 0 ? (
-        <div className="flex items-center gap-3 py-2">
-          <span className="text-2xl">🌱</span>
-          <p className="text-xs text-muted-foreground">
-            Harvest your first flower to unlock display options.
-          </p>
-        </div>
-      ) : !open ? null : pendingSpecies ? (
-        /* ── Step 2: pick a mutation for the selected species ── */
-        <div className="mt-2 space-y-2">
-          <div className="flex items-center gap-2 mb-1">
-            <button
-              onClick={() => setPendingSpecies(null)}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            >
-              ← Back
-            </button>
-            <p className="text-xs text-muted-foreground">
-              Choose a mutation for <span className="text-foreground font-medium">{getFlower(pendingSpecies)?.name}</span>
-            </p>
-          </div>
-
-          {/* No mutation option */}
-          {(() => {
-            const isActiveMutation = pendingSpecies === currentFlower && !currentMutation;
-            return (
-              <button
-                onClick={() => handlePickMutation(null)}
-                disabled={saving}
-                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl border transition-all text-left
-                  ${isActiveMutation ? "border-primary bg-primary/20" : "border-border hover:border-primary/50 bg-background"}`}
-              >
-                <span className="text-2xl leading-none w-9 text-center">
-                  {getFlower(pendingSpecies)?.emoji.bloom}
-                </span>
-                <div>
-                  <p className="text-sm font-medium">No mutation</p>
-                  <p className="text-xs text-muted-foreground font-mono">Base bloom</p>
-                </div>
-              </button>
-            );
-          })()}
-
-          {unlockedMutations.length === 0 ? (
-            <p className="text-xs text-muted-foreground px-1 pt-1">
-              No mutations discovered for this flower yet.
-            </p>
-          ) : (
-            unlockedMutations.map((mut) => {
-              const isActiveMutation = pendingSpecies === currentFlower && mut.id === currentMutation;
-              return (
-              <button
-                key={mut.id}
-                onClick={() => handlePickMutation(mut.id)}
-                disabled={saving}
-                className={`flex items-center gap-3 w-full px-3 py-2.5 rounded-xl border transition-all text-left
-                  ${isActiveMutation ? "border-primary bg-primary/20" : "border-border hover:border-primary/50 bg-background"}`}
-              >
-                <div className="relative w-9 text-center flex-shrink-0">
-                  <span className="text-2xl leading-none">{getFlower(pendingSpecies)?.emoji.bloom}</span>
-                  <span className="absolute -top-1 -right-0 text-sm leading-none">{mut.emoji}</span>
-                </div>
-                <div>
-                  <p className={`text-sm font-medium ${mut.color}`}>{mut.name}</p>
-                  <p className="text-xs text-muted-foreground font-mono">×{mut.valueMultiplier} value</p>
-                </div>
-              </button>
-            );})
-          )}
-        </div>
-      ) : (
-        /* ── Step 1: pick a species ── */
-        <div className="flex flex-col gap-1.5 mt-2 max-h-72 overflow-y-auto">
-          {unlockedFlowers.map((flower) => {
-            const rarity    = RARITY_CONFIG[flower.rarity];
-            const isCurrent = currentFlower === flower.id;
-
-            return (
-              <button
-                key={flower.id}
-                onClick={() => handlePickSpecies(flower.id)}
-                disabled={saving}
-                className={`
-                  flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left
-                  ${isCurrent
-                    ? "border-primary bg-primary/20"
-                    : "border-border hover:border-primary/50 bg-background"
-                  }
-                `}
-              >
-                <div className="w-9 h-9 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl leading-none">{flower.emoji.bloom}</span>
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium">{flower.name}</p>
-                  <p className={`text-xs font-mono ${rarity.color}`}>{rarity.label}</p>
-                </div>
-                {isCurrent && (
-                  <span className="text-xs text-primary font-mono flex-shrink-0">current</span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
