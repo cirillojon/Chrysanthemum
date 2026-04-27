@@ -437,7 +437,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     id:             "auto_planter_prismatic",
     name:           "Auto-Planter",
     description:    "Automatically plants seeds from your inventory into empty cells within a 5×5 area, even while offline. Lasts 24 hours.",
-    emoji:          "🪴",
+    emoji:          "🌾",
     rarity:         "prismatic",
     shopPrice:      500_000,
     category:       "passive",
