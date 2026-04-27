@@ -4,6 +4,7 @@ import { MUTATIONS, RARITY_CONFIG } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
 import { removeGear, collectFromComposter } from "../store/gameStore";
 import { useGame } from "../store/GameContext";
+import { edgeRemoveGear, edgeCollectFromComposter } from "../lib/edgeFunctions";
 
 interface Props {
   gear:    PlacedGear;
@@ -25,7 +26,7 @@ function formatMs(ms: number): string {
 }
 
 export function GearTooltip({ gear, row, col, onClose }: Props) {
-  const { state, update } = useGame();
+  const { state, perform } = useGame();
   const [nudge,   setNudge]   = useState(0);
   const [flipped, setFlipped] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -59,14 +60,69 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
   const maxStorage  = def.maxStorage ?? 10;
 
   function handleRemove() {
-    const next = removeGear(state, row, col);
-    if (next) update(next);
+    const optimistic = removeGear(state, row, col);
+    if (!optimistic) return;
+    const savedGear = gear; // captured at click time
+    perform(
+      optimistic,
+      () => edgeRemoveGear(row, col),
+      undefined,
+      {
+        rollback: (cur) => ({
+          ...cur,
+          grid: cur.grid.map((r2, ri) =>
+            r2.map((p, ci) =>
+              ri === row && ci === col ? { ...p, gear: savedGear } : p
+            )
+          ),
+          gearInventory: (cur.gearInventory ?? [])
+            .map((g) =>
+              g.gearType === savedGear.gearType
+                ? { ...g, quantity: Math.max(0, g.quantity - 1) }
+                : g
+            )
+            .filter((g) => g.quantity > 0),
+        }),
+      }
+    );
     onClose?.();
   }
 
   function handleCollect() {
-    const next = collectFromComposter(state, row, col);
-    if (next) update(next);
+    const optimistic = collectFromComposter(state, row, col);
+    if (!optimistic) return;
+    const storedTypes = gear.storedFertilizers ?? [];
+    perform(
+      optimistic,
+      () => edgeCollectFromComposter(row, col),
+      undefined,
+      {
+        rollback: (cur) => {
+          // Count how many of each fertilizer type were collected
+          const countByType = storedTypes.reduce<Record<string, number>>((acc, t) => {
+            acc[t] = (acc[t] ?? 0) + 1;
+            return acc;
+          }, {});
+          return {
+            ...cur,
+            grid: cur.grid.map((r2, ri) =>
+              r2.map((p, ci) =>
+                ri === row && ci === col
+                  ? { ...p, gear: { ...p.gear!, storedFertilizers: storedTypes } }
+                  : p
+              )
+            ),
+            fertilizers: cur.fertilizers
+              .map((f) =>
+                countByType[f.type]
+                  ? { ...f, quantity: f.quantity - (countByType[f.type] ?? 0) }
+                  : f
+              )
+              .filter((f) => f.quantity > 0),
+          };
+        },
+      }
+    );
     onClose?.();
   }
 

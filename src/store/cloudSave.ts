@@ -124,6 +124,11 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       discovered:           (data.discovered as string[]) ?? [],
       weatherForecastSlots: (data.weather_forecast_slots as number) ?? 0,
       marketplaceSlots:     (data.marketplace_slots as number) ?? 0,
+      // Farm Update fields
+      gearInventory:        (data.gear_inventory  as GameState["gearInventory"])  ?? [],
+      supplyShop:           (data.supply_shop     as GameState["supplyShop"])     ?? [],
+      supplySlots:          (data.supply_slots    as number)                      ?? 2,
+      lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
     } as GameState;
   } catch {
     return null;
@@ -151,6 +156,11 @@ export async function saveToCloud(
       discovered:             state.discovered ?? [],
       weather_forecast_slots: state.weatherForecastSlots ?? 0,
       marketplace_slots:      state.marketplaceSlots ?? 0,
+      // Farm Update fields
+      gear_inventory:         state.gearInventory     ?? [],
+      supply_shop:            state.supplyShop        ?? [],
+      supply_slots:           state.supplySlots       ?? 2,
+      last_supply_reset:      state.lastSupplyReset   ?? 0,
       updated_at:             new Date().toISOString(),
     });
 
@@ -212,6 +222,10 @@ export async function getPublicSave(userId: string): Promise<GameState | null> {
     discovered:           (data.discovered as string[]) ?? [],
     weatherForecastSlots: (data.weather_forecast_slots as number) ?? 0,
     marketplaceSlots:     (data.marketplace_slots as number) ?? 2,
+    gearInventory:        (data.gear_inventory  as GameState["gearInventory"])  ?? [],
+    supplyShop:           (data.supply_shop     as GameState["supplyShop"])     ?? [],
+    supplySlots:          (data.supply_slots    as number)                      ?? 2,
+    lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
   } as GameState;
 }
 

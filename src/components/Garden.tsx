@@ -16,7 +16,7 @@ import {
   stampStageTransitions,
   placeGear,
 } from "../store/gameStore";
-import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest } from "../lib/edgeFunctions";
+import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
 import { getAffectedCells } from "../data/gear";
 import type { MutationType } from "../data/flowers";
@@ -81,8 +81,26 @@ export function Garden() {
   function handleGearSelect(gearType: GearType) {
     if (!selectedPlot) return;
     const { row, col } = selectedPlot;
-    const next = placeGear(state, row, col, gearType);
-    if (next) update(next);
+    const optimistic = placeGear(getState(), row, col, gearType);
+    if (!optimistic) return;
+    perform(
+      optimistic,
+      () => edgePlaceGear(row, col, gearType),
+      undefined,
+      {
+        rollback: (cur) => ({
+          ...cur,
+          grid: cur.grid.map((r2, ri) =>
+            r2.map((p, ci) =>
+              ri === row && ci === col ? { ...p, gear: undefined } : p
+            )
+          ),
+          gearInventory: (cur.gearInventory ?? []).map((g) =>
+            g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g
+          ),
+        }),
+      }
+    );
     setSelectedPlot(null);
   }
 

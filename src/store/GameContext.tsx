@@ -20,7 +20,7 @@ import {
   type CloudProfile,
 } from "./cloudSave";
 import { supabase } from "../lib/supabase";
-import { edgeSyncShop } from "../lib/edgeFunctions";
+import { edgeSyncShop, edgeSyncSupplyShop } from "../lib/edgeFunctions";
 import { useWeather } from "../hooks/useWeather";
 import type { ForecastEntry } from "../hooks/useWeather";
 import { useTimeOfDay } from "../hooks/useTimeOfDay";
@@ -293,7 +293,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
         // Supply shop restock
         const supplyTicked = tickSupplyShop(next);
-        if (supplyTicked !== next) next = supplyTicked;
+        if (supplyTicked !== next) {
+          const shop  = supplyTicked.supplyShop;
+          const reset = supplyTicked.lastSupplyReset;
+          harvestQueue.current = harvestQueue.current
+            .then(() => edgeSyncSupplyShop(shop, reset))
+            .catch(() => {});
+          next = supplyTicked;
+        }
 
         // Prune expired gear from grid
         const prunedGrid = pruneExpiredGear(next.grid, Date.now());

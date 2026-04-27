@@ -6,6 +6,10 @@ import {
   upgradeSupplySlots,
 } from "../store/gameStore";
 import {
+  edgeBuyFromSupplyShop,
+  edgeUpgradeSupplySlots,
+} from "../lib/edgeFunctions";
+import {
   RARITY_CONFIG,
   MUTATIONS,
 } from "../data/flowers";
@@ -40,7 +44,7 @@ function formatDuration(ms: number): string {
 // ── Individual supply slot card ─────────────────────────────────────────────
 
 function SupplyCard({ slot }: { slot: ShopSlot }) {
-  const { state, update } = useGame();
+  const { state, perform } = useGame();
   const [justBought, setJustBought] = useState(false);
 
   // ── Empty placeholder ─────────────────────────────────────────────────────
@@ -57,9 +61,49 @@ function SupplyCard({ slot }: { slot: ShopSlot }) {
   const outOfStock = slot.quantity < 1;
 
   function handleBuy() {
-    const next = buyFromSupplyShop(state, slot.speciesId);
-    if (!next) return;
-    update(next);
+    const optimistic = buyFromSupplyShop(state, slot.speciesId);
+    if (!optimistic) return;
+    perform(
+      optimistic,
+      () => edgeBuyFromSupplyShop(slot.speciesId),
+      undefined,
+      {
+        rollback: (cur) => {
+          const restoredShop = (cur.supplyShop ?? []).map((s) =>
+            s.speciesId === slot.speciesId ? { ...s, quantity: s.quantity + 1 } : s
+          );
+          if (slot.isFertilizer && slot.fertilizerType) {
+            return {
+              ...cur,
+              coins: cur.coins + slot.price,
+              supplyShop: restoredShop,
+              fertilizers: cur.fertilizers
+                .map((f) =>
+                  f.type === slot.fertilizerType
+                    ? { ...f, quantity: f.quantity - 1 }
+                    : f
+                )
+                .filter((f) => f.quantity > 0),
+            };
+          }
+          if (slot.isGear && slot.gearType) {
+            return {
+              ...cur,
+              coins: cur.coins + slot.price,
+              supplyShop: restoredShop,
+              gearInventory: (cur.gearInventory ?? [])
+                .map((g) =>
+                  g.gearType === slot.gearType
+                    ? { ...g, quantity: g.quantity - 1 }
+                    : g
+                )
+                .filter((g) => g.quantity > 0),
+            };
+          }
+          return { ...cur, coins: cur.coins + slot.price, supplyShop: restoredShop };
+        },
+      }
+    );
     setJustBought(true);
     setTimeout(() => setJustBought(false), 800);
   }
@@ -190,7 +234,7 @@ function supplyUnlockSlots(rarity: Rarity): number | null {
 }
 
 export function SupplyShop() {
-  const { state, update } = useGame();
+  const { state, perform } = useGame();
   const [countdown,  setCountdown]  = useState(() => msUntilSupplyReset(state));
   const [showRates,  setShowRates]  = useState(false);
 
@@ -220,8 +264,25 @@ export function SupplyShop() {
   [supplySlots]);
 
   function handleUpgradeSlots() {
-    const next = upgradeSupplySlots(state);
-    if (next) update(next);
+    if (!nextSlotUpgrade) return;
+    const optimistic = upgradeSupplySlots(state);
+    if (!optimistic) return;
+    const prevSlots = state.supplySlots ?? 2;
+    const prevShop  = state.supplyShop;
+    const cost      = nextSlotUpgrade.cost;
+    perform(
+      optimistic,
+      () => edgeUpgradeSupplySlots(),
+      undefined,
+      {
+        rollback: (cur) => ({
+          ...cur,
+          coins:       cur.coins + cost,
+          supplySlots: prevSlots,
+          supplyShop:  prevShop,
+        }),
+      }
+    );
   }
 
   const slots = state.supplyShop ?? [];
