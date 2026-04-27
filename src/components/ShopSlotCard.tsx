@@ -141,7 +141,7 @@ export function ShopSlotCard({ slot }: Props) {
           flex flex-col gap-3 bg-card/60 border rounded-xl p-4 transition-all duration-200
           ${outOfStock ? "border-border opacity-50"
             : justBought ? "border-green-400/70 bg-green-400/5"
-            : "border-border hover:border-primary/40"}
+            : `${fert.cardBorder} hover:opacity-90`}
         `}
       >
         <div className="flex items-start justify-between">
