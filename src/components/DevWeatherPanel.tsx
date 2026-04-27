@@ -70,7 +70,7 @@ export function DevWeatherPanel() {
   useEffect(() => () => stopCycle(), []);
 
   // ── Item give actions ──────────────────────────────────────────────────────
-  function giveItem() {
+  async function giveItem() {
     const mut = mutation === "none" ? undefined : mutation as MutationType;
     const isSeed = itemType === "seed";
 
@@ -84,12 +84,14 @@ export function DevWeatherPanel() {
       newInventory.push({ speciesId: selectedFlower, quantity, mutation: mut, isSeed });
     }
 
-    update({ ...state, inventory: newInventory });
+    const newState = { ...state, inventory: newInventory };
+    update(newState);
+    if (user) await saveToCloud(user.id, newState);
     const flower = FLOWERS.find((f) => f.id === selectedFlower);
     showToast(`+${quantity} ${flower?.name ?? selectedFlower} ${isSeed ? "seed" : mut ? `(${mut})` : "bloom"}`);
   }
 
-  function fillCodex() {
+  async function fillCodex() {
     const allMutations = Object.keys(MUTATIONS) as MutationType[];
     const newDiscovered = [...state.discovered];
 
@@ -100,7 +102,9 @@ export function DevWeatherPanel() {
       if (!newDiscovered.includes(key)) newDiscovered.push(key);
     }
 
-    update({ ...state, discovered: newDiscovered });
+    const newState = { ...state, discovered: newDiscovered };
+    update(newState);
+    if (user) await saveToCloud(user.id, newState);
     const flower = FLOWERS.find((f) => f.id === selectedFlower);
     showToast(`Codex filled for ${flower?.name ?? selectedFlower}`);
   }
@@ -112,7 +116,7 @@ export function DevWeatherPanel() {
     showToast(`${coins >= 0 ? "+" : ""}${coins.toLocaleString()} coins`);
   }
 
-  function giveFertilizer() {
+  async function giveFertilizer() {
     const newFertilizers = [...state.fertilizers];
     const existing = newFertilizers.find((f) => f.type === fertType);
     if (existing) {
@@ -120,7 +124,9 @@ export function DevWeatherPanel() {
     } else {
       newFertilizers.push({ type: fertType, quantity: fertQty });
     }
-    update({ ...state, fertilizers: newFertilizers });
+    const newState = { ...state, fertilizers: newFertilizers };
+    update(newState);
+    if (user) await saveToCloud(user.id, newState);
     showToast(`+${fertQty} ${FERTILIZERS[fertType].name}`);
   }
 
