@@ -103,13 +103,19 @@ export function Garden() {
         opt,
         async () => {
           try {
-            return await edgePlantSeed(row, col, speciesId);
+            // Discard grid + inventory from the server response — merging them back
+            // would overwrite the other in-flight optimistic plants (same problem
+            // harvest has with inventory).  Rollback handles failure; saveToCloud
+            // will sync the full state once everything settles.
+            await edgePlantSeed(row, col, speciesId);
+            return {};
           } finally {
             plantingPlots.current.delete(key);
           }
         },
         undefined,
         {
+          serialize: true,
           rollback: (c) => ({
             ...c,
             grid: c.grid.map((r2, ri2) =>
