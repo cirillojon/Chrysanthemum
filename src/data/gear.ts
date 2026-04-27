@@ -115,7 +115,11 @@ function perTickChance(targetTotal: number, durationMs: number): number {
   return 1 - Math.pow(1 - targetTotal, 1 / ticks);
 }
 
-const WET_CHANCE_TARGET  = 0.35; // 35% over full duration
+const WET_CHANCE_PER_HOUR = 0.35; // 35% chance per hour (compounds across duration)
+/** Cumulative wet chance over `hours` hours at 35%/hr */
+function wetOverHours(hours: number): number {
+  return 1 - Math.pow(1 - WET_CHANCE_PER_HOUR, hours);
+}
 const MUT_CHANCE_TARGET  = 0.50; // 50% over full duration
 
 const DURATION_1H  = 1 * 60 * 60 * 1_000;
@@ -131,7 +135,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   sprinkler_rare: {
     id:               "sprinkler_rare",
     name:             "Sprinkler",
-    description:      "Speeds up adjacent plants by 1.5×. Lasts 1 hour.",
+    description:      "Speeds up adjacent plants by 1.5×. May get them wet. Lasts 1 hour.",
     emoji:            "🚿",
     rarity:           "rare",
     shopPrice:        400,
@@ -139,13 +143,13 @@ export const GEAR: Record<GearType, GearDefinition> = {
     durationMs:       DURATION_1H,
     radiusOffsets:    OFFSETS_CROSS,
     growthMultiplier: 1.5,
-    wetChancePerTick: perTickChance(WET_CHANCE_TARGET, DURATION_1H),
+    wetChancePerTick: perTickChance(wetOverHours(1), DURATION_1H),
   },
 
   sprinkler_legendary: {
     id:               "sprinkler_legendary",
     name:             "Sprinkler",
-    description:      "Speeds up surrounding plants by 1.75×. Lasts 2 hours.",
+    description:      "Speeds up surrounding plants by 1.75×. May get them wet. Lasts 2 hours.",
     emoji:            "🚿",
     rarity:           "legendary",
     shopPrice:        5_500,
@@ -153,13 +157,13 @@ export const GEAR: Record<GearType, GearDefinition> = {
     durationMs:       DURATION_2H,
     radiusOffsets:    OFFSETS_3X3,
     growthMultiplier: 1.75,
-    wetChancePerTick: perTickChance(WET_CHANCE_TARGET, DURATION_2H),
+    wetChancePerTick: perTickChance(wetOverHours(2), DURATION_2H),
   },
 
   sprinkler_mythic: {
     id:               "sprinkler_mythic",
     name:             "Sprinkler",
-    description:      "Speeds up all nearby plants by 2×. Lasts 4 hours.",
+    description:      "Speeds up all nearby plants by 2×. May get them wet. Lasts 4 hours.",
     emoji:            "🚿",
     rarity:           "mythic",
     shopPrice:        60_000,
@@ -167,7 +171,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     durationMs:       DURATION_4H,
     radiusOffsets:    OFFSETS_DIAMOND,
     growthMultiplier: 2.0,
-    wetChancePerTick: perTickChance(WET_CHANCE_TARGET, DURATION_4H),
+    wetChancePerTick: perTickChance(wetOverHours(4), DURATION_4H),
   },
 
   // ── Mutation sprinklers ──────────────────────────────────────────────────
@@ -261,7 +265,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   grow_lamp_uncommon: {
     id:              "grow_lamp_uncommon",
     name:            "Grow Lamp",
-    description:     "Speeds up nearby plants by 1.3× during night periods. Lasts 4 hours.",
+    description:     "Adds a 1.2× night boost that stacks with sprinklers. Lasts 4 hours.",
     emoji:           "💡",
     rarity:          "uncommon",
     shopPrice:       100,
@@ -269,13 +273,13 @@ export const GEAR: Record<GearType, GearDefinition> = {
     passiveSubtype:  "grow_lamp",
     radiusOffsets:   OFFSETS_3X3,
     durationMs:      4 * 60 * 60 * 1_000,
-    nightMultiplier: 1.3,
+    nightMultiplier: 1.2,
   },
 
   grow_lamp_rare: {
     id:              "grow_lamp_rare",
     name:            "Grow Lamp",
-    description:     "Speeds up nearby plants by 1.5× during night periods. Lasts 8 hours.",
+    description:     "Adds a 1.5× night boost that stacks with sprinklers. Lasts 8 hours.",
     emoji:           "💡",
     rarity:          "rare",
     shopPrice:       600,

@@ -417,6 +417,23 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
     updated = { ...updated, supplyShop: generateSupplyShop(updated.supplySlots), lastSupplyReset: now };
   }
 
+  // Always sync prices from current data definitions so price changes take effect immediately on load
+  updated = {
+    ...updated,
+    supplyShop: updated.supplyShop.map((slot) => {
+      if (slot.isEmpty) return slot;
+      if (slot.isFertilizer && slot.fertilizerType) {
+        const fert = FERTILIZERS[slot.fertilizerType as FertilizerType];
+        return fert ? { ...slot, price: fert.shopPrice } : slot;
+      }
+      if (slot.isGear && slot.gearType) {
+        const gearDef = GEAR[slot.gearType as GearType];
+        return gearDef ? { ...slot, price: gearDef.shopPrice } : slot;
+      }
+      return slot;
+    }),
+  };
+
   // Prune expired gear from grid on load
   updated = { ...updated, grid: pruneExpiredGear(updated.grid, now) };
 
@@ -531,20 +548,22 @@ export function getPassiveGrowthMultiplier(
   now: number
 ): number {
   const night = isNighttime();
-  let best = 1.0;
+  let bestSprinkler = 1.0;
+  let bestLamp      = 1.0;
 
   const sources = getGearAffectingCell(grid, row, col, now);
   for (const { def } of sources) {
-    // Regular sprinkler: take the highest multiplier (priority rule)
+    // Regular sprinkler: take the highest multiplier across all covering sprinklers
     if (isRegularSprinkler(def) && def.growthMultiplier) {
-      best = Math.max(best, def.growthMultiplier);
+      bestSprinkler = Math.max(bestSprinkler, def.growthMultiplier);
     }
-    // Grow lamp: only boosts during night periods
+    // Grow lamp: only active at night — stacks multiplicatively with the sprinkler
     if (isGrowLamp(def) && night && def.nightMultiplier) {
-      best = Math.max(best, def.nightMultiplier);
+      bestLamp = Math.max(bestLamp, def.nightMultiplier);
     }
   }
-  return best;
+  // Sprinkler and grow lamp multiply together (lamp is additive bonus on top)
+  return bestSprinkler * bestLamp;
 }
 
 function computeGrowthMs(
