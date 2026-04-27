@@ -27,13 +27,18 @@ interface Props {
   isSelected?:     boolean;
   /** True when this cell is within the radius of an inspected gear item. */
   isHighlighted?:  boolean;
+  /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
+  onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
+  onGearInspectClose?: () => void;
   cellSize?:       string;
 }
 
 export function PlotTile({
   plot, row, col,
   onEmptyClick, onHarvest, onHarvestStart, onHarvestEnd, harvestPending,
-  isSelected, isHighlighted, cellSize = "w-16 h-16",
+  isSelected, isHighlighted,
+  onGearInspect, onGearInspectClose,
+  cellSize = "w-16 h-16",
 }: Props) {
   const { perform, getState, activeWeather } = useGame();
   const now    = Date.now();
@@ -66,7 +71,10 @@ export function PlotTile({
   }, [open, gearOpen]);
 
   useEffect(() => { if (!plant) setOpen(false); }, [plant]);
-  useEffect(() => { if (!gear)  setGearOpen(false); }, [gear]);
+  useEffect(() => {
+    if (!gear) { setGearOpen(false); onGearInspectClose?.(); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gear]);
 
   function handleClick() {
     if (!plant) { onEmptyClick(); return; }
@@ -137,11 +145,18 @@ export function PlotTile({
             gear={gear}
             row={row}
             col={col}
-            onClose={() => setGearOpen(false)}
+            onClose={() => { setGearOpen(false); onGearInspectClose?.(); }}
           />
         )}
         <button
-          onClick={() => setGearOpen((v) => !v)}
+          onClick={() => {
+            setGearOpen((v) => {
+              const next = !v;
+              if (next) onGearInspect?.(row, col, gear.gearType);
+              else      onGearInspectClose?.();
+              return next;
+            });
+          }}
           className={`
             relative ${cellSize} rounded-xl border-2 transition-all duration-200
             flex flex-col items-center justify-center

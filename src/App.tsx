@@ -32,7 +32,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
 type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
-type ShopView   = "seeds" | "fertilizers";
+type ShopView   = "seeds" | "supply";
 type SocialView = "search" | "friends" | "gifts" | "leaderboard" | "marketplace";
 
 
@@ -74,7 +74,7 @@ export default function App() {
   const inventoryCount = state.inventory.reduce((s, i) => s + i.quantity, 0);
 
   // ── Swipe navigation ─────────────────────────────────────────────────────────
-  // Flat order: garden(0) → shop:seeds(1) → shop:fertilizers(2) →
+  // Flat order: garden(0) → shop:seeds(1) → shop:supply(2) →
   //             inventory(3) → botany(4) → codex(5) →
   //             social:search(6) → friends(7) → gifts(8) →
   //             marketplace(9) → leaderboard(10) → me(profile)
@@ -148,7 +148,7 @@ export default function App() {
     if (tab === "inventory") {
       setTabDir("right"); setSubDir(null);
       setTab("shop");
-      setShopView("fertilizers");
+      setShopView("supply");
       return;
     }
     const idx = MAIN_TABS.indexOf(tab);
@@ -161,10 +161,10 @@ export default function App() {
   const swipeHandlers = useSwipe(handleSwipeLeft, handleSwipeRight);
 
   // Flat index across the entire nav sequence:
-  // garden(0) → shop:seeds(1) → shop:fertilizers(2) → inventory(3) →
+  // garden(0) → shop:seeds(1) → shop:supply(2) → inventory(3) →
   // botany(4) → codex(5) → social:search(6) → friends(7) → gifts(8) →
   // marketplace(9) → leaderboard(10)
-  const SHOP_VIEWS:   ShopView[]   = ["seeds", "fertilizers"];
+  const SHOP_VIEWS:   ShopView[]   = ["seeds", "supply"];
   const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
 
   function flatNavIndex(t: Tab, shv: ShopView, sv: SocialView): number {
@@ -393,7 +393,7 @@ export default function App() {
             <>
               {/* Shop sub-nav */}
               <div className="flex gap-2 mb-6">
-                {(["seeds", "fertilizers"] as ShopView[]).map((v) => (
+                {(["seeds", "supply"] as ShopView[]).map((v) => (
                   <button
                     key={v}
                     onClick={() => handleShopViewChange(v)}
@@ -405,7 +405,7 @@ export default function App() {
                       }
                     `}
                   >
-                    {v === "seeds" ? "🌱 Seeds" : "🌿 Fertilizers"}
+                    {v === "seeds" ? "🌱 Seeds" : "🧪 Supply"}
                   </button>
                 ))}
               </div>

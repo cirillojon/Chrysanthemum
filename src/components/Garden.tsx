@@ -1,31 +1,46 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useGame } from "../store/GameContext";
 import { useGrowthTick } from "../hooks/useGrowthTick";
 import { PlotTile } from "./PlotTile";
 import { SeedPicker } from "./SeedPicker";
 import { HarvestPopup } from "./HarvestPopup";
-import { getCurrentStage, plantSeed, upgradeFarm, harvestPlant, plantAll, assignBloomMutations, tickWeatherMutations, stampStageTransitions } from "../store/gameStore";
+import {
+  getCurrentStage,
+  plantSeed,
+  upgradeFarm,
+  harvestPlant,
+  plantAll,
+  assignBloomMutations,
+  tickWeatherMutations,
+  tickSprinklerMutations,
+  stampStageTransitions,
+  placeGear,
+} from "../store/gameStore";
 import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
+import { getAffectedCells } from "../data/gear";
 import type { MutationType } from "../data/flowers";
+import type { GearType } from "../data/gear";
 
 export function Garden() {
   const { state, update, perform, getState, awaitHarvests, activeWeather } = useGame();
   useGrowthTick(5_000);
 
-  // Every render: stamp transitions first (locks stages permanently),
-  // then roll weather mutations and Giant on newly-bloomed plants
+  // Every render: stamp transitions, roll weather mutations, roll sprinkler mutations
   useEffect(() => {
     const now     = Date.now();
     const weather = activeWeather ?? "clear";
     let next = stampStageTransitions(state, now, weather);
     next = tickWeatherMutations(next, weather);
+    next = tickSprinklerMutations(next, weather);
     next = assignBloomMutations(next, weather);
     if (next !== state) update(next);
   });
 
   const [selectedPlot, setSelectedPlot]     = useState<{ row: number; col: number } | null>(null);
   const [harvestPopup, setHarvestPopup]     = useState<{ speciesId: string; mutation?: MutationType } | null>(null);
+  /** Which gear cell has its tooltip open — used to highlight affected cells */
+  const [highlightSource, setHighlightSource] = useState<{ row: number; col: number; gearType: GearType } | null>(null);
 
   // Track plots with a harvest in-flight so we don't open the seed picker
   // before the server has removed the plant from the DB.
@@ -40,11 +55,16 @@ export function Garden() {
     state.farmSize === 5 ? "w-15 h-15 sm:w-16 sm:h-16" :
     "w-11 h-11 sm:w-16 sm:h-16"; // 6+ cols: compact on mobile
 
+  // Cells highlighted by the currently-inspected gear item
+  const highlightedCells = useMemo((): Set<string> => {
+    if (!highlightSource) return new Set();
+    const { row, col, gearType } = highlightSource;
+    const affected = getAffectedCells(gearType, row, col, state.farmRows, state.farmSize);
+    return new Set(affected.map(([r, c]) => `${r}-${c}`));
+  }, [highlightSource, state.farmRows, state.farmSize]);
+
   function handlePlotClick(row: number, col: number) {
     const plot = state.grid[row][col];
-    // Block seed picker if a harvest for this exact plot is still in-flight;
-    // the server hasn't written the removal yet so plant-seed would get
-    // "Plot already occupied" and roll back.
     if (!plot.plant && !harvestingPlots.current.has(`${row}-${col}`)) {
       setSelectedPlot({ row, col });
     }
@@ -58,14 +78,20 @@ export function Garden() {
     setSelectedPlot(null);
   }
 
+  function handleGearSelect(gearType: GearType) {
+    if (!selectedPlot) return;
+    const { row, col } = selectedPlot;
+    const next = placeGear(state, row, col, gearType);
+    if (next) update(next);
+    setSelectedPlot(null);
+  }
+
   function handleUpgrade() {
     const optimistic = upgradeFarm(state);
     if (optimistic) perform(optimistic, () => edgeUpgradeFarm());
   }
 
   function handleCollectAll() {
-    // Use getState() to see optimistic state including any in-flight harvests,
-    // so we don't try to re-harvest plots already cleared by individual clicks.
     const currentState = getState();
     const bloomed: { row: number; col: number }[] = [];
     for (let ri = 0; ri < currentState.grid.length; ri++) {
@@ -78,12 +104,7 @@ export function Garden() {
     }
     if (bloomed.length === 0) return;
 
-    // Fire individual performs — each chains on stateRef so they see the
-    // previous plot's optimistic clear. All server calls are serialized through
-    // the harvest queue to avoid concurrent DB overwrites.
     for (const { row, col } of bloomed) {
-      // Skip plots already being harvested (e.g. individual click fired first)
-      // to avoid double-queueing the same plot.
       if (harvestingPlots.current.has(`${row}-${col}`)) continue;
       harvestingPlots.current.add(`${row}-${col}`);
 
@@ -113,8 +134,6 @@ export function Garden() {
             grid: c.grid.map((r2, ri2) =>
               r2.map((p2, ci2) => ri2 === row && ci2 === col ? savedCell : p2)
             ),
-            // Undo the optimistic inventory add for this specific flower.
-            // (inventory is no longer overwritten on success, so rollback must clean it up.)
             inventory: harvestedSpeciesId
               ? c.inventory
                   .map((item) =>
@@ -133,22 +152,19 @@ export function Garden() {
   }
 
   async function handlePlantAll() {
-    // Wait for any queued harvest server calls to finish before planting —
-    // prevents plant-seed from racing against a harvest that hasn't hit the DB yet.
     await awaitHarvests();
 
     const currentState = getState();
     const optimistic = plantAll(currentState);
-    if (optimistic === currentState) return; // nothing to plant
+    if (optimistic === currentState) return;
 
     const prev = currentState;
     update(optimistic);
 
-    // Collect newly-filled plots
     const planted: { row: number; col: number; speciesId: string }[] = [];
     for (let ri = 0; ri < optimistic.grid.length; ri++) {
       for (let ci = 0; ci < optimistic.grid[ri].length; ci++) {
-        const wasEmpty = !currentState.grid[ri]?.[ci]?.plant;
+        const wasEmpty  = !currentState.grid[ri]?.[ci]?.plant;
         const nowFilled = optimistic.grid[ri]?.[ci]?.plant;
         if (wasEmpty && nowFilled) {
           planted.push({ row: ri, col: ci, speciesId: nowFilled.speciesId });
@@ -166,8 +182,9 @@ export function Garden() {
     .flat()
     .filter((p) => p.plant && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom").length;
 
-  const emptyPlotCount  = state.grid.flat().filter((p) => !p.plant).length;
-  const availSeedCount  = state.inventory.filter((i) => i.isSeed && i.quantity > 0).length;
+  // Exclude gear-occupied cells from "empty" count — they can't receive seeds
+  const emptyPlotCount = state.grid.flat().filter((p) => !p.plant && !p.gear).length;
+  const availSeedCount = state.inventory.filter((i) => i.isSeed && i.quantity > 0).length;
 
   return (
     <div className="flex flex-col items-center gap-6">
@@ -211,7 +228,7 @@ export function Garden() {
           style={{ gridTemplateColumns: `repeat(${state.farmSize}, minmax(0, 1fr))` }}
         >
           {state.grid.flat().map((plot, i) => {
-            const row = Math.floor(i / state.farmSize); // farmSize = cols
+            const row = Math.floor(i / state.farmSize);
             const col = i % state.farmSize;
             return (
               <PlotTile
@@ -225,13 +242,16 @@ export function Garden() {
                 onHarvestEnd={() => harvestingPlots.current.delete(`${row}-${col}`)}
                 harvestPending={() => harvestingPlots.current.has(`${row}-${col}`)}
                 isSelected={selectedPlot?.row === row && selectedPlot?.col === col}
+                isHighlighted={highlightedCells.has(`${row}-${col}`)}
+                onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
+                onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}
               />
             );
           })}
         </div>
 
-        {/* Seed picker modal */}
+        {/* Seed + Gear picker modal */}
         {selectedPlot && (
           <div
             className="fixed inset-0 z-50 flex items-center justify-center bg-background/60 backdrop-blur-sm"
@@ -240,6 +260,7 @@ export function Garden() {
             <div onClick={(e) => e.stopPropagation()}>
               <SeedPicker
                 onSelect={handleSeedSelect}
+                onGearSelect={handleGearSelect}
                 onClose={() => setSelectedPlot(null)}
               />
             </div>
@@ -271,8 +292,6 @@ export function Garden() {
         <p className="text-xs text-yellow-400 font-mono">✦ Max farm size reached</p>
       )}
 
-      {/* Harvest popup rendered here, outside the grid, so it's never
-          clipped by grid cell stacking contexts */}
       {harvestPopup && (
         <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
           <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
