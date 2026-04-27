@@ -63,8 +63,11 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
   return (
     <div className={`bg-card/60 border rounded-2xl overflow-hidden transition-all ${rarity?.glow ?? ""} border-border hover:border-primary/30`}>
 
-      {/* Main row */}
-      <div className="flex items-center gap-3 px-4 py-3">
+      {/* Main row — clicking anywhere toggles price history */}
+      <div
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+        onClick={() => setExpanded((v) => !v)}
+      >
 
         {/* Flower */}
         <div className="relative flex-shrink-0">
@@ -87,7 +90,7 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
             <p className="text-xs text-muted-foreground">
               by{" "}
               <button
-                onClick={() => onViewProfile(listing.seller_username)}
+                onClick={(e) => { e.stopPropagation(); onViewProfile(listing.seller_username); }}
                 className="text-primary hover:underline"
               >
                 {listing.seller_username}
@@ -116,7 +119,7 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
             </span>
           ) : (
             <button
-              onClick={handleBuy}
+              onClick={(e) => { e.stopPropagation(); handleBuy(); }}
               disabled={buying || !canAfford}
               className="text-xs font-semibold px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
             >
@@ -125,14 +128,12 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
           )}
         </div>
 
-        {/* Expand toggle */}
-        <button
-          onClick={() => setExpanded((v) => !v)}
-          className={`text-muted-foreground text-xs transition-transform flex-shrink-0 ml-1 ${expanded ? "rotate-180" : ""}`}
-          aria-label="Toggle price history"
+        {/* Expand indicator */}
+        <span
+          className={`text-muted-foreground text-xs transition-transform flex-shrink-0 ml-1 pointer-events-none ${expanded ? "rotate-180" : ""}`}
         >
           ▾
-        </button>
+        </span>
       </div>
 
       {/* Expanded price history */}
