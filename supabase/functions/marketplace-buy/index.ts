@@ -143,12 +143,10 @@ Deno.serve(async (req: Request) => {
 
     // Record sale history
     void supabaseAdmin.from("marketplace_sales").insert({
-      listing_id:  listing.id,
-      seller_id:   listing.seller_id,
-      buyer_id:    userId,
-      species_id:  listing.species_id,
-      mutation:    listing.mutation ?? null,
-      sale_price:  listing.ask_price,
+      species_id: listing.species_id,
+      mutation:   listing.mutation ?? null,
+      item_type:  "flower",
+      price:      listing.ask_price,
     });
 
     // Credit seller in parallel with updating buyer save

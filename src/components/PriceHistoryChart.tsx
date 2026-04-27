@@ -54,7 +54,7 @@ export function PriceHistoryChart({ speciesId, mutation, baseValue }: Props) {
 
     const base = supabase
       .from("marketplace_sales")
-      .select("sale_price, sold_at")
+      .select("price, sold_at")
       .eq("species_id", speciesId);
 
     const q = mutation
@@ -63,11 +63,16 @@ export function PriceHistoryChart({ speciesId, mutation, baseValue }: Props) {
 
     q.order("sold_at", { ascending: false })
       .limit(30)
-      .then(({ data }) => {
-        if (cancelled || !data) return;
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error || !data) {
+          // Table may not exist yet or schema cache stale — show empty state
+          setLoading(false);
+          return;
+        }
         // Reverse so oldest → newest left to right
         const pts = data
-          .map((r) => ({ soldAt: r.sold_at as string, price: r.sale_price as number }))
+          .map((r) => ({ soldAt: r.sold_at as string, price: r.price as number }))
           .reverse();
         setPoints(pts);
         setLoading(false);
