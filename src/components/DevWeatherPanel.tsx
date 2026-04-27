@@ -8,6 +8,7 @@ import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
 import { codexKey } from "../store/gameStore";
+import { saveToCloud } from "../store/cloudSave";
 
 const DURATION_MS = 30_000;
 
@@ -18,7 +19,7 @@ async function setWeather(type: WeatherType) {
 type Tab = "weather" | "items";
 
 export function DevWeatherPanel() {
-  const { state, update } = useGame();
+  const { state, update, user } = useGame();
 
   // ── Weather tab state ──────────────────────────────────────────────────────
   const [cycling, setCycling]   = useState(false);
@@ -104,9 +105,11 @@ export function DevWeatherPanel() {
     showToast(`Codex filled for ${flower?.name ?? selectedFlower}`);
   }
 
-  function giveCoins() {
-    update({ ...state, coins: state.coins + coins });
-    showToast(`+${coins.toLocaleString()} coins`);
+  async function giveCoins() {
+    const newState = { ...state, coins: state.coins + coins };
+    update(newState);
+    if (user) await saveToCloud(user.id, newState);
+    showToast(`${coins >= 0 ? "+" : ""}${coins.toLocaleString()} coins`);
   }
 
   function giveFertilizer() {
@@ -213,15 +216,14 @@ export function DevWeatherPanel() {
               <input
                 type="number"
                 value={coins}
-                min={1}
-                onChange={(e) => setCoins(Math.max(1, parseInt(e.target.value) || 1))}
+                onChange={(e) => setCoins(parseInt(e.target.value) || 0)}
                 className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white font-mono text-xs focus:outline-none focus:border-yellow-500/50"
               />
               <button
                 onClick={giveCoins}
                 className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all"
               >
-                Give
+                {coins >= 0 ? "Give" : "Take"}
               </button>
             </div>
           </div>
