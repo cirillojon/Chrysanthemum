@@ -52,12 +52,16 @@ export function PriceHistoryChart({ speciesId, mutation, baseValue }: Props) {
     let cancelled = false;
     setLoading(true);
 
-    supabase
+    const base = supabase
       .from("marketplace_sales")
       .select("sale_price, sold_at")
-      .eq("species_id", speciesId)
-      .eq("mutation", mutation ?? null)
-      .order("sold_at", { ascending: false })
+      .eq("species_id", speciesId);
+
+    const q = mutation
+      ? base.eq("mutation", mutation)
+      : base.is("mutation", null);
+
+    q.order("sold_at", { ascending: false })
       .limit(30)
       .then(({ data }) => {
         if (cancelled || !data) return;
