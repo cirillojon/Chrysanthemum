@@ -275,6 +275,42 @@ export function PlotTile({
             : `${species?.name} — Click for options`
         }
       >
+        {/* ── Gear ambient animation overlay (clipped to cell) ── */}
+        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter) && (
+          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+            {/* Grow lamp: warm amber glow */}
+            {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
+            {/* Sprinkler: 💧 drops falling */}
+            {isUnderSprinkler && (
+              <>
+                <span className="gear-drop" style={{ left: "15%", animationDelay: "0s"   }}>💧</span>
+                <span className="gear-drop" style={{ left: "48%", animationDelay: "0.6s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "74%", animationDelay: "1.2s" }}>💧</span>
+              </>
+            )}
+            {/* Mutation sprinkler: emoji floating up, 2 per mutation type */}
+            {sprinklerMutations.flatMap((emoji, mi) => [
+              <span key={`m${mi}a`} className="gear-float" style={{ left: `${16 + mi * 28}%`, animationDelay: `${mi * 0.5}s`       }}>{emoji}</span>,
+              <span key={`m${mi}b`} className="gear-float" style={{ left: `${40 + mi * 28}%`, animationDelay: `${mi * 0.5 + 1.1}s` }}>{emoji}</span>,
+            ])}
+            {/* Scarecrow: 🐦 birds fluttering away */}
+            {isUnderScarecrow && (
+              <>
+                <span className="gear-bird" style={{ left: "10%", animationDelay: "0s"   }}>🐦</span>
+                <span className="gear-bird" style={{ left: "52%", animationDelay: "1.5s" }}>🐦</span>
+              </>
+            )}
+            {/* Composter: ✦ sparkles rising */}
+            {isUnderComposter && (
+              <>
+                <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "0s"    }}>✦</span>
+                <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "0.75s" }}>✦</span>
+                <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "1.5s"  }}>✦</span>
+              </>
+            )}
+          </div>
+        )}
+
         <span className="text-2xl leading-none">
           {species?.emoji[stage!] ?? "🌱"}
         </span>
