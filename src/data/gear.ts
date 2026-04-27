@@ -294,6 +294,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     category:       "passive",
     passiveSubtype: "scarecrow",
     radiusOffsets:  OFFSETS_3X3,
+    durationMs:     4 * 60 * 60 * 1_000,
   },
 
   scarecrow_legendary: {
@@ -306,6 +307,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     category:       "passive",
     passiveSubtype: "scarecrow",
     radiusOffsets:  OFFSETS_3X3,
+    durationMs:     4 * 60 * 60 * 1_000,
   },
 
   composter_uncommon: {
@@ -318,6 +320,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     category:       "passive",
     passiveSubtype: "composter",
     radiusOffsets:  OFFSETS_3X3,
+    durationMs:     4 * 60 * 60 * 1_000,
     maxStorage:     10,
   },
 
@@ -331,6 +334,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     category:       "passive",
     passiveSubtype: "composter",
     radiusOffsets:  OFFSETS_3X3,
+    durationMs:     4 * 60 * 60 * 1_000,
     maxStorage:     10,
   },
 };
