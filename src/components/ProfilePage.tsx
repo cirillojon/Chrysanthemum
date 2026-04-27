@@ -474,7 +474,7 @@ function SettingsPanel() {
             >
               <span
                 className={`
-                  absolute top-0.5 w-4 h-4 rounded-full transition-transform duration-200
+                  absolute inset-y-0 my-auto w-4 h-4 rounded-full transition-transform duration-200
                   ${settings[key]
                     ? "translate-x-5 bg-primary"
                     : "translate-x-0.5 bg-muted-foreground/50"
