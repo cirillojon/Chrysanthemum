@@ -132,3 +132,57 @@ export function edgeBotanyConvert(selections: { speciesId: string; mutation?: st
 export function edgeBotanyConvertAll(rarity: string) {
   return callEdge<BotanyResult>("botany-convert", { action: "convert_all", rarity });
 }
+
+// ── Marketplace ───────────────────────────────────────────────────────────────
+
+export interface MarketplaceListResult {
+  ok:        true;
+  coins:     number;
+  inventory: GameState["inventory"];
+  listingId: string;
+}
+
+export interface MarketplaceUpgradeSlotsResult {
+  ok:               true;
+  coins:            number;
+  marketplaceSlots: number;
+}
+
+export interface MarketplaceBuyResult {
+  ok:         true;
+  coins:      number;
+  inventory:  GameState["inventory"];
+  discovered: GameState["discovered"];
+}
+
+export interface MarketplaceCancelResult {
+  ok:        true;
+  inventory: GameState["inventory"];
+}
+
+export function edgeMarketplaceCreateListing(
+  speciesId: string,
+  mutation: string | undefined,
+  askPrice: number,
+) {
+  return callEdge<MarketplaceListResult>("marketplace-list", {
+    action: "create_listing",
+    speciesId,
+    mutation,
+    askPrice,
+  });
+}
+
+export function edgeMarketplaceUpgradeSlots() {
+  return callEdge<MarketplaceUpgradeSlotsResult>("marketplace-list", {
+    action: "upgrade_slots",
+  });
+}
+
+export function edgeMarketplaceBuy(listingId: string) {
+  return callEdge<MarketplaceBuyResult>("marketplace-buy", { listingId });
+}
+
+export function edgeMarketplaceCancel(listingId: string) {
+  return callEdge<MarketplaceCancelResult>("marketplace-cancel", { listingId });
+}

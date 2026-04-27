@@ -61,6 +61,28 @@ export interface Fertilizer {
   shopWeight: number;
 }
 
+// ── Marketplace slot upgrades ──────────────────────────────────────────────
+
+export const MAX_MARKETPLACE_SLOTS = 5;
+
+export interface MarketplaceSlotUpgrade {
+  slots: number; // total slots after this upgrade
+  cost:  number;
+}
+
+export const MARKETPLACE_SLOT_UPGRADES: MarketplaceSlotUpgrade[] = [
+  { slots: 1, cost: 10_000  },
+  { slots: 2, cost: 50_000  },
+  { slots: 3, cost: 150_000 },
+  { slots: 4, cost: 350_000 },
+  { slots: 5, cost: 650_000 },
+];
+
+export const getNextMarketplaceSlotUpgrade = (currentSlots: number): MarketplaceSlotUpgrade | null =>
+  MARKETPLACE_SLOT_UPGRADES.find((u) => u.slots > currentSlots) ?? null;
+
+// ── Fertilizers ───────────────────────────────────────────────────────────
+
 export const FERTILIZERS: Record<FertilizerType, Fertilizer> = {
   basic:   { id: "basic",   name: "Basic Fertilizer",   description: "Speeds growth by 1.2×.", emoji: "🦴", speedMultiplier: 1.2, shopPrice: 25,   color: "text-gray-400",  shopWeight: 40 },
   advanced:{ id: "advanced",name: "Advanced Fertilizer",description: "Speeds growth by 1.5×.", emoji: "🥣", speedMultiplier: 1.5, shopPrice: 100,  color: "text-green-400", shopWeight: 25 },
