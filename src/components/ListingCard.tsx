@@ -78,8 +78,10 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
   if (isFertilizer && fertDef) {
     return (
       <div className="bg-card/60 border border-border hover:border-primary/30 rounded-2xl overflow-hidden transition-all">
-        <div className="flex items-center gap-3 px-4 py-3">
-
+        <div
+          className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+          onClick={() => setExpanded((v) => !v)}
+        >
           <span className="text-3xl flex-shrink-0">{fertDef.emoji}</span>
 
           <div className="flex-1 min-w-0">
@@ -120,7 +122,7 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
               </span>
             ) : (
               <button
-                onClick={handleBuy}
+                onClick={(e) => { e.stopPropagation(); handleBuy(); }}
                 disabled={buying || !canAfford}
                 className="text-xs font-semibold px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
               >
@@ -128,7 +130,20 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
               </button>
             )}
           </div>
+
+          <span className={`text-muted-foreground text-xs transition-transform flex-shrink-0 ml-1 pointer-events-none ${expanded ? "rotate-180" : ""}`}>
+            ▾
+          </span>
         </div>
+
+        {expanded && (
+          <div className="px-4 pb-4 pt-1 border-t border-border/40">
+            <PriceHistoryChart
+              speciesId={listing.species_id}
+              baseValue={listing.base_value}
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -138,8 +153,10 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
     const gearRarity = RARITY_CONFIG[gearDef.rarity];
     return (
       <div className={`bg-card/60 border rounded-2xl overflow-hidden transition-all ${gearRarity?.glow ?? ""} border-border hover:border-primary/30`}>
-        <div className="flex items-center gap-3 px-4 py-3">
-
+        <div
+          className="flex items-center gap-3 px-4 py-3 cursor-pointer"
+          onClick={() => setExpanded((v) => !v)}
+        >
           <span className="text-3xl flex-shrink-0">{gearDef.emoji}</span>
 
           <div className="flex-1 min-w-0">
@@ -179,7 +196,7 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
               </span>
             ) : (
               <button
-                onClick={handleBuy}
+                onClick={(e) => { e.stopPropagation(); handleBuy(); }}
                 disabled={buying || !canAfford}
                 className="text-xs font-semibold px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
               >
@@ -187,7 +204,20 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
               </button>
             )}
           </div>
+
+          <span className={`text-muted-foreground text-xs transition-transform flex-shrink-0 ml-1 pointer-events-none ${expanded ? "rotate-180" : ""}`}>
+            ▾
+          </span>
         </div>
+
+        {expanded && (
+          <div className="px-4 pb-4 pt-1 border-t border-border/40">
+            <PriceHistoryChart
+              speciesId={listing.species_id}
+              baseValue={listing.base_value}
+            />
+          </div>
+        )}
       </div>
     );
   }
