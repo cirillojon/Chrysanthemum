@@ -170,12 +170,14 @@ export function edgeMarketplaceCreateListing(
   speciesId: string,
   mutation: string | undefined,
   askPrice: number,
+  isSeed = false,
 ) {
   return callEdge<MarketplaceListResult>("marketplace-list", {
     action: "create_listing",
     speciesId,
     mutation,
     askPrice,
+    isSeed,
   });
 }
 

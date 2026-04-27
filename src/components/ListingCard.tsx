@@ -9,6 +9,7 @@ export interface Listing {
   seller_username:  string;
   species_id:       string;
   mutation:         string | null;
+  is_seed:          boolean;
   ask_price:        number;
   base_value:       number;
   created_at:       string;
@@ -69,10 +70,14 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
         onClick={() => setExpanded((v) => !v)}
       >
 
-        {/* Flower */}
+        {/* Flower / Seed */}
         <div className="relative flex-shrink-0">
-          <span className="text-3xl">{species?.emoji.bloom ?? "❓"}</span>
-          {mut && (
+          <span className="text-3xl">
+            {listing.is_seed
+              ? (species?.emoji.seed ?? "🌱")
+              : (species?.emoji.bloom ?? "❓")}
+          </span>
+          {!listing.is_seed && mut && (
             <span className="absolute -top-1 -right-1 text-sm">{mut.emoji}</span>
           )}
         </div>
@@ -81,9 +86,10 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-sm font-bold">{species?.name ?? listing.species_id}</p>
-            {mut && (
-              <span className={`text-xs font-mono font-bold ${mut.color}`}>{mut.name}</span>
-            )}
+            {listing.is_seed
+              ? <span className="text-xs font-mono text-muted-foreground">Seed</span>
+              : mut && <span className={`text-xs font-mono font-bold ${mut.color}`}>{mut.name}</span>
+            }
             <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
           </div>
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">

@@ -25,8 +25,8 @@ export function CreateListingModal({ onClose, onListed }: Props) {
   const [listing, setListing]         = useState(false);
   const [error, setError]             = useState("");
 
-  // Only harvested blooms (not seeds)
-  const items = state.inventory.filter((i) => !i.isSeed && i.quantity > 0);
+  // Blooms and seeds (not fertilizers — those are handled separately)
+  const items = state.inventory.filter((i) => i.quantity > 0);
 
   const askPrice = parseInt(askPriceStr, 10);
   const validPrice = !isNaN(askPrice) && askPrice >= 1;
@@ -44,6 +44,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
         selectedItem.speciesId,
         selectedItem.mutation,
         askPrice,
+        selectedItem.isSeed ?? false,
       );
       // Apply server-confirmed state (coins deducted, item removed from inventory)
       update({ ...state, coins: result.coins, inventory: result.inventory });
@@ -72,15 +73,15 @@ export function CreateListingModal({ onClose, onListed }: Props) {
         {items.length === 0 ? (
           <div className="text-center py-8 space-y-2">
             <p className="text-3xl">🎒</p>
-            <p className="text-sm text-muted-foreground">No flowers to list.</p>
-            <p className="text-xs text-muted-foreground">Harvest some flowers first!</p>
+            <p className="text-sm text-muted-foreground">Nothing to list.</p>
+            <p className="text-xs text-muted-foreground">Harvest flowers or buy seeds first!</p>
           </div>
         ) : (
           <>
             {/* Item picker */}
             <div className="flex-1 overflow-y-auto space-y-1.5 min-h-0">
               <p className="text-xs font-mono text-muted-foreground uppercase tracking-wide mb-2">
-                Select a flower
+                Select an item
               </p>
               {items.map((item, idx) => {
                 const species  = getFlower(item.speciesId);
@@ -91,7 +92,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
 
                 return (
                   <button
-                    key={`${item.speciesId}-${item.mutation ?? "none"}-${idx}`}
+                    key={`${item.speciesId}-${item.mutation ?? "none"}-${item.isSeed ? "seed" : "bloom"}-${idx}`}
                     onClick={() => { setSelectedIdx(selected ? null : idx); setError(""); }}
                     className={`
                       w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left
@@ -102,13 +103,20 @@ export function CreateListingModal({ onClose, onListed }: Props) {
                     `}
                   >
                     <div className="relative flex-shrink-0">
-                      <span className="text-2xl">{species.emoji.bloom}</span>
-                      {mut && <span className="absolute -top-1 -right-1 text-xs">{mut.emoji}</span>}
+                      <span className="text-2xl">
+                        {item.isSeed ? (species.emoji.seed ?? "🌱") : species.emoji.bloom}
+                      </span>
+                      {!item.isSeed && mut && (
+                        <span className="absolute -top-1 -right-1 text-xs">{mut.emoji}</span>
+                      )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <p className="text-sm font-medium truncate">{species.name}</p>
-                        {mut && <span className={`text-xs font-mono ${mut.color}`}>{mut.name}</span>}
+                        {item.isSeed
+                          ? <span className="text-xs font-mono text-muted-foreground">Seed</span>
+                          : mut && <span className={`text-xs font-mono ${mut.color}`}>{mut.name}</span>
+                        }
                       </div>
                       <p className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</p>
                     </div>
@@ -168,8 +176,8 @@ export function CreateListingModal({ onClose, onListed }: Props) {
               {listing
                 ? "Listing..."
                 : selectedItem && validPrice
-                  ? `List ${getFlower(selectedItem.speciesId)?.name ?? "flower"} for ${formatCoins(askPrice)} 🟡`
-                  : "Select a flower and set a price"
+                  ? `List ${getFlower(selectedItem.speciesId)?.name ?? "item"}${selectedItem.isSeed ? " Seed" : ""} for ${formatCoins(askPrice)} 🟡`
+                  : "Select an item and set a price"
               }
             </button>
 

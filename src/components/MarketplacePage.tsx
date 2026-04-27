@@ -47,7 +47,7 @@ export function MarketplacePage({ onViewProfile }: Props) {
     // Build query
     let query = supabase
       .from("marketplace_listings")
-      .select("id, seller_id, species_id, mutation, ask_price, base_value, created_at, expires_at")
+      .select("id, seller_id, species_id, mutation, is_seed, ask_price, base_value, created_at, expires_at")
       .eq("status", "active")
       .gt("expires_at", new Date().toISOString());
 
@@ -102,6 +102,7 @@ export function MarketplacePage({ onViewProfile }: Props) {
       seller_username: usernameMap[l.seller_id as string] ?? "unknown",
       species_id:      l.species_id as string,
       mutation:        l.mutation as string | null,
+      is_seed:         (l.is_seed as boolean) ?? false,
       ask_price:       l.ask_price as number,
       base_value:      l.base_value as number,
       created_at:      l.created_at as string,

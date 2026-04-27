@@ -60,7 +60,7 @@ Deno.serve(async (req: Request) => {
         .single(),
       supabaseAdmin
         .from("marketplace_listings")
-        .select("id, seller_id, species_id, mutation, ask_price, status")
+        .select("id, seller_id, species_id, mutation, is_seed, ask_price, status")
         .eq("id", body.listingId)
         .single(),
     ]);
@@ -107,18 +107,23 @@ Deno.serve(async (req: Request) => {
 
     buyerCoins -= listing.ask_price;
 
-    // Add item to buyer inventory
+    // Add item to buyer inventory (preserve isSeed flag from listing)
     const mutation = listing.mutation ?? undefined;
+    const isSeed   = (listing.is_seed as boolean) ?? false;
     const existing = buyerInventory.find(
-      (i) => i.speciesId === listing.species_id && i.mutation === mutation && !i.isSeed
+      (i) => i.speciesId === listing.species_id &&
+             i.mutation === mutation &&
+             (i.isSeed ?? false) === isSeed
     );
     buyerInventory = existing
       ? buyerInventory.map((i) =>
-          i.speciesId === listing.species_id && i.mutation === mutation && !i.isSeed
+          i.speciesId === listing.species_id &&
+          i.mutation === mutation &&
+          (i.isSeed ?? false) === isSeed
             ? { ...i, quantity: i.quantity + 1 }
             : i
         )
-      : [...buyerInventory, { speciesId: listing.species_id, quantity: 1, mutation, isSeed: false }];
+      : [...buyerInventory, { speciesId: listing.species_id, quantity: 1, mutation, isSeed }];
 
     // Register in buyer's codex
     const baseKey = listing.species_id;
@@ -155,7 +160,7 @@ Deno.serve(async (req: Request) => {
     const saleRecord = supabaseAdmin.from("marketplace_sales").insert({
       species_id: listing.species_id,
       mutation:   listing.mutation ?? null,
-      item_type:  "flower",
+      item_type:  isSeed ? "seed" : "flower",
       price:      listing.ask_price,
       sold_at:    new Date().toISOString(),
     });
