@@ -276,7 +276,7 @@ export default function App() {
       <WeatherOverlay weatherType={activeWeather} isActive={weatherIsActive} />
 
       {/* HUD + Tab bar — sticky together so both stay pinned while scrolling */}
-      <div className="sticky top-0 z-30">
+      <div className="sticky top-0 z-30" data-sticky-nav>
       <header className="bg-card/80 backdrop-blur border-b border-border">
         <div className="w-full sm:max-w-2xl sm:mx-auto flex items-center justify-between px-3 sm:px-4 py-3">
           <h1
