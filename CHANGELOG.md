@@ -1,3 +1,13 @@
+## [v2.1.1] — 2026-04-27 — Bug Fixes
+
+### Fixed
+- **Collect All inventory trickle** — harvested blooms now appear in inventory all at once instead of one by one; each server response was overwriting the optimistic inventory with the DB's partial state
+- **Harvest rollback now undoes inventory** — a failed harvest correctly removes the flower that was optimistically added, rather than leaving a ghost item
+- **Shop "Flower not in stock" errors** — shop restock sync is now queued before any buy, eliminating the race where a buy fired before the new shop was written to the server
+- **Stale fertilizer multipliers in harvest function** — server-side bloom check now uses the correct multipliers (Basic 1.1×, Advanced 1.25×, Premium 1.5×, Elite 1.75×, Miracle 2×)
+
+---
+
 ## [v2.1.0] — 2026-04-27 — Marketplace
 
 ### Added
