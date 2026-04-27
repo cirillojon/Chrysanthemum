@@ -284,8 +284,8 @@ export function PlotTile({
           </span>
         )}
 
-        {/* ⚡ Mastery bonus indicator — top-right (only when growing) */}
-        {!isBloomed && (plant as PlantedFlower).masteredBonus && (
+        {/* ⚡ Mastery bonus indicator — top-right */}
+        {(plant as PlantedFlower).masteredBonus && (
           <span
             className="absolute top-0.5 right-0.5 text-[10px] leading-none text-yellow-400"
             title="Mastered — grows 20% faster"
@@ -294,9 +294,9 @@ export function PlotTile({
           </span>
         )}
 
-        {/* Gear effect indicators — bottom-left row (only when growing) */}
-        {!isBloomed && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter) && (
-          <div className="absolute bottom-2.5 left-0.5 flex leading-none">
+        {/* Gear effect indicators — bottom-left row */}
+        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter) && (
+          <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map((emoji, i) => (
               <span key={i} className="text-[9px]" title="Mutation sprinkler">{emoji}</span>

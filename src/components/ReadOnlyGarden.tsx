@@ -167,15 +167,15 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Mastery — top-right */}
-              {!isBloomed && plant.masteredBonus && (
+              {plant.masteredBonus && (
                 <span className="absolute top-0.5 right-0.5 text-[9px] leading-none text-yellow-400" title="Mastered">
                   ⚡
                 </span>
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {!isBloomed && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter) && (
-                <div className="absolute bottom-2 left-0.5 flex leading-none">
+              {(underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter) && (
+                <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2"}`}>
                   {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
                   {mutEmojis.map((emoji, i) => (
                     <span key={i} className="text-[9px]" title="Mutation sprinkler">{emoji}</span>

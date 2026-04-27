@@ -268,6 +268,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     category:        "passive",
     passiveSubtype:  "grow_lamp",
     radiusOffsets:   OFFSETS_3X3,
+    durationMs:      4 * 60 * 60 * 1_000,
     nightMultiplier: 1.3,
   },
 
@@ -281,6 +282,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     category:        "passive",
     passiveSubtype:  "grow_lamp",
     radiusOffsets:   OFFSETS_3X3,
+    durationMs:      4 * 60 * 60 * 1_000,
     nightMultiplier: 1.3,
   },
 
