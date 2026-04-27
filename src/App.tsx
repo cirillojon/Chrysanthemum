@@ -14,6 +14,7 @@ import { FriendRequestNotification } from "./components/FriendRequestNotificatio
 import { GiftNotification } from "./components/GiftNotification";
 import { Codex } from "./components/Codex";
 import { Botany } from "./components/Botany";
+import { MarketplaceTab } from "./components/MarketplaceTab";
 import { WeatherOverlay } from "./components/WeatherOverlay";
 import { DevWeatherPanel } from "./components/DevWeatherPanel";
 import { WeatherBanner } from "./components/WeatherBanner";
@@ -29,7 +30,7 @@ import { useVersionCheck } from "./hooks/useVersionCheck";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
-type Tab = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
+type Tab = "garden" | "shop" | "inventory" | "social" | "codex" | "botany" | "marketplace";
 type SocialView = "search" | "friends" | "gifts" | "leaderboard";
 
 
@@ -213,7 +214,7 @@ export default function App() {
       {/* Tabs */}
       <nav className="bg-card/40 border-b border-border">
         <div className="w-full sm:max-w-2xl sm:mx-auto flex">
-          {(["garden", "shop", "inventory", "botany", "codex", "social"] as Tab[]).map((t) => (
+          {(["garden", "shop", "inventory", "botany", "codex", "social", "marketplace"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => handleTabChange(t)}
@@ -231,8 +232,9 @@ export default function App() {
                : t === "inventory" ? "🎒"
                : t === "botany"    ? "🌿"
                : t === "codex"     ? "📖"
-               : "🌍"}
-              <span className="ml-1 hidden sm:inline capitalize">{t}</span>
+               : t === "social"    ? "🌍"
+               : "🏪"}
+              <span className="ml-1 hidden sm:inline capitalize">{t === "marketplace" ? "Market" : t}</span>
 
               {t === "inventory" && inventoryCount > 0 && (
                 <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
@@ -252,11 +254,17 @@ export default function App() {
       {/* Content */}
       <main className="flex-1 w-full sm:max-w-2xl sm:mx-auto px-3 sm:px-4 py-6 sm:py-8">
         <>
-          {tab === "garden"    && <Garden />}
-          {tab === "shop"      && <Shop />}
-          {tab === "inventory" && <Inventory />}
-          {tab === "botany"    && <Botany />}
-          {tab === "codex"     && <Codex />}
+          {tab === "garden"      && <Garden />}
+          {tab === "shop"        && <Shop />}
+          {tab === "inventory"   && <Inventory />}
+          {tab === "botany"      && <Botany />}
+          {tab === "codex"       && <Codex />}
+          {tab === "marketplace" && (
+            <MarketplaceTab
+              onViewProfile={handleViewProfile}
+              onSignIn={signInWithGoogle}
+            />
+          )}
           {tab === "social"    && (
             user ? (
               <>

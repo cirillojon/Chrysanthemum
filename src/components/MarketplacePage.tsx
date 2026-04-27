@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { supabase } from "../lib/supabase";
 import { useGame } from "../store/GameContext";
-import { FLOWERS, RARITY_CONFIG } from "../data/flowers";
+import { FLOWERS } from "../data/flowers";
 import type { Rarity } from "../data/flowers";
 import { getFlower } from "../data/flowers";
 import { edgeMarketplaceBuy } from "../lib/edgeFunctions";

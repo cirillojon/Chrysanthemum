@@ -30,8 +30,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
 
   const askPrice = parseInt(askPriceStr, 10);
   const validPrice = !isNaN(askPrice) && askPrice >= 1;
-  const fee     = validPrice ? Math.max(1, Math.floor(askPrice * LISTING_FEE_PCT)) : 0;
-  const netEarn = validPrice ? askPrice - fee : 0;
+  const fee = validPrice ? Math.max(1, Math.floor(askPrice * LISTING_FEE_PCT)) : 0;
 
   const selectedItem = selectedIdx !== null ? items[selectedIdx] : null;
 

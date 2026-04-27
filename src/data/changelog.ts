@@ -14,6 +14,19 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.1.0",
+    title:   "Marketplace",
+    items: [
+      { type: "added",   text: "🏪 Marketplace — buy and sell flowers with other players; listings are visible to everyone" },
+      { type: "added",   text: "Listing slots — unlock your first slot for 10,000 coins, up to 5 slots total" },
+      { type: "added",   text: "5% listing fee charged upfront when creating a listing; fee is non-refundable" },
+      { type: "added",   text: "48-hour listing expiry — unsold flowers are automatically returned to your inventory" },
+      { type: "added",   text: "Price history chart — tap any listing to see the last 30 sale prices for that flower" },
+      { type: "added",   text: "My Listings tab — view your active listings, cancel them, and see sold/expired history" },
+      { type: "added",   text: "Search, rarity filter, and sort (newest, price ↑, price ↓) on the Browse tab" },
+    ],
+  },
+  {
     version: "2.0.3",
     title:   "UI Bug Fixes",
     items: [
