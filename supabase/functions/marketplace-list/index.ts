@@ -116,12 +116,14 @@ Deno.serve(async (req: Request) => {
       });
     }
     if (saveResult.error || !saveResult.data) {
+      console.error("save load failed:", saveResult.error);
       return new Response(JSON.stringify({ error: "Save not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
     const save = saveResult.data;
+    console.log("save loaded:", JSON.stringify({ coins: save.coins, marketplace_slots: save.marketplace_slots, action: body.action }));
     let coins             = save.coins as number;
     let newInventory      = [...(save.inventory ?? []) as InventoryItem[]];
     let marketplaceSlots  = (save.marketplace_slots ?? 0) as number;
@@ -216,6 +218,7 @@ Deno.serve(async (req: Request) => {
           species_id: body.speciesId,
           mutation:   body.mutation ?? null,
           ask_price:  body.askPrice,
+          price:      body.askPrice,   // original column name — kept in sync with ask_price
           base_value: baseValue,
           fee_paid:   fee,
           status:     "active",
@@ -225,6 +228,7 @@ Deno.serve(async (req: Request) => {
         .single();
 
       if (insertError || !listing) {
+        console.error("insert failed:", insertError);
         return new Response(JSON.stringify({ error: "Failed to create listing" }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
@@ -237,7 +241,7 @@ Deno.serve(async (req: Request) => {
         .eq("user_id", userId);
 
       if (updateError) {
-        // Compensate: delete the listing we just created
+        console.error("save update failed:", updateError);
         await supabaseAdmin.from("marketplace_listings").delete().eq("id", listing.id);
         return new Response(JSON.stringify({ error: "Failed to save" }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
