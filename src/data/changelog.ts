@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.1.4",
+    title:   "Gifting Fixes",
+    items: [
+      { type: "fixed", text: "Gifting a flower no longer incorrectly awards coins as if it was sold" },
+      { type: "fixed", text: "Gifted flowers are now validated and deducted server-side — no more duplication on page reload" },
+      { type: "fixed", text: "You can no longer gift an item that is already listed on the Marketplace" },
+      { type: "fixed", text: "Claimed gifts are now written directly to your DB inventory — gifted flowers are immediately usable in Botany" },
+      { type: "fixed", text: "Friend profile flowers now show mutation emojis, matching the leaderboard" },
+    ],
+  },
+  {
     version: "2.1.3",
     title:   "Marketplace & Garden",
     items: [
