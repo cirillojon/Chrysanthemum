@@ -52,7 +52,8 @@ export default function App() {
   const [socialView, setSocialView] = useState<SocialView>("search");
   const [showBanner, setShowBanner] = useState(true);
   const [showForecast, setShowForecast] = useState(false);
-  const [navDirection, setNavDirection] = useState<"left" | "right" | null>(null);
+  const [tabDir,    setTabDir]    = useState<"left" | "right" | null>(null);
+  const [socialDir, setSocialDir] = useState<"left" | "right" | null>(null);
 
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
 
@@ -78,31 +79,55 @@ export default function App() {
   const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
 
   const handleSwipeLeft = useCallback(() => {
-    if (profileUsername) { setNavDirection(null); setProfileUsername(null); return; }
-    setNavDirection("left");
+    // If viewing a profile, swipe left does nothing (already at the end)
+    if (profileUsername) return;
     if (tab === "social") {
       const idx = SOCIAL_VIEWS.indexOf(socialView);
-      if (idx < SOCIAL_VIEWS.length - 1) { setSocialView(SOCIAL_VIEWS[idx + 1]); return; }
+      if (idx < SOCIAL_VIEWS.length - 1) {
+        setSocialDir("left"); setTabDir(null);
+        setSocialView(SOCIAL_VIEWS[idx + 1]);
+        return;
+      }
+      // After last social view → navigate to own profile
+      if (user && profile?.username) {
+        setSocialDir("left"); setTabDir(null);
+        setProfileUsername(profile.username);
+      }
       return;
     }
     const idx = MAIN_TABS.indexOf(tab);
     if (idx < MAIN_TABS.length - 1) {
       const next = MAIN_TABS[idx + 1];
+      setTabDir("left"); setSocialDir(null);
       setTab(next);
       if (next === "social") setSocialView("search");
     }
-  }, [tab, socialView, profileUsername]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, socialView, profileUsername, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSwipeRight = useCallback(() => {
-    if (profileUsername) { setNavDirection(null); setProfileUsername(null); return; }
-    setNavDirection("right");
+    if (tab === "social" && profileUsername) {
+      // Swipe right from own profile → back to leaderboard
+      setSocialDir("right"); setTabDir(null);
+      setProfileUsername(null);
+      setSocialView("leaderboard");
+      return;
+    }
     if (tab === "social") {
       const idx = SOCIAL_VIEWS.indexOf(socialView);
-      if (idx > 0) { setSocialView(SOCIAL_VIEWS[idx - 1]); return; }
-      setTab("codex"); return;
+      if (idx > 0) {
+        setSocialDir("right"); setTabDir(null);
+        setSocialView(SOCIAL_VIEWS[idx - 1]);
+        return;
+      }
+      setTabDir("right"); setSocialDir(null);
+      setTab("codex");
+      return;
     }
     const idx = MAIN_TABS.indexOf(tab);
-    if (idx > 0) setTab(MAIN_TABS[idx - 1]);
+    if (idx > 0) {
+      setTabDir("right"); setSocialDir(null);
+      setTab(MAIN_TABS[idx - 1]);
+    }
   }, [tab, socialView, profileUsername]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const swipeHandlers = useSwipe(handleSwipeLeft, handleSwipeRight);
@@ -116,14 +141,16 @@ export default function App() {
   }
 
   function handleViewProfile(username: string) {
-    setNavDirection(null);
+    setSocialDir("left");
+    setTabDir(null);
     setTab("social");
     setProfileUsername(username);
   }
 
   function handleTabChange(t: Tab) {
     const dir = flatNavIndex(t, "search") > flatNavIndex(tab, socialView) ? "left" : "right";
-    setNavDirection(dir);
+    setTabDir(dir);
+    setSocialDir(null);
     setTab(t);
     if (t === "social") setSocialView("search");
     setProfileUsername(null);
@@ -131,7 +158,8 @@ export default function App() {
 
   function handleSocialViewChange(v: SocialView) {
     const dir = flatNavIndex("social", v) > flatNavIndex("social", socialView) ? "left" : "right";
-    setNavDirection(dir);
+    setSocialDir(dir);
+    setTabDir(null);
     setSocialView(v);
     setProfileUsername(null);
   }
@@ -309,8 +337,8 @@ export default function App() {
         {...swipeHandlers}
       >
         <div
-          key={`${tab}-${tab === "social" ? (profileUsername ?? socialView) : ""}`}
-          className={navDirection === "left" ? "slide-from-right" : navDirection === "right" ? "slide-from-left" : ""}
+          key={tab}
+          className={tabDir === "left" ? "slide-from-right" : tabDir === "right" ? "slide-from-left" : ""}
         >
         <>
           {tab === "garden"      && <Garden />}
@@ -379,28 +407,33 @@ export default function App() {
                 </div>
               )}
 
-              {/* Marketplace is accessible to guests — it handles its own sign-in prompt */}
-              {socialView === "marketplace" ? (
-                <MarketplaceTab
-                  onViewProfile={handleViewProfile}
-                  onSignIn={signInWithGoogle}
-                />
-              ) : user ? (
-                <>
-                  {profileUsername ? (
-                    <ProfilePage username={profileUsername} />
-                  ) : (
-                    <>
-                      {socialView === "search"      && <SearchPage onViewProfile={handleViewProfile} />}
-                      {socialView === "friends"     && <FriendsPage onViewProfile={handleViewProfile} />}
-                      {socialView === "gifts"       && <GiftsPage onViewProfile={handleViewProfile} />}
-                      {socialView === "leaderboard" && <LeaderboardPage onViewProfile={handleViewProfile} />}
-                    </>
-                  )}
-                </>
-              ) : (
-                <GuestSocialPrompt onSignIn={signInWithGoogle} />
-              )}
+              {/* Social content — animated independently from the sub-nav */}
+              <div
+                key={profileUsername ?? socialView}
+                className={socialDir === "left" ? "slide-from-right" : socialDir === "right" ? "slide-from-left" : ""}
+              >
+                {socialView === "marketplace" ? (
+                  <MarketplaceTab
+                    onViewProfile={handleViewProfile}
+                    onSignIn={signInWithGoogle}
+                  />
+                ) : user ? (
+                  <>
+                    {profileUsername ? (
+                      <ProfilePage username={profileUsername} />
+                    ) : (
+                      <>
+                        {socialView === "search"      && <SearchPage onViewProfile={handleViewProfile} />}
+                        {socialView === "friends"     && <FriendsPage onViewProfile={handleViewProfile} />}
+                        {socialView === "gifts"       && <GiftsPage onViewProfile={handleViewProfile} />}
+                        {socialView === "leaderboard" && <LeaderboardPage onViewProfile={handleViewProfile} />}
+                      </>
+                    )}
+                  </>
+                ) : (
+                  <GuestSocialPrompt onSignIn={signInWithGoogle} />
+                )}
+              </div>
             </>
           )}
         </>
