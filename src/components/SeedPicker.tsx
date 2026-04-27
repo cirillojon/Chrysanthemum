@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { GEAR } from "../data/gear";
@@ -11,11 +12,16 @@ interface Props {
   onClose:      () => void;
 }
 
+type Tab = "seeds" | "gear";
+
 export function SeedPicker({ onSelect, onGearSelect, onClose }: Props) {
   const { state } = useGame();
 
   const seeds = state.inventory.filter((i) => i.quantity > 0 && i.isSeed);
   const gear  = (state.gearInventory ?? []).filter((i) => i.quantity > 0);
+
+  // Default to whichever tab has items; prefer seeds
+  const [tab, setTab] = useState<Tab>(seeds.length > 0 ? "seeds" : "gear");
 
   const hasAnything = seeds.length > 0 || gear.length > 0;
 
@@ -33,6 +39,8 @@ export function SeedPicker({ onSelect, onGearSelect, onClose }: Props) {
 
   return (
     <div className="bg-card border border-border rounded-xl p-3 w-80 shadow-xl z-50">
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-semibold">Select what to place</p>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xs">
@@ -40,17 +48,55 @@ export function SeedPicker({ onSelect, onGearSelect, onClose }: Props) {
         </button>
       </div>
 
-      <div className="flex flex-col gap-1.5 max-h-72 overflow-y-auto">
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-muted/30 border border-border rounded-xl p-1 mb-3">
+        <button
+          onClick={() => setTab("seeds")}
+          className={`
+            flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all
+            ${tab === "seeds"
+              ? "bg-primary/20 text-primary border border-primary/30"
+              : "text-muted-foreground hover:text-foreground"
+            }
+          `}
+        >
+          🌱 Seeds
+          {seeds.length > 0 && (
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+              tab === "seeds" ? "bg-primary/20 text-primary" : "bg-border text-muted-foreground"
+            }`}>
+              {seeds.reduce((s, i) => s + i.quantity, 0)}
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => setTab("gear")}
+          className={`
+            flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-all
+            ${tab === "gear"
+              ? "bg-primary/20 text-primary border border-primary/30"
+              : "text-muted-foreground hover:text-foreground"
+            }
+          `}
+        >
+          ⚙️ Gear
+          {gear.length > 0 && (
+            <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+              tab === "gear" ? "bg-primary/20 text-primary" : "bg-border text-muted-foreground"
+            }`}>
+              {gear.reduce((s, i) => s + i.quantity, 0)}
+            </span>
+          )}
+        </button>
+      </div>
 
-        {/* ── Seeds ────────────────────────────────────────────────────────── */}
-        {seeds.length > 0 && (
-          <>
-            {gear.length > 0 && (
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1 pb-0.5">
-                Seeds
-              </p>
-            )}
-            {seeds.map((item) => {
+      {/* Tab content */}
+      <div className="flex flex-col gap-1 max-h-72 overflow-y-auto">
+
+        {/* ── Seeds ── */}
+        {tab === "seeds" && (
+          seeds.length > 0 ? (
+            seeds.map((item) => {
               const species = getFlower(item.speciesId);
               if (!species) return null;
               const rarity   = RARITY_CONFIG[species.rarity];
@@ -74,25 +120,19 @@ export function SeedPicker({ onSelect, onGearSelect, onClose }: Props) {
                     <p className={`text-xs ${rarity.color}`}>{rarity.label}</p>
                     <FlowerTypeBadges types={species.types} className="mt-0.5" />
                   </div>
-                  <span className="text-xs text-muted-foreground">×{item.quantity}</span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0">×{item.quantity}</span>
                 </button>
               );
-            })}
-          </>
+            })
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-8">No seeds in inventory.</p>
+          )
         )}
 
-        {/* ── Divider ───────────────────────────────────────────────────────── */}
-        {seeds.length > 0 && gear.length > 0 && (
-          <div className="border-t border-border my-1" />
-        )}
-
-        {/* ── Gear ─────────────────────────────────────────────────────────── */}
-        {gear.length > 0 && (
-          <>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1 pb-0.5">
-              Gear
-            </p>
-            {gear.map((item) => {
+        {/* ── Gear ── */}
+        {tab === "gear" && (
+          gear.length > 0 ? (
+            gear.map((item) => {
               const def    = GEAR[item.gearType];
               const rarity = RARITY_CONFIG[def.rarity];
               return (
@@ -113,11 +153,13 @@ export function SeedPicker({ onSelect, onGearSelect, onClose }: Props) {
                     <p className="text-sm font-medium truncate">{def.name}</p>
                     <p className={`text-xs ${rarity.color}`}>{rarity.label}</p>
                   </div>
-                  <span className="text-xs text-muted-foreground">×{item.quantity}</span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0">×{item.quantity}</span>
                 </button>
               );
-            })}
-          </>
+            })
+          ) : (
+            <p className="text-xs text-muted-foreground text-center py-8">No gear in inventory.</p>
+          )
         )}
 
       </div>
