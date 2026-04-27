@@ -44,6 +44,8 @@ interface Props {
   fanDirection?: FanDirection;
   /** True when this cell is within a harvest bell's radius. */
   isUnderHarvestBell?: boolean;
+  /** True when this cell is within an auto-planter's radius. */
+  isUnderAutoPlanter?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -56,7 +58,7 @@ export function PlotTile({
   isSelected, isHighlighted,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
-  isUnderFan, fanDirection, isUnderHarvestBell,
+  isUnderFan, fanDirection, isUnderHarvestBell, isUnderAutoPlanter,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
 }: Props) {
@@ -290,7 +292,7 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan) && (
+        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -320,6 +322,14 @@ export function PlotTile({
                 <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "0s"    }}>✦</span>
                 <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "0.75s" }}>✦</span>
                 <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "1.5s"  }}>✦</span>
+              </>
+            )}
+            {/* Auto-Planter: 🌱 seeds gently drifting down */}
+            {isUnderAutoPlanter && (
+              <>
+                <span className="gear-planter-seed" style={{ left: "20%", animationDelay: "0s"    }}>🌱</span>
+                <span className="gear-planter-seed" style={{ left: "52%", animationDelay: "0.8s"  }}>🌱</span>
+                <span className="gear-planter-seed" style={{ left: "76%", animationDelay: "1.6s"  }}>🌱</span>
               </>
             )}
             {/* Fan: 💨 gusts drifting in the fan's direction */}

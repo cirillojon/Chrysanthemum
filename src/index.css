@@ -165,6 +165,22 @@
   pointer-events: none;
 }
 
+/* Auto-Planter: 🌱 seeds drift downward into the soil */
+@keyframes gear-planter-drop {
+  0%   { transform: translateY(-6px) scale(0.8); opacity: 0;    }
+  15%  {                                          opacity: 0.85; }
+  75%  {                                          opacity: 0.6;  }
+  100% { transform: translateY(56px) scale(0.5); opacity: 0;    }
+}
+.gear-planter-seed {
+  animation: gear-planter-drop 2.2s ease-in infinite;
+  position: absolute;
+  top: 0;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+}
+
 /* Fan: 💨 gusts drift in the fan's facing direction */
 @keyframes gear-wind-right {
   0%   { transform: translateX(-4px); opacity: 0;    }

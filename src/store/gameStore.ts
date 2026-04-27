@@ -6,7 +6,7 @@ import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
 import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
-  isScarecrow, isGrowLamp, isComposter, isFan, isHarvestBell,
+  isScarecrow, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
   rollComposterFertilizer,
   SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
   type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
@@ -441,6 +441,9 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
 
   // Auto-harvest via any active Harvest Bells (captures offline progress)
   updated = tickHarvestBells(updated, "clear");
+
+  // Auto-plant via any active Auto-Planters (captures offline progress)
+  updated = tickAutoPlanter(updated);
 
   const readyToHarvest = updated.grid
     .flat()
@@ -1128,6 +1131,104 @@ export function findHarvestBellTargets(
         // Grace period: skip plants that bloomed < 5 s ago (avoids same-tick self-harvest)
         if (!targetPlot.plant.bloomedAt || now - targetPlot.plant.bloomedAt < 5_000) continue;
         targets.push({ row: ar, col: ac });
+      }
+    }
+  }
+
+  return targets;
+}
+
+// ── Auto-Planter ──────────────────────────────────────────────────────────
+
+/** Picks the seed with the highest quantity from the current inventory.
+ *  Returns null if the player has no seeds. */
+function pickBestSeed(inventory: GameState["inventory"]): string | null {
+  const best = inventory
+    .filter((i) => i.isSeed && i.quantity > 0)
+    .sort((a, b) => b.quantity - a.quantity)[0];
+  return best?.speciesId ?? null;
+}
+
+/** Scans for active Auto-Planters and plants seeds into every empty covered cell.
+ *  Called from applyOfflineTick — mutates state in-place via plantSeed chaining. */
+export function tickAutoPlanter(state: GameState): GameState {
+  const now = Date.now();
+  let updated = state;
+
+  for (let ri = 0; ri < state.grid.length; ri++) {
+    for (let ci = 0; ci < state.grid[ri].length; ci++) {
+      const planterPlot = updated.grid[ri][ci];
+      if (!planterPlot.gear) continue;
+      const def = GEAR[planterPlot.gear.gearType];
+      if (!isAutoPlanter(def)) continue;
+      if (isGearExpired(planterPlot.gear, now)) continue;
+
+      const gridRows = updated.grid.length;
+      const gridCols = updated.grid[0]?.length ?? 0;
+      const affected = getAffectedCells(planterPlot.gear.gearType, ri, ci, gridRows, gridCols);
+
+      for (const [ar, ac] of affected) {
+        const targetPlot = updated.grid[ar]?.[ac];
+        if (!targetPlot || targetPlot.plant || targetPlot.gear) continue;
+
+        const speciesId = pickBestSeed(updated.inventory);
+        if (!speciesId) return updated; // no more seeds — stop
+
+        const result = plantSeed(updated, ar, ac, speciesId);
+        if (result) updated = result;
+      }
+    }
+  }
+
+  return updated;
+}
+
+/** Pure read — returns the cells an Auto-Planter should fill right now, with the
+ *  seed to use in each. Simulates inventory depletion to avoid double-spending.
+ *  Used by the live garden tick so each plant goes through perform() + edgePlantSeed(). */
+export function findAutoPlantTargets(
+  state: GameState
+): Array<{ row: number; col: number; speciesId: string }> {
+  const now = Date.now();
+  const targets: Array<{ row: number; col: number; speciesId: string }> = [];
+
+  // Shallow-copy quantities so we can simulate depletion without touching real state
+  const simQty = new Map<string, number>(
+    state.inventory.filter((i) => i.isSeed && i.quantity > 0).map((i) => [i.speciesId, i.quantity])
+  );
+
+  function pickSeed(): string | null {
+    let best: string | null = null;
+    let bestQty = 0;
+    simQty.forEach((qty, id) => {
+      if (qty > bestQty) { best = id; bestQty = qty; }
+    });
+    if (!best) return null;
+    simQty.set(best, (simQty.get(best) ?? 0) - 1);
+    if ((simQty.get(best) ?? 0) <= 0) simQty.delete(best);
+    return best;
+  }
+
+  for (let ri = 0; ri < state.grid.length; ri++) {
+    for (let ci = 0; ci < state.grid[ri].length; ci++) {
+      const planterPlot = state.grid[ri][ci];
+      if (!planterPlot.gear) continue;
+      const def = GEAR[planterPlot.gear.gearType];
+      if (!isAutoPlanter(def)) continue;
+      if (isGearExpired(planterPlot.gear, now)) continue;
+
+      const gridRows = state.grid.length;
+      const gridCols = state.grid[0]?.length ?? 0;
+      const affected = getAffectedCells(planterPlot.gear.gearType, ri, ci, gridRows, gridCols);
+
+      for (const [ar, ac] of affected) {
+        const targetPlot = state.grid[ar]?.[ac];
+        if (!targetPlot || targetPlot.plant || targetPlot.gear) continue;
+
+        const speciesId = pickSeed();
+        if (!speciesId) return targets; // no seeds left
+
+        targets.push({ row: ar, col: ac, speciesId });
       }
     }
   }

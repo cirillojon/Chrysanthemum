@@ -24,12 +24,13 @@ export type PassiveGearType =
   | "fan_uncommon"
   | "fan_rare"
   | "harvest_bell_rare"
-  | "harvest_bell_legendary";
+  | "harvest_bell_legendary"
+  | "auto_planter_prismatic";
 
 export type GearType = SprinklerGearType | PassiveGearType;
 
 export type GearCategory  = "sprinkler_regular" | "sprinkler_mutation" | "passive";
-export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell";
+export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter";
 
 /** Which way a Fan is pointing — set at placement time */
 export type FanDirection = "up" | "down" | "left" | "right";
@@ -117,6 +118,15 @@ const OFFSETS_DIAMOND: [number, number][] = [
   [ 0, -2], [ 0, -1], [ 0, 1], [ 0, 2],
   [ 1, -1], [ 1, 0], [ 1, 1],
   [ 2, 0],
+];
+
+/** 5×5 square — all 24 neighbours (used by Auto-Planter) */
+const OFFSETS_5X5: [number, number][] = [
+  [-2, -2], [-2, -1], [-2,  0], [-2,  1], [-2,  2],
+  [-1, -2], [-1, -1], [-1,  0], [-1,  1], [-1,  2],
+  [ 0, -2], [ 0, -1],           [ 0,  1], [ 0,  2],
+  [ 1, -2], [ 1, -1], [ 1,  0], [ 1,  1], [ 1,  2],
+  [ 2, -2], [ 2, -1], [ 2,  0], [ 2,  1], [ 2,  2],
 ];
 
 // ── Per-tick chance helpers ────────────────────────────────────────────────
@@ -418,6 +428,23 @@ export const GEAR: Record<GearType, GearDefinition> = {
     radiusOffsets:  OFFSETS_3X3,
     durationMs:     DURATION_8H,
   },
+
+  // ── Auto-Planter ─────────────────────────────────────────────────────────
+  // Automatically plants seeds from the player's inventory into empty cells
+  // within a 5×5 area — works even while offline.
+
+  auto_planter_prismatic: {
+    id:             "auto_planter_prismatic",
+    name:           "Auto-Planter",
+    description:    "Automatically plants seeds from your inventory into empty cells within a 5×5 area, even while offline. Lasts 24 hours.",
+    emoji:          "🪴",
+    rarity:         "prismatic",
+    shopPrice:      500_000,
+    category:       "passive",
+    passiveSubtype: "auto_planter",
+    radiusOffsets:  OFFSETS_5X5,
+    durationMs:     24 * 60 * 60 * 1_000,
+  },
 };
 
 // ── Utility: check if gear has expired ────────────────────────────────────
@@ -541,6 +568,10 @@ export function isHarvestBell(def: GearDefinition): boolean {
   return def.passiveSubtype === "harvest_bell";
 }
 
+export function isAutoPlanter(def: GearDefinition): boolean {
+  return def.passiveSubtype === "auto_planter";
+}
+
 // ── Supply shop pools ──────────────────────────────────────────────────────
 
 export type SupplyItem =
@@ -586,6 +617,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
   ],
   prismatic: [
     { kind: "gear", gearType: "sprinkler_prism" },
+    { kind: "gear", gearType: "auto_planter_prismatic" },
   ],
 };
 

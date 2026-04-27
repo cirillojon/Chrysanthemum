@@ -15,6 +15,7 @@ import {
   tickSprinklerMutations,
   tickFanMutations,
   findHarvestBellTargets,
+  findAutoPlantTargets,
   stampStageTransitions,
   placeGear,
 } from "../store/gameStore";
@@ -85,6 +86,46 @@ export function Garden() {
         }
       );
     }
+
+    // Auto-Planter: plant seeds into empty covered cells, notify the server per-plant
+    const plantTargets = findAutoPlantTargets(getState());
+    for (const { row, col, speciesId } of plantTargets) {
+      const key = `plant-${row}-${col}`;
+      if (plantingPlots.current.has(key)) continue;
+      plantingPlots.current.add(key);
+      const cur = getState();
+      if (cur.grid[row]?.[col]?.plant || cur.grid[row]?.[col]?.gear) {
+        plantingPlots.current.delete(key); continue;
+      }
+      const opt = plantSeed(cur, row, col, speciesId);
+      if (!opt) { plantingPlots.current.delete(key); continue; }
+      perform(
+        opt,
+        async () => {
+          try {
+            return await edgePlantSeed(row, col, speciesId);
+          } finally {
+            plantingPlots.current.delete(key);
+          }
+        },
+        undefined,
+        {
+          rollback: (c) => ({
+            ...c,
+            grid: c.grid.map((r2, ri2) =>
+              r2.map((p2, ci2) =>
+                ri2 === row && ci2 === col ? { ...p2, plant: null } : p2
+              )
+            ),
+            inventory: c.inventory.map((item) =>
+              item.speciesId === speciesId && item.isSeed
+                ? { ...item, quantity: item.quantity + 1 }
+                : item
+            ),
+          }),
+        }
+      );
+    }
   });
 
   const [selectedPlot, setSelectedPlot]     = useState<{ row: number; col: number } | null>(null);
@@ -97,6 +138,8 @@ export function Garden() {
   // Track plots with a harvest in-flight so we don't open the seed picker
   // before the server has removed the plant from the DB.
   const harvestingPlots = useRef<Set<string>>(new Set());
+  // Track plots with an auto-plant in-flight to avoid duplicate edge calls
+  const plantingPlots = useRef<Set<string>>(new Set());
 
   const nextUpgrade = getNextUpgrade(state.farmRows, state.farmSize);
   const currentTier = getCurrentTier(state.farmRows, state.farmSize);
@@ -118,15 +161,16 @@ export function Garden() {
   }, [highlightSource, state.farmRows, state.farmSize, state.grid]);
 
   // Per-cell gear coverage — used for plant indicator icons
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells } =
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, autoPlantCoveredCells } =
     useMemo(() => {
       const regular  = new Set<string>();
       const mutation = new Map<string, string[]>(); // cellKey → unique mutation emojis
       const scarecrow = new Set<string>();
       const composter = new Set<string>();
       const growLamp  = new Set<string>();
-      const fan       = new Map<string, FanDirection>();
-      const harvestBell = new Set<string>();
+      const fan        = new Map<string, FanDirection>();
+      const harvestBell  = new Set<string>();
+      const autoPlanter  = new Set<string>();
       const now = Date.now();
       for (let ri = 0; ri < state.grid.length; ri++) {
         for (let ci = 0; ci < state.grid[ri].length; ci++) {
@@ -155,10 +199,12 @@ export function Garden() {
             keys.forEach((k) => fan.set(k, dir));
           } else if (def.passiveSubtype === "harvest_bell") {
             keys.forEach((k) => harvestBell.add(k));
+          } else if (def.passiveSubtype === "auto_planter") {
+            keys.forEach((k) => autoPlanter.add(k));
           }
         }
       }
-      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell };
+      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, autoPlantCoveredCells: autoPlanter };
     }, [state.grid, state.farmRows, state.farmSize]);
 
   function handlePlotClick(row: number, col: number) {
@@ -377,6 +423,7 @@ export function Garden() {
                 isUnderFan={fanCoveredCells.has(`${row}-${col}`)}
                 fanDirection={fanCoveredCells.get(`${row}-${col}`)}
                 isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
+                isUnderAutoPlanter={autoPlantCoveredCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}
