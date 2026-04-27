@@ -126,7 +126,7 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
       className={`absolute ${flipped ? "top-full mt-2" : "bottom-full mb-2"} left-1/2 z-40 pointer-events-none`}
       style={{ transform: `translateX(calc(-50% + ${nudge}px))` }}
     >
-      <div className="pointer-events-auto bg-card border border-border rounded-xl p-3 shadow-xl w-48 space-y-2">
+      <div className="pointer-events-auto bg-card/80 backdrop-blur-sm border border-border rounded-xl p-3 shadow-xl w-48 space-y-2">
 
         {/* Header */}
         <div className="flex items-center gap-2">

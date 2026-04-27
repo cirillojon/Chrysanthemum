@@ -65,7 +65,7 @@ export function PlotTile({
     function handleClickOutside(e: MouseEvent) {
       if (tileRef.current && !tileRef.current.contains(e.target as Node)) {
         setOpen(false);
-        setGearOpen(false);
+        if (gearOpen) { setGearOpen(false); onGearInspectClose?.(); }
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
