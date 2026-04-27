@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { getFlower, RARITY_CONFIG } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
 import { buyFromShop, buyFertilizer, buyAllFromShop, buyAllFertilizer, getSpeciesCompletion } from "../store/gameStore";
@@ -317,7 +318,8 @@ export function ShopSlotCard({ slot }: Props) {
 
       <div>
         <h3 className="font-semibold text-sm">{species.name}</h3>
-        <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+        <FlowerTypeBadges types={species.types} className="mt-1.5" />
+        <p className="text-xs text-muted-foreground leading-relaxed mt-1">
           {species.description}
         </p>
       </div>

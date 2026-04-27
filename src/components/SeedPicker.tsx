@@ -1,4 +1,5 @@
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { GEAR } from "../data/gear";
 import { useGame } from "../store/GameContext";
 import { isSpeciesMastered } from "../store/gameStore";
@@ -71,6 +72,7 @@ export function SeedPicker({ onSelect, onGearSelect, onClose }: Props) {
                       )}
                     </div>
                     <p className={`text-xs ${rarity.color}`}>{rarity.label}</p>
+                    <FlowerTypeBadges types={species.types} className="mt-0.5" />
                   </div>
                   <span className="text-xs text-muted-foreground">×{item.quantity}</span>
                 </button>

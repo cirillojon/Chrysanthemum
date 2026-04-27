@@ -1,6 +1,7 @@
 import { useGame } from "../store/GameContext";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, type InventoryItem } from "../store/gameStore";
 import { edgeSellFlower } from "../lib/edgeFunctions";
@@ -168,6 +169,7 @@ function SeedInventoryRow({ item }: { item: InventoryItem }) {
           <h3 className="font-semibold text-sm">{species.name} Seed</h3>
           <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
         </div>
+        <FlowerTypeBadges types={species.types} className="mt-1" />
         <p className="text-xs text-muted-foreground mt-0.5">
           ×{item.quantity} · Plant in your garden to grow
         </p>

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { PriceHistoryChart } from "./PriceHistoryChart";
 
 export interface Listing {
@@ -92,6 +93,7 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
             }
             <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
           </div>
+          {species && <FlowerTypeBadges types={species.types} className="mt-1" />}
           <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
             <p className="text-xs text-muted-foreground">
               by{" "}

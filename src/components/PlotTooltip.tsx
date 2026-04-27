@@ -8,6 +8,7 @@ import {
 } from "../store/gameStore";
 import { edgeApplyFertilizer, edgeRemovePlant } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
 
@@ -143,6 +144,7 @@ export function PlotTooltip({
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold leading-tight">{species.name}</p>
             <p className={`text-[10px] font-mono ${rarity.color}`}>{rarity.label}</p>
+            <FlowerTypeBadges types={species.types} className="mt-1" />
           </div>
           {/* Close button */}
           {onClose && (
