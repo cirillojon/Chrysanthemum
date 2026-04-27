@@ -128,8 +128,14 @@ export function CreateListingModal({ onClose, onListed }: Props) {
   ];
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm px-4">
-      <div className="bg-card border border-primary/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl flex flex-col gap-3 max-h-[85vh] overflow-hidden">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm px-4 py-20"
+      onClick={onClose}
+    >
+      <div
+        className="bg-card border border-primary/30 rounded-2xl p-5 max-w-sm w-full shadow-2xl flex flex-col gap-3 max-h-full overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
 
         {/* ── Header — always visible ── */}
         <div className="flex items-center justify-between">
@@ -169,7 +175,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
 
         {/* ── Item list — capped height, independently scrollable ── */}
         {tabItems.length === 0 ? (
-          <div className="min-h-[22vh] flex flex-col items-center justify-center space-y-1">
+          <div className="min-h-[18vh] flex flex-col items-center justify-center space-y-1">
             <p className="text-2xl">
               {activeTab === "flowers" ? "🌸" : activeTab === "seeds" ? "🌱" : "🧪"}
             </p>
@@ -183,7 +189,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
             )}
           </div>
         ) : (
-          <div className="overflow-y-auto min-h-[22vh] max-h-[40vh] space-y-1.5 pr-0.5">
+          <div className="overflow-y-auto min-h-[18vh] max-h-[35vh] space-y-1.5 pr-0.5">
 
             {/* Supplies tab — fertilizers + gear */}
             {activeTab === "supplies" && supplies.map((supply, idx) => {

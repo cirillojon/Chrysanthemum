@@ -94,8 +94,8 @@
   to   { transform: translateX(0);    opacity: 1; }
 }
 
-.slide-from-right { animation: slide-from-right 280ms ease-out both; }
-.slide-from-left  { animation: slide-from-left  280ms ease-out both; }
+.slide-from-right { animation: slide-from-right 280ms ease-out backwards; }
+.slide-from-left  { animation: slide-from-left  280ms ease-out backwards; }
 
 /* ── Gear cell particle / glow animations ─────────────────────────────── */
 
