@@ -17,11 +17,12 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   const rows = farmRows ?? farmSize;
 
   // Compute gear coverage in one pass
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys } = useMemo(() => {
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys } = useMemo(() => {
     const regular  = new Set<string>();
     const mutation = new Map<string, string[]>();
     const scarecrow = new Set<string>();
     const composter = new Set<string>();
+    const growLamp  = new Set<string>();
     for (let ri = 0; ri < grid.length; ri++) {
       for (let ci = 0; ci < grid[ri].length; ci++) {
         const g = grid[ri][ci].gear;
@@ -42,10 +43,12 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           keys.forEach((k) => scarecrow.add(k));
         } else if (def.passiveSubtype === "composter") {
           keys.forEach((k) => composter.add(k));
+        } else if (def.passiveSubtype === "grow_lamp") {
+          keys.forEach((k) => growLamp.add(k));
         }
       }
     }
-    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter };
+    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid, farmSize, rows]);
 
@@ -142,6 +145,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           const mutEmojis       = mutationSprinklerMap.get(cellKey) ?? [];
           const underScarecrow  = scarecrowKeys.has(cellKey);
           const underComposter  = composterKeys.has(cellKey);
+          const underGrowLamp   = growLampKeys.has(cellKey);
 
           return (
             <div
@@ -174,7 +178,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {(underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter) && (
+              {(underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp) && (
                 <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2"}`}>
                   {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
                   {mutEmojis.map((emoji, i) => (
@@ -182,6 +186,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                   ))}
                   {underScarecrow && <span className="text-[9px]" title="Under scarecrow">🧹</span>}
                   {underComposter && <span className="text-[9px]" title="Near composter">🧺</span>}
+                  {underGrowLamp && <span className="text-[9px]" title="Under grow lamp">💡</span>}
                 </div>
               )}
 

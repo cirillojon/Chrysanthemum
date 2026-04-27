@@ -35,6 +35,8 @@ interface Props {
   isUnderScarecrow?: boolean;
   /** True when this cell is within a composter's radius. */
   isUnderComposter?: boolean;
+  /** True when this cell is within a grow lamp's radius. */
+  isUnderGrowLamp?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -46,7 +48,7 @@ export function PlotTile({
   onEmptyClick, onHarvest, onHarvestStart, onHarvestEnd, harvestPending,
   isSelected, isHighlighted,
   isUnderSprinkler, sprinklerMutations = [],
-  isUnderScarecrow, isUnderComposter,
+  isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
 }: Props) {
@@ -295,7 +297,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter) && (
+        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map((emoji, i) => (
@@ -303,6 +305,7 @@ export function PlotTile({
             ))}
             {isUnderScarecrow && <span className="text-[9px]" title="Under scarecrow">🧹</span>}
             {isUnderComposter && <span className="text-[9px]" title="Near composter">🧺</span>}
+            {isUnderGrowLamp && <span className="text-[9px]" title="Under grow lamp">💡</span>}
           </div>
         )}
 

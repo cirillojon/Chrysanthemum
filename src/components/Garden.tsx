@@ -65,12 +65,13 @@ export function Garden() {
   }, [highlightSource, state.farmRows, state.farmSize]);
 
   // Per-cell gear coverage — used for plant indicator icons
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells } =
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys } =
     useMemo(() => {
       const regular  = new Set<string>();
       const mutation = new Map<string, string[]>(); // cellKey → unique mutation emojis
       const scarecrow = new Set<string>();
       const composter = new Set<string>();
+      const growLamp  = new Set<string>();
       const now = Date.now();
       for (let ri = 0; ri < state.grid.length; ri++) {
         for (let ci = 0; ci < state.grid[ri].length; ci++) {
@@ -92,10 +93,12 @@ export function Garden() {
             keys.forEach((k) => scarecrow.add(k));
           } else if (def.passiveSubtype === "composter") {
             keys.forEach((k) => composter.add(k));
+          } else if (def.passiveSubtype === "grow_lamp") {
+            keys.forEach((k) => growLamp.add(k));
           }
         }
       }
-      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter };
+      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp };
     }, [state.grid, state.farmRows, state.farmSize]);
 
   function handlePlotClick(row: number, col: number) {
@@ -300,6 +303,7 @@ export function Garden() {
                 sprinklerMutations={mutationSprinklerMap.get(`${row}-${col}`) ?? []}
                 isUnderScarecrow={scarecrowCoveredCells.has(`${row}-${col}`)}
                 isUnderComposter={composterCoveredCells.has(`${row}-${col}`)}
+                isUnderGrowLamp={growLampKeys.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}
