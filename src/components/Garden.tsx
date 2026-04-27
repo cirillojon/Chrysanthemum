@@ -19,6 +19,7 @@ import {
 import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
 import { getAffectedCells, GEAR, isGearExpired } from "../data/gear";
+import { MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import type { GearType } from "../data/gear";
 
@@ -63,10 +64,11 @@ export function Garden() {
     return new Set(affected.map(([r, c]) => `${r}-${c}`));
   }, [highlightSource, state.farmRows, state.farmSize]);
 
-  // Per-cell gear coverage sets — used for plant indicator icons
-  const { sprinklerCoveredCells, scarecrowCoveredCells, composterCoveredCells } =
+  // Per-cell gear coverage — used for plant indicator icons
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells } =
     useMemo(() => {
-      const sprinkler = new Set<string>();
+      const regular  = new Set<string>();
+      const mutation = new Map<string, string[]>(); // cellKey → unique mutation emojis
       const scarecrow = new Set<string>();
       const composter = new Set<string>();
       const now = Date.now();
@@ -74,11 +76,18 @@ export function Garden() {
         for (let ci = 0; ci < state.grid[ri].length; ci++) {
           const g = state.grid[ri][ci].gear;
           if (!g || isGearExpired(g, now)) continue;
-          const def = GEAR[g.gearType];
+          const def     = GEAR[g.gearType];
           const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize);
-          const keys = affected.map(([r, c]) => `${r}-${c}`);
-          if (def.category === "sprinkler_regular" || def.category === "sprinkler_mutation") {
-            keys.forEach((k) => sprinkler.add(k));
+          const keys    = affected.map(([r, c]) => `${r}-${c}`);
+          if (def.category === "sprinkler_regular") {
+            keys.forEach((k) => regular.add(k));
+          } else if (def.category === "sprinkler_mutation" && def.mutationType) {
+            const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
+            keys.forEach((k) => {
+              const existing = mutation.get(k);
+              if (!existing) mutation.set(k, [emoji]);
+              else if (!existing.includes(emoji)) existing.push(emoji);
+            });
           } else if (def.passiveSubtype === "scarecrow") {
             keys.forEach((k) => scarecrow.add(k));
           } else if (def.passiveSubtype === "composter") {
@@ -86,7 +95,7 @@ export function Garden() {
           }
         }
       }
-      return { sprinklerCoveredCells: sprinkler, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter };
+      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter };
     }, [state.grid, state.farmRows, state.farmSize]);
 
   function handlePlotClick(row: number, col: number) {
@@ -287,7 +296,8 @@ export function Garden() {
                 harvestPending={() => harvestingPlots.current.has(`${row}-${col}`)}
                 isSelected={selectedPlot?.row === row && selectedPlot?.col === col}
                 isHighlighted={highlightedCells.has(`${row}-${col}`)}
-                isUnderSprinkler={sprinklerCoveredCells.has(`${row}-${col}`)}
+                isUnderSprinkler={regularSprinklerKeys.has(`${row}-${col}`)}
+                sprinklerMutations={mutationSprinklerMap.get(`${row}-${col}`) ?? []}
                 isUnderScarecrow={scarecrowCoveredCells.has(`${row}-${col}`)}
                 isUnderComposter={composterCoveredCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}

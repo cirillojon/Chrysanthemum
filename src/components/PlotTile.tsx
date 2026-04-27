@@ -27,8 +27,10 @@ interface Props {
   isSelected?:     boolean;
   /** True when this cell is within the radius of an inspected gear item. */
   isHighlighted?:  boolean;
-  /** True when this cell is covered by at least one active sprinkler. */
+  /** True when this cell is covered by at least one active regular (growth) sprinkler. */
   isUnderSprinkler?: boolean;
+  /** Mutation emojis from any active mutation sprinklers covering this cell. */
+  sprinklerMutations?: string[];
   /** True when this cell is within a scarecrow's radius. */
   isUnderScarecrow?: boolean;
   /** True when this cell is within a composter's radius. */
@@ -42,7 +44,9 @@ interface Props {
 export function PlotTile({
   plot, row, col,
   onEmptyClick, onHarvest, onHarvestStart, onHarvestEnd, harvestPending,
-  isSelected, isHighlighted, isUnderSprinkler, isUnderScarecrow, isUnderComposter,
+  isSelected, isHighlighted,
+  isUnderSprinkler, sprinklerMutations = [],
+  isUnderScarecrow, isUnderComposter,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
 }: Props) {
@@ -291,9 +295,12 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row (only when growing) */}
-        {!isBloomed && (isUnderSprinkler || isUnderScarecrow || isUnderComposter) && (
+        {!isBloomed && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter) && (
           <div className="absolute bottom-2.5 left-0.5 flex leading-none">
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
+            {sprinklerMutations.map((emoji, i) => (
+              <span key={i} className="text-[9px]" title="Mutation sprinkler">{emoji}</span>
+            ))}
             {isUnderScarecrow && <span className="text-[9px]" title="Under scarecrow">🧹</span>}
             {isUnderComposter && <span className="text-[9px]" title="Near composter">🧺</span>}
           </div>

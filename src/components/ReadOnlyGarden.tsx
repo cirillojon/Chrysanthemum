@@ -16,9 +16,10 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   const now  = Date.now();
   const rows = farmRows ?? farmSize;
 
-  // Compute gear coverage sets in one pass
-  const { sprinklerKeys, scarecrowKeys, composterKeys } = useMemo(() => {
-    const sprinkler = new Set<string>();
+  // Compute gear coverage in one pass
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys } = useMemo(() => {
+    const regular  = new Set<string>();
+    const mutation = new Map<string, string[]>();
     const scarecrow = new Set<string>();
     const composter = new Set<string>();
     for (let ri = 0; ri < grid.length; ri++) {
@@ -28,8 +29,15 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
         const def      = GEAR[g.gearType];
         const affected = getAffectedCells(g.gearType, ri, ci, rows, farmSize);
         const keys     = affected.map(([r, c]) => `${r}-${c}`);
-        if (def.category === "sprinkler_regular" || def.category === "sprinkler_mutation") {
-          keys.forEach((k) => sprinkler.add(k));
+        if (def.category === "sprinkler_regular") {
+          keys.forEach((k) => regular.add(k));
+        } else if (def.category === "sprinkler_mutation" && def.mutationType) {
+          const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
+          keys.forEach((k) => {
+            const existing = mutation.get(k);
+            if (!existing) mutation.set(k, [emoji]);
+            else if (!existing.includes(emoji)) existing.push(emoji);
+          });
         } else if (def.passiveSubtype === "scarecrow") {
           keys.forEach((k) => scarecrow.add(k));
         } else if (def.passiveSubtype === "composter") {
@@ -37,7 +45,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
         }
       }
     }
-    return { sprinklerKeys: sprinkler, scarecrowKeys: scarecrow, composterKeys: composter };
+    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid, farmSize, rows]);
 
@@ -130,9 +138,10 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
             : null;
           const hasFert   = !!plant.fertilizer;
 
-          const underSprinkler = sprinklerKeys.has(cellKey);
-          const underScarecrow = scarecrowKeys.has(cellKey);
-          const underComposter = composterKeys.has(cellKey);
+          const underSprinkler  = regularSprinklerKeys.has(cellKey);
+          const mutEmojis       = mutationSprinklerMap.get(cellKey) ?? [];
+          const underScarecrow  = scarecrowKeys.has(cellKey);
+          const underComposter  = composterKeys.has(cellKey);
 
           return (
             <div
@@ -165,9 +174,12 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {!isBloomed && (underSprinkler || underScarecrow || underComposter) && (
+              {!isBloomed && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter) && (
                 <div className="absolute bottom-2 left-0.5 flex leading-none">
                   {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
+                  {mutEmojis.map((emoji, i) => (
+                    <span key={i} className="text-[9px]" title="Mutation sprinkler">{emoji}</span>
+                  ))}
                   {underScarecrow && <span className="text-[9px]" title="Under scarecrow">🧹</span>}
                   {underComposter && <span className="text-[9px]" title="Near composter">🧺</span>}
                 </div>
