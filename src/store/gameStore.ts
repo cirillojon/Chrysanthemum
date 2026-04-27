@@ -1080,10 +1080,13 @@ export function tickHarvestBells(
       const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols);
 
       for (const [ar, ac] of affected) {
+        if (ar === ri && ac === ci) continue; // never process bell's own cell
         const targetPlot = updated.grid[ar]?.[ac];
         if (!targetPlot?.plant) continue;
         const stage = getCurrentStage(targetPlot.plant, now, weatherType);
         if (stage !== "bloom") continue;
+        // Skip plants that bloomed less than 5 s ago — prevents same-render-tick harvesting
+        if (!targetPlot.plant.bloomedAt || now - targetPlot.plant.bloomedAt < 5_000) continue;
 
         const result = harvestPlant(updated, ar, ac, weatherType);
         if (result) updated = result.state;
@@ -1626,6 +1629,28 @@ export function placeGear(
     .filter((g) => g.quantity > 0);
 
   return { ...state, grid: newGrid, gearInventory: newGearInv };
+}
+
+/** Updates the direction of a fan placed at (row, col). No-op if no fan is there. */
+export function setFanDirection(
+  state: GameState,
+  row: number,
+  col: number,
+  direction: FanDirection
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot?.gear) return null;
+  const def = GEAR[plot.gear.gearType];
+  if (def.passiveSubtype !== "fan") return null;
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col
+        ? { ...p, gear: { ...p.gear!, direction } }
+        : p
+    )
+  );
+  return { ...state, grid: newGrid };
 }
 
 export function removeGear(

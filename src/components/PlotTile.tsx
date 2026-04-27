@@ -290,7 +290,7 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter) && (
+        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -320,6 +320,14 @@ export function PlotTile({
                 <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "0s"    }}>✦</span>
                 <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "0.75s" }}>✦</span>
                 <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "1.5s"  }}>✦</span>
+              </>
+            )}
+            {/* Fan: 💨 gusts drifting across */}
+            {isUnderFan && (
+              <>
+                <span className="gear-wind" style={{ top: "18%", animationDelay: "0s"    }}>💨</span>
+                <span className="gear-wind" style={{ top: "50%", animationDelay: "0.7s"  }}>💨</span>
+                <span className="gear-wind" style={{ top: "76%", animationDelay: "1.4s"  }}>💨</span>
               </>
             )}
           </div>

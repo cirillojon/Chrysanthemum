@@ -1,8 +1,8 @@
 import { useState, useRef, useLayoutEffect } from "react";
-import { GEAR, isGearExpired, type PlacedGear } from "../data/gear";
+import { GEAR, isGearExpired, type PlacedGear, type FanDirection } from "../data/gear";
 import { MUTATIONS, RARITY_CONFIG } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
-import { removeGear, collectFromComposter } from "../store/gameStore";
+import { removeGear, collectFromComposter, setFanDirection } from "../store/gameStore";
 import { useGame } from "../store/GameContext";
 import { edgeRemoveGear, edgeCollectFromComposter } from "../lib/edgeFunctions";
 
@@ -26,7 +26,7 @@ function formatMs(ms: number): string {
 }
 
 export function GearTooltip({ gear, row, col, onClose }: Props) {
-  const { state, perform } = useGame();
+  const { state, perform, update } = useGame();
   const [nudge,   setNudge]   = useState(0);
   const [flipped, setFlipped] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -126,6 +126,13 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
     onClose?.();
   }
 
+  function handleFanDirection(dir: FanDirection) {
+    const next = setFanDirection(state, row, col, dir);
+    if (next) update(next);
+  }
+
+  const isFan = def.passiveSubtype === "fan";
+
   return (
     <div
       ref={tooltipRef}
@@ -156,6 +163,52 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
 
         {/* Description */}
         <p className="text-[10px] text-muted-foreground leading-snug">{def.description}</p>
+
+        {/* Fan direction picker */}
+        {isFan && (
+          <div className="pt-1 border-t border-border space-y-1.5">
+            <p className="text-[10px] text-muted-foreground">Direction</p>
+            <div className="grid grid-cols-3 gap-1">
+              <div />
+              <button
+                onClick={() => handleFanDirection("up")}
+                className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
+                  gear.direction === "up"
+                    ? "bg-primary/20 border border-primary/40 text-primary"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                }`}
+              >↑</button>
+              <div />
+              <button
+                onClick={() => handleFanDirection("left")}
+                className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
+                  gear.direction === "left"
+                    ? "bg-primary/20 border border-primary/40 text-primary"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                }`}
+              >←</button>
+              <div className="flex items-center justify-center text-base">💨</div>
+              <button
+                onClick={() => handleFanDirection("right")}
+                className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
+                  gear.direction === "right"
+                    ? "bg-primary/20 border border-primary/40 text-primary"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                }`}
+              >→</button>
+              <div />
+              <button
+                onClick={() => handleFanDirection("down")}
+                className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
+                  gear.direction === "down"
+                    ? "bg-primary/20 border border-primary/40 text-primary"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                }`}
+              >↓</button>
+              <div />
+            </div>
+          </div>
+        )}
 
         {/* Expiry */}
         {msRemaining !== null && (

@@ -165,6 +165,21 @@
   pointer-events: none;
 }
 
+/* Fan: 💨 gusts drift across the cell */
+@keyframes gear-wind-gust {
+  0%   { transform: translate(-8px, 0)  opacity: 0;   }
+  10%  {                                opacity: 0.75; }
+  80%  {                                opacity: 0.5;  }
+  100% { transform: translate(56px, 0); opacity: 0;   }
+}
+.gear-wind {
+  animation: gear-wind-gust 1.6s ease-in-out infinite;
+  position: absolute;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+}
+
 /* ── Base resets ───────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after {
