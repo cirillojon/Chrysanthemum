@@ -251,6 +251,11 @@ export function PlotTile({
           row={row}
           col={col}
           onClose={() => setOpen(false)}
+          isUnderSprinkler={isUnderSprinkler}
+          sprinklerMutations={sprinklerMutations}
+          isUnderGrowLamp={isUnderGrowLamp}
+          isUnderScarecrow={isUnderScarecrow}
+          isUnderComposter={isUnderComposter}
         />
       )}
 

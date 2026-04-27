@@ -12,10 +12,15 @@ import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
 
 interface Props {
-  plant: PlantedFlower;
-  row: number;
-  col: number;
-  onClose?: () => void;
+  plant:               PlantedFlower;
+  row:                 number;
+  col:                 number;
+  onClose?:            () => void;
+  isUnderSprinkler?:   boolean;
+  sprinklerMutations?: string[];
+  isUnderGrowLamp?:    boolean;
+  isUnderScarecrow?:   boolean;
+  isUnderComposter?:   boolean;
 }
 
 function formatMs(ms: number): string {
@@ -32,7 +37,11 @@ function formatMs(ms: number): string {
   return remH > 0 ? `${d}d ${remH}h` : `${d}d`;
 }
 
-export function PlotTooltip({ plant, row, col, onClose }: Props) {
+export function PlotTooltip({
+  plant, row, col, onClose,
+  isUnderSprinkler, sprinklerMutations = [],
+  isUnderGrowLamp, isUnderScarecrow, isUnderComposter,
+}: Props) {
   const { state, getState, perform, activeWeather } = useGame();
   const [showFertPicker,  setShowFertPicker]  = useState(false);
   const [confirmRemove,   setConfirmRemove]   = useState(false);
@@ -178,6 +187,44 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
             <p className="text-[10px] text-muted-foreground font-mono">No mutation</p>
           )}
         </div>
+
+        {/* Active gear effects */}
+        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter) && (
+          <div className="pt-1 border-t border-border space-y-1">
+            <p className="text-[10px] text-muted-foreground">Active gear</p>
+
+            {/* Chip labels */}
+            <div className="flex flex-wrap gap-1">
+              {isUnderGrowLamp && (
+                <span className="relative inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-400/10 border border-amber-400/30 text-[10px] text-amber-300 overflow-hidden">
+                  <div className="absolute inset-0 gear-lamp-glow pointer-events-none" />
+                  <span className="relative">💡</span>
+                  <span className="relative">Grow lamp</span>
+                </span>
+              )}
+              {isUnderSprinkler && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-400/10 border border-blue-400/20 text-[10px] text-blue-300">
+                  <span>💧</span><span>Sprinkler</span>
+                </span>
+              )}
+              {sprinklerMutations.map((emoji, i) => (
+                <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-400/10 border border-blue-400/20 text-[10px] text-blue-300">
+                  <span>{emoji}</span><span>Sprinkler</span>
+                </span>
+              ))}
+              {isUnderScarecrow && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-400/10 border border-green-400/20 text-[10px] text-green-300">
+                  <span>🧹</span><span>Scarecrow</span>
+                </span>
+              )}
+              {isUnderComposter && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-400/10 border border-green-400/20 text-[10px] text-green-300">
+                  <span>🧺</span><span>Composter</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Fertilizer section */}
         {!isBloomed && (
