@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { supabase } from "../lib/supabase";
 import { useGame } from "../store/GameContext";
 import { FLOWERS } from "../data/flowers";
@@ -123,6 +123,78 @@ export function MarketplacePage({ onViewProfile }: Props) {
 
   useEffect(() => { loadListings(true); }, [search, filterRarity, sort]);
 
+  // ── Realtime sync ──────────────────────────────────────────────────────────
+  // Keep filter values in a ref so the subscription callback always reads the
+  // latest values without needing to re-subscribe on every filter change.
+  const filtersRef = useRef({ search, filterRarity, sort });
+  useEffect(() => { filtersRef.current = { search, filterRarity, sort }; }, [search, filterRarity, sort]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("marketplace-listings-realtime")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "marketplace_listings", filter: "status=eq.active" },
+        async (payload) => {
+          const l = payload.new as Record<string, unknown>;
+          const { search: s, filterRarity: fr } = filtersRef.current;
+
+          // Apply current rarity filter
+          if (fr !== "all") {
+            const species = getFlower(l.species_id as string);
+            if (!species || species.rarity !== fr) return;
+          }
+          // Apply current search filter
+          if (s.trim()) {
+            const name = getFlower(l.species_id as string)?.name.toLowerCase() ?? "";
+            if (!name.includes(s.trim().toLowerCase())) return;
+          }
+
+          // Fetch seller username
+          const { data: userData } = await supabase
+            .from("users")
+            .select("username")
+            .eq("id", l.seller_id as string)
+            .single();
+
+          const newListing: Listing = {
+            id:              l.id as string,
+            seller_id:       l.seller_id as string,
+            seller_username: (userData?.username as string) ?? "unknown",
+            species_id:      l.species_id as string,
+            mutation:        (l.mutation as string | null) ?? null,
+            is_seed:         (l.is_seed as boolean) ?? false,
+            ask_price:       l.ask_price as number,
+            base_value:      l.base_value as number,
+            created_at:      l.created_at as string,
+            expires_at:      l.expires_at as string,
+          };
+
+          setListings((prev) => {
+            if (prev.some((e) => e.id === newListing.id)) return prev; // dedupe
+            // Newest sort → prepend; price sorts → append (close enough without re-sorting)
+            return filtersRef.current.sort === "newest"
+              ? [newListing, ...prev]
+              : [...prev, newListing];
+          });
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "marketplace_listings" },
+        (payload) => {
+          const l = payload.new as Record<string, unknown>;
+          // Remove from browse list the moment a listing is no longer active
+          if (l.status !== "active") {
+            setListings((prev) => prev.filter((e) => e.id !== l.id));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []); // subscribe once — filter logic reads from filtersRef
+
   // ── Buy handler ────────────────────────────────────────────────────────────
   async function handleBuy(listing: Listing) {
     setBuyError(null);
@@ -130,10 +202,16 @@ export function MarketplacePage({ onViewProfile }: Props) {
       const result = await edgeMarketplaceBuy(listing.id);
       const cur = getState();
       update({ ...cur, coins: result.coins, inventory: result.inventory, discovered: result.discovered });
-      // Remove listing from local list
       setListings((prev) => prev.filter((l) => l.id !== listing.id));
     } catch (e) {
-      setBuyError(e instanceof Error ? e.message : "Purchase failed");
+      const msg = e instanceof Error ? e.message : "Purchase failed";
+      // Race condition — someone else bought it between render and click
+      if (msg.includes("no longer available") || msg.includes("not found") || msg.toLowerCase().includes("listing")) {
+        setListings((prev) => prev.filter((l) => l.id !== listing.id));
+        setBuyError("This listing was just sold — it has been removed from the list.");
+      } else {
+        setBuyError(msg);
+      }
     }
   }
 
