@@ -9,6 +9,7 @@ interface MyListing {
   id:         string;
   species_id: string;
   mutation:   string | null;
+  is_seed:    boolean;
   ask_price:  number;
   base_value: number;
   created_at: string;
@@ -70,7 +71,7 @@ export function MyListingsPage({ onRefreshNeeded }: Props) {
 
     const { data } = await supabase
       .from("marketplace_listings")
-      .select("id, species_id, mutation, ask_price, base_value, created_at, expires_at, status, buyer_id, sold_at")
+      .select("id, species_id, mutation, is_seed, ask_price, base_value, created_at, expires_at, status, buyer_id, sold_at")
       .eq("seller_id", user.id)
       .order("created_at", { ascending: false })
       .limit(50);
@@ -194,14 +195,19 @@ function ActiveListingRow({
     <div className={`bg-card/60 border rounded-2xl p-4 space-y-3 transition-all ${rarity?.glow ?? ""} border-border`}>
       <div className="flex items-center gap-3">
         <div className="relative flex-shrink-0">
-          <span className="text-3xl">{species?.emoji.bloom ?? "❓"}</span>
-          {mut && <span className="absolute -top-1 -right-1 text-sm">{mut.emoji}</span>}
+          <span className="text-3xl">
+            {listing.is_seed ? (species?.emoji.seed ?? "🌱") : (species?.emoji.bloom ?? "❓")}
+          </span>
+          {!listing.is_seed && mut && <span className="absolute -top-1 -right-1 text-sm">{mut.emoji}</span>}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
             <p className="text-sm font-bold">{species?.name ?? listing.species_id}</p>
-            {mut && <span className={`text-xs font-mono font-bold ${mut.color}`}>{mut.name}</span>}
+            {listing.is_seed
+              ? <span className="text-xs font-mono text-muted-foreground">Seed</span>
+              : mut && <span className={`text-xs font-mono font-bold ${mut.color}`}>{mut.name}</span>
+            }
             <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
           </div>
           <p className={`text-xs font-mono mt-0.5 ${expiring ? "text-orange-400" : "text-muted-foreground"}`}>
@@ -240,14 +246,19 @@ function HistoryListingRow({ listing }: { listing: MyListing }) {
   return (
     <div className="bg-card/40 border border-border/40 rounded-2xl px-4 py-3 flex items-center gap-3 opacity-70">
       <div className="relative flex-shrink-0">
-        <span className="text-2xl">{species?.emoji.bloom ?? "❓"}</span>
-        {mut && <span className="absolute -top-1 -right-1 text-xs">{mut.emoji}</span>}
+        <span className="text-2xl">
+            {listing.is_seed ? (species?.emoji.seed ?? "🌱") : (species?.emoji.bloom ?? "❓")}
+          </span>
+          {!listing.is_seed && mut && <span className="absolute -top-1 -right-1 text-xs">{mut.emoji}</span>}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <p className="text-sm font-semibold">{species?.name ?? listing.species_id}</p>
-          {mut && <span className={`text-xs font-mono ${mut.color}`}>{mut.name}</span>}
+          {listing.is_seed
+            ? <span className="text-xs font-mono text-muted-foreground">Seed</span>
+            : mut && <span className={`text-xs font-mono ${mut.color}`}>{mut.name}</span>
+          }
           <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">

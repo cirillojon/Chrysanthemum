@@ -93,6 +93,7 @@ Deno.serve(async (req: Request) => {
       speciesId?: string;
       mutation?: string;
       askPrice?: number;
+      isSeed?: boolean;
     };
 
     const supabaseAdmin = createClient(
@@ -183,9 +184,12 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Validate item in inventory
+      // Validate item in inventory (match on speciesId + mutation + isSeed)
+      const isSeed = body.isSeed ?? false;
       const itemIdx = newInventory.findIndex(
-        (i) => i.speciesId === body.speciesId && i.mutation === body.mutation && !i.isSeed
+        (i) => i.speciesId === body.speciesId &&
+               i.mutation === body.mutation &&
+               (i.isSeed ?? false) === isSeed
       );
       if (itemIdx === -1 || newInventory[itemIdx].quantity < 1) {
         return new Response(JSON.stringify({ error: "Item not in inventory" }), {
@@ -217,6 +221,7 @@ Deno.serve(async (req: Request) => {
           seller_id:  userId,
           species_id: body.speciesId,
           mutation:   body.mutation ?? null,
+          is_seed:    isSeed,
           ask_price:  body.askPrice,
           price:      body.askPrice,   // original column name — kept in sync with ask_price
           base_value: baseValue,

@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import {
   type PlantedFlower,
   getCurrentStage,
   getMsUntilNextStage,
   applyFertilizer,
+  removePlant,
 } from "../store/gameStore";
-import { edgeApplyFertilizer } from "../lib/edgeFunctions";
+import { edgeApplyFertilizer, edgeRemovePlant } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
@@ -32,8 +33,25 @@ function formatMs(ms: number): string {
 }
 
 export function PlotTooltip({ plant, row, col, onClose }: Props) {
-  const { state, perform, activeWeather } = useGame();
-  const [showFertPicker, setShowFertPicker] = useState(false);
+  const { state, getState, perform, activeWeather } = useGame();
+  const [showFertPicker,  setShowFertPicker]  = useState(false);
+  const [confirmRemove,   setConfirmRemove]   = useState(false);
+  const [removing,        setRemoving]        = useState(false);
+  const [nudge,           setNudge]           = useState(0);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+
+  useLayoutEffect(() => {
+    const el = tooltipRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const vw  = document.documentElement.clientWidth;
+    const pad = 8;
+    if (rect.left < pad) {
+      setNudge(pad - rect.left);
+    } else if (rect.right > vw - pad) {
+      setNudge(vw - pad - rect.right);
+    }
+  }, []);
 
   const now     = Date.now();
   const species = getFlower(plant.speciesId);
@@ -55,8 +73,49 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
     onClose?.();
   }
 
+  function handleRemove() {
+    if (removing) return;
+    const cur = getState();
+    const optimistic = removePlant(cur, row, col);
+    if (!optimistic) return;
+    setRemoving(true);
+    // Snapshot the cell for surgical rollback
+    const savedCell = cur.grid[row][col];
+    perform(
+      optimistic,
+      async () => {
+        try {
+          return await edgeRemovePlant(row, col);
+        } finally {
+          setRemoving(false);
+        }
+      },
+      () => onClose?.(),
+      {
+        rollback: (c) => ({
+          ...c,
+          grid: c.grid.map((r, ri) =>
+            r.map((p, ci) => ri === row && ci === col ? savedCell : p)
+          ),
+          // Undo the seed that was optimistically added back
+          inventory: c.inventory
+            .map((i) =>
+              i.speciesId === plant.speciesId && i.isSeed
+                ? { ...i, quantity: i.quantity - 1 }
+                : i
+            )
+            .filter((i) => i.quantity > 0),
+        }),
+      }
+    );
+  }
+
   return (
-    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-40 pointer-events-none">
+    <div
+      ref={tooltipRef}
+      className="absolute bottom-full left-1/2 mb-2 z-40 pointer-events-none"
+      style={{ transform: `translateX(calc(-50% + ${nudge}px))` }}
+    >
       <div className="pointer-events-auto bg-card border border-border rounded-xl p-3 shadow-xl w-48 space-y-2">
 
         {/* Header */}
@@ -148,6 +207,39 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
               </>
             ) : (
               <p className="text-[10px] text-muted-foreground">No fertilizer available</p>
+            )}
+          </div>
+        )}
+
+        {/* Remove section — only for growing (non-bloomed) plants */}
+        {!isBloomed && (
+          <div className="pt-1 border-t border-border">
+            {confirmRemove ? (
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground">Seed will be returned. Sure?</p>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={handleRemove}
+                    disabled={removing}
+                    className="flex-1 text-[10px] py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-40 text-center"
+                  >
+                    {removing ? "Removing..." : "Yes, remove"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(false)}
+                    className="flex-1 text-[10px] py-1 rounded-lg bg-card border border-border text-muted-foreground hover:border-primary/30 transition-colors text-center"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setShowFertPicker(false); setConfirmRemove(true); }}
+                className="text-[10px] text-red-400 hover:text-red-300 transition-colors w-full text-left"
+              >
+                🗑 Remove plant
+              </button>
             )}
           </div>
         )}

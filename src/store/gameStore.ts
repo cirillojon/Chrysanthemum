@@ -527,6 +527,35 @@ export function plantSeed(
   return { ...state, grid: newGrid, inventory: newInventory };
 }
 
+/** Optimistically remove a growing (non-bloomed) plant and return its seed to inventory. */
+export function removePlant(
+  state: GameState,
+  row: number,
+  col: number,
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot?.plant) return null;
+
+  const { speciesId } = plot.plant;
+
+  // Clear the plot
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col ? { ...p, plant: null } : p
+    )
+  );
+
+  // Return seed to inventory
+  const existing = state.inventory.find((i) => i.speciesId === speciesId && i.isSeed);
+  const newInventory = existing
+    ? state.inventory.map((i) =>
+        i.speciesId === speciesId && i.isSeed ? { ...i, quantity: i.quantity + 1 } : i
+      )
+    : [...state.inventory, { speciesId, quantity: 1, isSeed: true }];
+
+  return { ...state, grid: newGrid, inventory: newInventory };
+}
+
 /** Called every tick. Two jobs:
  *  1. Accumulate growthMs (effective ms of growth) so the progress bar is
  *     weather-change-proof — it only adds, never recalculates from scratch.

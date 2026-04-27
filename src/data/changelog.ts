@@ -14,6 +14,17 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.1.3",
+    title:   "Marketplace & Garden",
+    items: [
+      { type: "added",   text: "🌱 Seeds can now be listed and bought on the Marketplace — seed listings show the seed emoji and a \"Seed\" label so they're easy to spot" },
+      { type: "added",   text: "⚡ Marketplace listings update in real time — new listings appear instantly and sold/cancelled listings disappear without a page refresh" },
+      { type: "fixed",   text: "Buying a listing that was just sold now shows a friendly \"just sold\" message and removes the phantom listing, instead of throwing an error" },
+      { type: "added",   text: "🗑 You can now remove a growing (non-bloomed) plant from the garden — your seed is returned to inventory. Tap the plot to open the tooltip and use \"Remove plant\"" },
+      { type: "fixed",   text: "Plot tooltip no longer gets clipped off-screen on mobile — it automatically nudges itself back into the viewport on the left and right edges" },
+    ],
+  },
+  {
     version: "2.1.2",
     title:   "Bug Fixes & UI",
     items: [
