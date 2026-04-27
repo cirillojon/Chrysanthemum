@@ -1,14 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
 import { useGame } from "../store/GameContext";
-import {
-  getPendingGifts,
-  claimGift,
-  type GiftWithSender,
-} from "../store/cloudSave";
+import { getPendingGifts, type GiftWithSender } from "../store/cloudSave";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
-import type { InventoryItem } from "../store/gameStore";
-import { codexKey } from "../store/gameStore";
+import { edgeClaimGift } from "../lib/edgeFunctions";
 
 interface Props {
   onViewProfile: (username: string) => void;
@@ -44,38 +39,16 @@ export function GiftsPage({ onViewProfile }: Props) {
     if (!user) return;
     setClaiming(gw.gift.id);
 
-    const ok = await claimGift(gw.gift.id);
-    if (!ok) { setClaiming(null); return; }
-
-    // Add flower to local inventory
-    const mutation = gw.gift.mutation as MutationType | undefined;
-
-    // Match only harvested flowers (not seeds) to avoid merging into a seed stack,
-    // which would make the item invisible to botany (botanyConvert filters !isSeed)
-    const existing = state.inventory.find(
-      (i) => i.speciesId === gw.gift.species_id && i.mutation === mutation && !i.isSeed
-    );
-
-    const newInventory: InventoryItem[] = existing
-      ? state.inventory.map((i) =>
-          i.speciesId === gw.gift.species_id && i.mutation === mutation && !i.isSeed
-            ? { ...i, quantity: i.quantity + 1 }
-            : i
-        )
-      : [...state.inventory, { speciesId: gw.gift.species_id, quantity: 1, mutation, isSeed: false }];
-
-    // Register in codex — gifted flowers count as discovered
-    const newDiscovered = [...state.discovered];
-    const base = codexKey(gw.gift.species_id);
-    if (!newDiscovered.includes(base)) newDiscovered.push(base);
-    if (mutation) {
-      const mutKey = codexKey(gw.gift.species_id, mutation);
-      if (!newDiscovered.includes(mutKey)) newDiscovered.push(mutKey);
+    try {
+      // Server validates the gift, adds item to DB inventory, updates codex
+      const result = await edgeClaimGift(gw.gift.id);
+      update({ ...state, inventory: result.inventory, discovered: result.discovered });
+      setClaimed((prev) => [...prev, gw.gift.id]);
+    } catch {
+      // silently ignore — gift stays visible so user can retry
+    } finally {
+      setClaiming(null);
     }
-
-    update({ ...state, inventory: newInventory, discovered: newDiscovered });
-    setClaimed((prev) => [...prev, gw.gift.id]);
-    setClaiming(null);
   }
 
   if (!user) return null;
