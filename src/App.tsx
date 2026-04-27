@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { useSwipe } from "./hooks/useSwipe";
 import { Garden } from "./components/Garden";
 import { Shop } from "./components/Shop";
 import { Inventory } from "./components/Inventory";
@@ -67,6 +68,41 @@ export default function App() {
 
 
   const inventoryCount = state.inventory.reduce((s, i) => s + i.quantity, 0);
+
+  // ── Swipe navigation ─────────────────────────────────────────────────────────
+  // Flat order: garden → shop → inventory → botany → codex →
+  //             social:search → social:friends → social:gifts →
+  //             social:marketplace → social:leaderboard
+  const MAIN_TABS:    Tab[]        = ["garden", "shop", "inventory", "botany", "codex", "social"];
+  const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
+
+  const handleSwipeLeft = useCallback(() => {
+    if (profileUsername) { setProfileUsername(null); return; }
+    if (tab === "social") {
+      const idx = SOCIAL_VIEWS.indexOf(socialView);
+      if (idx < SOCIAL_VIEWS.length - 1) { setSocialView(SOCIAL_VIEWS[idx + 1]); return; }
+      return; // already at end
+    }
+    const idx = MAIN_TABS.indexOf(tab);
+    if (idx < MAIN_TABS.length - 1) {
+      const next = MAIN_TABS[idx + 1];
+      setTab(next);
+      if (next === "social") setSocialView("search");
+    }
+  }, [tab, socialView, profileUsername]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleSwipeRight = useCallback(() => {
+    if (profileUsername) { setProfileUsername(null); return; }
+    if (tab === "social") {
+      const idx = SOCIAL_VIEWS.indexOf(socialView);
+      if (idx > 0) { setSocialView(SOCIAL_VIEWS[idx - 1]); return; }
+      setTab("codex"); return; // social:search → codex
+    }
+    const idx = MAIN_TABS.indexOf(tab);
+    if (idx > 0) setTab(MAIN_TABS[idx - 1]);
+  }, [tab, socialView, profileUsername]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const swipeHandlers = useSwipe(handleSwipeLeft, handleSwipeRight);
 
   function handleViewProfile(username: string) {
     setTab("social");
@@ -251,7 +287,10 @@ export default function App() {
       </nav>
 
       {/* Content */}
-      <main className="flex-1 w-full sm:max-w-2xl sm:mx-auto px-3 sm:px-4 py-6 sm:py-8">
+      <main
+        className="flex-1 w-full sm:max-w-2xl sm:mx-auto px-3 sm:px-4 py-6 sm:py-8"
+        {...swipeHandlers}
+      >
         <>
           {tab === "garden"      && <Garden />}
           {tab === "shop"        && <Shop />}
