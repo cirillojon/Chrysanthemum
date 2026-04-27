@@ -11,7 +11,9 @@ function b64url(s: string): string {
   return t + "=".repeat((4 - t.length % 4) % 4);
 }
 
-interface InventoryItem { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface InventoryItem  { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface FertilizerItem { type: string; quantity: number; }
+interface GearItem       { gearType: string; quantity: number; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -55,7 +57,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, inventory, discovered")
+        .select("coins, inventory, fertilizers, gear_inventory, discovered")
         .eq("user_id", userId)
         .single(),
       supabaseAdmin
@@ -95,9 +97,11 @@ Deno.serve(async (req: Request) => {
     }
 
     const buyerSave = buyerSaveResult.data;
-    let buyerCoins       = buyerSave.coins as number;
-    let buyerInventory   = [...(buyerSave.inventory ?? []) as InventoryItem[]];
-    let buyerDiscovered  = [...(buyerSave.discovered ?? []) as string[]];
+    let buyerCoins        = buyerSave.coins as number;
+    let buyerInventory    = [...(buyerSave.inventory ?? []) as InventoryItem[]];
+    let buyerFertilizers  = [...(buyerSave.fertilizers ?? []) as FertilizerItem[]];
+    let buyerGearInventory = [...(buyerSave.gear_inventory ?? []) as GearItem[]];
+    let buyerDiscovered   = [...(buyerSave.discovered ?? []) as string[]];
 
     if (buyerCoins < listing.ask_price) {
       return new Response(JSON.stringify({ error: "Not enough coins" }), {
@@ -107,30 +111,55 @@ Deno.serve(async (req: Request) => {
 
     buyerCoins -= listing.ask_price;
 
-    // Add item to buyer inventory (preserve isSeed flag from listing)
-    const mutation = listing.mutation ?? undefined;
-    const isSeed   = (listing.is_seed as boolean) ?? false;
-    const existing = buyerInventory.find(
-      (i) => i.speciesId === listing.species_id &&
-             i.mutation === mutation &&
-             (i.isSeed ?? false) === isSeed
-    );
-    buyerInventory = existing
-      ? buyerInventory.map((i) =>
-          i.speciesId === listing.species_id &&
-          i.mutation === mutation &&
-          (i.isSeed ?? false) === isSeed
-            ? { ...i, quantity: i.quantity + 1 }
-            : i
-        )
-      : [...buyerInventory, { speciesId: listing.species_id, quantity: 1, mutation, isSeed }];
+    const speciesId    = listing.species_id as string;
+    const isFertilizer = speciesId.startsWith("fert:");
+    const isGear       = speciesId.startsWith("gear:");
 
-    // Register in buyer's codex
-    const baseKey = listing.species_id;
-    if (!buyerDiscovered.includes(baseKey)) buyerDiscovered.push(baseKey);
-    if (mutation) {
-      const mutKey = `${listing.species_id}:${mutation}`;
-      if (!buyerDiscovered.includes(mutKey)) buyerDiscovered.push(mutKey);
+    if (isFertilizer) {
+      // ── Fertilizer: add to buyer's fertilizers array ──────────────────────
+      const fertType = speciesId.replace("fert:", "");
+      const existing = buyerFertilizers.find((f) => f.type === fertType);
+      buyerFertilizers = existing
+        ? buyerFertilizers.map((f) =>
+            f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f
+          )
+        : [...buyerFertilizers, { type: fertType, quantity: 1 }];
+
+    } else if (isGear) {
+      // ── Gear: add to buyer's gear inventory ───────────────────────────────
+      const gearType = speciesId.replace("gear:", "");
+      const existing = buyerGearInventory.find((g) => g.gearType === gearType);
+      buyerGearInventory = existing
+        ? buyerGearInventory.map((g) =>
+            g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g
+          )
+        : [...buyerGearInventory, { gearType, quantity: 1 }];
+
+    } else {
+      // ── Flower / seed: add to buyer's inventory ───────────────────────────
+      const mutation = listing.mutation ?? undefined;
+      const isSeed   = (listing.is_seed as boolean) ?? false;
+      const existing = buyerInventory.find(
+        (i) => i.speciesId === speciesId &&
+               i.mutation === mutation &&
+               (i.isSeed ?? false) === isSeed
+      );
+      buyerInventory = existing
+        ? buyerInventory.map((i) =>
+            i.speciesId === speciesId &&
+            i.mutation === mutation &&
+            (i.isSeed ?? false) === isSeed
+              ? { ...i, quantity: i.quantity + 1 }
+              : i
+          )
+        : [...buyerInventory, { speciesId, quantity: 1, mutation, isSeed }];
+
+      // Register in buyer's codex
+      if (!buyerDiscovered.includes(speciesId)) buyerDiscovered.push(speciesId);
+      if (mutation) {
+        const mutKey = `${speciesId}:${mutation}`;
+        if (!buyerDiscovered.includes(mutKey)) buyerDiscovered.push(mutKey);
+      }
     }
 
     // Mark listing sold
@@ -154,13 +183,21 @@ Deno.serve(async (req: Request) => {
 
     const buyerUpdate = supabaseAdmin
       .from("game_saves")
-      .update({ coins: buyerCoins, inventory: buyerInventory, discovered: buyerDiscovered, updated_at: new Date().toISOString() })
+      .update({
+        coins:          buyerCoins,
+        inventory:      buyerInventory,
+        fertilizers:    buyerFertilizers,
+        gear_inventory: buyerGearInventory,
+        discovered:     buyerDiscovered,
+        updated_at:     new Date().toISOString(),
+      })
       .eq("user_id", userId);
 
+    const isSeed = (listing.is_seed as boolean) ?? false;
     const saleRecord = supabaseAdmin.from("marketplace_sales").insert({
-      species_id: listing.species_id,
+      species_id: speciesId,
       mutation:   listing.mutation ?? null,
-      item_type:  isSeed ? "seed" : "flower",
+      item_type:  isFertilizer ? "fertilizer" : isGear ? "gear" : isSeed ? "seed" : "flower",
       price:      listing.ask_price,
       sold_at:    new Date().toISOString(),
     });
@@ -172,7 +209,6 @@ Deno.serve(async (req: Request) => {
     }
 
     if (buyerResult.error) {
-      // This is bad — listing is sold but buyer save failed. Log it.
       console.error("marketplace-buy: buyer save failed after listing sold", buyerResult.error);
       return new Response(JSON.stringify({ error: "Failed to update save" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -180,12 +216,18 @@ Deno.serve(async (req: Request) => {
     }
 
     if (sellerResult.error) {
-      // Non-fatal: seller credit failed, but buyer got the item. Log for manual review.
       console.error("marketplace-buy: seller credit failed", sellerResult.error, "listing:", listing.id);
     }
 
     return new Response(
-      JSON.stringify({ ok: true, coins: buyerCoins, inventory: buyerInventory, discovered: buyerDiscovered }),
+      JSON.stringify({
+        ok:            true,
+        coins:         buyerCoins,
+        inventory:     buyerInventory,
+        fertilizers:   buyerFertilizers,
+        gearInventory: buyerGearInventory,
+        discovered:    buyerDiscovered,
+      }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

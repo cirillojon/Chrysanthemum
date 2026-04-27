@@ -95,8 +95,10 @@ export function PlotTile({
 
   useEffect(() => { if (!plant) setOpen(false); }, [plant]);
   useEffect(() => {
-    if (!gear) { setGearOpen(false); onGearInspectClose?.(); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Only touch local state here — calling onGearInspectClose (Garden's setState) from a
+    // child effect triggers React 18's "update while rendering" warning in concurrent mode.
+    // Garden watches for stale highlightSource itself (see Garden.tsx).
+    if (!gear) setGearOpen(false);
   }, [gear]);
 
   function handleClick() {

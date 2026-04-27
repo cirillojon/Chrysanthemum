@@ -156,6 +156,17 @@ export function Garden() {
     state.farmSize === 5 ? "w-15 h-15 sm:w-16 sm:h-16" :
     "w-11 h-11 sm:w-16 sm:h-16"; // 6+ cols: compact on mobile
 
+  // Auto-clear highlightSource when the gear tile it's tracking is removed or expires.
+  // This runs in Garden (the owner of highlightSource) rather than in PlotTile's useEffect
+  // so we never call a parent's setState from a child effect (React 18 concurrent-mode warning).
+  useEffect(() => {
+    if (!highlightSource) return;
+    const plot = state.grid[highlightSource.row]?.[highlightSource.col];
+    if (!plot?.gear || plot.gear.gearType !== highlightSource.gearType) {
+      setHighlightSource(null);
+    }
+  }, [state.grid, highlightSource]);
+
   // Cells highlighted by the currently-inspected gear item
   const highlightedCells = useMemo((): Set<string> => {
     if (!highlightSource) return new Set();

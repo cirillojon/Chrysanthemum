@@ -4,6 +4,8 @@ import { useGame } from "../store/GameContext";
 import { FLOWERS } from "../data/flowers";
 import type { Rarity } from "../data/flowers";
 import { getFlower } from "../data/flowers";
+import { FERTILIZERS } from "../data/upgrades";
+import type { FertilizerType } from "../data/upgrades";
 import { edgeMarketplaceBuy } from "../lib/edgeFunctions";
 import { ListingCard } from "./ListingCard";
 import type { Listing } from "./ListingCard";
@@ -74,7 +76,10 @@ export function MarketplacePage({ onViewProfile }: Props) {
     // Client-side name search (after rarity filter to keep result set small)
     const searched = search.trim()
       ? data.filter((l) => {
-          const name = getFlower(l.species_id)?.name.toLowerCase() ?? l.species_id;
+          const sid = l.species_id as string;
+          const name = sid.startsWith("fert:")
+            ? FERTILIZERS[sid.replace("fert:", "") as FertilizerType]?.name.toLowerCase() ?? sid
+            : getFlower(sid)?.name.toLowerCase() ?? sid;
           return name.includes(search.trim().toLowerCase());
         })
       : data;
@@ -146,7 +151,10 @@ export function MarketplacePage({ onViewProfile }: Props) {
           }
           // Apply current search filter
           if (s.trim()) {
-            const name = getFlower(l.species_id as string)?.name.toLowerCase() ?? "";
+            const sid = l.species_id as string;
+            const name = sid.startsWith("fert:")
+              ? FERTILIZERS[sid.replace("fert:", "") as FertilizerType]?.name.toLowerCase() ?? sid
+              : getFlower(sid)?.name.toLowerCase() ?? "";
             if (!name.includes(s.trim().toLowerCase())) return;
           }
 
@@ -201,7 +209,14 @@ export function MarketplacePage({ onViewProfile }: Props) {
     try {
       const result = await edgeMarketplaceBuy(listing.id);
       const cur = getState();
-      update({ ...cur, coins: result.coins, inventory: result.inventory, discovered: result.discovered });
+      update({
+        ...cur,
+        coins:      result.coins,
+        inventory:  result.inventory,
+        discovered: result.discovered,
+        ...(result.fertilizers   ? { fertilizers:   result.fertilizers   } : {}),
+        ...(result.gearInventory ? { gearInventory: result.gearInventory } : {}),
+      });
       setListings((prev) => prev.filter((l) => l.id !== listing.id));
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Purchase failed";

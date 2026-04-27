@@ -48,6 +48,37 @@ const FLOWER_SELL_VALUES: Record<string, number> = {
   eternal_heart: 1_550_000, nova_bloom: 1_800_000, princess_blossom: 2_000_000,
 };
 
+// ── Fertilizer shop prices (mirrors src/data/upgrades.ts) ────────────────────
+const FERTILIZER_SHOP_PRICES: Record<string, number> = {
+  basic:    10,
+  advanced: 30,
+  premium:  200,
+  elite:    2_500,
+  miracle:  35_000,
+};
+const VALID_FERTILIZER_TYPES = ["basic", "advanced", "premium", "elite", "miracle"];
+
+// ── Gear shop prices (mirrors src/data/gear.ts) ───────────────────────────────
+const GEAR_SHOP_PRICES: Record<string, number> = {
+  sprinkler_rare:         500,
+  sprinkler_legendary:    5_000,
+  sprinkler_mythic:       25_000,
+  sprinkler_exalted:      75_000,
+  sprinkler_prismatic:    200_000,
+  sprinkler_midas:        500_000,
+  sprinkler_prism:        1_000_000,
+  grow_lamp_uncommon:     200,
+  grow_lamp_rare:         2_000,
+  scarecrow_rare:         1_500,
+  fan_uncommon:           300,
+  fan_rare:               2_500,
+  composter_uncommon:     400,
+  composter_rare:         3_000,
+  harvest_bell_rare:      5_000,
+  harvest_bell_legendary: 30_000,
+  auto_planter_prismatic: 500_000,
+};
+
 // ── Marketplace slot upgrade costs (mirrors src/data/upgrades.ts) ─────────────
 const MARKETPLACE_SLOT_UPGRADES = [
   { slots: 1, cost: 10_000  },
@@ -61,7 +92,9 @@ const MAX_MARKETPLACE_SLOTS = 5;
 const LISTING_FEE_PCT       = 0.05; // 5% listing fee, non-refundable
 const LISTING_DURATION_MS   = 48 * 60 * 60 * 1_000; // 48 hours
 
-interface InventoryItem { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface InventoryItem  { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface FertilizerItem { type: string; quantity: number; }
+interface GearItem       { gearType: string; quantity: number; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -89,11 +122,15 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json() as {
-      action: "create_listing" | "upgrade_slots";
-      speciesId?: string;
-      mutation?: string;
-      askPrice?: number;
-      isSeed?: boolean;
+      action:          "create_listing" | "upgrade_slots";
+      speciesId?:      string;
+      mutation?:       string;
+      askPrice?:       number;
+      isSeed?:         boolean;
+      isFertilizer?:   boolean;
+      fertilizerType?: string;
+      isGear?:         boolean;
+      gearType?:       string;
     };
 
     const supabaseAdmin = createClient(
@@ -106,7 +143,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, inventory, marketplace_slots")
+        .select("coins, inventory, fertilizers, gear_inventory, marketplace_slots")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -127,6 +164,8 @@ Deno.serve(async (req: Request) => {
     console.log("save loaded:", JSON.stringify({ coins: save.coins, marketplace_slots: save.marketplace_slots, action: body.action }));
     let coins             = save.coins as number;
     let newInventory      = [...(save.inventory ?? []) as InventoryItem[]];
+    let newFertilizers    = [...(save.fertilizers ?? []) as FertilizerItem[]];
+    let newGearInventory  = [...(save.gear_inventory ?? []) as GearItem[]];
     let marketplaceSlots  = (save.marketplace_slots ?? 0) as number;
 
     // ── upgrade_slots ─────────────────────────────────────────────────────────
@@ -165,8 +204,8 @@ Deno.serve(async (req: Request) => {
 
     // ── create_listing ────────────────────────────────────────────────────────
     if (body.action === "create_listing") {
-      if (!body.speciesId || typeof body.askPrice !== "number" || body.askPrice < 1) {
-        return new Response(JSON.stringify({ error: "speciesId and askPrice required" }), {
+      if (typeof body.askPrice !== "number" || body.askPrice < 1) {
+        return new Response(JSON.stringify({ error: "askPrice required" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -184,6 +223,158 @@ Deno.serve(async (req: Request) => {
         });
       }
 
+      // Deduct listing fee
+      const fee = Math.max(1, Math.floor(body.askPrice * LISTING_FEE_PCT));
+      if (coins < fee) {
+        return new Response(JSON.stringify({ error: "Not enough coins for listing fee" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      coins -= fee;
+
+      const expiresAt = new Date(Date.now() + LISTING_DURATION_MS).toISOString();
+
+      // ── Fertilizer listing ────────────────────────────────────────────────
+      if (body.isFertilizer) {
+        const fertType = body.fertilizerType;
+        if (!fertType || !VALID_FERTILIZER_TYPES.includes(fertType)) {
+          return new Response(JSON.stringify({ error: "Invalid fertilizer type" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const fertIdx = newFertilizers.findIndex((f) => f.type === fertType);
+        if (fertIdx === -1 || newFertilizers[fertIdx].quantity < 1) {
+          return new Response(JSON.stringify({ error: "Fertilizer not in inventory" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Deduct one fertilizer
+        newFertilizers = newFertilizers
+          .map((f, i) => i === fertIdx ? { ...f, quantity: f.quantity - 1 } : f)
+          .filter((f) => f.quantity > 0);
+
+        const baseValue = FERTILIZER_SHOP_PRICES[fertType] ?? 0;
+
+        // Insert listing — encode fertilizer type as "fert:<type>" in species_id
+        const { data: listing, error: insertError } = await supabaseAdmin
+          .from("marketplace_listings")
+          .insert({
+            seller_id:  userId,
+            species_id: `fert:${fertType}`,
+            mutation:   null,
+            is_seed:    false,
+            ask_price:  body.askPrice,
+            price:      body.askPrice,
+            base_value: baseValue,
+            fee_paid:   fee,
+            status:     "active",
+            expires_at: expiresAt,
+          })
+          .select("id")
+          .single();
+
+        if (insertError || !listing) {
+          console.error("fertilizer listing insert failed:", insertError);
+          return new Response(JSON.stringify({ error: "Failed to create listing" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from("game_saves")
+          .update({ coins, fertilizers: newFertilizers, updated_at: new Date().toISOString() })
+          .eq("user_id", userId);
+
+        if (updateError) {
+          console.error("save update failed:", updateError);
+          await supabaseAdmin.from("marketplace_listings").delete().eq("id", listing.id);
+          return new Response(JSON.stringify({ error: "Failed to save" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(
+          JSON.stringify({ ok: true, coins, fertilizers: newFertilizers, inventory: newInventory, listingId: listing.id }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // ── Gear listing ──────────────────────────────────────────────────────
+      if (body.isGear) {
+        const gearType = body.gearType;
+        if (!gearType || !(gearType in GEAR_SHOP_PRICES)) {
+          return new Response(JSON.stringify({ error: "Invalid gear type" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const gearIdx = newGearInventory.findIndex((g) => g.gearType === gearType);
+        if (gearIdx === -1 || newGearInventory[gearIdx].quantity < 1) {
+          return new Response(JSON.stringify({ error: "Gear not in inventory" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Deduct one gear item
+        newGearInventory = newGearInventory
+          .map((g, i) => i === gearIdx ? { ...g, quantity: g.quantity - 1 } : g)
+          .filter((g) => g.quantity > 0);
+
+        const baseValue = GEAR_SHOP_PRICES[gearType] ?? 0;
+
+        // Insert listing — encode gear type as "gear:<type>" in species_id
+        const { data: listing, error: insertError } = await supabaseAdmin
+          .from("marketplace_listings")
+          .insert({
+            seller_id:  userId,
+            species_id: `gear:${gearType}`,
+            mutation:   null,
+            is_seed:    false,
+            ask_price:  body.askPrice,
+            price:      body.askPrice,
+            base_value: baseValue,
+            fee_paid:   fee,
+            status:     "active",
+            expires_at: expiresAt,
+          })
+          .select("id")
+          .single();
+
+        if (insertError || !listing) {
+          console.error("gear listing insert failed:", insertError);
+          return new Response(JSON.stringify({ error: "Failed to create listing" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { error: updateError } = await supabaseAdmin
+          .from("game_saves")
+          .update({ coins, gear_inventory: newGearInventory, updated_at: new Date().toISOString() })
+          .eq("user_id", userId);
+
+        if (updateError) {
+          console.error("save update failed:", updateError);
+          await supabaseAdmin.from("marketplace_listings").delete().eq("id", listing.id);
+          return new Response(JSON.stringify({ error: "Failed to save" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(
+          JSON.stringify({ ok: true, coins, gearInventory: newGearInventory, inventory: newInventory, listingId: listing.id }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // ── Flower / seed listing ─────────────────────────────────────────────
+      if (!body.speciesId) {
+        return new Response(JSON.stringify({ error: "speciesId required" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       // Validate item in inventory (match on speciesId + mutation + isSeed)
       const isSeed = body.isSeed ?? false;
       const itemIdx = newInventory.findIndex(
@@ -197,21 +388,11 @@ Deno.serve(async (req: Request) => {
         });
       }
 
-      // Deduct listing fee (5%, floored, min 1)
-      const fee = Math.max(1, Math.floor(body.askPrice * LISTING_FEE_PCT));
-      if (coins < fee) {
-        return new Response(JSON.stringify({ error: "Not enough coins for listing fee" }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      coins -= fee;
-
       // Remove one from inventory
       newInventory = newInventory
         .map((i, idx) => idx === itemIdx ? { ...i, quantity: i.quantity - 1 } : i)
         .filter((i) => i.quantity > 0);
 
-      const expiresAt = new Date(Date.now() + LISTING_DURATION_MS).toISOString();
       const baseValue = FLOWER_SELL_VALUES[body.speciesId] ?? 0;
 
       // Insert listing
@@ -223,7 +404,7 @@ Deno.serve(async (req: Request) => {
           mutation:   body.mutation ?? null,
           is_seed:    isSeed,
           ask_price:  body.askPrice,
-          price:      body.askPrice,   // original column name — kept in sync with ask_price
+          price:      body.askPrice,
           base_value: baseValue,
           fee_paid:   fee,
           status:     "active",

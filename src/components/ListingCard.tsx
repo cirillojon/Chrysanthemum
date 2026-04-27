@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
+import { FERTILIZERS } from "../data/upgrades";
+import type { FertilizerType } from "../data/upgrades";
+import { GEAR as GEAR_CATALOG } from "../data/gear";
+import type { GearType } from "../data/gear";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { PriceHistoryChart } from "./PriceHistoryChart";
 
@@ -45,9 +49,17 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
   const [expanded, setExpanded] = useState(false);
   const [buying,   setBuying]   = useState(false);
 
-  const species   = getFlower(listing.species_id);
-  const mut       = listing.mutation ? MUTATIONS[listing.mutation as MutationType] : null;
+  const isFertilizer = listing.species_id?.startsWith("fert:");
+  const isGear       = listing.species_id?.startsWith("gear:");
+  const fertType     = isFertilizer ? listing.species_id.replace("fert:", "") as FertilizerType : null;
+  const gearType     = isGear       ? listing.species_id.replace("gear:", "") as GearType       : null;
+  const fertDef      = fertType ? FERTILIZERS[fertType]        : null;
+  const gearDef      = gearType ? GEAR_CATALOG[gearType]       : null;
+
+  const species   = (isFertilizer || isGear) ? null : getFlower(listing.species_id);
+  const mut       = (!isFertilizer && !isGear && listing.mutation) ? MUTATIONS[listing.mutation as MutationType] : null;
   const rarity    = species ? RARITY_CONFIG[species.rarity] : null;
+
   const isOwnListing = listing.seller_id === currentUserId;
   const canAfford    = currentCoins >= listing.ask_price;
   const expiring     = new Date(listing.expires_at).getTime() - Date.now() < 2 * 3_600_000; // < 2h
@@ -62,6 +74,125 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
     }
   }
 
+  // ── Fertilizer card ────────────────────────────────────────────────────────
+  if (isFertilizer && fertDef) {
+    return (
+      <div className="bg-card/60 border border-border hover:border-primary/30 rounded-2xl overflow-hidden transition-all">
+        <div className="flex items-center gap-3 px-4 py-3">
+
+          <span className="text-3xl flex-shrink-0">{fertDef.emoji}</span>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className={`text-sm font-bold ${fertDef.color}`}>{fertDef.name}</p>
+              <span className="text-xs font-mono text-muted-foreground">Fertilizer</span>
+            </div>
+            <p className="text-xs text-muted-foreground font-mono mt-0.5">{fertDef.speedMultiplier}× growth speed</p>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <p className="text-xs text-muted-foreground">
+                by{" "}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onViewProfile(listing.seller_username); }}
+                  className="text-primary hover:underline"
+                >
+                  {listing.seller_username}
+                </button>
+              </p>
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              <p className={`text-xs font-mono ${expiring ? "text-orange-400" : "text-muted-foreground"}`}>
+                {expiring && "⚠ "}expires {formatExpiry(listing.expires_at)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+            <p className="text-sm font-bold font-mono text-primary">
+              {formatCoins(listing.ask_price)} 🟡
+            </p>
+            {listing.base_value > 0 && (
+              <p className="text-[10px] text-muted-foreground font-mono">
+                shop {formatCoins(listing.base_value)}
+              </p>
+            )}
+            {isOwnListing ? (
+              <span className="text-[10px] text-muted-foreground font-mono bg-border/50 px-2 py-0.5 rounded-full">
+                Your listing
+              </span>
+            ) : (
+              <button
+                onClick={handleBuy}
+                disabled={buying || !canAfford}
+                className="text-xs font-semibold px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+              >
+                {buying ? "Buying..." : canAfford ? "Buy" : "Can't afford"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Gear card ──────────────────────────────────────────────────────────────
+  if (isGear && gearDef) {
+    const gearRarity = RARITY_CONFIG[gearDef.rarity];
+    return (
+      <div className={`bg-card/60 border rounded-2xl overflow-hidden transition-all ${gearRarity?.glow ?? ""} border-border hover:border-primary/30`}>
+        <div className="flex items-center gap-3 px-4 py-3">
+
+          <span className="text-3xl flex-shrink-0">{gearDef.emoji}</span>
+
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="text-sm font-bold">{gearDef.name}</p>
+              <span className={`text-xs font-mono ${gearRarity?.color}`}>{gearRarity?.label}</span>
+            </div>
+            <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <p className="text-xs text-muted-foreground">
+                by{" "}
+                <button
+                  onClick={(e) => { e.stopPropagation(); onViewProfile(listing.seller_username); }}
+                  className="text-primary hover:underline"
+                >
+                  {listing.seller_username}
+                </button>
+              </p>
+              <span className="text-muted-foreground/40 text-xs">·</span>
+              <p className={`text-xs font-mono ${expiring ? "text-orange-400" : "text-muted-foreground"}`}>
+                {expiring && "⚠ "}expires {formatExpiry(listing.expires_at)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
+            <p className="text-sm font-bold font-mono text-primary">
+              {formatCoins(listing.ask_price)} 🟡
+            </p>
+            {listing.base_value > 0 && (
+              <p className="text-[10px] text-muted-foreground font-mono">
+                shop {formatCoins(listing.base_value)}
+              </p>
+            )}
+            {isOwnListing ? (
+              <span className="text-[10px] text-muted-foreground font-mono bg-border/50 px-2 py-0.5 rounded-full">
+                Your listing
+              </span>
+            ) : (
+              <button
+                onClick={handleBuy}
+                disabled={buying || !canAfford}
+                className="text-xs font-semibold px-3 py-1 rounded-lg bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-40"
+              >
+                {buying ? "Buying..." : canAfford ? "Buy" : "Can't afford"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Flower / seed card ─────────────────────────────────────────────────────
   return (
     <div className={`bg-card/60 border rounded-2xl overflow-hidden transition-all ${rarity?.glow ?? ""} border-border hover:border-primary/30`}>
 

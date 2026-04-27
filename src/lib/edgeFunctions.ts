@@ -221,10 +221,12 @@ export function edgeClaimGift(giftId: string) {
 // ── Marketplace ───────────────────────────────────────────────────────────────
 
 export interface MarketplaceListResult {
-  ok:        true;
-  coins:     number;
-  inventory: GameState["inventory"];
-  listingId: string;
+  ok:             true;
+  coins:          number;
+  inventory:      GameState["inventory"];
+  fertilizers?:   GameState["fertilizers"];
+  gearInventory?: GameState["gearInventory"];
+  listingId:      string;
 }
 
 export interface MarketplaceUpgradeSlotsResult {
@@ -234,15 +236,19 @@ export interface MarketplaceUpgradeSlotsResult {
 }
 
 export interface MarketplaceBuyResult {
-  ok:         true;
-  coins:      number;
-  inventory:  GameState["inventory"];
-  discovered: GameState["discovered"];
+  ok:             true;
+  coins:          number;
+  inventory:      GameState["inventory"];
+  fertilizers?:   GameState["fertilizers"];
+  gearInventory?: GameState["gearInventory"];
+  discovered:     GameState["discovered"];
 }
 
 export interface MarketplaceCancelResult {
-  ok:        true;
-  inventory: GameState["inventory"];
+  ok:             true;
+  inventory:      GameState["inventory"];
+  fertilizers?:   GameState["fertilizers"];
+  gearInventory?: GameState["gearInventory"];
 }
 
 export function edgeMarketplaceCreateListing(
@@ -257,6 +263,30 @@ export function edgeMarketplaceCreateListing(
     mutation,
     askPrice,
     isSeed,
+  });
+}
+
+export function edgeMarketplaceCreateFertilizerListing(
+  fertilizerType: string,
+  askPrice: number,
+) {
+  return callEdge<MarketplaceListResult>("marketplace-list", {
+    action:         "create_listing",
+    isFertilizer:   true,
+    fertilizerType,
+    askPrice,
+  });
+}
+
+export function edgeMarketplaceCreateGearListing(
+  gearType: string,
+  askPrice: number,
+) {
+  return callEdge<MarketplaceListResult>("marketplace-list", {
+    action:   "create_listing",
+    isGear:   true,
+    gearType,
+    askPrice,
   });
 }
 
