@@ -96,6 +96,16 @@ export function edgePlantSeed(row: number, col: number, speciesId: string) {
   return callEdge<PlantSeedResult>("plant-seed", { row, col, speciesId });
 }
 
+export interface RemovePlantResult {
+  ok:        true;
+  grid:      GameState["grid"];
+  inventory: GameState["inventory"];
+}
+
+export function edgeRemovePlant(row: number, col: number) {
+  return callEdge<RemovePlantResult>("remove-plant", { row, col });
+}
+
 export function edgeBuyFlower(speciesId: string, buyAll = false) {
   return callEdge<ShopActionResult>("shop-action", {
     action: buyAll ? "buy_all" : "buy",

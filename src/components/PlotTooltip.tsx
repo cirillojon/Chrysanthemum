@@ -4,8 +4,9 @@ import {
   getCurrentStage,
   getMsUntilNextStage,
   applyFertilizer,
+  removePlant,
 } from "../store/gameStore";
-import { edgeApplyFertilizer } from "../lib/edgeFunctions";
+import { edgeApplyFertilizer, edgeRemovePlant } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
@@ -32,8 +33,10 @@ function formatMs(ms: number): string {
 }
 
 export function PlotTooltip({ plant, row, col, onClose }: Props) {
-  const { state, perform, activeWeather } = useGame();
-  const [showFertPicker, setShowFertPicker] = useState(false);
+  const { state, getState, perform, activeWeather } = useGame();
+  const [showFertPicker,  setShowFertPicker]  = useState(false);
+  const [confirmRemove,   setConfirmRemove]   = useState(false);
+  const [removing,        setRemoving]        = useState(false);
 
   const now     = Date.now();
   const species = getFlower(plant.speciesId);
@@ -53,6 +56,43 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
     if (optimistic) perform(optimistic, () => edgeApplyFertilizer(row, col, type));
     setShowFertPicker(false);
     onClose?.();
+  }
+
+  function handleRemove() {
+    if (removing) return;
+    const cur = getState();
+    const optimistic = removePlant(cur, row, col);
+    if (!optimistic) return;
+    setRemoving(true);
+    // Snapshot the cell for surgical rollback
+    const savedCell = cur.grid[row][col];
+    perform(
+      optimistic,
+      async () => {
+        try {
+          return await edgeRemovePlant(row, col);
+        } finally {
+          setRemoving(false);
+        }
+      },
+      () => onClose?.(),
+      {
+        rollback: (c) => ({
+          ...c,
+          grid: c.grid.map((r, ri) =>
+            r.map((p, ci) => ri === row && ci === col ? savedCell : p)
+          ),
+          // Undo the seed that was optimistically added back
+          inventory: c.inventory
+            .map((i) =>
+              i.speciesId === plant.speciesId && i.isSeed
+                ? { ...i, quantity: i.quantity - 1 }
+                : i
+            )
+            .filter((i) => i.quantity > 0),
+        }),
+      }
+    );
   }
 
   return (
@@ -148,6 +188,39 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
               </>
             ) : (
               <p className="text-[10px] text-muted-foreground">No fertilizer available</p>
+            )}
+          </div>
+        )}
+
+        {/* Remove section — only for growing (non-bloomed) plants */}
+        {!isBloomed && (
+          <div className="pt-1 border-t border-border">
+            {confirmRemove ? (
+              <div className="space-y-1">
+                <p className="text-[10px] text-muted-foreground">Seed will be returned. Sure?</p>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={handleRemove}
+                    disabled={removing}
+                    className="flex-1 text-[10px] py-1 rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-40"
+                  >
+                    {removing ? "Removing..." : "Yes, remove"}
+                  </button>
+                  <button
+                    onClick={() => setConfirmRemove(false)}
+                    className="flex-1 text-[10px] py-1 rounded-lg bg-card border border-border text-muted-foreground hover:border-primary/30 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => { setShowFertPicker(false); setConfirmRemove(true); }}
+                className="text-[10px] text-muted-foreground hover:text-red-400 transition-colors w-full text-left"
+              >
+                🗑 Remove plant
+              </button>
             )}
           </div>
         )}
