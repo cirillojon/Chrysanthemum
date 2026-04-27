@@ -6,6 +6,8 @@ import { FLOWERS, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
+import { GEAR } from "../data/gear";
+import type { GearType } from "../data/gear";
 import { useGame } from "../store/GameContext";
 import { codexKey } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
@@ -37,6 +39,8 @@ export function DevWeatherPanel() {
   const [coins, setCoins]           = useState(1000);
   const [fertType, setFertType]     = useState<FertilizerType>("basic");
   const [fertQty, setFertQty]       = useState(5);
+  const [gearType, setGearType]     = useState<GearType>("sprinkler_rare");
+  const [gearQty, setGearQty]       = useState(1);
   const [toast, setToast]           = useState<string | null>(null);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -130,6 +134,20 @@ export function DevWeatherPanel() {
     showToast(`+${fertQty} ${FERTILIZERS[fertType].name}`);
   }
 
+  async function giveGear() {
+    const newGearInventory = [...(state.gearInventory ?? [])];
+    const existing = newGearInventory.find((g) => g.gearType === gearType);
+    if (existing) {
+      existing.quantity += gearQty;
+    } else {
+      newGearInventory.push({ gearType, quantity: gearQty });
+    }
+    const newState = { ...state, gearInventory: newGearInventory };
+    update(newState);
+    if (user) await saveToCloud(user.id, newState);
+    showToast(`+${gearQty} ${GEAR[gearType].name} (${GEAR[gearType].rarity})`);
+  }
+
   // ── Filtered flower list ───────────────────────────────────────────────────
   const filteredFlowers = FLOWERS.filter((f) =>
     flowerSearch.trim() === "" ||
@@ -152,7 +170,7 @@ export function DevWeatherPanel() {
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all capitalize
+            className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all capitalize text-center
               ${tab === t
                 ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400"
                 : "bg-white/5 border border-white/10 text-white/50 hover:text-white/70"
@@ -199,7 +217,7 @@ export function DevWeatherPanel() {
           <button
             onClick={cycling ? stopCycle : startCycle}
             className={`
-              w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center
+              w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center block
               ${cycling
                 ? "bg-red-500/20 border border-red-500/50 text-red-400"
                 : "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/30"
@@ -227,7 +245,7 @@ export function DevWeatherPanel() {
               />
               <button
                 onClick={giveCoins}
-                className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all"
+                className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
               >
                 {coins >= 0 ? "Give" : "Take"}
               </button>
@@ -256,7 +274,7 @@ export function DevWeatherPanel() {
               />
               <button
                 onClick={giveFertilizer}
-                className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all"
+                className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
               >
                 Give
               </button>
@@ -296,7 +314,7 @@ export function DevWeatherPanel() {
                 <button
                   key={t}
                   onClick={() => setItemType(t)}
-                  className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all capitalize
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all capitalize text-center
                     ${itemType === t
                       ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400"
                       : "bg-white/5 border border-white/10 text-white/50 hover:text-white/70"
@@ -332,7 +350,7 @@ export function DevWeatherPanel() {
               />
               <button
                 onClick={giveItem}
-                className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all"
+                className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
               >
                 Give Item
               </button>
@@ -341,10 +359,42 @@ export function DevWeatherPanel() {
             {/* Fill codex */}
             <button
               onClick={fillCodex}
-              className="w-full py-1 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg font-semibold hover:bg-green-500/30 transition-all"
+              className="w-full py-1 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg font-semibold hover:bg-green-500/30 transition-all text-center"
             >
               ⚡ Fill Codex (all 10)
             </button>
+          </div>
+
+          {/* Gear */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">Gear</p>
+            <select
+              value={gearType}
+              onChange={(e) => setGearType(e.target.value as GearType)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+              size={5}
+            >
+              {(Object.values(GEAR) as typeof GEAR[GearType][]).map((def) => (
+                <option key={def.id} value={def.id}>
+                  {def.emoji} {def.name} ({def.rarity})
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-1.5">
+              <input
+                type="number"
+                value={gearQty}
+                min={1}
+                onChange={(e) => setGearQty(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-14 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white font-mono text-xs focus:outline-none focus:border-yellow-500/50"
+              />
+              <button
+                onClick={giveGear}
+                className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
+              >
+                Give Gear
+              </button>
+            </div>
           </div>
 
         </div>
