@@ -5,6 +5,7 @@ import { Shop } from "./components/Shop";
 import { Inventory } from "./components/Inventory";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { ShopRestockBanner } from "./components/ShopRestockBanner";
+import { GearExpiryBanner } from "./components/GearExpiryBanner";
 import { UsernameModal } from "./components/UsernameModal";
 import { SearchPage } from "./components/SearchPage";
 import { ProfilePage } from "./components/ProfilePage";
@@ -40,6 +41,7 @@ export default function App() {
   const {
     state, offlineSummary, clearSummary,
     shopJustRestocked, clearShopNotification,
+    gearExpiry, clearGearExpiry,
     user, profile, authLoading,
     signInWithGoogle, signOut,
     needsUsername, completeUsername,
@@ -230,6 +232,9 @@ export default function App() {
       )}
       {shopJustRestocked && (
         <ShopRestockBanner onDismiss={clearShopNotification} />
+      )}
+      {gearExpiry && (
+        <GearExpiryBanner gearType={gearExpiry.gearType} onDismiss={clearGearExpiry} />
       )}
       {newRequest && (
         <FriendRequestNotification

@@ -484,6 +484,17 @@ export function tickSupplyShop(state: GameState): GameState {
   };
 }
 
+/** Returns all PlacedGear items that have expired but not yet been removed from the grid. */
+export function getExpiredGear(grid: Plot[][], now: number): PlacedGear[] {
+  const expired: PlacedGear[] = [];
+  for (const row of grid) {
+    for (const plot of row) {
+      if (plot.gear && isGearExpired(plot.gear, now)) expired.push(plot.gear);
+    }
+  }
+  return expired;
+}
+
 /** Remove gear that has expired from the grid (called on load and each tick). */
 export function pruneExpiredGear(grid: Plot[][], now: number): Plot[][] {
   let changed = false;

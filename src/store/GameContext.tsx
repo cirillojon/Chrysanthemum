@@ -12,6 +12,7 @@ import {
   defaultState,
   buyWeatherForecastSlot,
   pruneExpiredGear,
+  getExpiredGear,
 } from "./gameStore";
 import {
   loadCloudSave,
@@ -51,6 +52,8 @@ interface GameContextValue {
   clearSummary: () => void;
   shopJustRestocked: boolean;
   clearShopNotification: () => void;
+  gearExpiry: { gearType: string } | null;
+  clearGearExpiry: () => void;
   user: User | null;
   profile: CloudProfile | null;
   authLoading: boolean;
@@ -91,6 +94,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, setState]                       = useState<GameState>(() => defaultState());
   const [offlineSummary, setOfflineSummary]     = useState<OfflineSummary>(EMPTY_SUMMARY);
   const [shopJustRestocked, setShopJustRestocked] = useState(false);
+  const [gearExpiry, setGearExpiry]               = useState<{ gearType: string } | null>(null);
   const [user, setUser]                         = useState<User | null>(null);
   const [profile, setProfile]                   = useState<CloudProfile | null>(null);
   const [authLoading, setAuthLoading]           = useState(true);
@@ -302,9 +306,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           next = supplyTicked;
         }
 
-        // Prune expired gear from grid
-        const prunedGrid = pruneExpiredGear(next.grid, Date.now());
-        if (prunedGrid !== next.grid) next = { ...next, grid: prunedGrid };
+        // Prune expired gear from grid — surface the first expiry as a toast
+        const tickNow = Date.now();
+        const expired = getExpiredGear(next.grid, tickNow);
+        const prunedGrid = pruneExpiredGear(next.grid, tickNow);
+        if (prunedGrid !== next.grid) {
+          if (expired.length > 0) setGearExpiry({ gearType: expired[0].gearType });
+          next = { ...next, grid: prunedGrid };
+        }
 
         return next;
       });
@@ -420,6 +429,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       state, update, getState, perform, awaitHarvests,
       offlineSummary, clearSummary: () => setOfflineSummary(EMPTY_SUMMARY),
       shopJustRestocked, clearShopNotification: () => setShopJustRestocked(false),
+      gearExpiry, clearGearExpiry: () => setGearExpiry(null),
       user, profile, authLoading,
       signInWithGoogle, signOut,
       refreshProfile,

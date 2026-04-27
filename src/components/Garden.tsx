@@ -18,7 +18,7 @@ import {
 } from "../store/gameStore";
 import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
-import { getAffectedCells } from "../data/gear";
+import { getAffectedCells, GEAR, isGearExpired } from "../data/gear";
 import type { MutationType } from "../data/flowers";
 import type { GearType } from "../data/gear";
 
@@ -62,6 +62,23 @@ export function Garden() {
     const affected = getAffectedCells(gearType, row, col, state.farmRows, state.farmSize);
     return new Set(affected.map(([r, c]) => `${r}-${c}`));
   }, [highlightSource, state.farmRows, state.farmSize]);
+
+  // All cells covered by at least one active (non-expired) sprinkler — used for the 💧 indicator
+  const sprinklerCoveredCells = useMemo((): Set<string> => {
+    const covered = new Set<string>();
+    const now = Date.now();
+    for (let ri = 0; ri < state.grid.length; ri++) {
+      for (let ci = 0; ci < state.grid[ri].length; ci++) {
+        const g = state.grid[ri][ci].gear;
+        if (!g || isGearExpired(g, now)) continue;
+        const def = GEAR[g.gearType];
+        if (def.category !== "sprinkler" && def.category !== "sprinkler_mutation") continue;
+        const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize);
+        for (const [r, c] of affected) covered.add(`${r}-${c}`);
+      }
+    }
+    return covered;
+  }, [state.grid, state.farmRows, state.farmSize]);
 
   function handlePlotClick(row: number, col: number) {
     const plot = state.grid[row][col];
@@ -261,6 +278,7 @@ export function Garden() {
                 harvestPending={() => harvestingPlots.current.has(`${row}-${col}`)}
                 isSelected={selectedPlot?.row === row && selectedPlot?.col === col}
                 isHighlighted={highlightedCells.has(`${row}-${col}`)}
+                isUnderSprinkler={sprinklerCoveredCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}

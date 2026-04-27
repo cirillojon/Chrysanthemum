@@ -27,6 +27,8 @@ interface Props {
   isSelected?:     boolean;
   /** True when this cell is within the radius of an inspected gear item. */
   isHighlighted?:  boolean;
+  /** True when this cell is covered by at least one active sprinkler. */
+  isUnderSprinkler?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -36,7 +38,7 @@ interface Props {
 export function PlotTile({
   plot, row, col,
   onEmptyClick, onHarvest, onHarvestStart, onHarvestEnd, harvestPending,
-  isSelected, isHighlighted,
+  isSelected, isHighlighted, isUnderSprinkler,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
 }: Props) {
@@ -281,6 +283,16 @@ export function PlotTile({
             title="Mastered — grows 20% faster"
           >
             ⚡
+          </span>
+        )}
+
+        {/* 💧 Sprinkler indicator — bottom-left (only when growing) */}
+        {!isBloomed && isUnderSprinkler && (
+          <span
+            className="absolute bottom-2.5 left-0.5 text-[10px] leading-none"
+            title="Under sprinkler effect"
+          >
+            💧
           </span>
         )}
 
