@@ -30,8 +30,8 @@ import { useVersionCheck } from "./hooks/useVersionCheck";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
-type Tab = "garden" | "shop" | "inventory" | "social" | "codex" | "botany" | "marketplace";
-type SocialView = "search" | "friends" | "gifts" | "leaderboard";
+type Tab = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
+type SocialView = "search" | "friends" | "gifts" | "leaderboard" | "marketplace";
 
 
 export default function App() {
@@ -214,7 +214,7 @@ export default function App() {
       {/* Tabs */}
       <nav className="bg-card/40 border-b border-border">
         <div className="w-full sm:max-w-2xl sm:mx-auto flex">
-          {(["garden", "shop", "inventory", "botany", "codex", "social", "marketplace"] as Tab[]).map((t) => (
+          {(["garden", "shop", "inventory", "botany", "codex", "social"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => handleTabChange(t)}
@@ -232,9 +232,8 @@ export default function App() {
                : t === "inventory" ? "🎒"
                : t === "botany"    ? "🌿"
                : t === "codex"     ? "📖"
-               : t === "social"    ? "🌍"
-               : "🏪"}
-              <span className="ml-1 hidden sm:inline capitalize">{t === "marketplace" ? "Market" : t}</span>
+               : "🌍"}
+              <span className="ml-1 hidden sm:inline capitalize">{t}</span>
 
               {t === "inventory" && inventoryCount > 0 && (
                 <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
@@ -259,18 +258,12 @@ export default function App() {
           {tab === "inventory"   && <Inventory />}
           {tab === "botany"      && <Botany />}
           {tab === "codex"       && <Codex />}
-          {tab === "marketplace" && (
-            <MarketplaceTab
-              onViewProfile={handleViewProfile}
-              onSignIn={signInWithGoogle}
-            />
-          )}
           {tab === "social"    && (
-            user ? (
-              <>
-                {/* Social nav — always visible, clicking clears any open profile */}
+            <>
+              {/* Sub-nav — always visible for signed-in users; guests only see Market */}
+              {(user || socialView === "marketplace") && (
                 <div className="flex gap-2 mb-6">
-                  {(["search", "friends", "gifts", "leaderboard"] as SocialView[]).map((v) => (
+                  {(["search", "friends", "gifts", "marketplace", "leaderboard"] as SocialView[]).map((v) => (
                     <button
                       key={v}
                       onClick={() => handleSocialViewChange(v)}
@@ -282,9 +275,19 @@ export default function App() {
                         }
                       `}
                     >
-                      <span>{v === "search" ? "🔍" : v === "friends" ? "👥" : v === "gifts" ? "🎁" : "🏆"}</span>
+                      <span>
+                        {v === "search"        ? "🔍"
+                         : v === "friends"     ? "👥"
+                         : v === "gifts"       ? "🎁"
+                         : v === "marketplace" ? "🏪"
+                         : "🏆"}
+                      </span>
                       <span className="hidden sm:inline ml-1">
-                        {v === "search" ? "Search" : v === "friends" ? "Friends" : v === "gifts" ? "Gifts" : "Ranks"}
+                        {v === "search"        ? "Search"
+                         : v === "friends"     ? "Friends"
+                         : v === "gifts"       ? "Gifts"
+                         : v === "marketplace" ? "Market"
+                         : "Ranks"}
                       </span>
                       {v === "friends" && pendingCount > 0 && (
                         <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
@@ -298,36 +301,47 @@ export default function App() {
                       )}
                     </button>
                   ))}
-                  <button
-                    onClick={() => handleViewProfile(profile?.username ?? "")}
-                    className={`
-                      flex-1 py-2 rounded-xl text-xs font-semibold transition-all text-center
-                      ${profileUsername === profile?.username
-                        ? "bg-primary/20 border border-primary/50 text-primary"
-                        : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
-                      }
-                    `}
-                  >
-                    <span>👤</span>
-                    <span className="hidden sm:inline ml-1">My Profile</span>
-                  </button>
+                  {user && (
+                    <button
+                      onClick={() => handleViewProfile(profile?.username ?? "")}
+                      className={`
+                        flex-1 py-2 rounded-xl text-xs font-semibold transition-all text-center
+                        ${profileUsername === profile?.username
+                          ? "bg-primary/20 border border-primary/50 text-primary"
+                          : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                        }
+                      `}
+                    >
+                      <span>👤</span>
+                      <span className="hidden sm:inline ml-1">Me</span>
+                    </button>
+                  )}
                 </div>
+              )}
 
-                {/* Content: profile view or social view */}
-                {profileUsername ? (
-                  <ProfilePage username={profileUsername} />
-                ) : (
-                  <>
-                    {socialView === "search"      && <SearchPage onViewProfile={handleViewProfile} />}
-                    {socialView === "friends"     && <FriendsPage onViewProfile={handleViewProfile} />}
-                    {socialView === "gifts"       && <GiftsPage onViewProfile={handleViewProfile} />}
-                    {socialView === "leaderboard" && <LeaderboardPage onViewProfile={handleViewProfile} />}
-                  </>
-                )}
-              </>
-            ) : (
-              <GuestSocialPrompt onSignIn={signInWithGoogle} />
-            )
+              {/* Marketplace is accessible to guests — it handles its own sign-in prompt */}
+              {socialView === "marketplace" ? (
+                <MarketplaceTab
+                  onViewProfile={handleViewProfile}
+                  onSignIn={signInWithGoogle}
+                />
+              ) : user ? (
+                <>
+                  {profileUsername ? (
+                    <ProfilePage username={profileUsername} />
+                  ) : (
+                    <>
+                      {socialView === "search"      && <SearchPage onViewProfile={handleViewProfile} />}
+                      {socialView === "friends"     && <FriendsPage onViewProfile={handleViewProfile} />}
+                      {socialView === "gifts"       && <GiftsPage onViewProfile={handleViewProfile} />}
+                      {socialView === "leaderboard" && <LeaderboardPage onViewProfile={handleViewProfile} />}
+                    </>
+                  )}
+                </>
+              ) : (
+                <GuestSocialPrompt onSignIn={signInWithGoogle} />
+              )}
+            </>
           )}
         </>
       </main>

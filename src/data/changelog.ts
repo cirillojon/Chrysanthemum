@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.1.2",
+    title:   "Bug Fixes & UI",
+    items: [
+      { type: "fixed",   text: "Shop \"Flower not in stock\" errors are now fully resolved — if the post-restock server sync failed silently, the buy handler auto-resyncs the shop and retries before giving up" },
+      { type: "changed", text: "🏪 Marketplace moved into the Social tab — all player-to-player features are now in one place, and the main nav is one tab shorter" },
+    ],
+  },
+  {
     version: "2.1.1",
     title:   "Bug Fixes",
     items: [
