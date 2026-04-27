@@ -1,4 +1,5 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import { applyTheme } from "../data/themes";
 
 export interface Settings {
   /** Gear ambient particle / glow animations on plant tiles */
@@ -11,6 +12,8 @@ export interface Settings {
   plotMasteryIndicator:  boolean;
   /** Fertilizer emoji badge on growing tiles */
   plotFertilizerIndicator: boolean;
+  /** Active theme id */
+  theme: string;
 }
 
 const DEFAULTS: Settings = {
@@ -19,6 +22,7 @@ const DEFAULTS: Settings = {
   plotMutationIndicator: true,
   plotMasteryIndicator:  true,
   plotFertilizerIndicator: true,
+  theme: "garden",
 };
 
 const LS_KEY = "chrysanthemum_settings";
@@ -26,8 +30,10 @@ const LS_KEY = "chrysanthemum_settings";
 function loadSettings(): Settings {
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return DEFAULTS;
-    return { ...DEFAULTS, ...JSON.parse(raw) };
+    const s   = raw ? { ...DEFAULTS, ...JSON.parse(raw) } : DEFAULTS;
+    // Apply synchronously so there's no flash before the first render
+    applyTheme(s.theme);
+    return s;
   } catch {
     return DEFAULTS;
   }
@@ -54,6 +60,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       return next;
     });
   }, []);
+
+  // Re-apply theme CSS vars whenever the theme changes
+  useEffect(() => { applyTheme(settings.theme); }, [settings.theme]);
 
   return <Ctx.Provider value={{ settings, setSetting }}>{children}</Ctx.Provider>;
 }

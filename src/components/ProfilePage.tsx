@@ -7,6 +7,7 @@ import { getFlower, RARITY_CONFIG, MUTATIONS, FLOWERS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { useGame } from "../store/GameContext";
 import { useSettings } from "../store/SettingsContext";
+import { THEMES } from "../data/themes";
 import { FriendButton } from "./FriendButton";
 import { SendGiftModal } from "./SendGiftModal";
 import { Codex } from "./Codex";
@@ -453,7 +454,42 @@ function SettingsPanel() {
         <h3 className="text-sm font-semibold">Visual Settings</h3>
         <p className="text-xs text-muted-foreground mt-0.5">Stored locally on this device</p>
       </div>
-      <div className="space-y-3">
+
+      {/* Theme picker */}
+      <div className="mb-4">
+        <p className="text-xs font-medium text-foreground mb-2">Theme</p>
+        <div className="grid grid-cols-3 gap-2">
+          {THEMES.map((t) => {
+            const active = settings.theme === t.id;
+            return (
+              <button
+                key={t.id}
+                onClick={() => setSetting("theme", t.id)}
+                className={`
+                  rounded-xl border-2 p-2 transition-all text-left
+                  ${active ? "border-primary scale-[1.03]" : "border-border hover:border-primary/40"}
+                `}
+              >
+                {/* Swatch */}
+                <div
+                  className="w-full h-7 rounded-lg mb-1.5 relative overflow-hidden"
+                  style={{ backgroundColor: t.swatch[0] }}
+                >
+                  <div
+                    className="absolute bottom-1 right-1.5 w-3 h-3 rounded-full"
+                    style={{ backgroundColor: t.swatch[1] }}
+                  />
+                </div>
+                <p className="text-[10px] font-medium leading-none">
+                  {t.emoji} {t.name}
+                </p>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="border-t border-border pt-4 space-y-3">
         {rows.map(({ key, label, description }) => (
           <div key={key} className="flex items-center justify-between gap-4">
             <div className="min-w-0">
