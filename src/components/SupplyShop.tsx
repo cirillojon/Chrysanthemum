@@ -39,6 +39,16 @@ function SupplyCard({ slot }: { slot: ShopSlot }) {
   const { state, update } = useGame();
   const [justBought, setJustBought] = useState(false);
 
+  // ── Empty placeholder ─────────────────────────────────────────────────────
+  if (slot.isEmpty) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-2 bg-card/20 border border-dashed border-border/50 rounded-xl p-4 min-h-[140px] opacity-60">
+        <span className="text-2xl">🧪</span>
+        <p className="text-xs text-muted-foreground text-center">New slot — fills on next restock</p>
+      </div>
+    );
+  }
+
   const canAfford  = state.coins >= slot.price;
   const outOfStock = slot.quantity < 1;
 

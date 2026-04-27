@@ -1637,11 +1637,19 @@ export function upgradeSupplySlots(state: GameState): GameState | null {
   if (!next) return null;
   if (state.coins < next.cost) return null;
 
+  const newSlotCount  = next.slots - state.supplySlots;
+  const emptySlots: ShopSlot[] = Array.from({ length: newSlotCount }, (_, i) => ({
+    speciesId: `supply_empty_${Date.now()}_${i}`,
+    price:     0,
+    quantity:  0,
+    isEmpty:   true,
+  }));
+
   return {
     ...state,
-    coins:      state.coins - next.cost,
+    coins:       state.coins - next.cost,
     supplySlots: next.slots,
-    supplyShop:  generateSupplyShop(next.slots),
+    supplyShop:  [...(state.supplyShop ?? []), ...emptySlots],
   };
 }
 
