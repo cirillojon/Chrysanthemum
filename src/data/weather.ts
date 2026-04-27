@@ -56,7 +56,7 @@ export const WEATHER: Record<WeatherType, WeatherDefinition> = {
     emoji:           "☀️",
     description:     "A beautiful day. No special effects.",
     durationMs:      15 * 60_000,   // 15 minutes
-    chance:          40,           // Most common
+    chance:          60,           // Most common
     cooldownMs:      0,
     growthMultiplier: 1.0,
     visual: {
@@ -204,22 +204,25 @@ export const WEATHER: Record<WeatherType, WeatherDefinition> = {
 
 export const WEATHER_LIST = Object.values(WEATHER);
 
-// Returns true if the given weather type is allowed at the provided UTC hour.
+// Returns true if the given weather type is allowed at the provided Eastern Time hour.
 // Weather with no allowedPeriods restriction is always eligible.
-export function isWeatherAllowedAtHour(type: WeatherType, utcHour: number): boolean {
+export function isWeatherAllowedAtHour(type: WeatherType, etHour: number): boolean {
   const def = WEATHER[type];
   if (!def.allowedPeriods) return true;
-  const period = getCurrentPeriod(utcHour);
+  const period = getCurrentPeriod(etHour);
   return def.allowedPeriods.includes(period.id);
 }
 
 // Pick the next weather randomly by weight, excluding cooldowns and time-of-day gates.
-// utcHour defaults to the current UTC hour if not provided.
+// etHour defaults to the current Eastern Time hour if not provided.
 export function rollNextWeather(
   lastWeatherType: WeatherType,
   now: number,
   lastWeatherEndedAt: number,
-  utcHour: number = new Date().getUTCHours(),
+  etHour: number = parseInt(
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: "America/New_York" }).format(new Date()),
+    10
+  ) % 24,
 ): WeatherType {
   const eligible = WEATHER_LIST.filter((w) => {
     if (w.id === "clear") return true;

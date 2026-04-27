@@ -345,7 +345,7 @@ export const FORECAST_SLOT_COSTS = [
   300_000,  // → 8 slots
 ] as const;
 
-export const MAX_FORECAST_SLOTS = FORECAST_SLOT_COSTS.length;
+export const MAX_FORECAST_SLOTS = FORECAST_SLOT_COSTS.length; // 8
 
 /** Purchase the next forecast slot tier. Returns null if already maxed or can't afford. */
 export function buyWeatherForecastSlot(state: GameState): GameState | null {
