@@ -63,22 +63,31 @@ export function Garden() {
     return new Set(affected.map(([r, c]) => `${r}-${c}`));
   }, [highlightSource, state.farmRows, state.farmSize]);
 
-  // All cells covered by at least one active (non-expired) sprinkler — used for the 💧 indicator
-  const sprinklerCoveredCells = useMemo((): Set<string> => {
-    const covered = new Set<string>();
-    const now = Date.now();
-    for (let ri = 0; ri < state.grid.length; ri++) {
-      for (let ci = 0; ci < state.grid[ri].length; ci++) {
-        const g = state.grid[ri][ci].gear;
-        if (!g || isGearExpired(g, now)) continue;
-        const def = GEAR[g.gearType];
-        if (def.category !== "sprinkler" && def.category !== "sprinkler_mutation") continue;
-        const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize);
-        for (const [r, c] of affected) covered.add(`${r}-${c}`);
+  // Per-cell gear coverage sets — used for plant indicator icons
+  const { sprinklerCoveredCells, scarecrowCoveredCells, composterCoveredCells } =
+    useMemo(() => {
+      const sprinkler = new Set<string>();
+      const scarecrow = new Set<string>();
+      const composter = new Set<string>();
+      const now = Date.now();
+      for (let ri = 0; ri < state.grid.length; ri++) {
+        for (let ci = 0; ci < state.grid[ri].length; ci++) {
+          const g = state.grid[ri][ci].gear;
+          if (!g || isGearExpired(g, now)) continue;
+          const def = GEAR[g.gearType];
+          const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize);
+          const keys = affected.map(([r, c]) => `${r}-${c}`);
+          if (def.category === "sprinkler_regular" || def.category === "sprinkler_mutation") {
+            keys.forEach((k) => sprinkler.add(k));
+          } else if (def.passiveSubtype === "scarecrow") {
+            keys.forEach((k) => scarecrow.add(k));
+          } else if (def.passiveSubtype === "composter") {
+            keys.forEach((k) => composter.add(k));
+          }
+        }
       }
-    }
-    return covered;
-  }, [state.grid, state.farmRows, state.farmSize]);
+      return { sprinklerCoveredCells: sprinkler, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter };
+    }, [state.grid, state.farmRows, state.farmSize]);
 
   function handlePlotClick(row: number, col: number) {
     const plot = state.grid[row][col];
@@ -279,6 +288,8 @@ export function Garden() {
                 isSelected={selectedPlot?.row === row && selectedPlot?.col === col}
                 isHighlighted={highlightedCells.has(`${row}-${col}`)}
                 isUnderSprinkler={sprinklerCoveredCells.has(`${row}-${col}`)}
+                isUnderScarecrow={scarecrowCoveredCells.has(`${row}-${col}`)}
+                isUnderComposter={composterCoveredCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}

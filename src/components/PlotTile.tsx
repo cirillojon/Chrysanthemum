@@ -29,6 +29,10 @@ interface Props {
   isHighlighted?:  boolean;
   /** True when this cell is covered by at least one active sprinkler. */
   isUnderSprinkler?: boolean;
+  /** True when this cell is within a scarecrow's radius. */
+  isUnderScarecrow?: boolean;
+  /** True when this cell is within a composter's radius. */
+  isUnderComposter?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -38,7 +42,7 @@ interface Props {
 export function PlotTile({
   plot, row, col,
   onEmptyClick, onHarvest, onHarvestStart, onHarvestEnd, harvestPending,
-  isSelected, isHighlighted, isUnderSprinkler,
+  isSelected, isHighlighted, isUnderSprinkler, isUnderScarecrow, isUnderComposter,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
 }: Props) {
@@ -286,14 +290,13 @@ export function PlotTile({
           </span>
         )}
 
-        {/* 💧 Sprinkler indicator — bottom-left (only when growing) */}
-        {!isBloomed && isUnderSprinkler && (
-          <span
-            className="absolute bottom-2.5 left-0.5 text-[10px] leading-none"
-            title="Under sprinkler effect"
-          >
-            💧
-          </span>
+        {/* Gear effect indicators — bottom-left row (only when growing) */}
+        {!isBloomed && (isUnderSprinkler || isUnderScarecrow || isUnderComposter) && (
+          <div className="absolute bottom-2.5 left-0.5 flex leading-none">
+            {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
+            {isUnderScarecrow && <span className="text-[9px]" title="Under scarecrow">🧹</span>}
+            {isUnderComposter && <span className="text-[9px]" title="Near composter">🧺</span>}
+          </div>
         )}
 
         {/* Progress bar — bottom */}
