@@ -1,3 +1,19 @@
+## [v2.1.1] — 2026-04-27 — Weather & Balance Fixes
+
+### Fixed
+- **Botany race condition (#61)** — simultaneous conversions no longer produce errors; perform calls are serialized so concurrent DB writes can't race each other
+- **Forecast slots 5–8 showing "Pending" (#62)** — SQL forecast loop now generates enough entries to fill all 8 unlocked slots
+- **Time-restricted weather outside allowed windows** — Golden Hour, Prismatic Skies, and Star Shower were occasionally rolling at the wrong time of day; all time gating now uses Eastern Time (America/New_York) consistently on both client and server
+- **`advance_weather` inserting NULL weather type** — rewrote `_pick_weather` SQL function with explicit per-type variables instead of array operations to eliminate the NULL constraint violation
+- **Forecast relative times** — times beyond 60 minutes now display as `Xh Xm`; times beyond 24 hours display as `Xd Xh`
+- **Plot tooltip growth time** — remaining time now shows days/hours (e.g. `2d 6h`) instead of wrapping past 24 hours
+
+### Changed
+- **Fertilizer rebalanced** — speed multipliers are now Basic 1.1×, Advanced 1.25×, Premium 1.5×, Elite 1.75×, Miracle 2×
+- **Clear skies more common** — weight increased from 40 → 60; special weather events are proportionally slightly rarer
+
+---
+
 ## [v2.1.0] — 2026-04-27 — Marketplace
 
 ### Added
