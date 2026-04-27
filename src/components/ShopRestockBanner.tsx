@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 
 interface Props {
   onDismiss: () => void;
+  /** "seeds" = seed shop restock; "supply" = gear & fertilizer supply shop restock */
+  type?: "seeds" | "supply";
 }
 
-export function ShopRestockBanner({ onDismiss }: Props) {
+export function ShopRestockBanner({ onDismiss, type = "seeds" }: Props) {
   const [visible, setVisible] = useState(false);
 
   // Animate in on mount
@@ -34,13 +36,19 @@ export function ShopRestockBanner({ onDismiss }: Props) {
       <div className="flex items-center gap-4 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/20 min-w-72">
 
         {/* Icon */}
-        <div className="text-3xl flex-shrink-0 animate-bounce">🛒</div>
+        <div className="text-3xl flex-shrink-0 animate-bounce">
+          {type === "supply" ? "🧪" : "🛒"}
+        </div>
 
         {/* Text */}
         <div className="flex-1">
-          <p className="text-sm font-bold text-foreground">Shop Restocked!</p>
+          <p className="text-sm font-bold text-foreground">
+            {type === "supply" ? "Supply Restocked!" : "Shop Restocked!"}
+          </p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Fresh seeds and fertilizer are available.
+            {type === "supply"
+              ? "Fresh gear and fertilizer are available."
+              : "Fresh seeds and fertilizer are available."}
           </p>
         </div>
 

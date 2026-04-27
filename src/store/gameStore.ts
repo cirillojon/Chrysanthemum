@@ -94,6 +94,7 @@ export interface OfflineSummary {
   minutesAway: number;
   readyToHarvest: number;
   shopRestocked: boolean;
+  supplyRestocked: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -357,7 +358,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
       const state = defaultState();
-      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false } };
+      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false } };
     }
     const parsed = JSON.parse(raw) as GameState;
     // Backfill discovered for saves that predate the codex
@@ -366,7 +367,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
   } catch (e) {
     // console.warn("Failed to load save, starting fresh:", e);
     const state = defaultState();
-    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false } };
+    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false } };
   }
 }
 
@@ -377,7 +378,21 @@ export function resetGame(): GameState {
 
 // ── Offline tick ───────────────────────────────────────────────────────────
 
-export function applyOfflineTick(save: GameState): { state: GameState; summary: OfflineSummary } {
+/**
+ * Describes the active weather event that was (partially) in progress while the
+ * player was offline.  Passed into applyOfflineTick so that rain / thunderstorm
+ * growth bonuses are correctly applied to offline growth.
+ */
+export interface WeatherWindow {
+  type:      WeatherType;
+  startedAt: number;
+  endsAt:    number;
+}
+
+export function applyOfflineTick(
+  save: GameState,
+  offlineWeather?: WeatherWindow,
+): { state: GameState; summary: OfflineSummary } {
   const now         = Date.now();
   const minutesAway = Math.floor((now - save.lastSaved) / 60_000);
 
@@ -414,9 +429,11 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
   }
 
   // Tick supply shop reset
+  let supplyRestocked = false;
   const timeSinceSupplyReset = now - (updated.lastSupplyReset ?? 0);
   if (timeSinceSupplyReset >= SUPPLY_RESET_INTERVAL) {
-    updated = { ...updated, supplyShop: generateSupplyShop(updated.supplySlots), lastSupplyReset: now };
+    updated         = { ...updated, supplyShop: generateSupplyShop(updated.supplySlots), lastSupplyReset: now };
+    supplyRestocked = true;
   }
 
   // Always sync prices from current data definitions so price changes take effect immediately on load
@@ -439,6 +456,49 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
   // Prune expired gear from grid on load
   updated = { ...updated, grid: pruneExpiredGear(updated.grid, now) };
 
+  // ── Offline weather growth bonus ──────────────────────────────────────────
+  // If rain / thunderstorm was active during part of the offline period,
+  // bake the extra growth into each plant's growthMs checkpoint so that
+  // getCurrentStage() and the progress bar reflect the real offline progress.
+  if (offlineWeather) {
+    const weatherMult = WEATHER[offlineWeather.type]?.growthMultiplier ?? 1.0;
+    if (weatherMult > 1.0) {
+      const offlineStart = save.lastSaved;
+      // How long the weather overlapped with the offline window
+      const weatherStart  = Math.max(offlineWeather.startedAt, offlineStart);
+      const weatherEnd    = Math.min(offlineWeather.endsAt, now);
+      const overlapMs     = Math.max(0, weatherEnd - weatherStart);
+
+      if (overlapMs > 0) {
+        const extraMult = weatherMult - 1.0; // additional multiplier above clear (1.0)
+        updated = {
+          ...updated,
+          grid: updated.grid.map((row) =>
+            row.map((plot) => {
+              if (!plot.plant || plot.plant.bloomedAt) return plot;
+              const fert = plot.plant.fertilizer
+                ? FERTILIZERS[plot.plant.fertilizer].speedMultiplier
+                : 1.0;
+              const mast = plot.plant.masteredBonus ?? 1.0;
+              // Compute growth accrued up to the moment the player went offline
+              const growthAtSave = computeGrowthMs(plot.plant, offlineStart, "clear");
+              // Extra effective ms from the weather window
+              const bonusMs      = overlapMs * extraMult * fert * mast;
+              return {
+                ...plot,
+                plant: {
+                  ...plot.plant,
+                  growthMs:   growthAtSave + bonusMs,
+                  lastTickAt: offlineStart,
+                },
+              };
+            })
+          ),
+        };
+      }
+    }
+  }
+
   // Auto-harvest via any active Harvest Bells (captures offline progress)
   updated = tickHarvestBells(updated, "clear");
 
@@ -451,7 +511,7 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
 
   return {
     state:   updated,
-    summary: { minutesAway, readyToHarvest, shopRestocked },
+    summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked },
   };
 }
 

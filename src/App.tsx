@@ -45,7 +45,8 @@ export default function App() {
 function AppInner() {
   const {
     state, offlineSummary, clearSummary,
-    shopJustRestocked, clearShopNotification,
+    shopJustRestocked,   clearShopNotification,
+    supplyJustRestocked, clearSupplyNotification,
     gearExpiry, clearGearExpiry,
     user, profile, authLoading,
     signInWithGoogle, signOut,
@@ -236,7 +237,10 @@ function AppInner() {
         />
       )}
       {shopJustRestocked && (
-        <ShopRestockBanner onDismiss={clearShopNotification} />
+        <ShopRestockBanner onDismiss={clearShopNotification} type="seeds" />
+      )}
+      {supplyJustRestocked && (
+        <ShopRestockBanner onDismiss={clearSupplyNotification} type="supply" />
       )}
       {gearExpiry && (
         <GearExpiryBanner gearType={gearExpiry.gearType} onDismiss={clearGearExpiry} />
@@ -497,23 +501,20 @@ function AppInner() {
                 key={profileUsername ?? socialView}
                 className={subDir === "left" ? "slide-from-right" : subDir === "right" ? "slide-from-left" : ""}
               >
-                {socialView === "marketplace" ? (
+                {/* Profile page takes priority over any social sub-view (including marketplace) */}
+                {profileUsername ? (
+                  <ProfilePage username={profileUsername} />
+                ) : socialView === "marketplace" ? (
                   <MarketplaceTab
                     onViewProfile={handleViewProfile}
                     onSignIn={signInWithGoogle}
                   />
                 ) : user ? (
                   <>
-                    {profileUsername ? (
-                      <ProfilePage username={profileUsername} />
-                    ) : (
-                      <>
-                        {socialView === "search"      && <SearchPage onViewProfile={handleViewProfile} />}
-                        {socialView === "friends"     && <FriendsPage onViewProfile={handleViewProfile} />}
-                        {socialView === "gifts"       && <GiftsPage onViewProfile={handleViewProfile} />}
-                        {socialView === "leaderboard" && <LeaderboardPage onViewProfile={handleViewProfile} />}
-                      </>
-                    )}
+                    {socialView === "search"      && <SearchPage onViewProfile={handleViewProfile} />}
+                    {socialView === "friends"     && <FriendsPage onViewProfile={handleViewProfile} />}
+                    {socialView === "gifts"       && <GiftsPage onViewProfile={handleViewProfile} />}
+                    {socialView === "leaderboard" && <LeaderboardPage onViewProfile={handleViewProfile} />}
                   </>
                 ) : (
                   <GuestSocialPrompt onSignIn={signInWithGoogle} />

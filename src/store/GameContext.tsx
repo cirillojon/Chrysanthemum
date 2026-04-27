@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import {
   type GameState,
   type OfflineSummary,
+  type WeatherWindow,
   loadGame,
   saveGame,
   tickShop,
@@ -52,6 +53,8 @@ interface GameContextValue {
   clearSummary: () => void;
   shopJustRestocked: boolean;
   clearShopNotification: () => void;
+  supplyJustRestocked: boolean;
+  clearSupplyNotification: () => void;
   gearExpiry: { gearType: string } | null;
   clearGearExpiry: () => void;
   user: User | null;
@@ -80,6 +83,7 @@ const EMPTY_SUMMARY: OfflineSummary = {
   minutesAway: 0,
   readyToHarvest: 0,
   shopRestocked: false,
+  supplyRestocked: false,
 };
 
 // Reject local saves whose lastSaved is more than 30 s in the future.
@@ -93,8 +97,9 @@ function isTamperedTimestamp(lastSaved: number): boolean {
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, setState]                       = useState<GameState>(() => defaultState());
   const [offlineSummary, setOfflineSummary]     = useState<OfflineSummary>(EMPTY_SUMMARY);
-  const [shopJustRestocked, setShopJustRestocked] = useState(false);
-  const [gearExpiry, setGearExpiry]               = useState<{ gearType: string } | null>(null);
+  const [shopJustRestocked,   setShopJustRestocked]   = useState(false);
+  const [supplyJustRestocked, setSupplyJustRestocked] = useState(false);
+  const [gearExpiry, setGearExpiry]                   = useState<{ gearType: string } | null>(null);
   const [user, setUser]                         = useState<User | null>(null);
   const [profile, setProfile]                   = useState<CloudProfile | null>(null);
   const [authLoading, setAuthLoading]           = useState(true);
@@ -128,6 +133,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       const { state: localState, summary } = loadGame();
       setState(localState);
       setOfflineSummary(summary);
+      if (summary.supplyRestocked) setSupplyJustRestocked(true);
       setUser(null);
       setProfile(null);
       loadedFor.current   = null;
@@ -179,9 +185,28 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         saveToUse = cloudSave;
       }
 
-      const { state: ticked, summary } = applyOfflineTick(saveToUse);
+      // Fetch current weather so offline growth can apply rain / storm bonuses.
+      let offlineWeather: WeatherWindow | undefined;
+      try {
+        const { data: wRow } = await supabase
+          .from("weather")
+          .select("type,started_at,ends_at")
+          .eq("id", 1)
+          .single();
+        if (wRow) {
+          offlineWeather = {
+            type:      wRow.type as import("../data/weather").WeatherType,
+            startedAt: wRow.started_at as number,
+            endsAt:    wRow.ends_at    as number,
+          };
+        }
+      } catch { /* non-critical — offline tick still runs without weather bonus */ }
+
+      const { state: ticked, summary } = applyOfflineTick(saveToUse, offlineWeather);
       setState(ticked);
       setOfflineSummary(summary);
+      if (summary.shopRestocked)   setShopJustRestocked(true);
+      if (summary.supplyRestocked) setSupplyJustRestocked(true);
 
       if (needsCloudSync) {
         await saveToCloud(u.id, ticked);
@@ -300,6 +325,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (supplyTicked !== next) {
           const shop  = supplyTicked.supplyShop;
           const reset = supplyTicked.lastSupplyReset;
+          setSupplyJustRestocked(true);
           harvestQueue.current = harvestQueue.current
             .then(() => edgeSyncSupplyShop(shop, reset))
             .catch(() => {});
@@ -428,7 +454,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     <GameContext.Provider value={{
       state, update, getState, perform, awaitHarvests,
       offlineSummary, clearSummary: () => setOfflineSummary(EMPTY_SUMMARY),
-      shopJustRestocked, clearShopNotification: () => setShopJustRestocked(false),
+      shopJustRestocked,   clearShopNotification:   () => setShopJustRestocked(false),
+      supplyJustRestocked, clearSupplyNotification: () => setSupplyJustRestocked(false),
       gearExpiry, clearGearExpiry: () => setGearExpiry(null),
       user, profile, authLoading,
       signInWithGoogle, signOut,
