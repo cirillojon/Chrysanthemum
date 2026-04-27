@@ -31,7 +31,8 @@ import { useVersionCheck } from "./hooks/useVersionCheck";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
-type Tab = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
+type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
+type ShopView   = "seeds" | "fertilizers";
 type SocialView = "search" | "friends" | "gifts" | "leaderboard" | "marketplace";
 
 
@@ -49,11 +50,12 @@ export default function App() {
   const { pendingCount: giftCount, newGift, clearNewGift } = useGiftNotifications(user?.id ?? null);
 
   const [tab, setTab]               = useState<Tab>("garden");
+  const [shopView,   setShopView]   = useState<ShopView>("seeds");
   const [socialView, setSocialView] = useState<SocialView>("search");
   const [showBanner, setShowBanner] = useState(true);
   const [showForecast, setShowForecast] = useState(false);
-  const [tabDir,    setTabDir]    = useState<"left" | "right" | null>(null);
-  const [socialDir, setSocialDir] = useState<"left" | "right" | null>(null);
+  const [tabDir, setTabDir] = useState<"left" | "right" | null>(null);
+  const [subDir, setSubDir] = useState<"left" | "right" | null>(null);
 
   const [profileUsername, setProfileUsername] = useState<string | null>(null);
 
@@ -72,25 +74,34 @@ export default function App() {
   const inventoryCount = state.inventory.reduce((s, i) => s + i.quantity, 0);
 
   // ── Swipe navigation ─────────────────────────────────────────────────────────
-  // Flat order: garden → shop → inventory → botany → codex →
-  //             social:search → social:friends → social:gifts →
-  //             social:marketplace → social:leaderboard
-  const MAIN_TABS:    Tab[]        = ["garden", "shop", "inventory", "botany", "codex", "social"];
-  const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
+  // Flat order: garden(0) → shop:seeds(1) → shop:fertilizers(2) →
+  //             inventory(3) → botany(4) → codex(5) →
+  //             social:search(6) → friends(7) → gifts(8) →
+  //             marketplace(9) → leaderboard(10) → me(profile)
+  const MAIN_TABS: Tab[] = ["garden", "shop", "inventory", "botany", "codex", "social"];
 
   const handleSwipeLeft = useCallback(() => {
-    // If viewing a profile, swipe left does nothing (already at the end)
     if (profileUsername) return;
+    if (tab === "shop") {
+      const idx = SHOP_VIEWS.indexOf(shopView);
+      if (idx < SHOP_VIEWS.length - 1) {
+        setSubDir("left"); setTabDir(null);
+        setShopView(SHOP_VIEWS[idx + 1]);
+        return;
+      }
+      setTabDir("left"); setSubDir(null);
+      setTab("inventory");
+      return;
+    }
     if (tab === "social") {
       const idx = SOCIAL_VIEWS.indexOf(socialView);
       if (idx < SOCIAL_VIEWS.length - 1) {
-        setSocialDir("left"); setTabDir(null);
+        setSubDir("left"); setTabDir(null);
         setSocialView(SOCIAL_VIEWS[idx + 1]);
         return;
       }
-      // After last social view → navigate to own profile
       if (user && profile?.username) {
-        setSocialDir("left"); setTabDir(null);
+        setSubDir("left"); setTabDir(null);
         setProfileUsername(profile.username);
       }
       return;
@@ -98,16 +109,16 @@ export default function App() {
     const idx = MAIN_TABS.indexOf(tab);
     if (idx < MAIN_TABS.length - 1) {
       const next = MAIN_TABS[idx + 1];
-      setTabDir("left"); setSocialDir(null);
+      setTabDir("left"); setSubDir(null);
       setTab(next);
+      if (next === "shop")   setShopView("seeds");
       if (next === "social") setSocialView("search");
     }
-  }, [tab, socialView, profileUsername, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, shopView, socialView, profileUsername, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSwipeRight = useCallback(() => {
     if (tab === "social" && profileUsername) {
-      // Swipe right from own profile → back to leaderboard
-      setSocialDir("right"); setTabDir(null);
+      setSubDir("right"); setTabDir(null);
       setProfileUsername(null);
       setSocialView("leaderboard");
       return;
@@ -115,50 +126,84 @@ export default function App() {
     if (tab === "social") {
       const idx = SOCIAL_VIEWS.indexOf(socialView);
       if (idx > 0) {
-        setSocialDir("right"); setTabDir(null);
+        setSubDir("right"); setTabDir(null);
         setSocialView(SOCIAL_VIEWS[idx - 1]);
         return;
       }
-      setTabDir("right"); setSocialDir(null);
+      setTabDir("right"); setSubDir(null);
       setTab("codex");
+      return;
+    }
+    if (tab === "shop") {
+      const idx = SHOP_VIEWS.indexOf(shopView);
+      if (idx > 0) {
+        setSubDir("right"); setTabDir(null);
+        setShopView(SHOP_VIEWS[idx - 1]);
+        return;
+      }
+      setTabDir("right"); setSubDir(null);
+      setTab("garden");
+      return;
+    }
+    if (tab === "inventory") {
+      setTabDir("right"); setSubDir(null);
+      setTab("shop");
+      setShopView("fertilizers");
       return;
     }
     const idx = MAIN_TABS.indexOf(tab);
     if (idx > 0) {
-      setTabDir("right"); setSocialDir(null);
+      setTabDir("right"); setSubDir(null);
       setTab(MAIN_TABS[idx - 1]);
     }
-  }, [tab, socialView, profileUsername]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, shopView, socialView, profileUsername]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const swipeHandlers = useSwipe(handleSwipeLeft, handleSwipeRight);
 
-  // Flat index across the entire nav (used to infer slide direction on clicks)
-  function flatNavIndex(t: Tab, sv: SocialView): number {
-    const tabs: Tab[] = ["garden", "shop", "inventory", "botany", "codex", "social"];
-    const views: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
-    if (t !== "social") return tabs.indexOf(t);
-    return tabs.length - 1 + views.indexOf(sv);
+  // Flat index across the entire nav sequence:
+  // garden(0) → shop:seeds(1) → shop:fertilizers(2) → inventory(3) →
+  // botany(4) → codex(5) → social:search(6) → friends(7) → gifts(8) →
+  // marketplace(9) → leaderboard(10)
+  const SHOP_VIEWS:   ShopView[]   = ["seeds", "fertilizers"];
+  const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
+
+  function flatNavIndex(t: Tab, shv: ShopView, sv: SocialView): number {
+    if (t === "garden")    return 0;
+    if (t === "shop")      return 1 + SHOP_VIEWS.indexOf(shv);
+    if (t === "inventory") return 3;
+    if (t === "botany")    return 4;
+    if (t === "codex")     return 5;
+    return 6 + SOCIAL_VIEWS.indexOf(sv); // social
   }
 
   function handleViewProfile(username: string) {
-    setSocialDir("left");
+    setSubDir("left");
     setTabDir(null);
     setTab("social");
     setProfileUsername(username);
   }
 
   function handleTabChange(t: Tab) {
-    const dir = flatNavIndex(t, "search") > flatNavIndex(tab, socialView) ? "left" : "right";
-    setTabDir(dir);
-    setSocialDir(null);
+    const cur  = flatNavIndex(tab, shopView, socialView);
+    const next = flatNavIndex(t, "seeds", "search");
+    setTabDir(next > cur ? "left" : "right");
+    setSubDir(null);
     setTab(t);
+    if (t === "shop")   setShopView("seeds");
     if (t === "social") setSocialView("search");
     setProfileUsername(null);
   }
 
+  function handleShopViewChange(v: ShopView) {
+    const dir = SHOP_VIEWS.indexOf(v) > SHOP_VIEWS.indexOf(shopView) ? "left" : "right";
+    setSubDir(dir);
+    setTabDir(null);
+    setShopView(v);
+  }
+
   function handleSocialViewChange(v: SocialView) {
-    const dir = flatNavIndex("social", v) > flatNavIndex("social", socialView) ? "left" : "right";
-    setSocialDir(dir);
+    const dir = SOCIAL_VIEWS.indexOf(v) > SOCIAL_VIEWS.indexOf(socialView) ? "left" : "right";
+    setSubDir(dir);
     setTabDir(null);
     setSocialView(v);
     setProfileUsername(null);
@@ -230,8 +275,9 @@ export default function App() {
       {/* Weather overlay — z-20, above day/night */}
       <WeatherOverlay weatherType={activeWeather} isActive={weatherIsActive} />
 
-      {/* HUD */}
-      <header className="sticky top-0 z-30 bg-card/80 backdrop-blur border-b border-border">
+      {/* HUD + Tab bar — sticky together so both stay pinned while scrolling */}
+      <div className="sticky top-0 z-30">
+      <header className="bg-card/80 backdrop-blur border-b border-border">
         <div className="w-full sm:max-w-2xl sm:mx-auto flex items-center justify-between px-3 sm:px-4 py-3">
           <h1
             className="font-bold text-primary tracking-wide cursor-pointer flex items-center gap-1"
@@ -293,7 +339,7 @@ export default function App() {
       </header>
 
       {/* Tabs */}
-      <nav className="bg-card/40 border-b border-border">
+      <nav className="bg-card/40 border-b border-border backdrop-blur">
         <div className="w-full sm:max-w-2xl sm:mx-auto flex">
           {(["garden", "shop", "inventory", "botany", "codex", "social"] as Tab[]).map((t) => (
             <button
@@ -330,6 +376,7 @@ export default function App() {
           ))}
         </div>
       </nav>
+      </div>{/* end sticky wrapper */}
 
       {/* Content */}
       <main
@@ -342,7 +389,35 @@ export default function App() {
         >
         <>
           {tab === "garden"      && <Garden />}
-          {tab === "shop"        && <Shop />}
+          {tab === "shop"        && (
+            <>
+              {/* Shop sub-nav */}
+              <div className="flex gap-2 mb-6">
+                {(["seeds", "fertilizers"] as ShopView[]).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => handleShopViewChange(v)}
+                    className={`
+                      flex-1 py-2 rounded-xl text-xs font-semibold transition-all text-center
+                      ${shopView === v
+                        ? "bg-primary/20 border border-primary/50 text-primary"
+                        : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                      }
+                    `}
+                  >
+                    {v === "seeds" ? "🌱 Seeds" : "🌿 Fertilizers"}
+                  </button>
+                ))}
+              </div>
+              {/* Animated shop content */}
+              <div
+                key={shopView}
+                className={subDir === "left" ? "slide-from-right" : subDir === "right" ? "slide-from-left" : ""}
+              >
+                <Shop view={shopView} />
+              </div>
+            </>
+          )}
           {tab === "inventory"   && <Inventory />}
           {tab === "botany"      && <Botany />}
           {tab === "codex"       && <Codex />}
@@ -410,7 +485,7 @@ export default function App() {
               {/* Social content — animated independently from the sub-nav */}
               <div
                 key={profileUsername ?? socialView}
-                className={socialDir === "left" ? "slide-from-right" : socialDir === "right" ? "slide-from-left" : ""}
+                className={subDir === "left" ? "slide-from-right" : subDir === "right" ? "slide-from-left" : ""}
               >
                 {socialView === "marketplace" ? (
                   <MarketplaceTab
