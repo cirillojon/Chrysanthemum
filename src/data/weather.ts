@@ -226,7 +226,7 @@ export function rollNextWeather(
 ): WeatherType {
   const eligible = WEATHER_LIST.filter((w) => {
     if (w.id === "clear") return true;
-    if (!isWeatherAllowedAtHour(w.id, utcHour)) return false;
+    if (!isWeatherAllowedAtHour(w.id, etHour)) return false;
     if (w.id === lastWeatherType) {
       return now - lastWeatherEndedAt >= w.cooldownMs;
     }
