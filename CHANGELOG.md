@@ -1,3 +1,16 @@
+## [v2.1.3] — 2026-04-27 — Marketplace & Garden
+
+### Added
+- **🌱 Seeds in Marketplace** — seed items can now be listed and purchased; seed listings display the seed emoji and a "Seed" label to distinguish them from blooms
+- **⚡ Real-time listing sync** — new listings appear instantly for all browsers; sold or cancelled listings disappear without a page refresh (Supabase Realtime Postgres Changes)
+- **🗑 Remove planted flower** — tap any growing (non-bloomed) plant to open its tooltip and remove it; the seed is returned to your inventory. Bloomed plants must still be harvested
+- **Tooltip viewport clamping** — plot tooltip no longer clips off the left or right screen edge on mobile; it measures its position before first paint and nudges itself into view
+
+### Fixed
+- **Marketplace race condition** — buying a listing that another player just purchased now shows a friendly "just sold" message and removes the phantom entry, rather than throwing an error
+
+---
+
 ## [v2.1.2] — 2026-04-27 — Bug Fixes & UI
 
 ### Fixed
