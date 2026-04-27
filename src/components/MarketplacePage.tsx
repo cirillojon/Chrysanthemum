@@ -169,12 +169,12 @@ export function MarketplacePage({ onViewProfile }: Props) {
         <div className="bg-card/60 border border-border rounded-2xl p-4 w-full max-w-xs space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">First slot</span>
-            <span className="font-mono font-bold">{(firstSlot.cost / 1_000).toFixed(0)}k 🪙</span>
+            <span className="font-mono font-bold">{(firstSlot.cost / 1_000).toFixed(0)}k 🟡</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Your coins</span>
             <span className={`font-mono font-bold ${canAfford ? "text-primary" : "text-red-400"}`}>
-              {state.coins.toLocaleString()} 🪙
+              {state.coins.toLocaleString()} 🟡
             </span>
           </div>
           <button
@@ -182,7 +182,7 @@ export function MarketplacePage({ onViewProfile }: Props) {
             disabled={!canAfford || upgrading}
             className="w-full py-2.5 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 transition-opacity disabled:opacity-40"
           >
-            {upgrading ? "Unlocking..." : canAfford ? "Unlock Marketplace — 10k 🪙" : "Not enough coins"}
+            {upgrading ? "Unlocking..." : canAfford ? "Unlock Marketplace — 10k 🟡" : "Not enough coins"}
           </button>
         </div>
       </div>
@@ -193,21 +193,12 @@ export function MarketplacePage({ onViewProfile }: Props) {
     <div className="flex flex-col gap-5">
 
       {/* Header */}
-      <div className="flex items-start justify-between">
+      <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-bold">Marketplace</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {state.marketplaceSlots} listing slot{state.marketplaceSlots !== 1 ? "s" : ""}
-            {nextUpgrade && nextUpgrade.slots <= MAX_MARKETPLACE_SLOTS && (
-              <span> · <button
-                onClick={handleUpgradeSlots}
-                disabled={state.coins < nextUpgrade.cost || upgrading}
-                className="text-primary hover:underline disabled:opacity-40 disabled:no-underline"
-              >
-                {upgrading ? "Upgrading..." : `+1 slot for ${(nextUpgrade.cost / 1_000).toFixed(0)}k 🪙`}
-              </button></span>
-            )}
-            {!nextUpgrade && <span> · max slots</span>}
+            {state.marketplaceSlots} / {MAX_MARKETPLACE_SLOTS} slot{state.marketplaceSlots !== 1 ? "s" : ""}
+            {!nextUpgrade && <span> · max</span>}
           </p>
         </div>
         <button
@@ -326,7 +317,31 @@ export function MarketplacePage({ onViewProfile }: Props) {
               {loadingMore ? "Loading..." : "Load more"}
             </button>
           )}
+
+          {/* Slot upgrade card — shown at the bottom when more slots are available */}
+          {nextUpgrade && (
+            <SlotUpgradeCard
+              nextCost={nextUpgrade.cost}
+              currentSlots={state.marketplaceSlots}
+              maxSlots={MAX_MARKETPLACE_SLOTS}
+              coins={state.coins}
+              upgrading={upgrading}
+              onUpgrade={handleUpgradeSlots}
+            />
+          )}
         </div>
+      )}
+
+      {/* Slot upgrade card when listing list is empty */}
+      {!loading && listings.length === 0 && nextUpgrade && (
+        <SlotUpgradeCard
+          nextCost={nextUpgrade.cost}
+          currentSlots={state.marketplaceSlots}
+          maxSlots={MAX_MARKETPLACE_SLOTS}
+          coins={state.coins}
+          upgrading={upgrading}
+          onUpgrade={handleUpgradeSlots}
+        />
       )}
 
       {/* Create listing modal */}
@@ -340,5 +355,58 @@ export function MarketplacePage({ onViewProfile }: Props) {
         />
       )}
     </div>
+  );
+}
+
+// ── Slot upgrade card ──────────────────────────────────────────────────────
+
+function SlotUpgradeCard({
+  nextCost, currentSlots, maxSlots, coins, upgrading, onUpgrade,
+}: {
+  nextCost:     number;
+  currentSlots: number;
+  maxSlots:     number;
+  coins:        number;
+  upgrading:    boolean;
+  onUpgrade:    () => void;
+}) {
+  const canAfford = coins >= nextCost;
+
+  function formatCost(n: number) {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000)     return `${(n / 1_000).toFixed(0)}k`;
+    return `${n}`;
+  }
+
+  return (
+    <button
+      onClick={onUpgrade}
+      disabled={!canAfford || upgrading}
+      className={`
+        w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left
+        ${canAfford
+          ? "border-primary/30 bg-primary/5 hover:bg-primary/10 hover:border-primary/50"
+          : "border-border/40 bg-card/30 opacity-60"
+        }
+        disabled:cursor-not-allowed
+      `}
+    >
+      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-xl flex-shrink-0">
+        ➕
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold">
+          {upgrading ? "Unlocking slot..." : `Unlock listing slot ${currentSlots + 1}`}
+        </p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          {currentSlots + 1} / {maxSlots} slots · {canAfford ? "tap to unlock" : "not enough coins"}
+        </p>
+      </div>
+      <div className="text-right flex-shrink-0">
+        <p className={`text-sm font-bold font-mono ${canAfford ? "text-primary" : "text-muted-foreground"}`}>
+          {formatCost(nextCost)} 🟡
+        </p>
+      </div>
+    </button>
   );
 }

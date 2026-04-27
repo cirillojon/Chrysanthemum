@@ -103,7 +103,7 @@ export function ListingCard({ listing, currentUserId, currentCoins, onBuy, onVie
         {/* Price + actions */}
         <div className="flex flex-col items-end gap-1.5 flex-shrink-0">
           <p className="text-sm font-bold font-mono text-primary">
-            {formatCoins(listing.ask_price)} 🪙
+            {formatCoins(listing.ask_price)} 🟡
           </p>
           {listing.base_value > 0 && (
             <p className="text-[10px] text-muted-foreground font-mono">

@@ -38,7 +38,7 @@ function ChartTooltip({ active, payload }: { active?: boolean; payload?: { value
   const { value, payload: point } = payload[0];
   return (
     <div className="bg-card border border-border rounded-lg px-3 py-1.5 text-xs shadow-md">
-      <p className="font-mono font-bold text-primary">{formatCoins(value)} 🪙</p>
+      <p className="font-mono font-bold text-primary">{formatCoins(value)} 🟡</p>
       <p className="text-muted-foreground">{formatDate(point.soldAt)}</p>
     </div>
   );
@@ -84,7 +84,7 @@ export function PriceHistoryChart({ speciesId, mutation, baseValue }: Props) {
     return (
       <div className="flex flex-col items-center justify-center h-20 gap-1">
         <p className="text-xs text-muted-foreground">No sales recorded yet</p>
-        <p className="text-[10px] text-muted-foreground/60">Base sell value: {formatCoins(baseValue)} 🪙</p>
+        <p className="text-[10px] text-muted-foreground/60">Base sell value: {formatCoins(baseValue)} 🟡</p>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export function PriceHistoryChart({ speciesId, mutation, baseValue }: Props) {
           Price history · last {points.length} sale{points.length !== 1 ? "s" : ""}
         </p>
         <p className="text-[10px] text-muted-foreground font-mono">
-          avg {formatCoins(avgPrice)} 🪙
+          avg {formatCoins(avgPrice)} 🟡
         </p>
       </div>
 
@@ -147,7 +147,7 @@ export function PriceHistoryChart({ speciesId, mutation, baseValue }: Props) {
       </ResponsiveContainer>
 
       <p className="text-[10px] text-muted-foreground/50 text-right">
-        — base sell value {formatCoins(baseValue)} 🪙
+        — base sell value {formatCoins(baseValue)} 🟡
       </p>
     </div>
   );

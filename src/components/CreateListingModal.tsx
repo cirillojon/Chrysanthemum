@@ -114,7 +114,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
                     </div>
                     <div className="text-right flex-shrink-0">
                       <p className="text-xs text-muted-foreground">×{item.quantity}</p>
-                      <p className="text-[10px] text-muted-foreground/60">{formatCoins(species.sellValue)} 🪙 base</p>
+                      <p className="text-[10px] text-muted-foreground/60">{formatCoins(species.sellValue)} 🟡 base</p>
                     </div>
                   </button>
                 );
@@ -124,7 +124,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
             {/* Ask price */}
             <div className="space-y-1.5">
               <p className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-                Ask price (🪙 coins)
+                Ask price (🟡 coins)
               </p>
               <input
                 type="number"
@@ -141,18 +141,18 @@ export function CreateListingModal({ onClose, onListed }: Props) {
               <div className="bg-background border border-border rounded-xl px-3 py-2.5 space-y-1 text-xs font-mono">
                 <div className="flex justify-between text-muted-foreground">
                   <span>Ask price</span>
-                  <span>{formatCoins(askPrice)} 🪙</span>
+                  <span>{formatCoins(askPrice)} 🟡</span>
                 </div>
                 <div className="flex justify-between text-muted-foreground">
                   <span>Listing fee (5%)</span>
-                  <span className="text-red-400">−{formatCoins(fee)} 🪙</span>
+                  <span className="text-red-400">−{formatCoins(fee)} 🟡</span>
                 </div>
                 <div className="border-t border-border/60 pt-1 flex justify-between font-bold">
                   <span>You earn (on sale)</span>
-                  <span className="text-primary">{formatCoins(askPrice)} 🪙</span>
+                  <span className="text-primary">{formatCoins(askPrice)} 🟡</span>
                 </div>
                 <p className="text-[10px] text-muted-foreground/60 text-right">
-                  Fee of {formatCoins(fee)} 🪙 charged now · non-refundable
+                  Fee of {formatCoins(fee)} 🟡 charged now · non-refundable
                 </p>
               </div>
             )}
@@ -168,14 +168,14 @@ export function CreateListingModal({ onClose, onListed }: Props) {
               {listing
                 ? "Listing..."
                 : selectedItem && validPrice
-                  ? `List ${getFlower(selectedItem.speciesId)?.name ?? "flower"} for ${formatCoins(askPrice)} 🪙`
+                  ? `List ${getFlower(selectedItem.speciesId)?.name ?? "flower"} for ${formatCoins(askPrice)} 🟡`
                   : "Select a flower and set a price"
               }
             </button>
 
             {selectedIdx !== null && validPrice && state.coins < fee && (
               <p className="text-xs text-red-400 font-mono text-center -mt-2">
-                Not enough coins for the listing fee ({formatCoins(fee)} 🪙 needed)
+                Not enough coins for the listing fee ({formatCoins(fee)} 🟡 needed)
               </p>
             )}
           </>
