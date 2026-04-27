@@ -1,3 +1,29 @@
+## [v2.1.0] — 2026-04-27 — Marketplace
+
+### Added
+- **🏪 Marketplace** — buy and sell harvested flowers with other players; all active listings are visible to everyone
+- **Listing slots** — start with 0 slots; unlock first slot for 10,000 coins, then 50k → 150k → 350k → 650k, max 5 slots
+- **5% listing fee** — charged upfront when creating a listing; non-refundable regardless of outcome
+- **48-hour expiry** — unsold listings expire automatically and the flower is returned to your inventory (hourly GitHub Actions sweep)
+- **Price history chart** — expand any listing to see a Recharts line chart of the last 30 sale prices with a dashed base-sell-value reference line
+- **My Listings tab** — view active listings with expiry countdown, cancel to reclaim the item, and browse sold/expired history
+- **Browse filters** — search by flower name, filter by rarity, sort by newest / price ascending / price descending
+- Seller credits are applied atomically via `add_coins_to_user` DB function; buyer save and seller credit run in parallel
+
+### Fixed
+- **Botany race condition (#61)** — simultaneous conversions no longer produce errors; perform calls are serialized so concurrent DB writes can't race each other
+- **Forecast slots 5–8 showing "Pending" (#62)** — SQL forecast loop now generates enough entries to fill all 8 unlocked slots
+- **Time-restricted weather outside allowed windows** — Golden Hour, Prismatic Skies, and Star Shower now gate correctly using Eastern Time on both client and server
+- **`advance_weather` inserting NULL weather type** — rewrote `_pick_weather` SQL function with explicit per-type variables to eliminate the NULL constraint violation
+- Forecast relative times now display as `Xh Xm` / `Xd Xh` for durations beyond 60 minutes / 24 hours
+- Plot tooltip growth time now shows days/hours (e.g. `2d 6h`) when remaining time exceeds 24 hours
+
+### Changed
+- **Fertilizer rebalanced** — speed multipliers are now Basic 1.1×, Advanced 1.25×, Premium 1.5×, Elite 1.75×, Miracle 2×
+- **Clear skies more common** — weight increased from 40 → 60
+
+---
+
 ## [v2.0.3] — 2026-04-27 — UI Bug Fixes
 
 ### Fixed

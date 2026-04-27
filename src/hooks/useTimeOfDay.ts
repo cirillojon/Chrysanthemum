@@ -1,13 +1,19 @@
 import { useEffect, useState } from "react";
 import { getCurrentPeriod, type DayPeriodDefinition } from "../data/dayNight";
 
-function getUtcHour(): number {
-  return new Date().getUTCHours();
+function getEtHour(): number {
+  // Weather period gating is anchored to Eastern Time (America/New_York),
+  // which automatically handles EST (UTC-5) / EDT (UTC-4) DST transitions.
+  return parseInt(
+    new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: "America/New_York" })
+      .format(new Date()),
+    10
+  ) % 24;
 }
 
 export interface TimeOfDay {
   period: DayPeriodDefinition;
-  utcHour: number;
+  etHour: number;
   /** midnight (0–5) or night (21–24) */
   isNight: boolean;
   /** morning (7–11), midday (11–14), afternoon (14–17) */
@@ -17,27 +23,25 @@ export interface TimeOfDay {
 }
 
 /**
- * Returns the current UTC-based time-of-day period, updated every minute.
+ * Returns the current Eastern-Time-based time-of-day period, updated every minute.
  *
- * Uses UTC so that weather gating is consistent for all players worldwide —
- * the server's advance_weather() SQL function also runs on UTC.
- *
- * For local-time visual overlays (day/night tint) use useDayNight() instead.
+ * All weather period gating (golden hour, prismatic skies, star shower) is
+ * anchored to America/New_York — the server's advance_weather() SQL function
+ * uses the same timezone. DST transitions are handled automatically.
  */
 export function useTimeOfDay(): TimeOfDay {
-  const [utcHour, setUtcHour] = useState<number>(() => getUtcHour());
+  const [etHour, setEtHour] = useState<number>(() => getEtHour());
 
   useEffect(() => {
-    // Re-check every minute — periods are hours-long so this is more than frequent enough
-    const id = setInterval(() => setUtcHour(getUtcHour()), 60_000);
+    const id = setInterval(() => setEtHour(getEtHour()), 60_000);
     return () => clearInterval(id);
   }, []);
 
-  const period = getCurrentPeriod(utcHour);
+  const period = getCurrentPeriod(etHour);
 
   return {
     period,
-    utcHour,
+    etHour,
     isNight:         period.id === "midnight" || period.id === "night",
     isDaytime:       period.id === "morning"  || period.id === "midday" || period.id === "afternoon",
     isSunriseSunset: period.id === "dawn"     || period.id === "sunset" || period.id === "dusk",

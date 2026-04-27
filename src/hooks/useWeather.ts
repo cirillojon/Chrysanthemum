@@ -58,7 +58,13 @@ export function useWeather() {
   }
 
   async function advanceAndRefresh() {
-    await supabase.rpc("advance_weather");
+    // Pass Eastern Time hour — all weather period gating is anchored to ET
+    const etHour = parseInt(
+      new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: "America/New_York" })
+        .format(new Date()),
+      10
+    ) % 24; // % 24 handles the Intl edge-case where midnight returns "24"
+    await supabase.rpc("advance_weather", { p_utc_hour: etHour });
     await fetchAndApply();
   }
 

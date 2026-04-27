@@ -29,9 +29,19 @@ const bgClass: Record<WeatherType, string> = {
 
 function formatRelative(ms: number): string {
   const totalSec = Math.max(0, Math.floor(ms / 1_000));
-  const m = Math.floor(totalSec / 60);
-  const s = totalSec % 60;
-  return `in ${m}m ${s.toString().padStart(2, "0")}s`;
+  const totalMin = Math.floor(totalSec / 60);
+  if (totalMin < 60) {
+    const s = totalSec % 60;
+    return `in ${totalMin}m ${s.toString().padStart(2, "0")}s`;
+  }
+  const totalHours = Math.floor(totalMin / 60);
+  if (totalHours < 24) {
+    const m = totalMin % 60;
+    return m > 0 ? `in ${totalHours}h ${m}m` : `in ${totalHours}h`;
+  }
+  const d = Math.floor(totalHours / 24);
+  const h = totalHours % 24;
+  return h > 0 ? `in ${d}d ${h}h` : `in ${d}d`;
 }
 
 function formatClock(epochMs: number): string {
@@ -43,7 +53,15 @@ interface Props {
 }
 
 export function WeatherForecastPanel({ onClose }: Props) {
-  const { state, weatherForecast, buyForecastSlot, activeWeather, weatherMsLeft, weatherMsUntilNext, weatherIsActive } = useGame();
+  const {
+    state,
+    weatherForecast,
+    buyForecastSlot,
+    activeWeather,
+    weatherMsLeft,
+    weatherMsUntilNext,
+    weatherIsActive,
+  } = useGame();
 
   const slots      = state.weatherForecastSlots ?? 0;
   const canUpgrade = slots < MAX_FORECAST_SLOTS;
@@ -51,15 +69,15 @@ export function WeatherForecastPanel({ onClose }: Props) {
   const canAfford  = nextCost !== null && state.coins >= nextCost;
 
   // Current weather countdown
-  const msLeft    = Math.max(0, weatherMsLeft);
-  const minsLeft  = Math.floor(msLeft / 60_000);
-  const secsLeft  = Math.floor((msLeft % 60_000) / 1_000);
-  const timeStr   = minsLeft > 0 ? `${minsLeft}m ${secsLeft.toString().padStart(2, "0")}s` : `${secsLeft}s`;
+  const msLeft   = Math.max(0, weatherMsLeft);
+  const minsLeft = Math.floor(msLeft / 60_000);
+  const secsLeft = Math.floor((msLeft % 60_000) / 1_000);
+  const timeStr  = minsLeft > 0
+    ? `${minsLeft}m ${secsLeft.toString().padStart(2, "0")}s`
+    : `${secsLeft}s`;
 
-  // Pre-compute start times for each forecast slot.
-  // Use weatherMsUntilNext so clear-skies periods (which aren't "active" for gameplay
-  // but still have a real endsAt) don't collapse all times to 0.
-  const now = Date.now();
+  // Pre-compute start time for each forecast slot
+  const now           = Date.now();
   const currentEndsAt = now + weatherMsUntilNext;
 
   const slotStartTimes: number[] = [];
@@ -126,9 +144,9 @@ export function WeatherForecastPanel({ onClose }: Props) {
           ) : (
             <div className="flex flex-col gap-2">
               {Array.from({ length: slots }, (_, i) => {
-                const entry      = weatherForecast[i];
-                const startsAt   = slotStartTimes[i] ?? currentEndsAt;
-                const msFromNow  = Math.max(0, startsAt - now);
+                const entry     = weatherForecast[i];
+                const startsAt  = slotStartTimes[i] ?? currentEndsAt;
+                const msFromNow = Math.max(0, startsAt - now);
 
                 if (!entry) {
                   return (
@@ -139,7 +157,9 @@ export function WeatherForecastPanel({ onClose }: Props) {
                       <span className="text-2xl opacity-40">❓</span>
                       <div>
                         <p className="text-sm font-medium text-muted-foreground">Pending…</p>
-                        <p className="text-xs text-muted-foreground/60">{formatRelative(msFromNow)} · {formatClock(startsAt)}</p>
+                        <p className="text-xs text-muted-foreground/60">
+                          {formatRelative(msFromNow)} · {formatClock(startsAt)}
+                        </p>
                       </div>
                     </div>
                   );
@@ -179,10 +199,7 @@ export function WeatherForecastPanel({ onClose }: Props) {
                 }
               `}
             >
-              {canAfford
-                ? `Unlock slot ${slots + 1} — ${nextCost!.toLocaleString()} 🟡`
-                : `Unlock slot ${slots + 1} — ${nextCost!.toLocaleString()} 🟡`
-              }
+              {`Unlock slot ${slots + 1} — ${nextCost!.toLocaleString()} 🟡`}
             </button>
             {!canAfford && (
               <p className="text-xs text-muted-foreground/60 text-center">

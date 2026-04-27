@@ -314,7 +314,7 @@ export function Botany() {
     if (!res) return;
     perform(res.state, () => edgeBotanyConvert(selections), (result) => {
       setResultSpeciesId(result.outputSpeciesIds[0]);
-    });
+    }, { serialize: true });
     setActiveRarity(null);
   }
 
@@ -323,7 +323,7 @@ export function Botany() {
     if (!res) return;
     perform(res.state, () => edgeBotanyConvertAll(rarity), (result) => {
       setConvertAllResult(result.outputSpeciesIds);
-    });
+    }, { serialize: true });
   }
 
   if (activeRarity) {

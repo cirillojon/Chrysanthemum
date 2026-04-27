@@ -1,5 +1,5 @@
 import { FLOWERS, MUTATIONS, getFlower, type GrowthStage, type MutationType, type Rarity } from "../data/flowers";
-import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, DEFAULT_SHOP_SLOTS, type FertilizerType } from "../data/upgrades";
+import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplaceSlotUpgrade, DEFAULT_SHOP_SLOTS, type FertilizerType } from "../data/upgrades";
 import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
@@ -66,7 +66,7 @@ export interface GameState {
   discovered: string[];
   // Weather forecast — number of upcoming slots the player has purchased (0 = not unlocked)
   weatherForecastSlots: number;
-  // Marketplace — number of active listing slots the player has purchased (default 2)
+  // Marketplace — number of active listing slots the player has purchased (0 = not unlocked)
   marketplaceSlots: number;
 }
 
@@ -254,7 +254,7 @@ export function defaultState(): GameState {
     lastSaved:            Date.now(),
     discovered:           [],
     weatherForecastSlots: 0,
-    marketplaceSlots:     2,
+    marketplaceSlots:     0,
   };
 }
 
@@ -345,7 +345,7 @@ export const FORECAST_SLOT_COSTS = [
   300_000,  // → 8 slots
 ] as const;
 
-export const MAX_FORECAST_SLOTS = FORECAST_SLOT_COSTS.length;
+export const MAX_FORECAST_SLOTS = FORECAST_SLOT_COSTS.length; // 8
 
 /** Purchase the next forecast slot tier. Returns null if already maxed or can't afford. */
 export function buyWeatherForecastSlot(state: GameState): GameState | null {
@@ -1064,6 +1064,18 @@ export function upgradeShopSlots(state: GameState): GameState | null {
     coins:     state.coins - next.cost,
     shopSlots: next.slots,
     shop:      [...flowerSlots, ...emptySlots, ...fertSlots],
+  };
+}
+
+export function upgradeMarketplaceSlots(state: GameState): GameState | null {
+  const next = getNextMarketplaceSlotUpgrade(state.marketplaceSlots);
+  if (!next) return null;
+  if (state.coins < next.cost) return null;
+
+  return {
+    ...state,
+    coins:            state.coins - next.cost,
+    marketplaceSlots: next.slots,
   };
 }
 
