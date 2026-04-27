@@ -110,13 +110,15 @@ Deno.serve(async (req: Request) => {
     const mutation  = (gift.mutation ?? undefined) as string | undefined;
 
     // ── Add item to receiver's inventory ─────────────────────────────────────
+    // Normalise mutation to null so null and undefined compare equal
+    const mutNorm = mutation ?? null;
     let inventory = (saveResult.data.inventory ?? []) as InventoryItem[];
     const existing = inventory.find(
-      (i) => i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
+      (i) => i.speciesId === speciesId && (i.mutation ?? null) === mutNorm && !i.isSeed
     );
     inventory = existing
       ? inventory.map((i) =>
-          i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
+          i.speciesId === speciesId && (i.mutation ?? null) === mutNorm && !i.isSeed
             ? { ...i, quantity: i.quantity + 1 }
             : i
         )

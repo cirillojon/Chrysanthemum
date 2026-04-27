@@ -19,9 +19,9 @@ export function SendGiftModal({ receiverId, receiverUsername, onClose, onSent }:
   const [sending, setSending]         = useState(false);
   const [error, setError]             = useState("");
 
-  // Only show flowers (items without mutation that are harvested blooms)
-  // Actually show all inventory items — seeds and harvested are the same type
-  const items = state.inventory.filter((i) => i.quantity > 0);
+  // Only blooms can be gifted — filter out seeds so they don't appear
+  // as blooms (the modal always renders the bloom emoji regardless of isSeed)
+  const items = state.inventory.filter((i) => i.quantity > 0 && !i.isSeed);
 
   async function handleSend() {
     if (!user || selectedIdx === null) return;

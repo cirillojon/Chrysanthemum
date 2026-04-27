@@ -91,9 +91,11 @@ Deno.serve(async (req: Request) => {
     let inventory = (saveResult.data.inventory ?? []) as InventoryItem[];
 
     // ── Validate item in sender's inventory (blooms only, not seeds) ──────────
+    // Normalise mutation to null so null and undefined compare equal
+    const mutNorm = mutation ?? null;
     const itemIdx = inventory.findIndex(
       (i) => i.speciesId === speciesId &&
-             i.mutation  === (mutation ?? undefined) &&
+             (i.mutation ?? null) === mutNorm &&
              !i.isSeed
     );
     if (itemIdx === -1 || inventory[itemIdx].quantity < 1) {
