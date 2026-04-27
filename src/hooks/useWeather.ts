@@ -58,7 +58,9 @@ export function useWeather() {
   }
 
   async function advanceAndRefresh() {
-    await supabase.rpc("advance_weather");
+    await supabase.rpc("advance_weather", {
+      p_utc_hour: new Date().getUTCHours(),
+    });
     await fetchAndApply();
   }
 
