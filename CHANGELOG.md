@@ -1,3 +1,59 @@
+## [v2.2.0] — 2026-04-27 — The Gear Update
+
+### Added
+- **⚙️ Gear system** — a new layer of placeable items for your farm; place gear on any plot and it affects nearby plants for its duration
+- **🏪 Supply Shop** — new shop tab that sells fertilizers and gear; items roll by rarity tier and restock independently of the seed shop
+- **🚿 Regular Sprinklers (3 tiers)** — speed up nearby plants and have a chance to apply the Wet mutation
+  - Rare 🚿: 1.5× growth, cross radius (4 plots), 1 hour
+  - Legendary 🚿: 1.75× growth, 3×3 radius (8 plots), 2 hours
+  - Mythic 🚿: 2× growth, diamond radius (12 plots), 4 hours
+- **🧪 Mutation Sprinklers (6 types)** — each targets a specific mutation; 50% chance per hour across a 3×3 area, 2-hour duration
+  - Heater ♨️ → Scorched (Legendary)
+  - Cooler 🧊 → Frosted (Legendary)
+  - Generator 🔋 → Shocked — only applies to Wet plants (Mythic)
+  - Crystal Ball 🔮 → Moonlit (Mythic)
+  - Gold Vial 💰 → Gilded (Exalted)
+  - Kaleidoscope 🔭 → Rainbow (Prismatic)
+- **💡 Grow Lamp** — boosts growth speed during night periods (dusk / night / midnight); stacks with sprinklers; Uncommon 1.2× (4 h) and Rare 1.5× (8 h)
+- **🧹 Scarecrow** — fully blocks weather mutations on nearby plants while active; sprinkler mutations still apply; Rare (4 h) and Legendary (8 h)
+- **🧺 Composter** — generates a fertilizer every time a nearby plant blooms; stores up to 10 (Uncommon, 4 h) or 20 (Rare, 8 h); collect stored fertilizers from the plot tooltip
+- **💨 Fan** — point it in a direction; each tick has a chance to strip the mutation from a bloomed plant in its path, or apply Windstruck if there is none; Uncommon (2 tiles, 2 h) and Rare (3 tiles, 4 h)
+- **🔔 Harvest Bell** — automatically harvests bloomed plants in range, even while offline; Rare cross radius (4 h) and Legendary 3×3 radius (8 h)
+- **🌾 Auto-Planter** — automatically plants seeds from your inventory into empty cells in a diamond area, even while offline; Prismatic only, 12 hours
+- **Gear inventory tab** — owned gear is displayed in a dedicated tab inside the Inventory page, separate from flowers and seeds
+- **Plant indicators** — active gear effects show as small badges on plots (sprinkler boost, mutation chance, lamp glow, scarecrow shield, etc.)
+- **Gear in plot tooltip** — the tooltip for a plot now shows any gear placed on it with its name, emoji, and time remaining
+- **Gear expiration** — placed gear automatically expires and is removed when its duration runs out
+- **Fan direction picker** — a compass UI appears when placing a Fan so you can choose which way it blows
+- **Profile gear slots** — your active gear is displayed on your public profile with slot animations
+- **Supplies on Marketplace** — fertilizers and gear can now be listed and purchased on the Marketplace
+- **Price history for supplies** — tap any supply listing to see its recent sale price history, matching the flower chart
+- **Flower types** — each flower species now has a type category (e.g. Wild, Tropical, Garden) shown in the Codex and seed picker
+- **App settings** — new settings panel accessible from the profile page; includes fertilizer badge display toggle and UI theme selection
+- **UI themes** — choose from multiple color themes in settings
+- **Inventory tabs** — inventory is now split into Flowers, Seeds, and Gear sub-tabs for easier browsing
+- **Tabulated seed picker** — the seed picker when planting is now organised into tabs
+- **Notification badges** — tab nav shows a badge count for unread mailbox items and unclaimed gifts
+- **User presence** — see whether friends and profile visitors are currently online
+
+### Changed
+- **Botany conversion rates reduced** — tiers now require 3 / 4 / 5 / 5 / 6 / 7 blooms (Common → Exalted), down from a flat 5× across the board
+- **Auto-Planter radius & duration** — now covers a diamond-shaped area (12 plots) and lasts 12 hours, down from a 5×5 square over 24 hours
+- **Offline tick cron** — fires every minute instead of every 15 minutes for more accurate offline progress
+
+### Fixed
+- **Botany Convert All no longer deletes blooms** — if the server call fails mid-batch, blooms are now correctly restored; the button also cools down for 5 seconds before retrying
+- **Weather permanently frozen after Clear** — the `advance_weather` database function was silently failing under Row Level Security; it now runs with correct permissions and weather advances reliably again
+- **Kaleidoscope missing prismatic border** — the rainbow animated border and glow now correctly appear on the Kaleidoscope in the inventory and supply shop
+- **Harvest Bell and Auto-Planter offline tick accuracy** — both gear types now process correctly during offline catch-up ticks
+- **Weather queue resetting on new event** — queued weather events no longer get wiped when a new event is generated
+- **Offline tick cloud sync** — the offline tick state is now reliably written back to the cloud after being applied
+- **Settings no longer bleed into profile gardens** — changing your settings previously caused other players' profile gardens to re-render with your preferences
+- **Grow Lamp dual rarity display** — the Grow Lamp no longer shows two rarity borders when placed
+- **Rarity borders on fertilizers** — fertilizer items in inventory and shop now display the correct rarity border colour
+
+---
+
 ## [v2.1.6] — 2026-04-27 — Bug Fixes
 
 ### Fixed
