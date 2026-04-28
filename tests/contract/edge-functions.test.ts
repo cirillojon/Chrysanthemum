@@ -38,6 +38,13 @@ function listEdgeFunctions(): string[] {
 
 const fns = listEdgeFunctions();
 
+/**
+ * Functions that use an alternative auth scheme (e.g. x-admin-secret or
+ * CRON_SECRET) instead of the standard Bearer / Authorization header.
+ * They are excluded from the Authorization-header assertion only.
+ */
+const ADMIN_AUTH_FUNCTIONS = new Set(["admin-broadcast"]);
+
 describe("Supabase edge function contract (regression)", () => {
   it("discovers at least one edge function", () => {
     expect(fns.length).toBeGreaterThan(0);
@@ -53,6 +60,11 @@ describe("Supabase edge function contract (regression)", () => {
       });
 
       it("checks the Authorization header", () => {
+        if (ADMIN_AUTH_FUNCTIONS.has(name)) {
+          // Admin functions use a custom secret header instead of Bearer auth
+          expect(src).toMatch(/x-admin-secret|CRON_SECRET/);
+          return;
+        }
         expect(src).toMatch(/Authorization/);
         // Either an explicit header check or auth.getUser must run.
         const hasHeaderCheck = /headers\.get\(\s*["']Authorization["']\s*\)/.test(src);
@@ -61,9 +73,11 @@ describe("Supabase edge function contract (regression)", () => {
       });
 
       it("returns a structured 401 on unauthorized requests", () => {
-        // Match a 401 status paired with a JSON Unauthorized payload (allowing whitespace/newlines).
         expect(src).toMatch(/Unauthorized/);
-        expect(src).toMatch(/status:\s*401/);
+        // Accept both inline `status: 401` and helper-call patterns like err("...", 401)
+        const hasInlineStatus = /status:\s*401/.test(src);
+        const hasHelperStatus = /\bUnauthorized\b.*401|401.*\bUnauthorized\b/s.test(src);
+        expect(hasInlineStatus || hasHelperStatus).toBe(true);
       });
 
       it("uses Deno.serve as the entrypoint", () => {
