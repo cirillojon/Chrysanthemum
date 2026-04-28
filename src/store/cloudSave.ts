@@ -494,6 +494,17 @@ export async function getAllMail(userId: string): Promise<MailboxEntry[]> {
   }
 }
 
+/** Delete claimed mailbox entries by ID. Requires the mailbox DELETE RLS policy. */
+export async function clearClaimedMail(userId: string, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  await supabase
+    .from("mailbox")
+    .delete()
+    .eq("user_id", userId)
+    .in("id", ids)
+    .eq("claimed", true); // safety guard — never deletes unclaimed rows
+}
+
 export async function getUnclaimedMailCount(userId: string): Promise<number> {
   try {
     const { count, error } = await supabase

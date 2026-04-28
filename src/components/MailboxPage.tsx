@@ -6,9 +6,10 @@ import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
 import { GEAR as GEAR_CATALOG } from "../data/gear";
 import type { GearType } from "../data/gear";
-import { getAllMail } from "../store/cloudSave";
+import { getAllMail, clearClaimedMail } from "../store/cloudSave";
 import type { MailboxEntry } from "../store/cloudSave";
 import { edgeClaimMail } from "../lib/edgeFunctions";
+import { supabase } from "../lib/supabase";
 
 interface Props {
   onViewProfile:  (username: string) => void;
@@ -35,6 +36,7 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
   const [mail,        setMail]        = useState<MailboxEntry[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [claiming,    setClaiming]    = useState<string | null>(null);
+  const [claimingAll, setClaimingAll] = useState(false);
   const [claimedIds,  setClaimedIds]  = useState<string[]>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
   const [openId,      setOpenId]      = useState<string | null>(null);
@@ -56,8 +58,62 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
+  // Realtime: reload full list whenever a new mail arrives for this user
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("mailbox-page")
+      .on(
+        "postgres_changes",
+        {
+          event:  "INSERT",
+          schema: "public",
+          table:  "mailbox",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => { load(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, load]);
+
+  async function handleClaimAll() {
+    if (!user || claiming || claimingAll) return;
+    const unclaimed = mail.filter(
+      (m) => !m.claimed && !claimedIds.includes(m.id) && !dismissedIds.includes(m.id)
+    );
+    if (unclaimed.length === 0) return;
+    setClaimingAll(true);
+    setError(null);
+    // Must be sequential — each call returns the updated save state; parallel
+    // calls would each read the pre-claim state and the last write wins, dropping items.
+    let latestResult = null;
+    const newClaimedIds: string[] = [];
+    for (const entry of unclaimed) {
+      try {
+        latestResult = await edgeClaimMail(entry.id);
+        newClaimedIds.push(entry.id);
+      } catch {
+        // skip individual failures — partial progress is still progress
+      }
+    }
+    if (latestResult) {
+      update({
+        ...state,
+        coins:         latestResult.coins,
+        inventory:     latestResult.inventory,
+        fertilizers:   latestResult.fertilizers,
+        gearInventory: latestResult.gearInventory,
+        discovered:    latestResult.discovered,
+      });
+    }
+    setClaimedIds((prev) => [...prev, ...newClaimedIds]);
+    onCountChange?.(0);
+    setClaimingAll(false);
+  }
+
   async function handleClaim(entry: MailboxEntry) {
-    if (!user || claiming) return;
+    if (!user || claiming || claimingAll) return;
     setClaiming(entry.id);
     setError(null);
     try {
@@ -71,6 +127,7 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
         discovered:    result.discovered,
       });
       setClaimedIds((prev) => [...prev, entry.id]);
+      setOpenId((prev) => prev === entry.id ? null : prev);
       onCountChange?.(mail.filter((m) => m.id !== entry.id && !m.claimed && !claimedIds.includes(m.id)).length);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to claim");
@@ -83,9 +140,17 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
     setDismissedIds((prev) => [...prev, id]);
   }
 
-  function handleClearClaimed() {
+  async function handleClearClaimed() {
+    if (!user) return;
     const claimedAll = mail.filter((m) => m.claimed || claimedIds.includes(m.id)).map((m) => m.id);
+    if (claimedAll.length === 0) return;
+    // Optimistic: hide immediately so the UI feels instant
     setDismissedIds((prev) => [...new Set([...prev, ...claimedAll])]);
+    // Persist deletion so cleared items don't reappear on refresh
+    await clearClaimedMail(user.id, claimedAll);
+    // Clean up local state
+    setMail((prev) => prev.filter((m) => !claimedAll.includes(m.id)));
+    setClaimedIds((prev) => prev.filter((id) => !claimedAll.includes(id)));
   }
 
   if (!user) return null;
@@ -120,6 +185,15 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
               Clear claimed
             </button>
           )}
+          {unclaimedCount > 0 && (
+            <button
+              onClick={handleClaimAll}
+              disabled={claimingAll || !!claiming}
+              className="text-xs text-primary hover:opacity-80 transition-opacity disabled:opacity-50 font-semibold"
+            >
+              {claimingAll ? "Collecting..." : "Claim All"}
+            </button>
+          )}
           <button
             onClick={load}
             className="text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -152,6 +226,7 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
               entry={entry}
               claimed={entry.claimed || claimedIds.includes(entry.id)}
               claiming={claiming === entry.id}
+              claimingAll={claimingAll}
               isOpen={openId === entry.id}
               onToggle={() => setOpenId((prev) => prev === entry.id ? null : entry.id)}
               onClaim={() => handleClaim(entry)}
@@ -171,6 +246,7 @@ function MailCard({
   entry,
   claimed,
   claiming,
+  claimingAll,
   isOpen,
   onToggle,
   onClaim,
@@ -180,6 +256,7 @@ function MailCard({
   entry:         MailboxEntry;
   claimed:       boolean;
   claiming:      boolean;
+  claimingAll:   boolean;
   isOpen:        boolean;
   onToggle:      () => void;
   onClaim:       () => void;
@@ -332,7 +409,7 @@ function MailCard({
           {/* Body message */}
           {entry.message && (
             <div className="bg-background border border-border rounded-xl px-3 py-2">
-              <p className="text-xs text-foreground/80 italic">"{entry.message}"</p>
+              <p className="text-xs text-foreground/80 italic break-words">"{entry.message}"</p>
             </div>
           )}
 
@@ -357,7 +434,7 @@ function MailCard({
           {/* Collect button */}
           <button
             onClick={(e) => { e.stopPropagation(); onClaim(); }}
-            disabled={claiming || claimed}
+            disabled={claiming || claimingAll || claimed}
             className="w-full py-2 rounded-xl text-xs font-semibold text-center transition-opacity disabled:opacity-50 bg-primary text-primary-foreground hover:opacity-90"
           >
             {claimed
