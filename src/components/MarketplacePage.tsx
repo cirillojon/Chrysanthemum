@@ -44,7 +44,7 @@ export function MarketplacePage({ onViewProfile }: Props) {
 
   // ── Load listings ──────────────────────────────────────────────────────────
   const loadListings = useCallback(async (reset = true) => {
-    reset ? setLoading(true) : setLoadingMore(true);
+    if (reset) setLoading(true); else setLoadingMore(true);
     const offset = reset ? 0 : page * PAGE_SIZE;
 
     // Build query
@@ -70,7 +70,7 @@ export function MarketplacePage({ onViewProfile }: Props) {
     const { data, error } = await query;
 
     if (error || !data) {
-      reset ? setLoading(false) : setLoadingMore(false);
+      if (reset) setLoading(false); else setLoadingMore(false);
       return;
     }
 
@@ -87,7 +87,7 @@ export function MarketplacePage({ onViewProfile }: Props) {
 
     // Batch-resolve seller usernames
     const sellerIds = [...new Set(searched.map((l) => l.seller_id as string))];
-    let usernameMap: Record<string, string> = {};
+    const usernameMap: Record<string, string> = {};
 
     if (sellerIds.length > 0) {
       const { data: users } = await supabase
@@ -124,7 +124,7 @@ export function MarketplacePage({ onViewProfile }: Props) {
     }
 
     setHasMore(data.length === PAGE_SIZE);
-    reset ? setLoading(false) : setLoadingMore(false);
+    if (reset) setLoading(false); else setLoadingMore(false);
   }, [search, filterRarity, sort, page]);
 
   useEffect(() => { loadListings(true); }, [search, filterRarity, sort]);

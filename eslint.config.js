@@ -23,6 +23,20 @@ export default tseslint.config(
         'warn',
         { allowConstantExport: true },
       ],
+      // Disable the base rule — @typescript-eslint/no-unused-vars supersedes it
+      'no-unused-vars': 'off',
+      // Respect the underscore-prefix convention for intentionally unused vars/args
+      '@typescript-eslint/no-unused-vars': ['error', {
+        varsIgnorePattern:        '^_',
+        argsIgnorePattern:        '^_',
+        caughtErrorsIgnorePattern: '^_',
+        caughtErrors:             'none', // don't flag unused catch-binding variables
+      }],
+      // Allow ternary and short-circuit expressions as statements (common React pattern)
+      'no-unused-expressions': ['error', {
+        allowTernary:      true,
+        allowShortCircuit: true,
+      }],
     },
   },
 )
