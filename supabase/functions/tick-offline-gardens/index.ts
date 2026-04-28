@@ -1,9 +1,16 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  WEATHER_MUT_CHANCE_PER_TICK,
+  THUNDERSTORM_WET_CHANCE_PER_TICK,
+  THUNDERSTORM_SHOCKED_CHANCE_PER_TICK,
+  MOONLIT_NIGHT_CHANCE_PER_TICK,
+  perMinChance,
+} from "../_shared/weatherMutationRates.ts";
 
 // ── Called by a Supabase cron schedule every minute ────────────────────────
 // Simulates offline gear auto-actions (harvest bell, auto-planter) for every
 // player who has active gear in their garden but isn't currently online.
-// Auth: requires Authorization: Bearer <CRON_SECRET>
+// Auth: requires Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY> (sent by the Supabase pg_cron job)
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -59,7 +66,7 @@ const FERT_MULT: Record<string, number> = {
 // ── Weather growth multipliers (mirrors src/data/weather.ts) ──────────────
 // Only rain and thunderstorm differ from 1.0
 const WEATHER_MULT: Record<string, number> = {
-  rain: 2.0, thunderstorm: 2.0,
+  rain: 1.5, thunderstorm: 1.5,
 };
 
 // ── Weather mutation types (mirrors src/store/gameStore.ts) ───────────────
@@ -71,27 +78,17 @@ const WEATHER_MUTATION_TYPE: Record<string, string> = {
   prismatic_skies: "rainbow",
   golden_hour:     "golden",
   tornado:         "windstruck",
-  thunderstorm:    "shocked",
+  // thunderstorm omitted — handled via two-step chain (wet→shocked) below
 };
 
-// Per-minute cumulative mutation chances = 1 - (1 - perSecondChance)^60
-// Mirrors the per-tick constants in gameStore.ts
-const WEATHER_MUTATION_CHANCE_PER_MIN: Record<string, number> = {
-  rain:            0.0443,  // 1-(1-0.00076)^60  ≈ 60% over 20-min event
-  heatwave:        0.0335,  // 1-(1-0.00057)^60  ≈ 40% over 15-min event
-  cold_front:      0.0335,
-  star_shower:     0.01268, // 1-(1-0.000213)^60 ≈ 20% over 17.5-min event
-  prismatic_skies: 0.01475, // 1-(1-0.000248)^60 ≈ 20% over 15-min event
-  golden_hour:     0.01475,
-  tornado:         1.0,     // instant — 100% on first tick
-  thunderstorm:    0.0335,  // null→wet: 0.0443; wet→shocked below
-};
-
-// Thunderstorm wet→shocked per-minute: 1-(1-0.000578)^60
-const THUNDERSTORM_SHOCKED_CHANCE_PER_MIN = 0.0341;
-
-// Moonlit chance at night outside star_shower: 1-(1-0.000019)^60
-const MOONLIT_NIGHT_CHANCE_PER_MIN = 0.001138;
+// Per-minute equivalents derived from the shared per-tick source of truth.
+// Formula: 1 - (1 - perTickChance)^60
+const WEATHER_MUTATION_CHANCE_PER_MIN: Record<string, number> = Object.fromEntries(
+  Object.entries(WEATHER_MUT_CHANCE_PER_TICK).map(([k, v]) => [k, perMinChance(v)])
+);
+const THUNDERSTORM_WET_CHANCE_PER_MIN     = perMinChance(THUNDERSTORM_WET_CHANCE_PER_TICK);
+const THUNDERSTORM_SHOCKED_CHANCE_PER_MIN = perMinChance(THUNDERSTORM_SHOCKED_CHANCE_PER_TICK);
+const MOONLIT_NIGHT_CHANCE_PER_MIN        = perMinChance(MOONLIT_NIGHT_CHANCE_PER_TICK);
 
 function isNightUTC(now: number): boolean {
   const h = new Date(now).getUTCHours();
@@ -100,6 +97,11 @@ function isNightUTC(now: number): boolean {
 
 // ── Gear range offsets ─────────────────────────────────────────────────────
 const OFFSETS_CROSS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+const OFFSETS_3X3: [number, number][] = [
+  [-1, -1], [-1, 0], [-1, 1],
+  [ 0, -1],          [ 0, 1],
+  [ 1, -1], [ 1, 0], [ 1, 1],
+];
 const OFFSETS_DIAMOND: [number, number][] = [
   [-2, 0],
   [-1, -1], [-1, 0], [-1, 1],
@@ -316,9 +318,9 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
     // Skip already-mutated plants (string = assigned; null = Giant-tried, weather can still apply)
     if (typeof plot.plant.mutation === "string") return plot;
 
-    // Thunderstorm: null → wet
-    if (weatherType === "thunderstorm" && plot.plant.mutation === null) {
-      if (Math.random() < 0.0443) {
+    // Thunderstorm: null/undefined → wet
+    if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
+      if (Math.random() < THUNDERSTORM_WET_CHANCE_PER_MIN) {
         changed = true;
         return { ...plot, plant: { ...plot.plant, mutation: "wet" } };
       }
@@ -351,16 +353,16 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  try {
-    // Verify cron secret
-    const cronSecret = Deno.env.get("CRON_SECRET");
-    const authHeader = req.headers.get("Authorization");
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
-      return new Response(JSON.stringify({ error: "Unauthorized" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+  // Verify the caller is the Supabase cron (which sends the service role key as bearer)
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  const authHeader = req.headers.get("Authorization");
+  if (!serviceRoleKey || authHeader !== `Bearer ${serviceRoleKey}`) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
 
+  try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
@@ -377,7 +379,7 @@ Deno.serve(async (req: Request) => {
         .select("type, started_at, ends_at")
         .eq("id", 1)
         .single();
-      if (wRow && wRow.started_at <= now && wRow.ends_at >= now) {
+      if (wRow && Date.parse(wRow.started_at) <= now && Date.parse(wRow.ends_at) >= now) {
         weatherType = wRow.type as string;
         weatherMult = WEATHER_MULT[weatherType] ?? 1.0;
       }
@@ -412,7 +414,7 @@ Deno.serve(async (req: Request) => {
         return !!def && !isExpired(plot.gear, now);
       });
       const hasBloomedForMutation = weatherType !== "clear" &&
-        grid.flat().some(plot => plot.plant?.bloomedAt && now >= plot.plant.bloomedAt);
+        grid.flat().some(plot => plot.plant && hasBloom(plot.plant, now, weatherMult));
       if (!hasActiveGear && !hasBloomedForMutation) continue;
 
       const original: Save = {

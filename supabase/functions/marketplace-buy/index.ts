@@ -11,6 +11,15 @@ function b64url(s: string): string {
   return t + "=".repeat((4 - t.length % 4) % 4);
 }
 
+function buildItemLabel(speciesId: string, mutation: string | null, isSeed: boolean): string {
+  const cap   = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const words = (s: string) => s.split("_").map(cap).join(" ");
+  if (speciesId.startsWith("fert:")) return words(speciesId.replace("fert:", "")) + " Fertilizer";
+  if (speciesId.startsWith("gear:")) return words(speciesId.replace("gear:", ""));
+  const base = words(speciesId);
+  return (mutation ? cap(mutation) + " " : "") + base + (isSeed ? " Seed" : "");
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -48,18 +57,23 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ── Load buyer coins + listing in parallel ────────────────────────────────
-    const [authResult, buyerCoinsResult, listingResult] = await Promise.all([
+    // ── Load buyer coins + listing + buyer profile in parallel ───────────────
+    const [authResult, buyerCoinsResult, listingResult, buyerProfileResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins")
+        .select("coins, updated_at")
         .eq("user_id", userId)
         .single(),
       supabaseAdmin
         .from("marketplace_listings")
         .select("id, seller_id, species_id, mutation, is_seed, ask_price, base_value, status")
         .eq("id", body.listingId)
+        .single(),
+      supabaseAdmin
+        .from("users")
+        .select("username")
+        .eq("id", userId)
         .single(),
     ]);
 
@@ -99,6 +113,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const priorUpdatedAt = buyerCoinsResult.data.updated_at as string;
     const newBuyerCoins = buyerCoins - listing.ask_price;
 
     const speciesId    = listing.species_id as string;
@@ -129,6 +144,9 @@ Deno.serve(async (req: Request) => {
     // ── Deliver via mailbox + deduct buyer coins + record sale in parallel ────
     const now = new Date().toISOString();
 
+    const buyerUsername = (buyerProfileResult.data as { username?: string } | null)?.username ?? "someone";
+    const itemLabel     = buildItemLabel(speciesId, listing.mutation, isSeed);
+
     const buyerMailInsert = supabaseAdmin.from("mailbox").insert({
       user_id:    userId,
       subject:    "Marketplace Purchase",
@@ -145,14 +163,17 @@ Deno.serve(async (req: Request) => {
       subject:    "Listing Sold",
       kind:       "coins",
       amount:     listing.ask_price,
-      message:    "",
+      message:    `${itemLabel} purchased by ${buyerUsername}.`,
       created_at: now,
     });
 
     const buyerCoinUpdate = supabaseAdmin
       .from("game_saves")
       .update({ coins: newBuyerCoins, updated_at: now })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("updated_at", priorUpdatedAt)
+      .select("updated_at")
+      .single();
 
     const saleRecord = supabaseAdmin.from("marketplace_sales").insert({
       species_id: speciesId,
@@ -178,10 +199,10 @@ Deno.serve(async (req: Request) => {
     if (saleResult.error) {
       console.error("marketplace-buy: sale record failed", saleResult.error);
     }
-    if (coinResult.error) {
+    if (coinResult.error || !coinResult.data) {
       console.error("marketplace-buy: buyer coin update failed", coinResult.error);
-      return new Response(JSON.stringify({ error: "Failed to update save" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

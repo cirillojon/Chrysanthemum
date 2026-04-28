@@ -49,6 +49,8 @@ interface GameContextValue {
   ) => Promise<void>;
   /** Returns a promise that resolves once all currently-queued serialized harvests have completed. */
   awaitHarvests: () => Promise<unknown>;
+  /** Attach an async operation to the serialized harvest queue so signOut() waits for it. */
+  queueWork: (fn: () => Promise<void>) => void;
   offlineSummary: OfflineSummary;
   clearSummary: () => void;
   shopJustRestocked: boolean;
@@ -65,6 +67,7 @@ interface GameContextValue {
   refreshProfile: () => Promise<void>;
   needsUsername: boolean;
   completeUsername: (username: string) => void;
+  isStaleTab: boolean;
   // Weather
   activeWeather: WeatherType;
   weatherMsLeft: number;
@@ -86,10 +89,10 @@ const EMPTY_SUMMARY: OfflineSummary = {
   supplyRestocked: false,
 };
 
-// Reject local saves whose lastSaved is more than 30 s in the future.
+// Reject local saves whose lastSaved is more than 1 s in the future.
 // This directly closes the exploit where a user sets lastSaved = Date.now() + 60_000
 // to force their manipulated localStorage to override the authoritative cloud save.
-const CLOCK_SKEW_TOLERANCE_MS = 30_000;
+const CLOCK_SKEW_TOLERANCE_MS = 1_000;
 function isTamperedTimestamp(lastSaved: number): boolean {
   return lastSaved > Date.now() + CLOCK_SKEW_TOLERANCE_MS;
 }
@@ -110,6 +113,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const loadedFor           = useRef<string | null>(null);
   const initialSessionFired = useRef(false);
   const stateRef            = useRef(state);
+  const tabId               = useRef(crypto.randomUUID());
+  // Incremented on every sign-out so in-flight loadUserSession calls know to discard their results.
+  const loadGen             = useRef(0);
+  const [isStaleTab, setIsStaleTab] = useState(false);
 
   // Weather — global, shared across all players via Supabase Realtime
   const { activeType: activeWeather, isActive: weatherIsActive, msLeft: weatherMsLeft, msUntilNext: weatherMsUntilNext, forecast: weatherForecast } = useWeather();
@@ -125,6 +132,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setAuthLoading(false);
       return;
     }
+
+    // Stamp this load with the current generation. Any sign-out that fires
+    // while we're awaiting will increment loadGen, letting us discard stale results
+    // and prevent a finished loadUserSession from overwriting the cleared state.
+    const gen = loadGen.current;
 
     isLoading.current   = true;
     saveEnabled.current = false;
@@ -145,9 +157,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
     loadedFor.current = u.id;
     setUser(u);
+    // Claim this tab as the active session — other open tabs will detect this
+    // via the storage event and disable their saves to prevent data races.
+    localStorage.setItem(`chrysanthemum_active_tab_${u.id}`, tabId.current);
 
     try {
       const p = await getProfile(u.id);
+      if (loadGen.current !== gen) return; // sign-out fired while we were loading — discard
 
       if (!p) {
         setNeedsUsername(true);
@@ -159,6 +175,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setProfile(p);
 
       const cloudSave = await loadCloudSave(u.id);
+      if (loadGen.current !== gen) return; // sign-out fired — discard
+
       const localRaw  = localStorage.getItem("chrysanthemum_save");
       const localParsed = localRaw ? (JSON.parse(localRaw) as GameState & { _userId?: string }) : null;
 
@@ -199,6 +217,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         }
       } catch { /* non-critical — offline tick still runs without weather bonus */ }
 
+      if (loadGen.current !== gen) return; // sign-out fired — discard
+
       const { state: ticked, summary } = applyOfflineTick(saveToUse, offlineWeather);
       setState(ticked);
       setOfflineSummary(summary);
@@ -212,10 +232,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // the DB can be out of sync with the client, causing plant-seed / harvest
       // edge functions to see stale occupied / empty plots.
       await saveToCloud(u.id, ticked);
+      if (loadGen.current !== gen) return; // sign-out fired after cloud write — don't re-enable saves
 
       setTimeout(() => { saveEnabled.current = true; }, 1_000);
 
     } catch (e) {
+      if (loadGen.current !== gen) return; // sign-out fired — discard
       const { state: localState, summary } = loadGame();
       setState(localState);
       setOfflineSummary(summary);
@@ -243,6 +265,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (event === "SIGNED_OUT") {
+          loadGen.current++;           // invalidate any in-flight loadUserSession
           isLoading.current            = false;
           loadedFor.current            = null;
           initialSessionFired.current  = false;
@@ -282,6 +305,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // ── Single-session enforcement ────────────────────────────────────────────
+  // When a second tab logs in as the same user it writes a new tabId to
+  // localStorage. The storage event fires in every OTHER tab, allowing this
+  // tab to detect it's been superseded and disable its saves.
+  useEffect(() => {
+    if (!user) return;
+    function handleStorage(e: StorageEvent) {
+      if (e.key === `chrysanthemum_active_tab_${user!.id}` && e.newValue !== tabId.current) {
+        saveEnabled.current = false;
+        setIsStaleTab(true);
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [user]);
+
   // ── Auto-save ─────────────────────────────────────────────────────────────
   // Signed-in users: writes are now owned by Edge Functions (server-authoritative).
   // We keep a localStorage shadow only so the correct save can be recovered if a
@@ -289,6 +328,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // Guest users: still write to localStorage as before.
   useEffect(() => {
     if (!saveEnabled.current) return;
+    if (isStaleTab) return;
     if (user && !needsUsername) {
       try {
         localStorage.setItem(
@@ -363,6 +403,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // so concurrent DB reads/writes don't overwrite each other's grid changes.
   const harvestQueue = useRef<Promise<unknown>>(Promise.resolve());
   const awaitHarvests = useCallback(() => harvestQueue.current, []);
+  const queueWork = useCallback((fn: () => Promise<void>) => {
+    harvestQueue.current = harvestQueue.current.then(fn).catch(() => {});
+  }, []);
 
   const perform = useCallback(async <T extends Partial<GameState>>(
     optimisticState: GameState,
@@ -383,9 +426,30 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const doServer = async () => {
       try {
         const result = await serverFn();
-        // Merge server delta into whatever state is current at reconcile time
-        // (avoids stomping growth ticks that fired during the network round-trip)
-        setState((cur) => ({ ...cur, ...result, ok: undefined }));
+        setState((cur) => {
+          const merged = { ...cur, ...result, ok: undefined } as GameState;
+          // When the server returns a full grid, preserve client-side plant mutations
+          // (weather/sprinkler mutations are applied locally and not yet written to the DB).
+          // Identify the same plant by speciesId + timePlanted so we never copy a
+          // mutation onto a different plant (e.g. after a harvest + re-plant).
+          if (result.grid) {
+            merged.grid = result.grid.map((row, ri) =>
+              row.map((plot, ci) => {
+                if (!plot.plant) return plot;
+                const curPlot = cur.grid[ri]?.[ci];
+                if (!curPlot?.plant) return plot;
+                if (
+                  plot.plant.speciesId   === curPlot.plant.speciesId &&
+                  plot.plant.timePlanted === curPlot.plant.timePlanted
+                ) {
+                  return { ...plot, plant: { ...plot.plant, mutation: curPlot.plant.mutation } };
+                }
+                return plot;
+              })
+            );
+          }
+          return merged;
+        });
         onSuccess?.(result);
       } catch (err) {
         console.error("Action failed, rolling back:", err);
@@ -448,12 +512,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   async function signOut() {
     saveEnabled.current = false;
+    // Flush any pending serialized operations (plant-seed, harvest, etc.) before
+    // invalidating the session — otherwise in-flight edge function calls fail mid-queue,
+    // their DB writes are lost, and the cloud save ends up behind the local state.
+    await harvestQueue.current;
     await supabase.auth.signOut();
   }
 
   return (
     <GameContext.Provider value={{
-      state, update, getState, perform, awaitHarvests,
+      state, update, getState, perform, awaitHarvests, queueWork,
       offlineSummary, clearSummary: () => setOfflineSummary(EMPTY_SUMMARY),
       shopJustRestocked,   clearShopNotification:   () => setShopJustRestocked(false),
       supplyJustRestocked, clearSupplyNotification: () => setSupplyJustRestocked(false),
@@ -462,6 +530,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       signInWithGoogle, signOut,
       refreshProfile,
       needsUsername, completeUsername,
+      isStaleTab,
       activeWeather,
       weatherMsLeft,
       weatherMsUntilNext,

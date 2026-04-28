@@ -68,11 +68,11 @@ export const WEATHER: Record<WeatherType, WeatherDefinition> = {
     id:              "rain",
     name:            "Rain",
     emoji:           "🌧️",
-    description:     "Plants grow 2× faster while it rains.",
+    description:     "Plants grow 1.5× faster while it rains.",
     durationMs:      20 * 60_000,   // 20 minutes
     chance:          20,
     cooldownMs:      30 * 60_000,
-    growthMultiplier: 2.0,
+    growthMultiplier: 1.5,
     visual: {
       overlayColor:  "bg-blue-900/10",
       particleEmoji: "💧",
@@ -172,11 +172,11 @@ export const WEATHER: Record<WeatherType, WeatherDefinition> = {
     id:              "thunderstorm",
     name:            "Thunderstorm",
     emoji:           "⛈️",
-    description:     "Plants grow 2× faster, but visibility is low.",
+    description:     "Plants grow 1.5× faster, but visibility is low.",
     durationMs:      20 * 60_000,   // 20 minutes
     chance:          8,
     cooldownMs:      60 * 60_000,
-    growthMultiplier: 2.0,
+    growthMultiplier: 1.5,
     visual: {
       overlayColor:  "bg-slate-900/30",
       particleEmoji: "⚡",

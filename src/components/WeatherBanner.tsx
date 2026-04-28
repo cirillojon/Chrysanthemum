@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { WEATHER } from "../data/weather";
 import type { WeatherType } from "../data/weather";
 import type { DayPeriodDefinition } from "../data/dayNight";
@@ -60,17 +59,6 @@ const bgClass: Record<WeatherType, string> = {
 };
 
 export function WeatherBanner({ weatherType, isActive, msLeft, period }: Props) {
-  const [timeLeft, setTimeLeft] = useState(msLeft);
-
-  useEffect(() => {
-    setTimeLeft(msLeft);
-    if (!isActive) return;
-    const id = setInterval(() => {
-      setTimeLeft((prev) => Math.max(0, prev - 1_000));
-    }, 1_000);
-    return () => clearInterval(id);
-  }, [msLeft, isActive]);
-
   const def = WEATHER[weatherType];
   const weatherActive = isActive && weatherType !== "clear";
 
@@ -93,8 +81,8 @@ export function WeatherBanner({ weatherType, isActive, msLeft, period }: Props) 
           <span className="opacity-40">·</span>
           <span className="text-sm">{def.emoji}</span>
           <span className="font-semibold hidden">{SHORT_NAMES[weatherType]}</span>
-          <span className="opacity-70 sm:hidden">{formatTimeLeftShort(timeLeft)}</span>
-          <span className="opacity-70 hidden sm:inline">{formatTimeLeft(timeLeft)}</span>
+          <span className="opacity-70 sm:hidden">{formatTimeLeftShort(msLeft)}</span>
+          <span className="opacity-70 hidden sm:inline">{formatTimeLeft(msLeft)}</span>
         </>
       )}
 

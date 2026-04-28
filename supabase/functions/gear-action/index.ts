@@ -14,8 +14,9 @@ function b64url(s: string): string {
 // ── Types (mirror src/data/gear.ts + src/store/gameStore.ts) ─────────────────
 
 type PlacedGear = {
-  gearType:          string;
-  placedAt:          number;
+  gearType:           string;
+  placedAt:           number;
+  direction?:         string;
   storedFertilizers?: string[];
 };
 
@@ -60,15 +61,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json() as {
-      action:    "place" | "remove" | "collect";
-      row:       number;
-      col:       number;
-      gearType?: string;
+      action:     "place" | "remove" | "collect" | "set_direction";
+      row:        number;
+      col:        number;
+      gearType?:  string;
+      direction?: string;
     };
 
     const { action, row, col } = body;
-    if (!["place", "remove", "collect"].includes(action)) {
-      return err("Invalid action — use place | remove | collect");
+    if (!["place", "remove", "collect", "set_direction"].includes(action)) {
+      return err("Invalid action — use place | remove | collect | set_direction");
     }
 
     const supabaseAdmin = createClient(
@@ -78,9 +80,9 @@ Deno.serve(async (req: Request) => {
 
     // Select only the columns each action needs
     const selectCols =
-      action === "collect" ? "grid, fertilizers"       :
-      action === "remove"  ? "grid, gear_inventory, fertilizers" :
-                             "grid, gear_inventory";
+      action === "collect" ? "grid, fertilizers, updated_at"       :
+      action === "remove"  ? "grid, gear_inventory, fertilizers, updated_at" :
+                             "grid, gear_inventory, updated_at";
 
     const [authResult, saveResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
@@ -95,6 +97,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const save = saveResult.data;
+    const priorUpdatedAt = save.updated_at as string;
     let grid          = (save.grid          ?? []) as GridCell[][];
     let gearInventory = (save.gear_inventory ?? []) as GearInvItem[];
     let fertilizers   = (save.fertilizers   ?? []) as FertItem[];
@@ -104,7 +107,7 @@ Deno.serve(async (req: Request) => {
 
     // ── place ─────────────────────────────────────────────────────────────────
     if (action === "place") {
-      const { gearType } = body;
+      const { gearType, direction } = body;
       if (!gearType)              return err("gearType required");
       if (cell.plant)             return err("Cell has a plant");
       if (cell.gear)              return err("Cell already has gear");
@@ -113,10 +116,13 @@ Deno.serve(async (req: Request) => {
       if (!invItem || invItem.quantity < 1) return err("Gear not in inventory");
 
       const placedAt = Date.now();
+      const placedGear: PlacedGear = direction
+        ? { gearType, placedAt, direction }
+        : { gearType, placedAt };
       grid = grid.map((r, ri) =>
         r.map((p, ci) =>
           ri === row && ci === col
-            ? { ...p, gear: { gearType, placedAt } }
+            ? { ...p, gear: placedGear }
             : p
         )
       );
@@ -124,12 +130,15 @@ Deno.serve(async (req: Request) => {
         .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)
         .filter((g) => g.quantity > 0);
 
-      const { error: ue } = await supabaseAdmin
+      const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
         .update({ grid, gear_inventory: gearInventory, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
 
-      if (ue) return err("Failed to save", 500);
+      if (ue || !ud) return err("Save was modified by another action", 409);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_place",
@@ -140,21 +149,18 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── remove ────────────────────────────────────────────────────────────────
+    // Removal destroys the gear (no refund) — closes the duration-reset exploit
+    // where players could remove near-expiry gear and re-place it fresh.
+    // Stored fertilizers from composters are still returned since the player earned them.
     if (action === "remove") {
       if (!cell.gear) return err("No gear at this cell");
 
-      const { gearType }  = cell.gear;
-      const stored        = cell.gear.storedFertilizers ?? [];
+      const { gearType } = cell.gear;
+      const stored      = cell.gear.storedFertilizers ?? [];
 
       grid = grid.map((r, ri) =>
         r.map((p, ci) => ri === row && ci === col ? { ...p, gear: null } : p)
       );
-
-      // Return gear to inventory
-      const existing = gearInventory.find((g) => g.gearType === gearType);
-      gearInventory = existing
-        ? gearInventory.map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g)
-        : [...gearInventory, { gearType, quantity: 1 }];
 
       // Return any stored fertilizers (composter)
       for (const fertType of stored) {
@@ -164,16 +170,19 @@ Deno.serve(async (req: Request) => {
           : [...fertilizers, { type: fertType, quantity: 1 }];
       }
 
-      const { error: ue } = await supabaseAdmin
+      const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
-        .update({ grid, gear_inventory: gearInventory, fertilizers, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+        .update({ grid, fertilizers, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
 
-      if (ue) return err("Failed to save", 500);
+      if (ue || !ud) return err("Save was modified by another action", 409);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_remove",
-        payload: { gearType, row, col }, result: { storedReturned: stored.length },
+        payload: { gearType, row, col }, result: { storedReturned: stored.length, gearDestroyed: true },
       });
 
       return json({ ok: true, grid, gearInventory, fertilizers });
@@ -202,12 +211,15 @@ Deno.serve(async (req: Request) => {
           : [...fertilizers, { type: fertType, quantity: 1 }];
       }
 
-      const { error: ue } = await supabaseAdmin
+      const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
         .update({ grid, fertilizers, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
 
-      if (ue) return err("Failed to save", 500);
+      if (ue || !ud) return err("Save was modified by another action", 409);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_collect",
@@ -215,6 +227,33 @@ Deno.serve(async (req: Request) => {
       });
 
       return json({ ok: true, grid, fertilizers });
+    }
+
+    // ── set_direction (fan) ───────────────────────────────────────────────────
+    if (action === "set_direction") {
+      const { direction } = body;
+      if (!direction) return err("direction required");
+      if (!cell.gear)  return err("No gear at this cell");
+
+      grid = grid.map((r, ri) =>
+        r.map((p, ci) =>
+          ri === row && ci === col
+            ? { ...p, gear: { ...p.gear!, direction } }
+            : p
+        )
+      );
+
+      const { data: ud, error: ue } = await supabaseAdmin
+        .from("game_saves")
+        .update({ grid, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
+
+      if (ue || !ud) return err("Save was modified by another action", 409);
+
+      return json({ ok: true, grid });
     }
 
     return err("Unhandled action");

@@ -143,7 +143,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, inventory, fertilizers, gear_inventory, marketplace_slots")
+        .select("coins, inventory, fertilizers, gear_inventory, marketplace_slots, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -161,6 +161,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const save = saveResult.data;
+    const priorUpdatedAt = save.updated_at as string;
     console.log("save loaded:", JSON.stringify({ coins: save.coins, marketplace_slots: save.marketplace_slots, action: body.action }));
     let coins             = save.coins as number;
     let newInventory      = [...(save.inventory ?? []) as InventoryItem[]];
@@ -185,14 +186,17 @@ Deno.serve(async (req: Request) => {
       coins -= next.cost;
       marketplaceSlots = next.slots;
 
-      const { error: updateError } = await supabaseAdmin
+      const { data: updateData, error: updateError } = await supabaseAdmin
         .from("game_saves")
         .update({ coins, marketplace_slots: marketplaceSlots, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
 
-      if (updateError) {
-        return new Response(JSON.stringify({ error: "Failed to save" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      if (updateError || !updateData) {
+        return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 
@@ -204,8 +208,8 @@ Deno.serve(async (req: Request) => {
 
     // ── create_listing ────────────────────────────────────────────────────────
     if (body.action === "create_listing") {
-      if (typeof body.askPrice !== "number" || body.askPrice < 1) {
-        return new Response(JSON.stringify({ error: "askPrice required" }), {
+      if (!Number.isInteger(body.askPrice) || body.askPrice < 1) {
+        return new Response(JSON.stringify({ error: "askPrice must be a positive integer" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -282,16 +286,19 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        const { error: updateError } = await supabaseAdmin
+        const { data: updateData, error: updateError } = await supabaseAdmin
           .from("game_saves")
           .update({ coins, fertilizers: newFertilizers, updated_at: new Date().toISOString() })
-          .eq("user_id", userId);
+          .eq("user_id", userId)
+          .eq("updated_at", priorUpdatedAt)
+          .select("updated_at")
+          .single();
 
-        if (updateError) {
+        if (updateError || !updateData) {
           console.error("save update failed:", updateError);
           await supabaseAdmin.from("marketplace_listings").delete().eq("id", listing.id);
-          return new Response(JSON.stringify({ error: "Failed to save" }), {
-            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+            status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
@@ -349,16 +356,19 @@ Deno.serve(async (req: Request) => {
           });
         }
 
-        const { error: updateError } = await supabaseAdmin
+        const { data: updateData2, error: updateError2 } = await supabaseAdmin
           .from("game_saves")
           .update({ coins, gear_inventory: newGearInventory, updated_at: new Date().toISOString() })
-          .eq("user_id", userId);
+          .eq("user_id", userId)
+          .eq("updated_at", priorUpdatedAt)
+          .select("updated_at")
+          .single();
 
-        if (updateError) {
-          console.error("save update failed:", updateError);
+        if (updateError2 || !updateData2) {
+          console.error("save update failed:", updateError2);
           await supabaseAdmin.from("marketplace_listings").delete().eq("id", listing.id);
-          return new Response(JSON.stringify({ error: "Failed to save" }), {
-            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+            status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
 
@@ -421,16 +431,19 @@ Deno.serve(async (req: Request) => {
       }
 
       // Update save
-      const { error: updateError } = await supabaseAdmin
+      const { data: updateData3, error: updateError3 } = await supabaseAdmin
         .from("game_saves")
         .update({ coins, inventory: newInventory, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
 
-      if (updateError) {
-        console.error("save update failed:", updateError);
+      if (updateError3 || !updateData3) {
+        console.error("save update failed:", updateError3);
         await supabaseAdmin.from("marketplace_listings").delete().eq("id", listing.id);
-        return new Response(JSON.stringify({ error: "Failed to save" }), {
-          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
 

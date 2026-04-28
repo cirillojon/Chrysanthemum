@@ -224,7 +224,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   sprinkler_lightning: {
     id:                    "sprinkler_lightning",
     name:                  "Generator",
-    description:           "50% chance per hour to apply Shocked to nearby blooms. Lasts 2 hours.",
+    description:           "50% chance per hour to apply Shocked to nearby wet blooms. Pair with a Sprinkler to wet them first. Lasts 2 hours.",
     emoji:                 "🔋",
     rarity:                "mythic",
     shopPrice:             50_000,

@@ -9,10 +9,31 @@ import type { FertilizerType } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearType } from "../data/gear";
 import { useGame } from "../store/GameContext";
-import { codexKey } from "../store/gameStore";
+import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
+import {
+  WEATHER_MUT_CHANCE_PER_TICK,
+  THUNDERSTORM_WET_CHANCE_PER_TICK,
+  THUNDERSTORM_SHOCKED_CHANCE_PER_TICK,
+  MOONLIT_NIGHT_CHANCE_PER_TICK,
+} from "../data/weatherMutationRates";
 
-const DURATION_MS = 30_000;
+const DURATION_MS = 600_000; // 10 min — long enough for the offline cron to fire multiple times
+
+const CHART_ROWS: Array<{
+  label: string; mutLabel: string; perTick: number; ticks: number; bar: string;
+}> = [
+  { label: "🌧️ Rain",        mutLabel: "💧 wet",         perTick: WEATHER_MUT_CHANCE_PER_TICK["rain"],            ticks: 1200,  bar: "bg-blue-400"    },
+  { label: "⛈️ Storm",       mutLabel: "💧 → wet",       perTick: THUNDERSTORM_WET_CHANCE_PER_TICK,               ticks: 1200,  bar: "bg-blue-400"    },
+  { label: "⛈️ Storm",       mutLabel: "⚡ wet→shocked",  perTick: THUNDERSTORM_SHOCKED_CHANCE_PER_TICK,           ticks: 1200,  bar: "bg-yellow-300"  },
+  { label: "🔥 Heatwave",    mutLabel: "🔥 scorched",    perTick: WEATHER_MUT_CHANCE_PER_TICK["heatwave"],         ticks: 900,   bar: "bg-orange-400"  },
+  { label: "❄️ Cold Front",  mutLabel: "❄️ frozen",      perTick: WEATHER_MUT_CHANCE_PER_TICK["cold_front"],       ticks: 900,   bar: "bg-cyan-400"    },
+  { label: "✨ Golden Hr",   mutLabel: "✨ golden",       perTick: WEATHER_MUT_CHANCE_PER_TICK["golden_hour"],      ticks: 900,   bar: "bg-amber-300"   },
+  { label: "🌈 Prismatic",   mutLabel: "🌈 rainbow",     perTick: WEATHER_MUT_CHANCE_PER_TICK["prismatic_skies"],  ticks: 900,   bar: "bg-fuchsia-400" },
+  { label: "🌙 Star Shower", mutLabel: "🌙 moonlit",     perTick: WEATHER_MUT_CHANCE_PER_TICK["star_shower"],      ticks: 1050,  bar: "bg-indigo-400"  },
+  { label: "🌪️ Tornado",     mutLabel: "🌪️ windstruck",  perTick: WEATHER_MUT_CHANCE_PER_TICK["tornado"],          ticks: 600,   bar: "bg-stone-400"   },
+  { label: "🌙 Night",       mutLabel: "🌙 moonlit",     perTick: MOONLIT_NIGHT_CHANCE_PER_TICK,                   ticks: 36000, bar: "bg-indigo-300"  },
+];
 
 async function setWeather(type: WeatherType) {
   await supabase.rpc("dev_set_weather", { p_type: type, p_duration_ms: DURATION_MS });
@@ -28,6 +49,9 @@ export function DevWeatherPanel() {
   const [current, setCurrent]   = useState<WeatherType | null>(null);
   const cycleRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   const weatherTypes            = WEATHER_LIST.map((w) => w.id);
+  const [mutMult, setMutMult]         = useState(getDevMutationMultiplier());
+  const [growthDebug, setGrowthDebug] = useState(getDevShowGrowthDebug());
+  const [showRates, setShowRates]     = useState(false);
 
   // ── Items tab state ────────────────────────────────────────────────────────
   const [tab, setTab]               = useState<Tab>("weather");
@@ -228,14 +252,6 @@ export function DevWeatherPanel() {
       {/* ── WEATHER TAB ─────────────────────────────────────────────────────── */}
       {tab === "weather" && (
         <>
-          <div className="flex items-center justify-between mb-2">
-            {cycling && (
-              <button onClick={stopCycle} className="text-red-400 hover:text-red-300 font-semibold ml-auto">
-                ✕ Stop
-              </button>
-            )}
-          </div>
-
           <div className="grid grid-cols-3 gap-1.5 mb-3">
             {weatherTypes.map((type) => {
               const def = WEATHER[type];
@@ -258,18 +274,117 @@ export function DevWeatherPanel() {
             })}
           </div>
 
+          <div className="flex gap-1.5 mb-2">
+            <button
+              onClick={cycling ? stopCycle : startCycle}
+              className={`
+                flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all text-center
+                ${cycling
+                  ? "bg-red-500/20 border border-red-500/50 text-red-400"
+                  : "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/30"
+                }
+              `}
+            >
+              {cycling ? `⏹ Stop (${WEATHER[current!]?.name ?? "…"})` : "▶ Auto-cycle (30s)"}
+            </button>
+            <button
+              onClick={async () => {
+                await supabase.rpc("dev_force_advance_weather");
+                showToast("Skipped to next weather");
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-blue-400/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-all"
+              title="Advance forecast queue to next slot"
+            >
+              ⏭ Skip
+            </button>
+          </div>
+
+          {/* Mutation rate multiplier */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">
+              Mutation Rate ×{mutMult}
+            </p>
+            <div className="flex gap-1.5 items-center">
+              <input
+                type="range"
+                min={1}
+                max={500}
+                value={mutMult}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value);
+                  setMutMult(v);
+                  setDevMutationMultiplier(v);
+                }}
+                className="flex-1 accent-yellow-400"
+              />
+              <button
+                onClick={() => { setMutMult(1); setDevMutationMultiplier(1); }}
+                className="text-[10px] text-white/40 hover:text-white/70 transition-colors"
+              >
+                Reset
+              </button>
+            </div>
+            <p className="text-[9px] text-white/30 font-mono">
+              Multiplies client-side weather mutation chances
+            </p>
+          </div>
+
+          {/* Growth debug overlay toggle */}
           <button
-            onClick={cycling ? stopCycle : startCycle}
-            className={`
-              w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center block
-              ${cycling
-                ? "bg-red-500/20 border border-red-500/50 text-red-400"
-                : "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/30"
-              }
-            `}
+            onClick={() => {
+              const v = !growthDebug;
+              setGrowthDebug(v);
+              setDevShowGrowthDebug(v);
+            }}
+            className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center mt-2
+              ${growthDebug
+                ? "bg-cyan-500/20 border border-cyan-400/50 text-cyan-300"
+                : "bg-white/5 border border-white/10 text-white/50 hover:text-white/70"
+              }`}
           >
-            {cycling ? `⏹ Stop cycle (on: ${WEATHER[current!]?.name ?? "…"})` : "▶ Auto-cycle all (30s each)"}
+            🔬 Growth Debug {growthDebug ? "ON" : "OFF"}
           </button>
+
+          {/* Manual offline tick trigger */}
+          <button
+            onClick={async () => {
+              const { data, error } = await supabase.functions.invoke("tick-offline-gardens");
+              if (error) { showToast(`✗ ${error.message}`); return; }
+              const d = data as { ok: boolean; scanned?: number; changed?: number; error?: string };
+              showToast(d.ok ? `✓ scanned ${d.scanned}, changed ${d.changed}` : `✗ ${d.error}`);
+            }}
+            className="w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center mt-1 bg-white/5 border border-white/10 text-white/50 hover:text-white/70"
+          >
+            🔄 Trigger Offline Tick
+          </button>
+
+          {/* Mutation rates chart */}
+          <button
+            onClick={() => setShowRates(r => !r)}
+            className="w-full mt-2 py-1 rounded-lg text-[10px] font-semibold bg-white/5 border border-white/10 text-white/50 hover:text-white/70 transition-all text-center"
+          >
+            📊 Mutation Rates {showRates ? "▲" : "▼"}
+          </button>
+
+          {showRates && (
+            <div className="mt-2 space-y-2">
+              {CHART_ROWS.map(({ label, mutLabel, perTick, ticks, bar }) => {
+                const pct = (1 - Math.pow(1 - perTick, ticks)) * 100;
+                return (
+                  <div key={`${label}-${mutLabel}`}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-white/60 text-[9px]">{label} → {mutLabel}</span>
+                      <span className="font-mono text-[9px] text-white/50">{pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-1">
+                      <div className={`${bar} h-1 rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-white/25 text-[8px] text-center pt-0.5">chance over full event · bloomed plants only</p>
+            </div>
+          )}
         </>
       )}
 

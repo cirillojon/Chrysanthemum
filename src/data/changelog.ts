@@ -14,6 +14,36 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.2.1",
+    title:   "Security & Bug Fixes",
+    items: [
+      { type: "fixed",   text: "Harvest mutation is now assigned entirely server-side — client-supplied mutation IDs are no longer accepted, closing the forced-mutation exploit" },
+      { type: "fixed",   text: "Codex discovery is now derived server-side from your real inventory — client-supplied discovery data is ignored, preventing fake codex completion" },
+      { type: "fixed",   text: "Marketplace listing fee exploit fixed — ask price is validated as a positive integer; NaN prices no longer bypass the 5% fee" },
+      { type: "fixed",   text: "Timestamp manipulation exploit closed — local saves more than 1 second ahead of server time are now rejected (down from 30 s)" },
+      { type: "fixed",   text: "Gear duration-reset exploit fixed — removing placed gear now destroys it permanently; composters still return stored fertilizers before removal" },
+      { type: "fixed",   text: "Sprinkler mutations (Scorched, Frozen, Shocked, Moonlit, Gilded, Rainbow) were not applying to nearby bloomed plants — now fixed" },
+      { type: "fixed",   text: "Mutation sprinkler tooltip now correctly shows which mutation type the sprinkler targets" },
+      { type: "fixed",   text: "Fan direction chosen at placement is now saved to the server — it was previously discarded, leaving the fan directionless until manually reset (#103)" },
+      { type: "fixed",   text: "Changing fan direction from the plot tooltip is now persisted to the server and survives a page reload" },
+      { type: "fixed",   text: "Gear tile animations now appear mid-motion on placement — particles no longer start from the edge and travel visibly from scratch (#106)" },
+      { type: "fixed",   text: "Plot tooltip time remaining now correctly factors in sprinkler and grow lamp speed boosts and updates live as weather and gear change (#104)" },
+      { type: "fixed",   text: "Signing out during Plant All or harvest no longer loses progress — sign-out waits for all pending server writes before invalidating the session" },
+      { type: "fixed",   text: "Signing in and immediately signing out no longer leaves stale account data visible on screen" },
+      { type: "fixed",   text: "Opening a second tab or device now disables saves on the older session to prevent data races — a banner prompts a refresh" },
+      { type: "fixed",   text: "Advancing weather now correctly appends the next event to the forecast queue instead of overwriting it" },
+      { type: "fixed",   text: "Expired marketplace listings are now reliably cleaned up; items are correctly returned to the seller's inventory" },
+      { type: "fixed",   text: "Sellers now receive a mailbox notification when a buyer purchases their listing" },
+      { type: "fixed",   text: "Mail items no longer display a rarity border; opening one mail now collapses any previously open mail" },
+      { type: "changed", text: "Rain and thunderstorm Wet mutation chance raised to ~70% over the event duration" },
+      { type: "changed", text: "Tornado Windstruck mutation is now ~70% over the tornado's duration instead of instant" },
+      { type: "changed", text: "Moonlit Night mutation chance reduced to ~15% over a 10-hour night" },
+      { type: "changed", text: "Wet mutation sell-value multiplier reduced from 1.5× to 1.25×" },
+      { type: "changed", text: "Thunderstorm Shocked mutation can only apply to plants already carrying Wet — the direct unmutated → Shocked path has been removed" },
+      { type: "changed", text: "Gift rate per sender is now capped to prevent leaderboard farming via alt accounts" },
+    ],
+  },
+  {
     version: "2.2.0",
     title:   "The Gear Update",
     items: [

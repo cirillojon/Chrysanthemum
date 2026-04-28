@@ -4,6 +4,12 @@ import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
 import {
+  WEATHER_MUT_CHANCE_PER_TICK,
+  THUNDERSTORM_WET_CHANCE_PER_TICK,
+  THUNDERSTORM_SHOCKED_CHANCE_PER_TICK,
+  MOONLIT_NIGHT_CHANCE_PER_TICK,
+} from "../data/weatherMutationRates";
+import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
   isScarecrow, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
@@ -950,25 +956,7 @@ export function stampStageTransitions(
   return changed ? { ...state, grid: newGrid } : state;
 }
 
-// ── Mutation tick rates ────────────────────────────────────────────────────
-// Per-tick chances (tick = 5 s, weather event ≈ 15 min = 180 ticks)
-// Per-tick rates (tick ≈ 1 s).  Formula: p = 1 − (1 − target)^(1/ticks)
-// Rain            20 min  = 1200 ticks → 60% over event
-// Heatwave        15 min  =  900 ticks → 40% over event
-// Cold Front      15 min  =  900 ticks → 40% over event
-// Star Shower   17.5 min  = 1050 ticks → 20% over event
-// Prismatic       15 min  =  900 ticks → 20% over event
-// Golden Hour     15 min  =  900 ticks → 20% over event
-const WEATHER_MUTATION_CHANCE: Partial<Record<WeatherType, number>> = {
-  rain:            0.00076,  // 60% over 20-min event
-  heatwave:        0.00057,  // 40% over 15-min event
-  cold_front:      0.00057,  // 40% over 15-min event
-  star_shower:     0.000213, // 20% over 17.5-min event
-  prismatic_skies: 0.000248, // 20% over 15-min event
-  golden_hour:     0.000248, // 20% over 15-min event
-  tornado:         1.0,      // 100% — instant on first tick, all bloomed flowers hit
-  thunderstorm:    0.00057,  // 40% over 20-min event (normal shocked roll for non-wet plants)
-};
+const WEATHER_MUTATION_CHANCE = WEATHER_MUT_CHANCE_PER_TICK as Partial<Record<WeatherType, number>>;
 
 const WEATHER_MUTATION_TYPE: Partial<Record<WeatherType, MutationType>> = {
   rain:            "wet",
@@ -978,10 +966,23 @@ const WEATHER_MUTATION_TYPE: Partial<Record<WeatherType, MutationType>> = {
   prismatic_skies: "rainbow",
   golden_hour:     "golden",
   tornado:         "windstruck",
-  thunderstorm:    "shocked",
+  // thunderstorm is handled via a two-step chain (wet → shocked) below, not a direct shocked roll
 };
 
-const MOONLIT_NIGHT_CHANCE = 0.000019; // 50% over a 10-hour night (1 - 0.5^(1/36000))
+const MOONLIT_NIGHT_CHANCE = MOONLIT_NIGHT_CHANCE_PER_TICK;
+
+// Dev-only runtime multiplier for weather mutation chances.
+// Default 1 (no change). Set higher via DevWeatherPanel to test mutations instantly.
+let _devMutationMultiplier = 1;
+export function setDevMutationMultiplier(x: number) { _devMutationMultiplier = Math.max(0, x); }
+export function getDevMutationMultiplier() { return _devMutationMultiplier; }
+
+let _devShowGrowthDebug = false;
+export function setDevShowGrowthDebug(v: boolean) {
+  _devShowGrowthDebug = v;
+  window.dispatchEvent(new CustomEvent("devGrowthDebugToggle", { detail: v }));
+}
+export function getDevShowGrowthDebug() { return _devShowGrowthDebug; }
 const GIANT_BLOOM_CHANCE   = 0.08;   // 8% flat, only at bloom transition
 
 function isNighttime(): boolean {
@@ -1017,9 +1018,11 @@ export function tickWeatherMutations(
       const hasScarecrow = scarecrowSources.some(({ def }) => isScarecrow(def));
       if (hasScarecrow) return plot;
 
+      const m = _devMutationMultiplier;
+
       // Thunderstorm combo: wet flowers have a ~50% chance to become shocked
       if (weatherType === "thunderstorm" && plot.plant.mutation === "wet") {
-        if (Math.random() < 0.000578) {
+        if (Math.random() < THUNDERSTORM_SHOCKED_CHANCE_PER_TICK * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "shocked" as MutationType } };
         }
@@ -1029,9 +1032,9 @@ export function tickWeatherMutations(
       // Skip if already has any other mutation (string); allow null and undefined
       if (typeof plot.plant.mutation === "string") return plot;
 
-      // Thunderstorm: unmutated (null) plants can become wet
-      if (weatherType === "thunderstorm" && plot.plant.mutation === null) {
-        if (Math.random() < 0.00076) {
+      // Thunderstorm: unmutated (undefined or null) plants can become wet
+      if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
+        if (Math.random() < THUNDERSTORM_WET_CHANCE_PER_TICK * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
         }
@@ -1039,7 +1042,7 @@ export function tickWeatherMutations(
 
       // Roll weather mutation
       if (weatherMut && weatherChance > 0) {
-        if (Math.random() < weatherChance) {
+        if (Math.random() < weatherChance * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: weatherMut } };
         }
@@ -1047,7 +1050,7 @@ export function tickWeatherMutations(
 
       // Moonlit at night (outside star_shower)
       if (night && weatherType !== "star_shower") {
-        if (Math.random() < MOONLIT_NIGHT_CHANCE) {
+        if (Math.random() < MOONLIT_NIGHT_CHANCE * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "moonlit" as MutationType } };
         }
@@ -1078,10 +1081,24 @@ export function tickSprinklerMutations(
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
-      // Only roll for unmutated plants (mutation === undefined or null)
-      if (typeof plot.plant.mutation === "string") return plot;
 
       const sources = getGearAffectingCell(state.grid, ri, ci, now);
+
+      // Generator sprinkler (shocked) converts wet → shocked.
+      // Must run before the "skip already-mutated" guard because wet is a string mutation.
+      if (plot.plant.mutation === "wet") {
+        for (const { def } of sources) {
+          if (!isMutationSprinkler(def) || def.mutationType !== "shocked" || !def.mutationChancePerTick) continue;
+          if (Math.random() < def.mutationChancePerTick) {
+            changed = true;
+            return { ...plot, plant: { ...plot.plant, mutation: "shocked" as MutationType } };
+          }
+        }
+        return plot; // wet plant — no other sprinkler mutation applies
+      }
+
+      // Only roll for unmutated plants (mutation === undefined or null)
+      if (typeof plot.plant.mutation === "string") return plot;
 
       // Regular sprinklers — wet mutation chance
       for (const { def } of sources) {
@@ -1092,11 +1109,10 @@ export function tickSprinklerMutations(
         }
       }
 
-      // Mutation sprinklers
+      // Mutation sprinklers (all types except shocked, which is handled above for wet plants)
       for (const { def } of sources) {
         if (!isMutationSprinkler(def) || !def.mutationType || !def.mutationChancePerTick) continue;
-        // Shocked can only be applied to wet plants — Generator skips non-wet blooms
-        if (def.mutationType === "shocked" && (plot.plant.mutation as string | null | undefined) !== "wet") continue;
+        if (def.mutationType === "shocked") continue; // Generator only applies to wet plants (handled above)
         if (Math.random() < def.mutationChancePerTick) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: def.mutationType } };
@@ -1889,23 +1905,14 @@ export function removeGear(
   const plot = state.grid[row]?.[col];
   if (!plot?.gear) return null;
 
-  const { gearType } = plot.gear;
-
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>
       ri === row && ci === col ? { ...p, gear: null } : p
     )
   );
 
-  // Return gear to inventory
-  const existing = state.gearInventory.find((g) => g.gearType === gearType);
-  const newGearInv = existing
-    ? state.gearInventory.map((g) =>
-        g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g
-      )
-    : [...state.gearInventory, { gearType, quantity: 1 }];
-
-  // If it's a composter, also return stored fertilizers
+  // Removal destroys the gear (no refund). Stored fertilizers from composters
+  // are still returned since the player earned them.
   const stored = plot.gear.storedFertilizers ?? [];
   let newFertilizers = state.fertilizers;
   for (const fertType of stored) {
@@ -1915,7 +1922,7 @@ export function removeGear(
       : [...newFertilizers, { type: fertType, quantity: 1 }];
   }
 
-  return { ...state, grid: newGrid, gearInventory: newGearInv, fertilizers: newFertilizers };
+  return { ...state, grid: newGrid, fertilizers: newFertilizers };
 }
 
 /** Collect all fertilizers stored in a composter and add them to player inventory. */

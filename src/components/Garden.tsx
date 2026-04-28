@@ -18,6 +18,7 @@ import {
   findAutoPlantTargets,
   stampStageTransitions,
   placeGear,
+  getDevShowGrowthDebug,
 } from "../store/gameStore";
 import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
@@ -27,8 +28,20 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden() {
-  const { state, update, perform, getState, awaitHarvests, activeWeather } = useGame();
+  const { state, update, perform, getState, awaitHarvests, queueWork, activeWeather } = useGame();
   useGrowthTick(5_000);
+
+  const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
+  useEffect(() => {
+    const h = (e: Event) => setShowGrowthDebug((e as CustomEvent<boolean>).detail);
+    window.addEventListener("devGrowthDebugToggle", h);
+    return () => window.removeEventListener("devGrowthDebugToggle", h);
+  }, []);
+
+  // Throttle the mutation tick to at most once per second to prevent the no-dep
+  // useEffect from spinning in an infinite render loop when a tick function
+  // (e.g. fan strip/apply oscillation) produces a new state object every call.
+  const lastMutationTickRef = useRef(0);
 
   // Every render: stamp transitions, roll weather mutations, roll sprinkler/fan mutations.
   // IMPORTANT: use getState() (the ref) not `state` (the React closure) as the starting point.
@@ -37,6 +50,8 @@ export function Garden() {
   // back through update(), wiping out any in-flight optimistic plants/harvests.
   useEffect(() => {
     const now     = Date.now();
+    if (now - lastMutationTickRef.current < 1_000) return;
+    lastMutationTickRef.current = now;
     const weather = activeWeather ?? "clear";
     const latest  = getState();                            // always the freshest state
     let next = stampStageTransitions(latest, now, weather);
@@ -208,7 +223,7 @@ export function Garden() {
   const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, autoPlantCoveredCells } =
     useMemo(() => {
       const regular  = new Set<string>();
-      const mutation = new Map<string, string[]>(); // cellKey → unique mutation emojis
+      const mutation = new Map<string, { emoji: string; label: string }[]>(); // cellKey → unique mutation sprinklers
       const scarecrow = new Set<string>();
       const composter = new Set<string>();
       const growLamp  = new Set<string>();
@@ -227,10 +242,11 @@ export function Garden() {
             keys.forEach((k) => regular.add(k));
           } else if (def.category === "sprinkler_mutation" && def.mutationType) {
             const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
+            const label = def.name;
             keys.forEach((k) => {
               const existing = mutation.get(k);
-              if (!existing) mutation.set(k, [emoji]);
-              else if (!existing.includes(emoji)) existing.push(emoji);
+              if (!existing) mutation.set(k, [{ emoji, label }]);
+              else if (!existing.some((e) => e.emoji === emoji)) existing.push({ emoji, label });
             });
           } else if (def.passiveSubtype === "scarecrow") {
             keys.forEach((k) => scarecrow.add(k));
@@ -387,11 +403,17 @@ export function Garden() {
         }
       }
     }
-    try {
-      for (const { row, col, speciesId } of planted) await edgePlantSeed(row, col, speciesId);
-    } catch {
-      update(prev);
-    }
+
+    // Add the edge calls to the harvest queue so signOut() waits for them
+    // before invalidating the session — without this, a rapid sign-out would
+    // cancel in-flight calls and the cloud save would be left in a partial state.
+    queueWork(async () => {
+      try {
+        for (const { row, col, speciesId } of planted) await edgePlantSeed(row, col, speciesId);
+      } catch {
+        update(prev);
+      }
+    });
   }
 
   const bloomedCount = state.grid
@@ -471,6 +493,7 @@ export function Garden() {
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}
+                showGrowthDebug={showGrowthDebug}
               />
             );
           })}

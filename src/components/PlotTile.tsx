@@ -4,16 +4,30 @@ import {
   type PlantedFlower,
   getCurrentStage,
   getStageProgress,
+  getPassiveGrowthMultiplier,
   harvestPlant,
 } from "../store/gameStore";
 import { getFlower, RARITY_CONFIG, MUTATIONS, type MutationType } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
+import { WEATHER } from "../data/weather";
+import type { WeatherType } from "../data/weather";
 import { GEAR, isGearExpired, type FanDirection } from "../data/gear";
 import { PlotTooltip } from "./PlotTooltip";
 import { GearTooltip } from "./GearTooltip";
 import { useGame } from "../store/GameContext";
 import { useSettings } from "../store/SettingsContext";
 import { edgeHarvest } from "../lib/edgeFunctions";
+
+const WEATHER_MUT_LABEL: Partial<Record<WeatherType, string>> = {
+  rain:            "wet",
+  heatwave:        "scorched",
+  cold_front:      "frozen",
+  star_shower:     "moonlit",
+  prismatic_skies: "rainbow",
+  golden_hour:     "golden",
+  tornado:         "windstruck",
+  thunderstorm:    "→⚡ shocked",
+};
 
 interface Props {
   plot:            Plot;
@@ -30,8 +44,8 @@ interface Props {
   isHighlighted?:  boolean;
   /** True when this cell is covered by at least one active regular (growth) sprinkler. */
   isUnderSprinkler?: boolean;
-  /** Mutation emojis from any active mutation sprinklers covering this cell. */
-  sprinklerMutations?: string[];
+  /** Mutation sprinklers covering this cell — emoji for display, label for tooltip. */
+  sprinklerMutations?: { emoji: string; label: string }[];
   /** True when this cell is within a scarecrow's radius. */
   isUnderScarecrow?: boolean;
   /** True when this cell is within a composter's radius. */
@@ -50,6 +64,7 @@ interface Props {
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
   cellSize?:       string;
+  showGrowthDebug?: boolean;
 }
 
 export function PlotTile({
@@ -61,6 +76,7 @@ export function PlotTile({
   isUnderFan, fanDirection, isUnderHarvestBell, isUnderAutoPlanter,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
+  showGrowthDebug = false,
 }: Props) {
   const { perform, getState, activeWeather } = useGame();
   const { settings } = useSettings();
@@ -69,12 +85,21 @@ export function PlotTile({
   const gear   = plot.gear;
   const species = plant ? getFlower(plant.speciesId) : null;
 
-  const stage    = plant ? getCurrentStage(plant, now, activeWeather) : null;
-  const progress = plant ? getStageProgress(plant, now, activeWeather) : 0;
+  const gearMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
+  const stage    = plant ? getCurrentStage(plant, now, activeWeather, gearMult) : null;
+  const progress = plant ? getStageProgress(plant, now, activeWeather, gearMult) : 0;
 
   const rarity     = species ? RARITY_CONFIG[species.rarity] : null;
   const isBloomed  = stage === "bloom";
   const hasFert    = !!plant?.fertilizer;
+
+  const debugTotalMult = showGrowthDebug && plant ? (() => {
+    const gMult = getPassiveGrowthMultiplier(getState().grid, row, col, now);
+    const fMult = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1;
+    const mMult = (plant as PlantedFlower).masteredBonus ?? 1;
+    const wMult = WEATHER[activeWeather as WeatherType]?.growthMultiplier ?? 1;
+    return fMult * mMult * wMult * gMult;
+  })() : null;
 
   const [open,     setOpen]     = useState(false);
   const [gearOpen, setGearOpen] = useState(false);
@@ -117,7 +142,7 @@ export function PlotTile({
         perform(
           optimistic.state,
           async () => {
-            try { return await edgeHarvest(row, col, optimistic.mutation); }
+            try { return await edgeHarvest(row, col); }
             finally {
               harvestingRef.current = false;
               onHarvestEnd?.();
@@ -163,10 +188,12 @@ export function PlotTile({
       ? Math.max(0, (gear.placedAt + def.durationMs - now) / def.durationMs)
       : null;
 
-    // Prismatic uses "rainbow-text" which doesn't follow text-* — map to gradient fill
+    // Prismatic uses "rainbow-text" and Exalted uses "text-black" — both need manual mapping
     const gearBarBg = gearRarity.color === "rainbow-text"
       ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
-      : gearRarity.color.replace("text-", "bg-");
+      : gearRarity.color === "text-black"
+        ? "bg-slate-300"
+        : gearRarity.color.replace("text-", "bg-");
 
     // Prismatic gear: drive all three rainbow animations via inline style so CSS cascade
     // order doesn't matter (inline style wins over any class-based `animation` shorthand).
@@ -274,6 +301,7 @@ export function PlotTile({
           row={row}
           col={col}
           onClose={() => setOpen(false)}
+          gearGrowthMultiplier={gearMult}
           isUnderSprinkler={isUnderSprinkler}
           sprinklerMutations={sprinklerMutations}
           isUnderGrowLamp={isUnderGrowLamp}
@@ -317,45 +345,45 @@ export function PlotTile({
             {/* Sprinkler: 💧 drops falling */}
             {isUnderSprinkler && (
               <>
-                <span className="gear-drop" style={{ left: "15%", animationDelay: "0s"   }}>💧</span>
-                <span className="gear-drop" style={{ left: "48%", animationDelay: "0.6s" }}>💧</span>
-                <span className="gear-drop" style={{ left: "74%", animationDelay: "1.2s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "74%", animationDelay: "0s"    }}>💧</span>
               </>
             )}
             {/* Mutation sprinkler: emoji floating up, 2 per mutation type */}
-            {sprinklerMutations.flatMap((emoji, mi) => [
-              <span key={`m${mi}a`} className="gear-float" style={{ left: `${16 + mi * 28}%`, animationDelay: `${mi * 0.5}s`       }}>{emoji}</span>,
-              <span key={`m${mi}b`} className="gear-float" style={{ left: `${40 + mi * 28}%`, animationDelay: `${mi * 0.5 + 1.1}s` }}>{emoji}</span>,
+            {sprinklerMutations.flatMap(({ emoji }, mi) => [
+              <span key={`m${mi}a`} className="gear-float" style={{ left: `${16 + mi * 28}%`, animationDelay: `${mi * 0.5 - 2}s`   }}>{emoji}</span>,
+              <span key={`m${mi}b`} className="gear-float" style={{ left: `${40 + mi * 28}%`, animationDelay: `${mi * 0.5 - 0.9}s` }}>{emoji}</span>,
             ])}
             {/* Scarecrow: 🐦 birds fluttering away */}
             {isUnderScarecrow && (
               <>
-                <span className="gear-bird" style={{ left: "10%", animationDelay: "0s"   }}>🐦</span>
-                <span className="gear-bird" style={{ left: "52%", animationDelay: "1.5s" }}>🐦</span>
+                <span className="gear-bird" style={{ left: "10%", animationDelay: "-1.5s" }}>🐦</span>
+                <span className="gear-bird" style={{ left: "52%", animationDelay: "0s"    }}>🐦</span>
               </>
             )}
             {/* Composter: ✦ sparkles rising */}
             {isUnderComposter && (
               <>
-                <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "0s"    }}>✦</span>
-                <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "0.75s" }}>✦</span>
-                <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "1.5s"  }}>✦</span>
+                <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "-1.5s"  }}>✦</span>
+                <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "-0.75s" }}>✦</span>
+                <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "0s"     }}>✦</span>
               </>
             )}
             {/* Auto-Planter: 🌱 seeds gently drifting down */}
             {isUnderAutoPlanter && (
               <>
-                <span className="gear-planter-seed" style={{ left: "20%", animationDelay: "0s"    }}>🌱</span>
-                <span className="gear-planter-seed" style={{ left: "52%", animationDelay: "0.8s"  }}>🌱</span>
-                <span className="gear-planter-seed" style={{ left: "76%", animationDelay: "1.6s"  }}>🌱</span>
+                <span className="gear-planter-seed" style={{ left: "20%", animationDelay: "-1.6s" }}>🌱</span>
+                <span className="gear-planter-seed" style={{ left: "52%", animationDelay: "-0.8s" }}>🌱</span>
+                <span className="gear-planter-seed" style={{ left: "76%", animationDelay: "0s"    }}>🌱</span>
               </>
             )}
             {/* Harvest Bell: 🔔 bell sways upward hinting at auto-harvest */}
             {isUnderHarvestBell && (
               <>
-                <span className="gear-bell" style={{ left: "18%", animationDelay: "0s"    }}>🔔</span>
-                <span className="gear-bell" style={{ left: "52%", animationDelay: "1.1s"  }}>🔔</span>
-                <span className="gear-bell" style={{ left: "74%", animationDelay: "2.2s"  }}>🔔</span>
+                <span className="gear-bell" style={{ left: "18%", animationDelay: "-2.2s" }}>🔔</span>
+                <span className="gear-bell" style={{ left: "52%", animationDelay: "-1.1s" }}>🔔</span>
+                <span className="gear-bell" style={{ left: "74%", animationDelay: "0s"    }}>🔔</span>
               </>
             )}
             {/* Fan: 💨 gusts drifting in the fan's direction */}
@@ -365,7 +393,7 @@ export function PlotTile({
               const horiz = dir === "left" || dir === "right";
               const axis  = horiz ? "top" : "left";
               return (["18%", "50%", "76%"] as const).map((pos, i) => (
-                <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.65}s` }}>💨</span>
+                <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.65 - 1.3}s` }}>💨</span>
               ));
             })()}
           </div>
@@ -396,8 +424,8 @@ export function PlotTile({
         {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
-            {sprinklerMutations.map((emoji, i) => (
-              <span key={i} className="text-[9px]" title="Mutation sprinkler">{emoji}</span>
+            {sprinklerMutations.map(({ emoji, label }, i) => (
+              <span key={i} className="text-[9px]" title={label}>{emoji}</span>
             ))}
             {isUnderScarecrow && <span className="text-[9px]" title="Under scarecrow">🧹</span>}
             {isUnderComposter && <span className="text-[9px]" title="Near composter">🧺</span>}
@@ -416,6 +444,18 @@ export function PlotTile({
               }`}
               style={{ width: `${progress * 100}%` }}
             />
+          </div>
+        )}
+
+        {/* Growth debug overlay — dev only */}
+        {debugTotalMult !== null && (
+          <div className="absolute top-0.5 inset-x-0 flex justify-center pointer-events-none z-20">
+            <span className="bg-black/75 rounded px-0.5 text-[7px] font-mono leading-tight text-cyan-300 whitespace-nowrap">
+              {debugTotalMult.toFixed(2)}×
+              {WEATHER_MUT_LABEL[activeWeather as WeatherType]
+                ? ` ${WEATHER_MUT_LABEL[activeWeather as WeatherType]}`
+                : ""}
+            </span>
           </div>
         )}
 

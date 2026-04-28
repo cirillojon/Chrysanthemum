@@ -101,7 +101,7 @@ describe("placeGear / removeGear / setFanDirection (regression)", () => {
     expect(setFanDirection(s0, 0, 2, "down")).toBeNull();
   });
 
-  it("removeGear returns the gear to inventory and clears the plot", () => {
+  it("removeGear destroys the gear and clears the plot (no refund)", () => {
     const s0 = baseState({
       grid: [
         [{ id: "0-0", plant: null, gear: { gearType: "sprinkler_rare", placedAt: Date.now() } }],
@@ -112,8 +112,9 @@ describe("placeGear / removeGear / setFanDirection (regression)", () => {
     });
     const s1 = removeGear(s0, 0, 0)!;
     expect(s1.grid[0][0].gear).toBeNull();
+    // Gear is destroyed on removal (security fix) — never returned to inventory
     const inv = s1.gearInventory.find((g) => g.gearType === "sprinkler_rare");
-    expect(inv?.quantity).toBe(1);
+    expect(inv).toBeUndefined();
   });
 
   it("removeGear of a composter also returns its stored fertilizers", () => {

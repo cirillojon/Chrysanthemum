@@ -4,7 +4,7 @@ import { MUTATIONS, RARITY_CONFIG } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
 import { removeGear, collectFromComposter, setFanDirection } from "../store/gameStore";
 import { useGame } from "../store/GameContext";
-import { edgeRemoveGear, edgeCollectFromComposter } from "../lib/edgeFunctions";
+import { edgeRemoveGear, edgeCollectFromComposter, edgeSetFanDirection } from "../lib/edgeFunctions";
 
 interface Props {
   gear:    PlacedGear;
@@ -26,7 +26,7 @@ function formatMs(ms: number): string {
 }
 
 export function GearTooltip({ gear, row, col, onClose }: Props) {
-  const { state, perform, update } = useGame();
+  const { state, perform } = useGame();
   const [nudge,   setNudge]   = useState(0);
   const [flipped, setFlipped] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -54,7 +54,9 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
   // keyframes are only 12% opacity (designed for tile backgrounds, not bar fills).
   const rarityBarBg = rarity.color === "rainbow-text"
     ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
-    : rarity.color.replace("text-", "bg-");
+    : rarity.color === "text-black"
+      ? "bg-slate-300"
+      : rarity.color.replace("text-", "bg-");
 
   const msRemaining    = def.durationMs ? Math.max(0, gear.placedAt + def.durationMs - now) : null;
   const expiryProgress = (def.durationMs && msRemaining !== null)
@@ -82,13 +84,6 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
               ri === row && ci === col ? { ...p, gear: savedGear } : p
             )
           ),
-          gearInventory: (cur.gearInventory ?? [])
-            .map((g) =>
-              g.gearType === savedGear.gearType
-                ? { ...g, quantity: Math.max(0, g.quantity - 1) }
-                : g
-            )
-            .filter((g) => g.quantity > 0),
         }),
       }
     );
@@ -135,7 +130,15 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
 
   function handleFanDirection(dir: FanDirection) {
     const next = setFanDirection(state, row, col, dir);
-    if (next) update(next);
+    if (!next) return;
+    perform(
+      next,
+      () => edgeSetFanDirection(row, col, dir),
+      undefined,
+      {
+        rollback: (cur) => setFanDirection(cur, row, col, gear.direction ?? "right") ?? cur,
+      }
+    );
   }
 
   const isFan = def.passiveSubtype === "fan";
