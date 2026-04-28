@@ -1,3 +1,38 @@
+## [v2.2.1] — 2026-04-28 — Security & Bug Fixes
+
+### Security
+- **Server-side mutation assignment** — harvest no longer accepts a client-supplied mutation ID; mutation type is now determined entirely server-side, closing the exploit where any mutation could be forced on any harvest
+- **Codex discovery server-trusted** — client-supplied `discovered` arrays are no longer merged into the save; the server derives discoveries from the authoritative inventory, preventing fake codex completion
+- **Marketplace ask price validated** — listing price is now coerced to a positive integer before the 5% fee is calculated; previously a NaN ask price caused the fee to floor to 1 coin
+- **Clock skew tolerance tightened** — local saves dated more than 1 second in the future are rejected in favour of the cloud save (down from 30 s), closing the timestamp manipulation exploit
+- **Gear duration-reset exploit fixed** — removing placed gear now destroys it with no refund; previously a player could remove gear just before expiry and redeploy fresh to reset the duration; composters still return stored fertilizers before removal
+
+### Fixed
+- **Sprinkler mutations not applying** — Scorched, Frozen, Shocked, Moonlit, Gilded, and Rainbow sprinkler mutations were silently failing and never applying to nearby bloomed plants
+- **Gear tooltip mutation badge** — mutation sprinkler tooltips now correctly show which mutation type the sprinkler targets
+- **Fan initial direction not applied (#103)** — the direction chosen in the placement picker is now saved to the server; it was previously discarded, leaving the fan directionless until manually reset via the tooltip
+- **Fan tooltip direction not persisted** — changing fan direction from the plot tooltip now saves to the server and survives a page reload
+- **Gear animations starting from origin (#106)** — all gear particle effects (sprinkler drops, fan gusts, bell sways, composter sparks, etc.) now appear mid-motion on placement instead of starting from the edge and traveling visibly from scratch
+- **Plot tooltip growth time inaccurate under gear (#104)** — time remaining now correctly accounts for sprinkler and grow lamp speed boosts and updates live as weather and gear change
+- **Sign-out losing Plant All progress** — sign-out now flushes all pending server writes before invalidating the JWT so in-flight operations are never dropped
+- **Stale account data visible after sign-out** — signing in and immediately signing out no longer leaves the previous account's data on-screen
+- **Single-session enforcement** — opening a second tab or device while signed in now disables saves on the older session to prevent data races; a banner prompts a refresh
+- **Weather queue overwritten on new event** — advancing weather now correctly appends the next event to the forecast tail instead of replacing it
+- **Marketplace expire edge function** — expired listings are now reliably cleaned up server-side and items correctly returned to the seller's inventory
+- **Marketplace sold notification** — sellers now receive a mailbox notification when a buyer purchases their listing
+- **Mail rarity border** — mail items no longer show a rarity-coloured border
+- **Mail accordion** — opening a mail item now automatically closes any previously expanded mail
+
+### Changed
+- **Rain and thunderstorm Wet mutation** — chance raised to ~70% over the event duration (was ~50%)
+- **Tornado Windstruck mutation** — now ~70% chance over the tornado's duration; no longer instant
+- **Moonlit Night mutation** — chance reduced to ~15% over a 10-hour night (was ~50%)
+- **Wet mutation sell-value multiplier** — reduced from 1.5× to 1.25×
+- **Thunderstorm Shocked mutation** — can only apply to plants already carrying Wet; the direct unmutated → Shocked path has been removed
+- **Gift rate limiting** — per-sender gift rate is now capped to prevent leaderboard farming via alt accounts
+
+---
+
 ## [v2.2.0] — 2026-04-27 — The Gear Update
 
 ### Added
