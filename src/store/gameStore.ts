@@ -4,6 +4,12 @@ import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
 import {
+  WEATHER_MUT_CHANCE_PER_TICK,
+  THUNDERSTORM_WET_CHANCE_PER_TICK,
+  THUNDERSTORM_SHOCKED_CHANCE_PER_TICK,
+  MOONLIT_NIGHT_CHANCE_PER_TICK,
+} from "../data/weatherMutationRates";
+import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
   isScarecrow, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
@@ -950,25 +956,7 @@ export function stampStageTransitions(
   return changed ? { ...state, grid: newGrid } : state;
 }
 
-// ── Mutation tick rates ────────────────────────────────────────────────────
-// Per-tick chances (tick = 5 s, weather event ≈ 15 min = 180 ticks)
-// Per-tick rates (tick ≈ 1 s).  Formula: p = 1 − (1 − target)^(1/ticks)
-// Rain            20 min  = 1200 ticks → 60% over event
-// Heatwave        15 min  =  900 ticks → 40% over event
-// Cold Front      15 min  =  900 ticks → 40% over event
-// Star Shower   17.5 min  = 1050 ticks → 20% over event
-// Prismatic       15 min  =  900 ticks → 20% over event
-// Golden Hour     15 min  =  900 ticks → 20% over event
-const WEATHER_MUTATION_CHANCE: Partial<Record<WeatherType, number>> = {
-  rain:            0.00116,  // 75% over 20-min event
-  heatwave:        0.00057,  // 40% over 15-min event
-  cold_front:      0.00057,  // 40% over 15-min event
-  star_shower:     0.000213, // 20% over 17.5-min event
-  prismatic_skies: 0.000248, // 20% over 15-min event
-  golden_hour:     0.000248, // 20% over 15-min event
-  tornado:         1.0,      // 100% — instant on first tick, all bloomed flowers hit
-  thunderstorm:    0.00057,  // 40% over 20-min event (normal shocked roll for non-wet plants)
-};
+const WEATHER_MUTATION_CHANCE = WEATHER_MUT_CHANCE_PER_TICK as Partial<Record<WeatherType, number>>;
 
 const WEATHER_MUTATION_TYPE: Partial<Record<WeatherType, MutationType>> = {
   rain:            "wet",
@@ -981,7 +969,7 @@ const WEATHER_MUTATION_TYPE: Partial<Record<WeatherType, MutationType>> = {
   // thunderstorm is handled via a two-step chain (wet → shocked) below, not a direct shocked roll
 };
 
-const MOONLIT_NIGHT_CHANCE = 0.000019; // 50% over a 10-hour night (1 - 0.5^(1/36000))
+const MOONLIT_NIGHT_CHANCE = MOONLIT_NIGHT_CHANCE_PER_TICK;
 
 // Dev-only runtime multiplier for weather mutation chances.
 // Default 1 (no change). Set higher via DevWeatherPanel to test mutations instantly.
@@ -1034,7 +1022,7 @@ export function tickWeatherMutations(
 
       // Thunderstorm combo: wet flowers have a ~50% chance to become shocked
       if (weatherType === "thunderstorm" && plot.plant.mutation === "wet") {
-        if (Math.random() < 0.000578 * m) {
+        if (Math.random() < THUNDERSTORM_SHOCKED_CHANCE_PER_TICK * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "shocked" as MutationType } };
         }
@@ -1046,7 +1034,7 @@ export function tickWeatherMutations(
 
       // Thunderstorm: unmutated (undefined or null) plants can become wet
       if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
-        if (Math.random() < 0.00116 * m) {
+        if (Math.random() < THUNDERSTORM_WET_CHANCE_PER_TICK * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
         }

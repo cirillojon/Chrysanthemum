@@ -11,8 +11,29 @@ import type { GearType } from "../data/gear";
 import { useGame } from "../store/GameContext";
 import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
+import {
+  WEATHER_MUT_CHANCE_PER_TICK,
+  THUNDERSTORM_WET_CHANCE_PER_TICK,
+  THUNDERSTORM_SHOCKED_CHANCE_PER_TICK,
+  MOONLIT_NIGHT_CHANCE_PER_TICK,
+} from "../data/weatherMutationRates";
 
 const DURATION_MS = 600_000; // 10 min — long enough for the offline cron to fire multiple times
+
+const CHART_ROWS: Array<{
+  label: string; mutLabel: string; perTick: number; ticks: number; bar: string;
+}> = [
+  { label: "🌧️ Rain",        mutLabel: "💧 wet",         perTick: WEATHER_MUT_CHANCE_PER_TICK["rain"],            ticks: 1200,  bar: "bg-blue-400"    },
+  { label: "⛈️ Storm",       mutLabel: "💧 → wet",       perTick: THUNDERSTORM_WET_CHANCE_PER_TICK,               ticks: 1200,  bar: "bg-blue-400"    },
+  { label: "⛈️ Storm",       mutLabel: "⚡ wet→shocked",  perTick: THUNDERSTORM_SHOCKED_CHANCE_PER_TICK,           ticks: 1200,  bar: "bg-yellow-300"  },
+  { label: "🔥 Heatwave",    mutLabel: "🔥 scorched",    perTick: WEATHER_MUT_CHANCE_PER_TICK["heatwave"],         ticks: 900,   bar: "bg-orange-400"  },
+  { label: "❄️ Cold Front",  mutLabel: "❄️ frozen",      perTick: WEATHER_MUT_CHANCE_PER_TICK["cold_front"],       ticks: 900,   bar: "bg-cyan-400"    },
+  { label: "✨ Golden Hr",   mutLabel: "✨ golden",       perTick: WEATHER_MUT_CHANCE_PER_TICK["golden_hour"],      ticks: 900,   bar: "bg-amber-300"   },
+  { label: "🌈 Prismatic",   mutLabel: "🌈 rainbow",     perTick: WEATHER_MUT_CHANCE_PER_TICK["prismatic_skies"],  ticks: 900,   bar: "bg-fuchsia-400" },
+  { label: "🌙 Star Shower", mutLabel: "🌙 moonlit",     perTick: WEATHER_MUT_CHANCE_PER_TICK["star_shower"],      ticks: 1050,  bar: "bg-indigo-400"  },
+  { label: "🌪️ Tornado",     mutLabel: "🌪️ windstruck",  perTick: WEATHER_MUT_CHANCE_PER_TICK["tornado"],          ticks: 600,   bar: "bg-stone-400"   },
+  { label: "🌙 Night",       mutLabel: "🌙 moonlit",     perTick: MOONLIT_NIGHT_CHANCE_PER_TICK,                   ticks: 36000, bar: "bg-indigo-300"  },
+];
 
 async function setWeather(type: WeatherType) {
   await supabase.rpc("dev_set_weather", { p_type: type, p_duration_ms: DURATION_MS });
@@ -30,6 +51,7 @@ export function DevWeatherPanel() {
   const weatherTypes            = WEATHER_LIST.map((w) => w.id);
   const [mutMult, setMutMult]         = useState(getDevMutationMultiplier());
   const [growthDebug, setGrowthDebug] = useState(getDevShowGrowthDebug());
+  const [showRates, setShowRates]     = useState(false);
 
   // ── Items tab state ────────────────────────────────────────────────────────
   const [tab, setTab]               = useState<Tab>("weather");
@@ -335,6 +357,34 @@ export function DevWeatherPanel() {
           >
             🔄 Trigger Offline Tick
           </button>
+
+          {/* Mutation rates chart */}
+          <button
+            onClick={() => setShowRates(r => !r)}
+            className="w-full mt-2 py-1 rounded-lg text-[10px] font-semibold bg-white/5 border border-white/10 text-white/50 hover:text-white/70 transition-all text-center"
+          >
+            📊 Mutation Rates {showRates ? "▲" : "▼"}
+          </button>
+
+          {showRates && (
+            <div className="mt-2 space-y-2">
+              {CHART_ROWS.map(({ label, mutLabel, perTick, ticks, bar }) => {
+                const pct = (1 - Math.pow(1 - perTick, ticks)) * 100;
+                return (
+                  <div key={`${label}-${mutLabel}`}>
+                    <div className="flex items-center justify-between mb-0.5">
+                      <span className="text-white/60 text-[9px]">{label} → {mutLabel}</span>
+                      <span className="font-mono text-[9px] text-white/50">{pct.toFixed(0)}%</span>
+                    </div>
+                    <div className="w-full bg-white/10 rounded-full h-1">
+                      <div className={`${bar} h-1 rounded-full`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+              <p className="text-white/25 text-[8px] text-center pt-0.5">chance over full event · bloomed plants only</p>
+            </div>
+          )}
         </>
       )}
 
