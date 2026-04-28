@@ -960,7 +960,7 @@ export function stampStageTransitions(
 // Prismatic       15 min  =  900 ticks → 20% over event
 // Golden Hour     15 min  =  900 ticks → 20% over event
 const WEATHER_MUTATION_CHANCE: Partial<Record<WeatherType, number>> = {
-  rain:            0.00076,  // 60% over 20-min event
+  rain:            0.00116,  // 75% over 20-min event
   heatwave:        0.00057,  // 40% over 15-min event
   cold_front:      0.00057,  // 40% over 15-min event
   star_shower:     0.000213, // 20% over 17.5-min event
@@ -1031,7 +1031,7 @@ export function tickWeatherMutations(
 
       // Thunderstorm: unmutated (undefined or null) plants can become wet
       if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
-        if (Math.random() < 0.00076) {
+        if (Math.random() < 0.00116) { // 75% over 20-min event
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
         }
