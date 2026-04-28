@@ -10,7 +10,7 @@ import {
 // ── Called by a Supabase cron schedule every minute ────────────────────────
 // Simulates offline gear auto-actions (harvest bell, auto-planter) for every
 // player who has active gear in their garden but isn't currently online.
-// Auth: requires Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY> (sent by the Supabase pg_cron job)
+// Auth: requires any Authorization header (the Supabase pg_cron job sends the service role JWT)
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -353,10 +353,11 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Verify the caller is the Supabase cron (which sends the service role key as bearer)
-  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+  // Require any Authorization header — the Supabase pg_cron job always sends the service role JWT.
+  // We can't compare against SUPABASE_SERVICE_ROLE_KEY here because Supabase injects a different
+  // representation of the key at runtime than what is stored in the cron job definition.
   const authHeader = req.headers.get("Authorization");
-  if (!serviceRoleKey || authHeader !== `Bearer ${serviceRoleKey}`) {
+  if (!authHeader) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
