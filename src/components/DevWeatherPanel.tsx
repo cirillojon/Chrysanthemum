@@ -12,7 +12,7 @@ import { useGame } from "../store/GameContext";
 import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
 
-const DURATION_MS = 30_000;
+const DURATION_MS = 600_000; // 10 min — long enough for the offline cron to fire multiple times
 
 async function setWeather(type: WeatherType) {
   await supabase.rpc("dev_set_weather", { p_type: type, p_duration_ms: DURATION_MS });
@@ -321,6 +321,19 @@ export function DevWeatherPanel() {
               }`}
           >
             🔬 Growth Debug {growthDebug ? "ON" : "OFF"}
+          </button>
+
+          {/* Manual offline tick trigger */}
+          <button
+            onClick={async () => {
+              const { data, error } = await supabase.functions.invoke("tick-offline-gardens");
+              if (error) { showToast(`✗ ${error.message}`); return; }
+              const d = data as { ok: boolean; scanned?: number; changed?: number; error?: string };
+              showToast(d.ok ? `✓ scanned ${d.scanned}, changed ${d.changed}` : `✗ ${d.error}`);
+            }}
+            className="w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center mt-1 bg-white/5 border border-white/10 text-white/50 hover:text-white/70"
+          >
+            🔄 Trigger Offline Tick
           </button>
         </>
       )}

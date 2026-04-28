@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from "react";
 import { useSettings } from "../store/SettingsContext";
 import { getCurrentStage, getStageProgress, getPassiveGrowthMultiplier, getDevShowGrowthDebug } from "../store/gameStore";
 import type { Plot } from "../store/gameStore";
-import { useWeather } from "../hooks/useWeather";
+import { supabase } from "../lib/supabase";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { WEATHER } from "../data/weather";
@@ -33,14 +33,23 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const rows = farmRows ?? farmSize;
   const { settings } = useSettings();
-  const { weather } = useWeather();
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
+  const [debugWeatherType, setDebugWeatherType] = useState<WeatherType>("clear");
+
   useEffect(() => {
     const h = (e: Event) => setShowGrowthDebug((e as CustomEvent<boolean>).detail);
     window.addEventListener("devGrowthDebugToggle", h);
     return () => window.removeEventListener("devGrowthDebugToggle", h);
   }, []);
+
+  // One-shot weather fetch for the debug overlay — avoids conflicting with the
+  // app-level useWeather realtime channel that is already subscribed.
+  useEffect(() => {
+    if (!showGrowthDebug) return;
+    supabase.from("weather").select("type").eq("id", 1).single()
+      .then(({ data }) => { if (data) setDebugWeatherType(data.type as WeatherType); });
+  }, [showGrowthDebug]);
 
   // Tick every second so progress bars and stage transitions animate in real-time
   useEffect(() => {
@@ -318,7 +327,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
 
               {/* Growth debug overlay — dev only */}
               {showGrowthDebug && (() => {
-                const wType  = weather.type as WeatherType;
+                const wType  = debugWeatherType;
                 const wMult  = WEATHER[wType]?.growthMultiplier ?? 1;
                 const fMult  = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1;
                 const mMult  = plant.masteredBonus ?? 1;
