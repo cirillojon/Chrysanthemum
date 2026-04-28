@@ -4,16 +4,30 @@ import {
   type PlantedFlower,
   getCurrentStage,
   getStageProgress,
+  getPassiveGrowthMultiplier,
   harvestPlant,
 } from "../store/gameStore";
 import { getFlower, RARITY_CONFIG, MUTATIONS, type MutationType } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
+import { WEATHER } from "../data/weather";
+import type { WeatherType } from "../data/weather";
 import { GEAR, isGearExpired, type FanDirection } from "../data/gear";
 import { PlotTooltip } from "./PlotTooltip";
 import { GearTooltip } from "./GearTooltip";
 import { useGame } from "../store/GameContext";
 import { useSettings } from "../store/SettingsContext";
 import { edgeHarvest } from "../lib/edgeFunctions";
+
+const WEATHER_MUT_LABEL: Partial<Record<WeatherType, string>> = {
+  rain:            "wet",
+  heatwave:        "scorched",
+  cold_front:      "frozen",
+  star_shower:     "moonlit",
+  prismatic_skies: "rainbow",
+  golden_hour:     "golden",
+  tornado:         "windstruck",
+  thunderstorm:    "→⚡ shocked",
+};
 
 interface Props {
   plot:            Plot;
@@ -50,6 +64,7 @@ interface Props {
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
   cellSize?:       string;
+  showGrowthDebug?: boolean;
 }
 
 export function PlotTile({
@@ -61,6 +76,7 @@ export function PlotTile({
   isUnderFan, fanDirection, isUnderHarvestBell, isUnderAutoPlanter,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
+  showGrowthDebug = false,
 }: Props) {
   const { perform, getState, activeWeather } = useGame();
   const { settings } = useSettings();
@@ -75,6 +91,14 @@ export function PlotTile({
   const rarity     = species ? RARITY_CONFIG[species.rarity] : null;
   const isBloomed  = stage === "bloom";
   const hasFert    = !!plant?.fertilizer;
+
+  const debugTotalMult = showGrowthDebug && plant ? (() => {
+    const gMult = getPassiveGrowthMultiplier(getState().grid, row, col, now);
+    const fMult = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1;
+    const mMult = (plant as PlantedFlower).masteredBonus ?? 1;
+    const wMult = WEATHER[activeWeather as WeatherType]?.growthMultiplier ?? 1;
+    return fMult * mMult * wMult * gMult;
+  })() : null;
 
   const [open,     setOpen]     = useState(false);
   const [gearOpen, setGearOpen] = useState(false);
@@ -418,6 +442,18 @@ export function PlotTile({
               }`}
               style={{ width: `${progress * 100}%` }}
             />
+          </div>
+        )}
+
+        {/* Growth debug overlay — dev only */}
+        {debugTotalMult !== null && (
+          <div className="absolute top-0.5 inset-x-0 flex justify-center pointer-events-none z-20">
+            <span className="bg-black/75 rounded px-0.5 text-[7px] font-mono leading-tight text-cyan-300 whitespace-nowrap">
+              {debugTotalMult.toFixed(2)}×
+              {WEATHER_MUT_LABEL[activeWeather as WeatherType]
+                ? ` ${WEATHER_MUT_LABEL[activeWeather as WeatherType]}`
+                : ""}
+            </span>
           </div>
         )}
 

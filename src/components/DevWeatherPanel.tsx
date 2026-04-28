@@ -9,7 +9,7 @@ import type { FertilizerType } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearType } from "../data/gear";
 import { useGame } from "../store/GameContext";
-import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier } from "../store/gameStore";
+import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
 
 const DURATION_MS = 30_000;
@@ -28,7 +28,8 @@ export function DevWeatherPanel() {
   const [current, setCurrent]   = useState<WeatherType | null>(null);
   const cycleRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   const weatherTypes            = WEATHER_LIST.map((w) => w.id);
-  const [mutMult, setMutMult]   = useState(getDevMutationMultiplier());
+  const [mutMult, setMutMult]         = useState(getDevMutationMultiplier());
+  const [growthDebug, setGrowthDebug] = useState(getDevShowGrowthDebug());
 
   // ── Items tab state ────────────────────────────────────────────────────────
   const [tab, setTab]               = useState<Tab>("weather");
@@ -305,6 +306,22 @@ export function DevWeatherPanel() {
               Multiplies client-side weather mutation chances
             </p>
           </div>
+
+          {/* Growth debug overlay toggle */}
+          <button
+            onClick={() => {
+              const v = !growthDebug;
+              setGrowthDebug(v);
+              setDevShowGrowthDebug(v);
+            }}
+            className={`w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center mt-2
+              ${growthDebug
+                ? "bg-cyan-500/20 border border-cyan-400/50 text-cyan-300"
+                : "bg-white/5 border border-white/10 text-white/50 hover:text-white/70"
+              }`}
+          >
+            🔬 Growth Debug {growthDebug ? "ON" : "OFF"}
+          </button>
         </>
       )}
 

@@ -18,6 +18,7 @@ import {
   findAutoPlantTargets,
   stampStageTransitions,
   placeGear,
+  getDevShowGrowthDebug,
 } from "../store/gameStore";
 import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
@@ -29,6 +30,13 @@ import type { GearType, FanDirection } from "../data/gear";
 export function Garden() {
   const { state, update, perform, getState, awaitHarvests, activeWeather } = useGame();
   useGrowthTick(5_000);
+
+  const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
+  useEffect(() => {
+    const h = (e: Event) => setShowGrowthDebug((e as CustomEvent<boolean>).detail);
+    window.addEventListener("devGrowthDebugToggle", h);
+    return () => window.removeEventListener("devGrowthDebugToggle", h);
+  }, []);
 
   // Throttle the mutation tick to at most once per second to prevent the no-dep
   // useEffect from spinning in an infinite render loop when a tick function
@@ -479,6 +487,7 @@ export function Garden() {
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}
+                showGrowthDebug={showGrowthDebug}
               />
             );
           })}

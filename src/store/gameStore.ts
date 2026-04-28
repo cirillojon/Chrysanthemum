@@ -988,6 +988,13 @@ const MOONLIT_NIGHT_CHANCE = 0.000019; // 50% over a 10-hour night (1 - 0.5^(1/3
 let _devMutationMultiplier = 1;
 export function setDevMutationMultiplier(x: number) { _devMutationMultiplier = Math.max(0, x); }
 export function getDevMutationMultiplier() { return _devMutationMultiplier; }
+
+let _devShowGrowthDebug = false;
+export function setDevShowGrowthDebug(v: boolean) {
+  _devShowGrowthDebug = v;
+  window.dispatchEvent(new CustomEvent("devGrowthDebugToggle", { detail: v }));
+}
+export function getDevShowGrowthDebug() { return _devShowGrowthDebug; }
 const GIANT_BLOOM_CHANCE   = 0.08;   // 8% flat, only at bloom transition
 
 function isNighttime(): boolean {

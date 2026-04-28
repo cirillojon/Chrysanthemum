@@ -1,10 +1,24 @@
 import { useMemo, useState, useEffect } from "react";
 import { useSettings } from "../store/SettingsContext";
-import { getCurrentStage, getStageProgress, getPassiveGrowthMultiplier } from "../store/gameStore";
+import { getCurrentStage, getStageProgress, getPassiveGrowthMultiplier, getDevShowGrowthDebug } from "../store/gameStore";
 import type { Plot } from "../store/gameStore";
+import { useWeather } from "../hooks/useWeather";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
+import { WEATHER } from "../data/weather";
+import type { WeatherType } from "../data/weather";
 import { FERTILIZERS } from "../data/upgrades";
+
+const WEATHER_MUT_LABEL: Partial<Record<WeatherType, string>> = {
+  rain:            "wet",
+  heatwave:        "scorched",
+  cold_front:      "frozen",
+  star_shower:     "moonlit",
+  prismatic_skies: "rainbow",
+  golden_hour:     "golden",
+  tornado:         "windstruck",
+  thunderstorm:    "→⚡ shocked",
+};
 import { GEAR, isGearExpired, getAffectedCells } from "../data/gear";
 import type { FanDirection } from "../data/gear";
 import type React from "react";
@@ -19,6 +33,14 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   const [now, setNow] = useState(() => Date.now());
   const rows = farmRows ?? farmSize;
   const { settings } = useSettings();
+  const { weather } = useWeather();
+
+  const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
+  useEffect(() => {
+    const h = (e: Event) => setShowGrowthDebug((e as CustomEvent<boolean>).detail);
+    window.addEventListener("devGrowthDebugToggle", h);
+    return () => window.removeEventListener("devGrowthDebugToggle", h);
+  }, []);
 
   // Tick every second so progress bars and stage transitions animate in real-time
   useEffect(() => {
@@ -293,6 +315,23 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                   />
                 </div>
               )}
+
+              {/* Growth debug overlay — dev only */}
+              {showGrowthDebug && (() => {
+                const wType  = weather.type as WeatherType;
+                const wMult  = WEATHER[wType]?.growthMultiplier ?? 1;
+                const fMult  = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1;
+                const mMult  = plant.masteredBonus ?? 1;
+                const total  = fMult * mMult * wMult * gearMult;
+                const mutLbl = WEATHER_MUT_LABEL[wType] ?? null;
+                return (
+                  <div className="absolute top-0.5 inset-x-0 flex justify-center pointer-events-none z-20">
+                    <span className="bg-black/75 rounded px-0.5 text-[7px] font-mono leading-tight text-cyan-300 whitespace-nowrap">
+                      {total.toFixed(2)}×{mutLbl ? ` ${mutLbl}` : ""}
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* Bloom pulse */}
               {isBloomed && (
