@@ -30,16 +30,21 @@ export function Garden() {
   const { state, update, perform, getState, awaitHarvests, activeWeather } = useGame();
   useGrowthTick(5_000);
 
-  // Every render: stamp transitions, roll weather mutations, roll sprinkler/fan mutations
+  // Every render: stamp transitions, roll weather mutations, roll sprinkler/fan mutations.
+  // IMPORTANT: use getState() (the ref) not `state` (the React closure) as the starting point.
+  // The closure can be stale when perform() has already advanced stateRef synchronously but
+  // the React re-render hasn't flushed yet. Using the stale closure would write an old state
+  // back through update(), wiping out any in-flight optimistic plants/harvests.
   useEffect(() => {
     const now     = Date.now();
     const weather = activeWeather ?? "clear";
-    let next = stampStageTransitions(state, now, weather);
+    const latest  = getState();                            // always the freshest state
+    let next = stampStageTransitions(latest, now, weather);
     next = tickWeatherMutations(next, weather);
     next = tickSprinklerMutations(next, weather);
     next = tickFanMutations(next, weather);
     next = assignBloomMutations(next, weather);
-    if (next !== state) update(next);
+    if (next !== latest) update(next);
 
     // Bell harvests — throttled to 1 per GEAR_ACTION_INTERVAL_MS to prevent server races
     const bellTargets = findHarvestBellTargets(next, weather);
