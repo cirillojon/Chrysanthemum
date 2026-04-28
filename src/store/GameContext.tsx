@@ -406,9 +406,30 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     const doServer = async () => {
       try {
         const result = await serverFn();
-        // Merge server delta into whatever state is current at reconcile time
-        // (avoids stomping growth ticks that fired during the network round-trip)
-        setState((cur) => ({ ...cur, ...result, ok: undefined }));
+        setState((cur) => {
+          const merged = { ...cur, ...result, ok: undefined } as GameState;
+          // When the server returns a full grid, preserve client-side plant mutations
+          // (weather/sprinkler mutations are applied locally and not yet written to the DB).
+          // Identify the same plant by speciesId + timePlanted so we never copy a
+          // mutation onto a different plant (e.g. after a harvest + re-plant).
+          if (result.grid) {
+            merged.grid = result.grid.map((row, ri) =>
+              row.map((plot, ci) => {
+                if (!plot.plant) return plot;
+                const curPlot = cur.grid[ri]?.[ci];
+                if (!curPlot?.plant) return plot;
+                if (
+                  plot.plant.speciesId   === curPlot.plant.speciesId &&
+                  plot.plant.timePlanted === curPlot.plant.timePlanted
+                ) {
+                  return { ...plot, plant: { ...plot.plant, mutation: curPlot.plant.mutation } };
+                }
+                return plot;
+              })
+            );
+          }
+          return merged;
+        });
         onSuccess?.(result);
       } catch (err) {
         console.error("Action failed, rolling back:", err);

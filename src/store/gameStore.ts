@@ -978,7 +978,7 @@ const WEATHER_MUTATION_TYPE: Partial<Record<WeatherType, MutationType>> = {
   prismatic_skies: "rainbow",
   golden_hour:     "golden",
   tornado:         "windstruck",
-  thunderstorm:    "shocked",
+  // thunderstorm is handled via a two-step chain (wet → shocked) below, not a direct shocked roll
 };
 
 const MOONLIT_NIGHT_CHANCE = 0.000019; // 50% over a 10-hour night (1 - 0.5^(1/36000))
@@ -1029,8 +1029,8 @@ export function tickWeatherMutations(
       // Skip if already has any other mutation (string); allow null and undefined
       if (typeof plot.plant.mutation === "string") return plot;
 
-      // Thunderstorm: unmutated (null) plants can become wet
-      if (weatherType === "thunderstorm" && plot.plant.mutation === null) {
+      // Thunderstorm: unmutated (undefined or null) plants can become wet
+      if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
         if (Math.random() < 0.00076) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
@@ -1078,10 +1078,24 @@ export function tickSprinklerMutations(
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
-      // Only roll for unmutated plants (mutation === undefined or null)
-      if (typeof plot.plant.mutation === "string") return plot;
 
       const sources = getGearAffectingCell(state.grid, ri, ci, now);
+
+      // Generator sprinkler (shocked) converts wet → shocked.
+      // Must run before the "skip already-mutated" guard because wet is a string mutation.
+      if (plot.plant.mutation === "wet") {
+        for (const { def } of sources) {
+          if (!isMutationSprinkler(def) || def.mutationType !== "shocked" || !def.mutationChancePerTick) continue;
+          if (Math.random() < def.mutationChancePerTick) {
+            changed = true;
+            return { ...plot, plant: { ...plot.plant, mutation: "shocked" as MutationType } };
+          }
+        }
+        return plot; // wet plant — no other sprinkler mutation applies
+      }
+
+      // Only roll for unmutated plants (mutation === undefined or null)
+      if (typeof plot.plant.mutation === "string") return plot;
 
       // Regular sprinklers — wet mutation chance
       for (const { def } of sources) {
@@ -1092,11 +1106,10 @@ export function tickSprinklerMutations(
         }
       }
 
-      // Mutation sprinklers
+      // Mutation sprinklers (all types except shocked, which is handled above for wet plants)
       for (const { def } of sources) {
         if (!isMutationSprinkler(def) || !def.mutationType || !def.mutationChancePerTick) continue;
-        // Shocked can only be applied to wet plants — Generator skips non-wet blooms
-        if (def.mutationType === "shocked" && (plot.plant.mutation as string | null | undefined) !== "wet") continue;
+        if (def.mutationType === "shocked") continue; // Generator only applies to wet plants (handled above)
         if (Math.random() < def.mutationChancePerTick) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: def.mutationType } };
