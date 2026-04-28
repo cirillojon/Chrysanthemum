@@ -236,12 +236,20 @@ export interface MarketplaceUpgradeSlotsResult {
 }
 
 export interface MarketplaceBuyResult {
+  ok:    true;
+  coins: number;
+  // Item is delivered via mailbox — no direct inventory update
+}
+
+export interface ClaimMailResult {
   ok:             true;
+  kind:           "coins" | "flower" | "seed" | "fertilizer" | "gear";
   coins:          number;
   inventory:      GameState["inventory"];
-  fertilizers?:   GameState["fertilizers"];
-  gearInventory?: GameState["gearInventory"];
+  fertilizers:    GameState["fertilizers"];
+  gearInventory:  GameState["gearInventory"];
   discovered:     GameState["discovered"];
+  alreadyClaimed?: boolean;
 }
 
 export interface MarketplaceCancelResult {
@@ -302,4 +310,8 @@ export function edgeMarketplaceBuy(listingId: string) {
 
 export function edgeMarketplaceCancel(listingId: string) {
   return callEdge<MarketplaceCancelResult>("marketplace-cancel", { listingId });
+}
+
+export function edgeClaimMail(mailId: string) {
+  return callEdge<ClaimMailResult>("claim-mail", { mailId });
 }

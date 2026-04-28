@@ -41,96 +41,114 @@ export function Garden() {
     next = assignBloomMutations(next, weather);
     if (next !== state) update(next);
 
-    // Bell harvests — goes through perform() + edgeHarvest() so the server stays in sync
+    // Bell harvests — throttled to 1 per GEAR_ACTION_INTERVAL_MS to prevent server races
     const bellTargets = findHarvestBellTargets(next, weather);
-    for (const { row, col } of bellTargets) {
-      const key = `${row}-${col}`;
-      if (harvestingPlots.current.has(key)) continue;
-      harvestingPlots.current.add(key);
-      const cur = getState();
-      if (!cur.grid[row]?.[col]?.plant) { harvestingPlots.current.delete(key); continue; }
-      const savedCell          = cur.grid[row][col];
-      const harvestedSpeciesId = savedCell.plant?.speciesId;
-      const harvestedMutation  = savedCell.plant?.mutation ?? undefined;
-      const opt = harvestPlant(cur, row, col, weather);
-      if (!opt) { harvestingPlots.current.delete(key); continue; }
-      perform(
-        opt.state,
-        async () => {
-          try {
-            return await edgeHarvest(row, col);
-          } finally {
+    const nowBell = Date.now();
+    if (nowBell - lastBellActionRef.current >= GEAR_ACTION_INTERVAL_MS) {
+      const bellTarget = bellTargets.find(({ row, col }) => !harvestingPlots.current.has(`${row}-${col}`));
+      if (bellTarget) {
+        const { row, col } = bellTarget;
+        const key = `${row}-${col}`;
+        lastBellActionRef.current = nowBell;
+        harvestingPlots.current.add(key);
+        const cur = getState();
+        if (!cur.grid[row]?.[col]?.plant) {
+          harvestingPlots.current.delete(key);
+        } else {
+          const savedCell          = cur.grid[row][col];
+          const harvestedSpeciesId = savedCell.plant?.speciesId;
+          const harvestedMutation  = savedCell.plant?.mutation ?? undefined;
+          const opt = harvestPlant(cur, row, col, weather);
+          if (!opt) {
             harvestingPlots.current.delete(key);
+          } else {
+            perform(
+              opt.state,
+              async () => {
+                try {
+                  return await edgeHarvest(row, col);
+                } finally {
+                  harvestingPlots.current.delete(key);
+                }
+              },
+              undefined,
+              {
+                serialize: true,
+                rollback: (c) => ({
+                  ...c,
+                  grid: c.grid.map((r2, ri2) =>
+                    r2.map((p2, ci2) => ri2 === row && ci2 === col ? savedCell : p2)
+                  ),
+                  inventory: harvestedSpeciesId
+                    ? c.inventory
+                        .map((item) =>
+                          item.speciesId === harvestedSpeciesId &&
+                          item.mutation  === harvestedMutation  &&
+                          !item.isSeed
+                            ? { ...item, quantity: item.quantity - 1 }
+                            : item
+                        )
+                        .filter((item) => item.quantity > 0)
+                    : c.inventory,
+                }),
+              }
+            );
           }
-        },
-        undefined,
-        {
-          serialize: true,
-          rollback: (c) => ({
-            ...c,
-            grid: c.grid.map((r2, ri2) =>
-              r2.map((p2, ci2) => ri2 === row && ci2 === col ? savedCell : p2)
-            ),
-            inventory: harvestedSpeciesId
-              ? c.inventory
-                  .map((item) =>
-                    item.speciesId === harvestedSpeciesId &&
-                    item.mutation  === harvestedMutation  &&
-                    !item.isSeed
-                      ? { ...item, quantity: item.quantity - 1 }
-                      : item
-                  )
-                  .filter((item) => item.quantity > 0)
-              : c.inventory,
-          }),
         }
-      );
+      }
     }
 
-    // Auto-Planter: plant seeds into empty covered cells, notify the server per-plant
+    // Auto-Planter: throttled to 1 per GEAR_ACTION_INTERVAL_MS
     const plantTargets = findAutoPlantTargets(getState());
-    for (const { row, col, speciesId } of plantTargets) {
-      const key = `plant-${row}-${col}`;
-      if (plantingPlots.current.has(key)) continue;
-      plantingPlots.current.add(key);
-      const cur = getState();
-      if (cur.grid[row]?.[col]?.plant || cur.grid[row]?.[col]?.gear) {
-        plantingPlots.current.delete(key); continue;
-      }
-      const opt = plantSeed(cur, row, col, speciesId);
-      if (!opt) { plantingPlots.current.delete(key); continue; }
-      perform(
-        opt,
-        async () => {
-          try {
-            // Discard grid + inventory from the server response — merging them back
-            // would overwrite the other in-flight optimistic plants (same problem
-            // harvest has with inventory).  Rollback handles failure; saveToCloud
-            // will sync the full state once everything settles.
-            await edgePlantSeed(row, col, speciesId);
-            return {};
-          } finally {
+    const nowPlant = Date.now();
+    if (nowPlant - lastPlanterActionRef.current >= GEAR_ACTION_INTERVAL_MS) {
+      const plantTarget = plantTargets.find(({ row, col }) => !plantingPlots.current.has(`plant-${row}-${col}`));
+      if (plantTarget) {
+        const { row, col, speciesId } = plantTarget;
+        const key = `plant-${row}-${col}`;
+        lastPlanterActionRef.current = nowPlant;
+        plantingPlots.current.add(key);
+        const cur = getState();
+        if (cur.grid[row]?.[col]?.plant || cur.grid[row]?.[col]?.gear) {
+          plantingPlots.current.delete(key);
+        } else {
+          const opt = plantSeed(cur, row, col, speciesId);
+          if (!opt) {
             plantingPlots.current.delete(key);
+          } else {
+            perform(
+              opt,
+              async () => {
+                try {
+                  // Discard grid + inventory from the server response — merging back
+                  // would overwrite other in-flight optimistic plants.
+                  await edgePlantSeed(row, col, speciesId);
+                  return {};
+                } finally {
+                  plantingPlots.current.delete(key);
+                }
+              },
+              undefined,
+              {
+                serialize: true,
+                rollback: (c) => ({
+                  ...c,
+                  grid: c.grid.map((r2, ri2) =>
+                    r2.map((p2, ci2) =>
+                      ri2 === row && ci2 === col ? { ...p2, plant: null } : p2
+                    )
+                  ),
+                  inventory: c.inventory.map((item) =>
+                    item.speciesId === speciesId && item.isSeed
+                      ? { ...item, quantity: item.quantity + 1 }
+                      : item
+                  ),
+                }),
+              }
+            );
           }
-        },
-        undefined,
-        {
-          serialize: true,
-          rollback: (c) => ({
-            ...c,
-            grid: c.grid.map((r2, ri2) =>
-              r2.map((p2, ci2) =>
-                ri2 === row && ci2 === col ? { ...p2, plant: null } : p2
-              )
-            ),
-            inventory: c.inventory.map((item) =>
-              item.speciesId === speciesId && item.isSeed
-                ? { ...item, quantity: item.quantity + 1 }
-                : item
-            ),
-          }),
         }
-      );
+      }
     }
   });
 
@@ -146,6 +164,10 @@ export function Garden() {
   const harvestingPlots = useRef<Set<string>>(new Set());
   // Track plots with an auto-plant in-flight to avoid duplicate edge calls
   const plantingPlots = useRef<Set<string>>(new Set());
+  // Throttle gear auto-actions to 1 per interval to prevent server race conditions
+  const lastBellActionRef    = useRef(0);
+  const lastPlanterActionRef = useRef(0);
+  const GEAR_ACTION_INTERVAL_MS = 1500; // 1 action per 1.5 s per gear type
 
   const nextUpgrade = getNextUpgrade(state.farmRows, state.farmSize);
   const currentTier = getCurrentTier(state.farmRows, state.farmSize);

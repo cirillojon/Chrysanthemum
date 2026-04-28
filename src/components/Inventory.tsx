@@ -13,7 +13,14 @@ import type { GearInventoryItem } from "../data/gear";
 type Tab = 0 | 1 | 2;
 const TAB_LABELS = ["Seeds", "Blooms", "Supplies"] as const;
 
-export function Inventory() {
+interface Props {
+  newSeeds?:    number;
+  newBlooms?:   number;
+  newSupplies?: number;
+  onSubTabView?: (subTab: "seeds" | "blooms" | "supplies") => void;
+}
+
+export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView }: Props) {
   const { state, update } = useGame();
   const [tab, setTab] = useState<Tab>(0);
 
@@ -91,13 +98,18 @@ export function Inventory() {
       {/* Tab bar */}
       <div className="flex gap-1 bg-card/40 border border-border rounded-xl p-1">
         {TAB_LABELS.map((label, i) => {
-          const count = i === 0 ? seedCount : i === 1 ? bloomCount : supplyCount;
+          const count    = i === 0 ? seedCount : i === 1 ? bloomCount : supplyCount;
+          const newCount = i === 0 ? newSeeds  : i === 1 ? newBlooms  : newSupplies;
+          const subKey   = (i === 0 ? "seeds" : i === 1 ? "blooms" : "supplies") as "seeds" | "blooms" | "supplies";
           return (
             <button
               key={label}
-              onClick={() => setTab(i as Tab)}
+              onClick={() => {
+                setTab(i as Tab);
+                onSubTabView?.(subKey);
+              }}
               className={`
-                flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all
+                flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all relative
                 ${tab === i
                   ? "bg-primary/20 text-primary border border-primary/30"
                   : "text-muted-foreground hover:text-foreground"
@@ -110,6 +122,11 @@ export function Inventory() {
                   tab === i ? "bg-primary/20 text-primary" : "bg-border text-muted-foreground"
                 }`}>
                   {count}
+                </span>
+              )}
+              {newCount > 0 && tab !== i && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
+                  {newCount > 9 ? "9+" : newCount}
                 </span>
               )}
             </button>

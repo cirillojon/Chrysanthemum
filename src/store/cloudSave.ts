@@ -437,6 +437,52 @@ export async function getSentGifts(userId: string): Promise<Gift[]> {
   return error || !data ? [] : (data as Gift[]);
 }
 
+// ── Mailbox ───────────────────────────────────────────────────────────────
+
+export interface MailboxEntry {
+  id:         string;
+  user_id:    string;
+  kind:       "coins" | "flower" | "seed" | "fertilizer" | "gear";
+  species_id: string | null;
+  mutation:   string | null;
+  is_seed:    boolean;
+  amount:     number | null;
+  message:    string;
+  claimed:    boolean;
+  created_at: string;
+}
+
+export async function getUnclaimedMail(userId: string): Promise<MailboxEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from("mailbox")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("claimed", false)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error || !data) return [];
+    return data as MailboxEntry[];
+  } catch {
+    return [];
+  }
+}
+
+export async function getUnclaimedMailCount(userId: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from("mailbox")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("claimed", false);
+
+    return error ? 0 : (count ?? 0);
+  } catch {
+    return 0;
+  }
+}
+
 // ── Leaderboard ───────────────────────────────────────────────────────────
 
 export interface LeaderboardEntry {

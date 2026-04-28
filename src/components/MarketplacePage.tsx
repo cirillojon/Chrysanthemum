@@ -39,6 +39,7 @@ export function MarketplacePage({ onViewProfile }: Props) {
   const [sort,         setSort]         = useState<SortKey>("newest");
   const [showModal,    setShowModal]    = useState(false);
   const [buyError,     setBuyError]     = useState<string | null>(null);
+  const [buySuccess,   setBuySuccess]   = useState(false);
   const [upgrading,    setUpgrading]    = useState(false);
 
   // ── Load listings ──────────────────────────────────────────────────────────
@@ -206,18 +207,14 @@ export function MarketplacePage({ onViewProfile }: Props) {
   // ── Buy handler ────────────────────────────────────────────────────────────
   async function handleBuy(listing: Listing) {
     setBuyError(null);
+    setBuySuccess(false);
     try {
       const result = await edgeMarketplaceBuy(listing.id);
       const cur = getState();
-      update({
-        ...cur,
-        coins:      result.coins,
-        inventory:  result.inventory,
-        discovered: result.discovered,
-        ...(result.fertilizers   ? { fertilizers:   result.fertilizers   } : {}),
-        ...(result.gearInventory ? { gearInventory: result.gearInventory } : {}),
-      });
+      update({ ...cur, coins: result.coins });
       setListings((prev) => prev.filter((l) => l.id !== listing.id));
+      setBuySuccess(true);
+      setTimeout(() => setBuySuccess(false), 5_000);
     } catch (e) {
       const msg = e instanceof Error ? e.message : "Purchase failed";
       // Race condition — someone else bought it between render and click
@@ -313,6 +310,14 @@ export function MarketplacePage({ onViewProfile }: Props) {
           </button>
         </div>
       </div>
+
+      {/* Buy success banner */}
+      {buySuccess && (
+        <div className="bg-primary/10 border border-primary/30 rounded-xl px-3 py-2 text-xs text-primary font-mono flex items-center justify-between">
+          <span>📬 Item sent to your Mailbox — collect it in the Social tab!</span>
+          <button onClick={() => setBuySuccess(false)} className="ml-2 opacity-60 hover:opacity-100">✕</button>
+        </div>
+      )}
 
       {/* Buy error banner */}
       {buyError && (
