@@ -425,7 +425,7 @@ export function Botany() {
         <button
           onClick={() => setTab("convert")}
           className={`
-            flex-1 py-1.5 rounded-[10px] text-xs font-semibold transition-all duration-150
+            flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center transition-all duration-150
             ${activeTab === "convert"
               ? "bg-card text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
@@ -437,7 +437,7 @@ export function Botany() {
         <button
           onClick={() => setTab("alchemy")}
           className={`
-            flex-1 py-1.5 rounded-[10px] text-xs font-semibold transition-all duration-150
+            flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center transition-all duration-150
             ${activeTab === "alchemy"
               ? "bg-card text-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground"
