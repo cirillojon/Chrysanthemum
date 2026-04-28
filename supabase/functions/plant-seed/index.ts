@@ -73,7 +73,7 @@ Deno.serve(async (req: Request) => {
     // ── Verify JWT + load save in parallel ────────────────────────────────────
     const [authResult, saveResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
-      supabaseAdmin.from("game_saves").select("grid, inventory, discovered").eq("user_id", userId).single(),
+      supabaseAdmin.from("game_saves").select("grid, inventory, discovered, updated_at").eq("user_id", userId).single(),
     ]);
 
     if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
@@ -88,6 +88,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const save = saveResult.data;
+    const priorUpdatedAt = save.updated_at as string;
 
     // ── Validate plot ─────────────────────────────────────────────────────────
     const grid = save.grid as { id: string; plant: unknown }[][];
@@ -136,14 +137,17 @@ Deno.serve(async (req: Request) => {
       .filter((i) => i.quantity > 0);
 
     // ── Write to DB ───────────────────────────────────────────────────────────
-    const { error: updateError } = await supabaseAdmin
+    const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
       .update({ grid: newGrid, inventory: newInventory, updated_at: new Date().toISOString() })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("updated_at", priorUpdatedAt)
+      .select("updated_at")
+      .single();
 
-    if (updateError) {
-      return new Response(JSON.stringify({ error: "Failed to save" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    if (updateError || !updateData) {
+      return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

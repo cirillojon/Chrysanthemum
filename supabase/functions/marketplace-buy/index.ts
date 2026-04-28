@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins")
+        .select("coins, updated_at")
         .eq("user_id", userId)
         .single(),
       supabaseAdmin
@@ -99,6 +99,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const priorUpdatedAt = buyerCoinsResult.data.updated_at as string;
     const newBuyerCoins = buyerCoins - listing.ask_price;
 
     const speciesId    = listing.species_id as string;
@@ -152,7 +153,10 @@ Deno.serve(async (req: Request) => {
     const buyerCoinUpdate = supabaseAdmin
       .from("game_saves")
       .update({ coins: newBuyerCoins, updated_at: now })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .eq("updated_at", priorUpdatedAt)
+      .select("updated_at")
+      .single();
 
     const saleRecord = supabaseAdmin.from("marketplace_sales").insert({
       species_id: speciesId,
@@ -178,10 +182,10 @@ Deno.serve(async (req: Request) => {
     if (saleResult.error) {
       console.error("marketplace-buy: sale record failed", saleResult.error);
     }
-    if (coinResult.error) {
+    if (coinResult.error || !coinResult.data) {
       console.error("marketplace-buy: buyer coin update failed", coinResult.error);
-      return new Response(JSON.stringify({ error: "Failed to update save" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

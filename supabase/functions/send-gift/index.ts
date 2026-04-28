@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("inventory")
+        .select("inventory, updated_at")
         .eq("user_id", userId)
         .single(),
       supabaseAdmin
@@ -94,6 +94,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const senderUsername = senderProfileResult.data?.username ?? "Someone";
+    const priorUpdatedAt = saveResult.data.updated_at as string;
     let inventory = (saveResult.data.inventory ?? []) as InventoryItem[];
 
     // ── Validate item in sender's inventory (blooms only, not seeds) ──────────
@@ -132,7 +133,10 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin
         .from("game_saves")
         .update({ inventory, updated_at: now })
-        .eq("user_id", userId),
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single(),
     ]);
 
     if (mailResult.error) {
@@ -141,10 +145,10 @@ Deno.serve(async (req: Request) => {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (updateResult.error) {
+    if (updateResult.error || !updateResult.data) {
       console.error("send-gift: inventory update failed:", updateResult.error);
-      return new Response(JSON.stringify({ error: "Failed to update inventory" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 

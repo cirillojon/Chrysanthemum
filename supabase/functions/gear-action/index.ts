@@ -78,9 +78,9 @@ Deno.serve(async (req: Request) => {
 
     // Select only the columns each action needs
     const selectCols =
-      action === "collect" ? "grid, fertilizers"       :
-      action === "remove"  ? "grid, gear_inventory, fertilizers" :
-                             "grid, gear_inventory";
+      action === "collect" ? "grid, fertilizers, updated_at"       :
+      action === "remove"  ? "grid, gear_inventory, fertilizers, updated_at" :
+                             "grid, gear_inventory, updated_at";
 
     const [authResult, saveResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
@@ -95,6 +95,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const save = saveResult.data;
+    const priorUpdatedAt = save.updated_at as string;
     let grid          = (save.grid          ?? []) as GridCell[][];
     let gearInventory = (save.gear_inventory ?? []) as GearInvItem[];
     let fertilizers   = (save.fertilizers   ?? []) as FertItem[];
@@ -124,12 +125,15 @@ Deno.serve(async (req: Request) => {
         .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)
         .filter((g) => g.quantity > 0);
 
-      const { error: ue } = await supabaseAdmin
+      const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
         .update({ grid, gear_inventory: gearInventory, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
 
-      if (ue) return err("Failed to save", 500);
+      if (ue || !ud) return err("Save was modified by another action", 409);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_place",
@@ -161,12 +165,15 @@ Deno.serve(async (req: Request) => {
           : [...fertilizers, { type: fertType, quantity: 1 }];
       }
 
-      const { error: ue } = await supabaseAdmin
+      const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
         .update({ grid, fertilizers, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
 
-      if (ue) return err("Failed to save", 500);
+      if (ue || !ud) return err("Save was modified by another action", 409);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_remove",
@@ -199,12 +206,15 @@ Deno.serve(async (req: Request) => {
           : [...fertilizers, { type: fertType, quantity: 1 }];
       }
 
-      const { error: ue } = await supabaseAdmin
+      const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
         .update({ grid, fertilizers, updated_at: new Date().toISOString() })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
 
-      if (ue) return err("Failed to save", 500);
+      if (ue || !ud) return err("Save was modified by another action", 409);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_collect",
