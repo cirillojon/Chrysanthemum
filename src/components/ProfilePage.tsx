@@ -7,6 +7,7 @@ import type { GameState } from "../store/gameStore";
 import { ReadOnlyGarden } from "./ReadOnlyGarden";
 import { getFlower, RARITY_CONFIG, MUTATIONS, FLOWERS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
+import { getPresenceStatus, formatLastSeen, STATUS_DOT, STATUS_TEXT_COLOR } from "../lib/presence";
 import { useGame } from "../store/GameContext";
 import { useSettings } from "../store/SettingsContext";
 import { THEMES } from "../data/themes";
@@ -122,6 +123,7 @@ export function ProfilePage({ username }: Props) {
   // ── Derived display values ───────────────────────────────────────────────
   const displayFlower   = getFlower(profile.display_flower);
   const displayRarity   = displayFlower ? RARITY_CONFIG[displayFlower.rarity] : null;
+  const presenceStatus  = !isOwnProfile ? getPresenceStatus(profile.last_seen_at) : null;
   const totalItems      = save?.inventory.reduce((s, i) => s + i.quantity, 0) ?? 0;
   const uniqueSpecies   = new Set(save?.inventory.map((i) => i.speciesId) ?? []).size;
   const displayMutation = profile.display_mutation as MutationType | null;
@@ -216,6 +218,9 @@ export function ProfilePage({ username }: Props) {
               {mutObj && (
                 <span className="absolute -top-1 -right-1 text-lg">{mutObj.emoji}</span>
               )}
+              {presenceStatus && (
+                <span className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-background ${STATUS_DOT[presenceStatus]}`} />
+              )}
             </div>
           )}
 
@@ -270,6 +275,16 @@ export function ProfilePage({ username }: Props) {
                   </>
                 )}
               </div>
+            )}
+
+            {/* Presence status line */}
+            {presenceStatus && (
+              <p className={`text-xs font-mono ${STATUS_TEXT_COLOR[presenceStatus]}`}>
+                {presenceStatus === "offline"
+                  ? `Last seen ${formatLastSeen(profile.last_seen_at)}`
+                  : presenceStatus === "away" ? "Away"
+                  : "Online"}
+              </p>
             )}
 
             {/* Display flower line */}

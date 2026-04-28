@@ -31,6 +31,7 @@ import { useDayNight } from "./hooks/useDayNight";
 import { getFlower, MUTATIONS } from "./data/flowers";
 import type { MutationType } from "./data/flowers";
 import { useVersionCheck } from "./hooks/useVersionCheck";
+import { usePresence } from "./hooks/usePresence";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
@@ -54,6 +55,8 @@ function AppInner() {
     needsUsername, completeUsername,
     activeWeather, weatherMsLeft, weatherIsActive,
   } = useGame();
+
+  usePresence();
 
   const { pendingCount, newRequest, clearNewRequest } = useFriendRequests(user?.id ?? null);
   const { pendingCount: giftCount, newGift, clearNewGift } = useGiftNotifications(user?.id ?? null);

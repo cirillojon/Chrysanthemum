@@ -8,6 +8,14 @@ export interface CloudProfile {
   display_mutation: string | null;
   status: string | null;
   created_at: string;
+  last_seen_at: string | null;
+}
+
+export async function updatePresence(userId: string): Promise<void> {
+  await supabase
+    .from("users")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("id", userId);
 }
 
 // ── Profile ────────────────────────────────────────────────────────────────
