@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView }: Props) {
-  const { state, update } = useGame();
+  const { state, update, getState, awaitHarvests } = useGame();
   const [tab, setTab] = useState<Tab>(0);
 
   const items       = state.inventory.filter((i) => i.quantity > 0);
@@ -42,15 +42,22 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   }, 0);
 
   async function handleSellAll() {
-    let optimistic = state;
-    for (const item of blooms) {
+    // Wait for any in-flight serialized harvests to finish before reading/writing
+    // the DB — avoids 409 conflicts from concurrent updated_at changes.
+    await awaitHarvests();
+
+    const current = getState();
+    const currentBlooms = current.inventory.filter((i) => i.quantity > 0 && !i.isSeed);
+
+    let optimistic = current;
+    for (const item of currentBlooms) {
       const next = sellFlower(optimistic, item.speciesId, item.quantity, item.mutation as MutationType | undefined);
       if (next) optimistic = next;
     }
-    const prev = state;
+    const prev = current;
     update(optimistic);
     try {
-      for (const item of blooms) {
+      for (const item of currentBlooms) {
         await edgeSellFlower(item.speciesId, item.mutation, item.quantity);
       }
     } catch {
