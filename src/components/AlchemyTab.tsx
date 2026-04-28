@@ -231,7 +231,7 @@ export function AlchemyTab() {
             key={v}
             onClick={() => setView(v)}
             className={`
-              flex-1 py-1.5 rounded-[10px] text-xs font-semibold capitalize transition-all duration-150
+              flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center capitalize transition-all duration-150
               ${view === v
                 ? "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
