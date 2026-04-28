@@ -65,6 +65,7 @@ interface GameContextValue {
   refreshProfile: () => Promise<void>;
   needsUsername: boolean;
   completeUsername: (username: string) => void;
+  isStaleTab: boolean;
   // Weather
   activeWeather: WeatherType;
   weatherMsLeft: number;
@@ -110,6 +111,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const loadedFor           = useRef<string | null>(null);
   const initialSessionFired = useRef(false);
   const stateRef            = useRef(state);
+  const tabId               = useRef(crypto.randomUUID());
+  const [isStaleTab, setIsStaleTab] = useState(false);
 
   // Weather — global, shared across all players via Supabase Realtime
   const { activeType: activeWeather, isActive: weatherIsActive, msLeft: weatherMsLeft, msUntilNext: weatherMsUntilNext, forecast: weatherForecast } = useWeather();
@@ -145,6 +148,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
     loadedFor.current = u.id;
     setUser(u);
+    // Claim this tab as the active session — other open tabs will detect this
+    // via the storage event and disable their saves to prevent data races.
+    localStorage.setItem(`chrysanthemum_active_tab_${u.id}`, tabId.current);
 
     try {
       const p = await getProfile(u.id);
@@ -282,6 +288,22 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, []);
 
+  // ── Single-session enforcement ────────────────────────────────────────────
+  // When a second tab logs in as the same user it writes a new tabId to
+  // localStorage. The storage event fires in every OTHER tab, allowing this
+  // tab to detect it's been superseded and disable its saves.
+  useEffect(() => {
+    if (!user) return;
+    function handleStorage(e: StorageEvent) {
+      if (e.key === `chrysanthemum_active_tab_${user!.id}` && e.newValue !== tabId.current) {
+        saveEnabled.current = false;
+        setIsStaleTab(true);
+      }
+    }
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, [user]);
+
   // ── Auto-save ─────────────────────────────────────────────────────────────
   // Signed-in users: writes are now owned by Edge Functions (server-authoritative).
   // We keep a localStorage shadow only so the correct save can be recovered if a
@@ -289,6 +311,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // Guest users: still write to localStorage as before.
   useEffect(() => {
     if (!saveEnabled.current) return;
+    if (isStaleTab) return;
     if (user && !needsUsername) {
       try {
         localStorage.setItem(
@@ -462,6 +485,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       signInWithGoogle, signOut,
       refreshProfile,
       needsUsername, completeUsername,
+      isStaleTab,
       activeWeather,
       weatherMsLeft,
       weatherMsUntilNext,

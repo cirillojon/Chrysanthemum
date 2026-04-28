@@ -53,6 +53,7 @@ function AppInner() {
     user, profile, authLoading,
     signInWithGoogle, signOut,
     needsUsername, completeUsername,
+    isStaleTab,
     activeWeather, weatherMsLeft, weatherIsActive,
   } = useGame();
 
@@ -342,6 +343,25 @@ function AppInner() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col">
+
+      {/* Stale-tab overlay — shown when another tab took over this session */}
+      {isStaleTab && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-card border border-border rounded-2xl p-6 max-w-sm mx-4 text-center space-y-3 shadow-2xl">
+            <p className="text-2xl">🌿</p>
+            <p className="font-semibold text-foreground">Session moved to another tab</p>
+            <p className="text-sm text-muted-foreground">
+              You opened Chrysanthemum in another tab. Saves are disabled here to prevent conflicts.
+            </p>
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-2 w-full py-2 rounded-xl bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
+            >
+              Resume here
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Modals & toasts */}
       {showBanner && (
