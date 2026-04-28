@@ -208,9 +208,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       if (summary.shopRestocked)   setShopJustRestocked(true);
       if (summary.supplyRestocked) setSupplyJustRestocked(true);
 
-      if (needsCloudSync) {
-        await saveToCloud(u.id, ticked);
-      }
+      // Always write the offline-ticked state back to cloud. This is critical
+      // when the cron job already harvested/planted while the user was offline —
+      // applyOfflineTick may further modify the cloud state (or the state may
+      // simply need to reflect the latest tick checkpoints). Without this write,
+      // the DB can be out of sync with the client, causing plant-seed / harvest
+      // edge functions to see stale occupied / empty plots.
+      await saveToCloud(u.id, ticked);
 
       setTimeout(() => { saveEnabled.current = true; }, 1_000);
 
