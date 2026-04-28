@@ -49,6 +49,8 @@ interface GameContextValue {
   ) => Promise<void>;
   /** Returns a promise that resolves once all currently-queued serialized harvests have completed. */
   awaitHarvests: () => Promise<unknown>;
+  /** Attach an async operation to the serialized harvest queue so signOut() waits for it. */
+  queueWork: (fn: () => Promise<void>) => void;
   offlineSummary: OfflineSummary;
   clearSummary: () => void;
   shopJustRestocked: boolean;
@@ -112,6 +114,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const initialSessionFired = useRef(false);
   const stateRef            = useRef(state);
   const tabId               = useRef(crypto.randomUUID());
+  // Incremented on every sign-out so in-flight loadUserSession calls know to discard their results.
+  const loadGen             = useRef(0);
   const [isStaleTab, setIsStaleTab] = useState(false);
 
   // Weather — global, shared across all players via Supabase Realtime
@@ -128,6 +132,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setAuthLoading(false);
       return;
     }
+
+    // Stamp this load with the current generation. Any sign-out that fires
+    // while we're awaiting will increment loadGen, letting us discard stale results
+    // and prevent a finished loadUserSession from overwriting the cleared state.
+    const gen = loadGen.current;
 
     isLoading.current   = true;
     saveEnabled.current = false;
@@ -154,6 +163,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
     try {
       const p = await getProfile(u.id);
+      if (loadGen.current !== gen) return; // sign-out fired while we were loading — discard
 
       if (!p) {
         setNeedsUsername(true);
@@ -165,6 +175,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       setProfile(p);
 
       const cloudSave = await loadCloudSave(u.id);
+      if (loadGen.current !== gen) return; // sign-out fired — discard
+
       const localRaw  = localStorage.getItem("chrysanthemum_save");
       const localParsed = localRaw ? (JSON.parse(localRaw) as GameState & { _userId?: string }) : null;
 
@@ -205,6 +217,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         }
       } catch { /* non-critical — offline tick still runs without weather bonus */ }
 
+      if (loadGen.current !== gen) return; // sign-out fired — discard
+
       const { state: ticked, summary } = applyOfflineTick(saveToUse, offlineWeather);
       setState(ticked);
       setOfflineSummary(summary);
@@ -218,10 +232,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // the DB can be out of sync with the client, causing plant-seed / harvest
       // edge functions to see stale occupied / empty plots.
       await saveToCloud(u.id, ticked);
+      if (loadGen.current !== gen) return; // sign-out fired after cloud write — don't re-enable saves
 
       setTimeout(() => { saveEnabled.current = true; }, 1_000);
 
     } catch (e) {
+      if (loadGen.current !== gen) return; // sign-out fired — discard
       const { state: localState, summary } = loadGame();
       setState(localState);
       setOfflineSummary(summary);
@@ -249,6 +265,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (event === "SIGNED_OUT") {
+          loadGen.current++;           // invalidate any in-flight loadUserSession
           isLoading.current            = false;
           loadedFor.current            = null;
           initialSessionFired.current  = false;
@@ -386,6 +403,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // so concurrent DB reads/writes don't overwrite each other's grid changes.
   const harvestQueue = useRef<Promise<unknown>>(Promise.resolve());
   const awaitHarvests = useCallback(() => harvestQueue.current, []);
+  const queueWork = useCallback((fn: () => Promise<void>) => {
+    harvestQueue.current = harvestQueue.current.then(fn).catch(() => {});
+  }, []);
 
   const perform = useCallback(async <T extends Partial<GameState>>(
     optimisticState: GameState,
@@ -492,12 +512,16 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   async function signOut() {
     saveEnabled.current = false;
+    // Flush any pending serialized operations (plant-seed, harvest, etc.) before
+    // invalidating the session — otherwise in-flight edge function calls fail mid-queue,
+    // their DB writes are lost, and the cloud save ends up behind the local state.
+    await harvestQueue.current;
     await supabase.auth.signOut();
   }
 
   return (
     <GameContext.Provider value={{
-      state, update, getState, perform, awaitHarvests,
+      state, update, getState, perform, awaitHarvests, queueWork,
       offlineSummary, clearSummary: () => setOfflineSummary(EMPTY_SUMMARY),
       shopJustRestocked,   clearShopNotification:   () => setShopJustRestocked(false),
       supplyJustRestocked, clearSupplyNotification: () => setSupplyJustRestocked(false),

@@ -28,7 +28,7 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden() {
-  const { state, update, perform, getState, awaitHarvests, activeWeather } = useGame();
+  const { state, update, perform, getState, awaitHarvests, queueWork, activeWeather } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -403,11 +403,17 @@ export function Garden() {
         }
       }
     }
-    try {
-      for (const { row, col, speciesId } of planted) await edgePlantSeed(row, col, speciesId);
-    } catch {
-      update(prev);
-    }
+
+    // Add the edge calls to the harvest queue so signOut() waits for them
+    // before invalidating the session — without this, a rapid sign-out would
+    // cancel in-flight calls and the cloud save would be left in a partial state.
+    queueWork(async () => {
+      try {
+        for (const { row, col, speciesId } of planted) await edgePlantSeed(row, col, speciesId);
+      } catch {
+        update(prev);
+      }
+    });
   }
 
   const bloomedCount = state.grid
