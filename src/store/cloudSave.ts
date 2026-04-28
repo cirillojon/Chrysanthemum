@@ -448,16 +448,20 @@ export async function getSentGifts(userId: string): Promise<Gift[]> {
 // ── Mailbox ───────────────────────────────────────────────────────────────
 
 export interface MailboxEntry {
-  id:         string;
-  user_id:    string;
-  kind:       "coins" | "flower" | "seed" | "fertilizer" | "gear";
-  species_id: string | null;
-  mutation:   string | null;
-  is_seed:    boolean;
-  amount:     number | null;
-  message:    string;
-  claimed:    boolean;
-  created_at: string;
+  id:           string;
+  user_id:      string;
+  from_user_id: string | null;   // null = system (marketplace proceeds, etc.)
+  subject:      string;
+  kind:         "coins" | "flower" | "seed" | "fertilizer" | "gear";
+  species_id:   string | null;
+  mutation:     string | null;
+  is_seed:      boolean;
+  amount:       number | null;
+  message:      string;
+  claimed:      boolean;
+  created_at:   string;
+  // Populated client-side after fetching sender profile
+  from_profile?: CloudProfile | null;
 }
 
 export async function getUnclaimedMail(userId: string): Promise<MailboxEntry[]> {
@@ -471,7 +475,21 @@ export async function getUnclaimedMail(userId: string): Promise<MailboxEntry[]> 
       .limit(50);
 
     if (error || !data) return [];
-    return data as MailboxEntry[];
+
+    const entries = data as MailboxEntry[];
+
+    // Fetch sender profiles for entries that have a from_user_id
+    const senderIds = [...new Set(entries.map((e) => e.from_user_id).filter(Boolean))] as string[];
+    if (senderIds.length > 0) {
+      const profiles = await Promise.all(senderIds.map((id) => getProfile(id)));
+      const profileMap = new Map(profiles.filter(Boolean).map((p) => [p!.id, p!]));
+      return entries.map((e) => ({
+        ...e,
+        from_profile: e.from_user_id ? (profileMap.get(e.from_user_id) ?? null) : null,
+      }));
+    }
+
+    return entries;
   } catch {
     return [];
   }

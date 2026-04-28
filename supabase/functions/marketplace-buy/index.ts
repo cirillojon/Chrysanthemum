@@ -131,19 +131,21 @@ Deno.serve(async (req: Request) => {
 
     const buyerMailInsert = supabaseAdmin.from("mailbox").insert({
       user_id:    userId,
+      subject:    "Marketplace Purchase",
       kind:       itemKind,
       species_id: speciesId,
       mutation:   listing.mutation ?? null,
       is_seed:    isSeed,
-      message:    "Marketplace purchase",
+      message:    "",
       created_at: now,
     });
 
     const sellerMailInsert = supabaseAdmin.from("mailbox").insert({
       user_id:    listing.seller_id,
+      subject:    "Listing Sold",
       kind:       "coins",
       amount:     listing.ask_price,
-      message:    "Your listing sold",
+      message:    "",
       created_at: now,
     });
 

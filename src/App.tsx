@@ -177,8 +177,9 @@ function AppInner() {
 
   const newInvTotal = newSeeds + newBlooms + newSupplies;
 
-  // Social tab badge = friend requests + unread mailbox + unclaimed gifts
-  const socialBadgeCount = pendingCount + mailboxUnreadCount + giftCount;
+  // Social tab badge = friend requests + unread mailbox
+  // (gifts now arrive via mailbox so mailboxUnreadCount already includes them)
+  const socialBadgeCount = pendingCount + mailboxUnreadCount;
 
   // ── Swipe navigation ─────────────────────────────────────────────────────────
   // Flat order: garden(0) → shop:seeds(1) → shop:supply(2) →
@@ -592,7 +593,7 @@ function AppInner() {
               {(user || socialView === "marketplace") && (
                 <div className="flex gap-2 mb-6">
                   {(["search", "friends", "mailbox", "marketplace", "leaderboard"] as SocialView[]).map((v) => {
-                    const mailboxBadge = mailboxUnreadCount + giftCount;
+                    const mailboxBadge = mailboxUnreadCount;
                     return (
                       <button
                         key={v}
