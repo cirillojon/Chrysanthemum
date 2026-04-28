@@ -208,8 +208,8 @@ Deno.serve(async (req: Request) => {
 
     // ── create_listing ────────────────────────────────────────────────────────
     if (body.action === "create_listing") {
-      if (typeof body.askPrice !== "number" || body.askPrice < 1) {
-        return new Response(JSON.stringify({ error: "askPrice required" }), {
+      if (!Number.isInteger(body.askPrice) || body.askPrice < 1) {
+        return new Response(JSON.stringify({ error: "askPrice must be a positive integer" }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
