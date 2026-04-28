@@ -501,7 +501,8 @@ export function applyOfflineTick(
 
   // Stamp stage transitions first — ensures bloomedAt is written on plants that
   // grew to bloom while offline, so tickHarvestBells can see and harvest them.
-  updated = stampStageTransitions(updated, now, "clear");
+  // Stamp 6 s in the past so the bell's 5-second grace period doesn't block them.
+  updated = stampStageTransitions(updated, now - 6_000, "clear");
 
   // Auto-harvest via any active Harvest Bells (captures offline progress)
   updated = tickHarvestBells(updated, "clear");
@@ -531,8 +532,9 @@ export function simulateOfflineGarden(save: GameState): GameState {
   const now = Date.now();
   // Prune any expired gear first (same as applyOfflineTick does)
   let sim = { ...save, grid: pruneExpiredGear(save.grid, now) };
-  // Stamp bloomedAt / sproutedAt so harvest bell can find ready plants
-  sim = stampStageTransitions(sim, now, "clear");
+  // Stamp bloomedAt / sproutedAt slightly in the past so tickHarvestBells'
+  // 5-second grace period doesn't block plants that bloomed while offline.
+  sim = stampStageTransitions(sim, now - 6_000, "clear");
   // Harvest bell auto-harvest
   sim = tickHarvestBells(sim, "clear");
   // Auto-planter fill
