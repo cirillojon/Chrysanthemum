@@ -291,7 +291,7 @@ export function Garden() {
           ...cur,
           grid: cur.grid.map((r2, ri) =>
             r2.map((p, ci) =>
-              ri === row && ci === col ? { ...p, gear: undefined } : p
+              ri === row && ci === col ? { ...p, gear: null } : p
             )
           ),
           gearInventory: (cur.gearInventory ?? []).map((g) =>
@@ -559,12 +559,6 @@ function FanDirectionPicker({
   onDirection: (dir: FanDirection) => void;
   onClose: () => void;
 }) {
-  const dirs: { dir: FanDirection; label: string; arrow: string }[] = [
-    { dir: "up",    label: "Up",    arrow: "↑" },
-    { dir: "down",  label: "Down",  arrow: "↓" },
-    { dir: "left",  label: "Left",  arrow: "←" },
-    { dir: "right", label: "Right", arrow: "→" },
-  ];
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 w-64 shadow-xl z-50 space-y-3">

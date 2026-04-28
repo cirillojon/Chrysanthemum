@@ -59,7 +59,7 @@ function AppInner() {
   usePresence();
 
   const { pendingCount, newRequest, clearNewRequest } = useFriendRequests(user?.id ?? null);
-  const { pendingCount: giftCount, newGift, clearNewGift } = useGiftNotifications(user?.id ?? null);
+  const { newGift, clearNewGift } = useGiftNotifications(user?.id ?? null);
   const { unreadCount: mailboxUnreadCount } = useMailbox(user?.id ?? null);
 
   const [tab, setTab]               = useState<Tab>("garden");

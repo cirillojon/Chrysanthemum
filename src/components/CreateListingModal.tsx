@@ -11,7 +11,6 @@ import {
   edgeMarketplaceCreateFertilizerListing,
   edgeMarketplaceCreateGearListing,
 } from "../lib/edgeFunctions";
-import type { FertilizerItem } from "../store/gameStore";
 
 const LISTING_FEE_PCT = 0.05;
 

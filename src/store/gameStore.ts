@@ -1096,7 +1096,7 @@ export function tickSprinklerMutations(
       for (const { def } of sources) {
         if (!isMutationSprinkler(def) || !def.mutationType || !def.mutationChancePerTick) continue;
         // Shocked can only be applied to wet plants — Generator skips non-wet blooms
-        if (def.mutationType === "shocked" && plot.plant.mutation !== "wet") continue;
+        if (def.mutationType === "shocked" && (plot.plant.mutation as string | null | undefined) !== "wet") continue;
         if (Math.random() < def.mutationChancePerTick) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: def.mutationType } };

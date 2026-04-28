@@ -169,18 +169,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // Pick the newer save — local is kept as a rolling backup so a refresh
       // or mid-flight cloud save never loses this user's progress.
       let saveToUse: GameState;
-      let needsCloudSync = false;
 
       if (!cloudSave) {
-        saveToUse      = localSave ?? defaultState();
-        needsCloudSync = true;
+        saveToUse = localSave ?? defaultState();
       } else if (
         localSave &&
         localSave.lastSaved > cloudSave.lastSaved &&
         !isTamperedTimestamp(localSave.lastSaved)
       ) {
-        saveToUse      = localSave;
-        needsCloudSync = true;
+        saveToUse = localSave;
       } else {
         saveToUse = cloudSave;
       }
