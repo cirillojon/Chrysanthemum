@@ -3,6 +3,7 @@ import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplace
 import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
+import { mergeEssences, calculateEssenceYield, type EssenceItem } from "../data/essences";
 import {
   WEATHER_MUT_CHANCE_PER_TICK,
   THUNDERSTORM_WET_CHANCE_PER_TICK,
@@ -59,6 +60,8 @@ export interface FertilizerItem {
   quantity: number;
 }
 
+export type { EssenceItem };
+
 export interface ShopSlot {
   speciesId:     string;
   price:         number;
@@ -94,6 +97,8 @@ export interface GameState {
   supplyShop:       ShopSlot[];
   lastSupplyReset:  number;
   gearInventory:    GearInventoryItem[];
+  // Alchemy — essence tokens per flower type
+  essences:         EssenceItem[];
 }
 
 export interface OfflineSummary {
@@ -346,6 +351,7 @@ export function defaultState(): GameState {
     supplyShop:           generateSupplyShop(DEFAULT_SUPPLY_SLOTS),
     lastSupplyReset:      now,
     gearInventory:        [],
+    essences:             [],
   };
 }
 
@@ -424,6 +430,7 @@ export function applyOfflineTick(
     supplyShop:           save.supplyShop           ?? generateSupplyShop(save.supplySlots ?? DEFAULT_SUPPLY_SLOTS),
     lastSupplyReset:      save.lastSupplyReset       ?? now2,
     gearInventory:        save.gearInventory         ?? [],
+    essences:             save.essences              ?? [],
   };
 
   let shopRestocked    = false;
@@ -2025,6 +2032,59 @@ export function upgradeSupplySlots(state: GameState): GameState | null {
     supplySlots: next.slots,
     supplyShop:  [...(state.supplyShop ?? []), ...emptySlots],
   };
+}
+
+// ── Alchemy — sacrifice ────────────────────────────────────────────────────
+
+export interface SacrificeEntry {
+  speciesId: string;
+  mutation?: MutationType;
+  quantity: number;
+}
+
+/**
+ * Optimistically consumes flowers and adds essences.
+ * The edge function mirrors this logic server-side.
+ * Returns null if any sacrifice entry is invalid (wrong species / not enough stock).
+ */
+export function sacrificeFlowers(
+  state: GameState,
+  sacrifices: SacrificeEntry[],
+): GameState | null {
+  if (sacrifices.length === 0) return null;
+
+  // Validate every entry first
+  for (const { speciesId, mutation, quantity } of sacrifices) {
+    if (quantity < 1) return null;
+    const species = getFlower(speciesId);
+    if (!species) return null;
+    const invItem = state.inventory.find(
+      (i) => i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
+    );
+    if (!invItem || invItem.quantity < quantity) return null;
+  }
+
+  // Consume flowers
+  let newInventory = [...state.inventory];
+  for (const { speciesId, mutation, quantity } of sacrifices) {
+    newInventory = newInventory
+      .map((i) =>
+        i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
+          ? { ...i, quantity: i.quantity - quantity }
+          : i
+      )
+      .filter((i) => i.quantity > 0);
+  }
+
+  // Accumulate essence deltas
+  let newEssences = [...state.essences];
+  for (const { speciesId, mutation: _mut, quantity } of sacrifices) {
+    const species = getFlower(speciesId)!;
+    const yields  = calculateEssenceYield(species.types, species.rarity, quantity);
+    newEssences   = mergeEssences(newEssences, yields);
+  }
+
+  return { ...state, inventory: newInventory, essences: newEssences };
 }
 
 export function upgradeFarm(state: GameState): GameState | null {

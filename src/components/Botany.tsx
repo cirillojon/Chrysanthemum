@@ -7,6 +7,9 @@ import { botanyConvert, botanyConvertAll } from "../store/gameStore";
 import { edgeBotanyConvert, edgeBotanyConvertAll } from "../lib/edgeFunctions";
 import type { InventoryItem } from "../store/gameStore";
 import type { Rarity } from "../data/flowers";
+import { AlchemyTab } from "./AlchemyTab";
+
+type BotanyTab = "convert" | "alchemy";
 
 type Selection = { speciesId: string; mutation?: MutationType };
 
@@ -269,6 +272,10 @@ function SelectionScreen({
 export function Botany() {
   const { state, perform } = useGame();
 
+  const [activeTab, setActiveTab] = useState<BotanyTab>(() =>
+    (localStorage.getItem("botany_tab") as BotanyTab | null) ?? "convert"
+  );
+
   const [activeRarity, setActiveRarity]         = useState<Rarity | null>(null);
   const [resultSpeciesId, setResultSpeciesId]   = useState<string | null>(null);
   const [convertAllResult, setConvertAllResult] = useState<string[] | null>(null);
@@ -279,6 +286,11 @@ export function Botany() {
   // Guards against re-entrant auto-convert runs and rollback-triggered retry loops
   const autoConvertRunning  = useRef(false);
   const autoConvertCooldown = useRef(false);
+
+  function setTab(tab: BotanyTab) {
+    localStorage.setItem("botany_tab", tab);
+    setActiveTab(tab);
+  }
 
   function toggleAutoConvert() {
     setAutoConvert((v) => {
@@ -404,10 +416,43 @@ export function Botany() {
       <div className="text-center space-y-1">
         <h2 className="font-bold text-lg tracking-wide">🌿 Botany Lab</h2>
         <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-          Combine harvested flowers to receive a rare seed of the next rarity.
-          Undiscovered species are prioritised.
+          Convert flowers to rarer seeds, or sacrifice them for elemental essence.
         </p>
       </div>
+
+      {/* Tab switcher */}
+      <div className="flex rounded-xl border border-border bg-card/40 p-0.5 gap-0.5">
+        <button
+          onClick={() => setTab("convert")}
+          className={`
+            flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center transition-all duration-150
+            ${activeTab === "convert"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+            }
+          `}
+        >
+          🔄 Convert
+        </button>
+        <button
+          onClick={() => setTab("alchemy")}
+          className={`
+            flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center transition-all duration-150
+            ${activeTab === "alchemy"
+              ? "bg-card text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground"
+            }
+          `}
+        >
+          ⚗️ Alchemy
+        </button>
+      </div>
+
+      {/* Alchemy tab */}
+      {activeTab === "alchemy" && <AlchemyTab />}
+
+      {/* Convert tab content below — hidden when alchemy is active */}
+      {activeTab === "convert" && (<>
 
       {/* Auto-convert toggle */}
       <div className="flex items-center justify-between bg-card/60 border border-border rounded-xl px-4 py-3">
@@ -531,6 +576,8 @@ export function Botany() {
       <p className="text-center text-[10px] text-muted-foreground">
         Harvest flowers from your garden to fill the conversion stations.
       </p>
+      </>)}
+
     </div>
   );
 }
