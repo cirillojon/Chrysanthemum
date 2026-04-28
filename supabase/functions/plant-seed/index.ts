@@ -136,6 +136,28 @@ Deno.serve(async (req: Request) => {
       .map((i) => i.speciesId === speciesId && i.isSeed ? { ...i, quantity: i.quantity - 1 } : i)
       .filter((i) => i.quantity > 0);
 
+    // ── Record server-authoritative planting time BEFORE the grid update ────
+    // plant_timings has no client write policy — only the service role can
+    // write here, so this value cannot be forged via the REST API. The harvest
+    // edge function validates bloom time against this row, never against the
+    // client-writable timePlanted in game_saves.grid.
+    //
+    // We insert this BEFORE the grid CAS update so that on failure we have
+    // not written a plant to the grid without a corresponding authoritative
+    // timing. If the grid update fails below we delete this row again.
+    const timingInsert = await supabaseAdmin
+      .from("plant_timings")
+      .upsert(
+        { user_id: userId, row, col, species_id: speciesId, planted_at: new Date(newPlant.timePlanted).toISOString() },
+        { onConflict: "user_id,row,col" }
+      );
+    if (timingInsert.error) {
+      console.error("plant_timings insert failed:", timingInsert.error);
+      return new Response(JSON.stringify({ error: "Internal server error" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── Write to DB ───────────────────────────────────────────────────────────
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
@@ -146,21 +168,16 @@ Deno.serve(async (req: Request) => {
       .single();
 
     if (updateError || !updateData) {
+      // Roll back the plant_timings row so the next plant-seed call (after
+      // the client refetches state) starts cleanly.
+      await supabaseAdmin
+        .from("plant_timings")
+        .delete()
+        .eq("user_id", userId).eq("row", row).eq("col", col);
       return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
         status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    // Record server-authoritative planting time.
-    // plant_timings has no client write policy — only service role can upsert here.
-    // harvest validates bloom time against this instead of the client-writable
-    // timePlanted field stored in game_saves.grid.
-    void supabaseAdmin.from("plant_timings").upsert({
-      user_id:    userId,
-      row,
-      col,
-      planted_at: new Date(newPlant.timePlanted).toISOString(),
-    }, { onConflict: "user_id,row,col" });
 
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "plant_seed",

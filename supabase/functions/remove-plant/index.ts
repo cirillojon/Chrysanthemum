@@ -147,6 +147,13 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Drop the server-authoritative timing for this plot. If we leave the row
+    // in place, a future plant-seed at the same (row,col) is protected by the
+    // upsert + species_id check, but cleaning up keeps the table tight.
+    void supabaseAdmin.from("plant_timings")
+      .delete()
+      .eq("user_id", userId).eq("row", row).eq("col", col);
+
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "remove_plant",
       payload: { row, col, speciesId },

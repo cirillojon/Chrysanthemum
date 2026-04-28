@@ -175,7 +175,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin.from("game_saves").select("coins, grid, inventory, discovered, updated_at").eq("user_id", userId).single(),
       // plant_timings has no client write policy — planted_at cannot be forged
-      supabaseAdmin.from("plant_timings").select("planted_at").eq("user_id", userId).eq("row", row).eq("col", col).maybeSingle(),
+      supabaseAdmin.from("plant_timings").select("planted_at, species_id").eq("user_id", userId).eq("row", row).eq("col", col).maybeSingle(),
     ]);
 
     if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
@@ -235,14 +235,38 @@ Deno.serve(async (req: Request) => {
     const fertMultiplier = plant.fertilizer ? (FERTILIZER_MULTIPLIERS[plant.fertilizer] ?? 1.0) : 1.0;
     const masteredBonus  = plant.masteredBonus ?? 1.0;
 
-    // Use server-authoritative planted_at from plant_timings when available.
-    // Falls back to timePlanted for plants that predate this fix — those remain
-    // vulnerable until they are harvested and replanted, at which point plant-seed
-    // will create a plant_timings entry for them.
-    const authoritativePlantedAt = timingResult?.data?.planted_at
-      ? new Date(timingResult.data.planted_at).getTime()
-      : plant.timePlanted;
+    // Server-authoritative planted_at. NEVER fall back to plant.timePlanted —
+    // that field lives in game_saves.grid (client-writable via the REST API
+    // used by saveToCloud), so trusting it lets a user PATCH the grid blob to
+    // backdate timePlanted and harvest instantly. See migration
+    // 20260428000004_plant_timings.sql for the full threat model.
+    //
+    // If no row exists (legacy plant from before plant_timings shipped, or a
+    // plant whose timing insert failed), lazily register the plant as if it
+    // had just been planted now and reject this harvest. The plant will grow
+    // legitimately from this point forward. Also reject if the recorded
+    // species does not match the grid — indicates the plot was rebuilt
+    // without going through plant-seed.
+    const timing = timingResult?.data;
+    if (!timing || timing.species_id !== plant.speciesId) {
+      const insertRes = await supabaseAdmin
+        .from("plant_timings")
+        .upsert(
+          { user_id: userId, row, col, species_id: plant.speciesId, planted_at: new Date().toISOString() },
+          { onConflict: "user_id,row,col" }
+        );
+      if (insertRes.error) {
+        console.error("plant_timings backfill failed:", insertRes.error);
+        return new Response(JSON.stringify({ error: "Internal server error" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ error: "Plant is not ready to harvest" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
+    const authoritativePlantedAt = new Date(timing.planted_at).getTime();
     const minBloomTime = authoritativePlantedAt + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
 
     if (Date.now() < minBloomTime) {

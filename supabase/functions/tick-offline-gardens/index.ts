@@ -426,6 +426,50 @@ Deno.serve(async (req: Request) => {
         discovered: (raw.discovered ?? []) as string[],
       };
 
+      // Load server-authoritative planting times for this user and overwrite
+      // any client-writable plant.timePlanted in the grid before we compute
+      // growth. Without this, a user can PATCH game_saves.grid via the REST
+      // API to backdate timePlanted, then trigger this endpoint (it accepts
+      // any Authorization header) to have an active harvest bell auto-harvest
+      // their forged-bloom plants. See migration 20260428000004 for context.
+      const { data: timings } = await supabase
+        .from("plant_timings")
+        .select("row, col, species_id, planted_at")
+        .eq("user_id", raw.user_id);
+      if (timings?.length) {
+        const tmap = new Map<string, { species_id: string; planted_at: string }>();
+        for (const t of timings) tmap.set(`${t.row},${t.col}`, t);
+        let mutated = false;
+        const safeGrid = original.grid.map((r, ri) => r.map((p, ci) => {
+          if (!p.plant) return p;
+          const t = tmap.get(`${ri},${ci}`);
+          if (!t || t.species_id !== p.plant.speciesId) {
+            // Missing or mismatched timing: treat as "just planted now". This
+            // makes legacy plants restart instead of being trusted.
+            mutated = true;
+            return { ...p, plant: { ...p.plant, timePlanted: now, sproutedAt: undefined, bloomedAt: undefined, growthMs: undefined, lastTickAt: undefined } };
+          }
+          const authoritative = new Date(t.planted_at).getTime();
+          if (p.plant.timePlanted === authoritative) return p;
+          mutated = true;
+          // Replace timePlanted with the authoritative value. Drop any
+          // client-stamped checkpoints (sproutedAt / bloomedAt / growthMs /
+          // lastTickAt) that may have been forged to lie about progress.
+          return { ...p, plant: { ...p.plant, timePlanted: authoritative, sproutedAt: undefined, bloomedAt: undefined, growthMs: undefined, lastTickAt: undefined } };
+        }));
+        if (mutated) original.grid = safeGrid;
+      } else {
+        // No timings recorded for this user at all — treat every plant as
+        // just-planted now so the cron cannot auto-harvest forged blooms.
+        let mutated = false;
+        const safeGrid = original.grid.map(r => r.map(p => {
+          if (!p.plant) return p;
+          mutated = true;
+          return { ...p, plant: { ...p.plant, timePlanted: now, sproutedAt: undefined, bloomedAt: undefined, growthMs: undefined, lastTickAt: undefined } };
+        }));
+        if (mutated) original.grid = safeGrid;
+      }
+
       // 1. Stamp bloomedAt so harvest bell + mutations can find ready plants
       const { grid: stamped, changed: stampChanged } = stampBloomed(original.grid, now, weatherMult);
       let sim = stampChanged ? { ...original, grid: stamped } : original;
