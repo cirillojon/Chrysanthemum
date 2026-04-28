@@ -499,6 +499,10 @@ export function applyOfflineTick(
     }
   }
 
+  // Stamp stage transitions first — ensures bloomedAt is written on plants that
+  // grew to bloom while offline, so tickHarvestBells can see and harvest them.
+  updated = stampStageTransitions(updated, now, "clear");
+
   // Auto-harvest via any active Harvest Bells (captures offline progress)
   updated = tickHarvestBells(updated, "clear");
 
@@ -513,6 +517,27 @@ export function applyOfflineTick(
     state:   updated,
     summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked },
   };
+}
+
+/**
+ * Purely visual offline simulation — used when displaying another player's garden
+ * on the profile page.  Does NOT write to the DB.  Applies the same catch-up steps
+ * as applyOfflineTick so the garden looks as it would if the owner had been online:
+ *   1. Stamp stage transitions  →  sets bloomedAt on plants that matured offline
+ *   2. Tick harvest bells       →  removes bloomed plants in bell range
+ *   3. Tick auto-planter        →  fills empty plots in planter range from inventory
+ */
+export function simulateOfflineGarden(save: GameState): GameState {
+  const now = Date.now();
+  // Prune any expired gear first (same as applyOfflineTick does)
+  let sim = { ...save, grid: pruneExpiredGear(save.grid, now) };
+  // Stamp bloomedAt / sproutedAt so harvest bell can find ready plants
+  sim = stampStageTransitions(sim, now, "clear");
+  // Harvest bell auto-harvest
+  sim = tickHarvestBells(sim, "clear");
+  // Auto-planter fill
+  sim = tickAutoPlanter(sim);
+  return sim;
 }
 
 // ── Weather forecast ────────────────────────────────────────────────────────

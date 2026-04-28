@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getProfileByUsername, getPublicSave, updateDisplayFlower, updateStatus, updateUsername } from "../store/cloudSave";
 import type { CloudProfile } from "../store/cloudSave";
+import { simulateOfflineGarden } from "../store/gameStore";
 import { supabase } from "../lib/supabase";
 import type { GameState } from "../store/gameStore";
 import { ReadOnlyGarden } from "./ReadOnlyGarden";
@@ -63,7 +64,10 @@ export function ProfilePage({ username }: Props) {
       setProfile(p);
 
       const isOwn = user?.id === p.id;
-      const s     = isOwn ? state : await getPublicSave(p.id);
+      const raw   = isOwn ? state : await getPublicSave(p.id);
+      // Apply offline simulation for other players' gardens so gear auto-actions
+      // (harvest bell, auto-planter) are reflected even when the owner is offline.
+      const s = raw && !isOwn ? simulateOfflineGarden(raw) : raw;
       setSave(s);
       setLoading(false);
     }
@@ -94,7 +98,7 @@ export function ProfilePage({ username }: Props) {
         },
         async () => {
           const fresh = await getPublicSave(profile.id);
-          if (fresh) setSave(fresh);
+          if (fresh) setSave(simulateOfflineGarden(fresh));
         }
       )
       .subscribe();
