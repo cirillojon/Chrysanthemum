@@ -343,45 +343,45 @@ export function PlotTile({
             {/* Sprinkler: 💧 drops falling */}
             {isUnderSprinkler && (
               <>
-                <span className="gear-drop" style={{ left: "15%", animationDelay: "0s"   }}>💧</span>
-                <span className="gear-drop" style={{ left: "48%", animationDelay: "0.6s" }}>💧</span>
-                <span className="gear-drop" style={{ left: "74%", animationDelay: "1.2s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "74%", animationDelay: "0s"    }}>💧</span>
               </>
             )}
             {/* Mutation sprinkler: emoji floating up, 2 per mutation type */}
             {sprinklerMutations.flatMap(({ emoji }, mi) => [
-              <span key={`m${mi}a`} className="gear-float" style={{ left: `${16 + mi * 28}%`, animationDelay: `${mi * 0.5}s`       }}>{emoji}</span>,
-              <span key={`m${mi}b`} className="gear-float" style={{ left: `${40 + mi * 28}%`, animationDelay: `${mi * 0.5 + 1.1}s` }}>{emoji}</span>,
+              <span key={`m${mi}a`} className="gear-float" style={{ left: `${16 + mi * 28}%`, animationDelay: `${mi * 0.5 - 2}s`   }}>{emoji}</span>,
+              <span key={`m${mi}b`} className="gear-float" style={{ left: `${40 + mi * 28}%`, animationDelay: `${mi * 0.5 - 0.9}s` }}>{emoji}</span>,
             ])}
             {/* Scarecrow: 🐦 birds fluttering away */}
             {isUnderScarecrow && (
               <>
-                <span className="gear-bird" style={{ left: "10%", animationDelay: "0s"   }}>🐦</span>
-                <span className="gear-bird" style={{ left: "52%", animationDelay: "1.5s" }}>🐦</span>
+                <span className="gear-bird" style={{ left: "10%", animationDelay: "-1.5s" }}>🐦</span>
+                <span className="gear-bird" style={{ left: "52%", animationDelay: "0s"    }}>🐦</span>
               </>
             )}
             {/* Composter: ✦ sparkles rising */}
             {isUnderComposter && (
               <>
-                <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "0s"    }}>✦</span>
-                <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "0.75s" }}>✦</span>
-                <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "1.5s"  }}>✦</span>
+                <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "-1.5s"  }}>✦</span>
+                <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "-0.75s" }}>✦</span>
+                <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "0s"     }}>✦</span>
               </>
             )}
             {/* Auto-Planter: 🌱 seeds gently drifting down */}
             {isUnderAutoPlanter && (
               <>
-                <span className="gear-planter-seed" style={{ left: "20%", animationDelay: "0s"    }}>🌱</span>
-                <span className="gear-planter-seed" style={{ left: "52%", animationDelay: "0.8s"  }}>🌱</span>
-                <span className="gear-planter-seed" style={{ left: "76%", animationDelay: "1.6s"  }}>🌱</span>
+                <span className="gear-planter-seed" style={{ left: "20%", animationDelay: "-1.6s" }}>🌱</span>
+                <span className="gear-planter-seed" style={{ left: "52%", animationDelay: "-0.8s" }}>🌱</span>
+                <span className="gear-planter-seed" style={{ left: "76%", animationDelay: "0s"    }}>🌱</span>
               </>
             )}
             {/* Harvest Bell: 🔔 bell sways upward hinting at auto-harvest */}
             {isUnderHarvestBell && (
               <>
-                <span className="gear-bell" style={{ left: "18%", animationDelay: "0s"    }}>🔔</span>
-                <span className="gear-bell" style={{ left: "52%", animationDelay: "1.1s"  }}>🔔</span>
-                <span className="gear-bell" style={{ left: "74%", animationDelay: "2.2s"  }}>🔔</span>
+                <span className="gear-bell" style={{ left: "18%", animationDelay: "-2.2s" }}>🔔</span>
+                <span className="gear-bell" style={{ left: "52%", animationDelay: "-1.1s" }}>🔔</span>
+                <span className="gear-bell" style={{ left: "74%", animationDelay: "0s"    }}>🔔</span>
               </>
             )}
             {/* Fan: 💨 gusts drifting in the fan's direction */}
@@ -391,7 +391,7 @@ export function PlotTile({
               const horiz = dir === "left" || dir === "right";
               const axis  = horiz ? "top" : "left";
               return (["18%", "50%", "76%"] as const).map((pos, i) => (
-                <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.65}s` }}>💨</span>
+                <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.65 - 1.3}s` }}>💨</span>
               ));
             })()}
           </div>
