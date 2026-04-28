@@ -6,7 +6,7 @@ import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
 import { GEAR as GEAR_CATALOG } from "../data/gear";
 import type { GearType } from "../data/gear";
-import { getAllMail } from "../store/cloudSave";
+import { getAllMail, clearClaimedMail } from "../store/cloudSave";
 import type { MailboxEntry } from "../store/cloudSave";
 import { edgeClaimMail } from "../lib/edgeFunctions";
 
@@ -83,9 +83,17 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
     setDismissedIds((prev) => [...prev, id]);
   }
 
-  function handleClearClaimed() {
+  async function handleClearClaimed() {
+    if (!user) return;
     const claimedAll = mail.filter((m) => m.claimed || claimedIds.includes(m.id)).map((m) => m.id);
+    if (claimedAll.length === 0) return;
+    // Optimistic: hide immediately so the UI feels instant
     setDismissedIds((prev) => [...new Set([...prev, ...claimedAll])]);
+    // Persist deletion so cleared items don't reappear on refresh
+    await clearClaimedMail(user.id, claimedAll);
+    // Clean up local state
+    setMail((prev) => prev.filter((m) => !claimedAll.includes(m.id)));
+    setClaimedIds((prev) => prev.filter((id) => !claimedAll.includes(id)));
   }
 
   if (!user) return null;
