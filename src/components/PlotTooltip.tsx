@@ -13,17 +13,19 @@ import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
 
 interface Props {
-  plant:               PlantedFlower;
-  row:                 number;
-  col:                 number;
-  onClose?:            () => void;
-  isUnderSprinkler?:   boolean;
-  sprinklerMutations?: { emoji: string; label: string }[];
-  isUnderGrowLamp?:    boolean;
-  isUnderScarecrow?:   boolean;
-  isUnderComposter?:   boolean;
-  isUnderFan?:         boolean;
-  isUnderHarvestBell?: boolean;
+  plant:                 PlantedFlower;
+  row:                   number;
+  col:                   number;
+  onClose?:              () => void;
+  /** Combined sprinkler × grow-lamp growth multiplier for this cell. */
+  gearGrowthMultiplier?: number;
+  isUnderSprinkler?:     boolean;
+  sprinklerMutations?:   { emoji: string; label: string }[];
+  isUnderGrowLamp?:      boolean;
+  isUnderScarecrow?:     boolean;
+  isUnderComposter?:     boolean;
+  isUnderFan?:           boolean;
+  isUnderHarvestBell?:   boolean;
 }
 
 function formatMs(ms: number): string {
@@ -42,6 +44,7 @@ function formatMs(ms: number): string {
 
 export function PlotTooltip({
   plant, row, col, onClose,
+  gearGrowthMultiplier = 1.0,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell,
 }: Props) {
@@ -79,8 +82,8 @@ export function PlotTooltip({
   const species = getFlower(plant.speciesId);
   if (!species) return null;
 
-  const stage         = getCurrentStage(plant, now, activeWeather);
-  const msLeft        = getMsUntilNextStage(plant, now, activeWeather);
+  const stage         = getCurrentStage(plant, now, activeWeather, gearGrowthMultiplier);
+  const msLeft        = getMsUntilNextStage(plant, now, activeWeather, gearGrowthMultiplier);
   const rarity        = RARITY_CONFIG[species.rarity];
   const isBloomed     = stage === "bloom";
   const hasFertilizer = !!plant.fertilizer;

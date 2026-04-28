@@ -85,8 +85,9 @@ export function PlotTile({
   const gear   = plot.gear;
   const species = plant ? getFlower(plant.speciesId) : null;
 
-  const stage    = plant ? getCurrentStage(plant, now, activeWeather) : null;
-  const progress = plant ? getStageProgress(plant, now, activeWeather) : 0;
+  const gearMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
+  const stage    = plant ? getCurrentStage(plant, now, activeWeather, gearMult) : null;
+  const progress = plant ? getStageProgress(plant, now, activeWeather, gearMult) : 0;
 
   const rarity     = species ? RARITY_CONFIG[species.rarity] : null;
   const isBloomed  = stage === "bloom";
@@ -300,6 +301,7 @@ export function PlotTile({
           row={row}
           col={col}
           onClose={() => setOpen(false)}
+          gearGrowthMultiplier={gearMult}
           isUnderSprinkler={isUnderSprinkler}
           sprinklerMutations={sprinklerMutations}
           isUnderGrowLamp={isUnderGrowLamp}
