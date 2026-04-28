@@ -380,7 +380,7 @@ Deno.serve(async (req: Request) => {
         .select("type, started_at, ends_at")
         .eq("id", 1)
         .single();
-      if (wRow && Date.parse(wRow.started_at) <= now && Date.parse(wRow.ends_at) >= now) {
+      if (wRow && (wRow.started_at as number) <= now && (wRow.ends_at as number) >= now) {
         weatherType = wRow.type as string;
         weatherMult = WEATHER_MULT[weatherType] ?? 1.0;
       }
