@@ -255,9 +255,12 @@ function MailCard({
     <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ${glow} ${open ? "border-primary/40" : "border-border"} ${claimed ? "opacity-40" : "bg-card/60"}`}>
 
       {/* ── Collapsed header — always visible, click to toggle ── */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-primary/5 transition-colors"
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpen((v) => !v); }}
+        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-primary/5 transition-colors cursor-pointer"
       >
         {/* Sender avatar: profile flower for friends, 👑 for admin, 🏪 for marketplace */}
         <div className="relative flex-shrink-0 w-7 h-7 flex items-center justify-center">
@@ -294,7 +297,7 @@ function MailCard({
             ▼
           </span>
         )}
-      </button>
+      </div>
 
       {/* ── Expandable body ── */}
       <div

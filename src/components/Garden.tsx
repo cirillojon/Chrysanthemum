@@ -30,6 +30,11 @@ export function Garden() {
   const { state, update, perform, getState, awaitHarvests, activeWeather } = useGame();
   useGrowthTick(5_000);
 
+  // Throttle the mutation tick to at most once per second to prevent the no-dep
+  // useEffect from spinning in an infinite render loop when a tick function
+  // (e.g. fan strip/apply oscillation) produces a new state object every call.
+  const lastMutationTickRef = useRef(0);
+
   // Every render: stamp transitions, roll weather mutations, roll sprinkler/fan mutations.
   // IMPORTANT: use getState() (the ref) not `state` (the React closure) as the starting point.
   // The closure can be stale when perform() has already advanced stateRef synchronously but
@@ -37,6 +42,8 @@ export function Garden() {
   // back through update(), wiping out any in-flight optimistic plants/harvests.
   useEffect(() => {
     const now     = Date.now();
+    if (now - lastMutationTickRef.current < 1_000) return;
+    lastMutationTickRef.current = now;
     const weather = activeWeather ?? "clear";
     const latest  = getState();                            // always the freshest state
     let next = stampStageTransitions(latest, now, weather);
