@@ -117,7 +117,7 @@ export function PlotTile({
         perform(
           optimistic.state,
           async () => {
-            try { return await edgeHarvest(row, col, optimistic.mutation); }
+            try { return await edgeHarvest(row, col); }
             finally {
               harvestingRef.current = false;
               onHarvestEnd?.();

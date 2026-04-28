@@ -158,7 +158,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { row, col, clientMutation } = await req.json() as { row: number; col: number; clientMutation?: string };
+    const { row, col } = await req.json() as { row: number; col: number };
     if (typeof row !== "number" || typeof col !== "number") {
       return new Response(JSON.stringify({ error: "Invalid input: row and col required" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -241,10 +241,10 @@ Deno.serve(async (req: Request) => {
 
     // ── Compute changes ───────────────────────────────────────────────────────
     const { speciesId } = plant;
-    // Prefer DB mutation; fall back to client-reported mutation (mutations are
-    // assigned client-side by the growth tick and never written to the DB).
-    const dbMutation    = (plant.mutation as string | null | undefined) ?? undefined;
-    const mutation      = dbMutation ?? (clientMutation && MUTATION_MULTIPLIERS[clientMutation] ? clientMutation : undefined);
+    // Server-trusted mutation only — never accept client-supplied mutation IDs.
+    // Both the client tick (cloud-saved grid) and the server tick-offline-gardens
+    // function write to plant.mutation in the DB.
+    const mutation      = (plant.mutation as string | null | undefined) ?? undefined;
     const sellValue     = FLOWER_SELL_VALUES[speciesId] ?? 0;
     const mutMultiplier = mutation ? (MUTATION_MULTIPLIERS[mutation] ?? 1) : 1;
     const bonusCoins    = mutation ? Math.floor(sellValue * (mutMultiplier - 1)) : 0;
