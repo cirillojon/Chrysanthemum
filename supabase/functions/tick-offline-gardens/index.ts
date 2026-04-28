@@ -10,7 +10,7 @@ import {
 // ── Called by a Supabase cron schedule every minute ────────────────────────
 // Simulates offline gear auto-actions (harvest bell, auto-planter) for every
 // player who has active gear in their garden but isn't currently online.
-// Auth: requires Authorization: Bearer <CRON_SECRET>
+// Auth: requires Authorization: Bearer <SUPABASE_SERVICE_ROLE_KEY> (sent by the Supabase pg_cron job)
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -353,10 +353,10 @@ Deno.serve(async (req: Request) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  // Verify cron secret
-  const cronSecret = Deno.env.get("CRON_SECRET");
+  // Verify the caller is the Supabase cron (which sends the service role key as bearer)
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const authHeader = req.headers.get("Authorization");
-  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+  if (!serviceRoleKey || authHeader !== `Bearer ${serviceRoleKey}`) {
     return new Response(JSON.stringify({ error: "Unauthorized" }), {
       status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
@@ -379,7 +379,7 @@ Deno.serve(async (req: Request) => {
         .select("type, started_at, ends_at")
         .eq("id", 1)
         .single();
-      if (wRow && wRow.started_at <= now && wRow.ends_at >= now) {
+      if (wRow && Date.parse(wRow.started_at) <= now && Date.parse(wRow.ends_at) >= now) {
         weatherType = wRow.type as string;
         weatherMult = WEATHER_MULT[weatherType] ?? 1.0;
       }
