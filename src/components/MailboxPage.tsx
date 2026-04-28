@@ -32,11 +32,12 @@ function timeAgo(dateStr: string): string {
 export function MailboxPage({ onViewProfile, onCountChange }: Props) {
   const { user, state, update } = useGame();
 
-  const [mail,      setMail]      = useState<MailboxEntry[]>([]);
-  const [loading,   setLoading]   = useState(true);
+  const [mail,        setMail]        = useState<MailboxEntry[]>([]);
+  const [loading,     setLoading]     = useState(true);
   const [claiming,    setClaiming]    = useState<string | null>(null);
   const [claimedIds,  setClaimedIds]  = useState<string[]>([]);
   const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [openId,      setOpenId]      = useState<string | null>(null);
   const [error,       setError]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -151,6 +152,8 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
               entry={entry}
               claimed={entry.claimed || claimedIds.includes(entry.id)}
               claiming={claiming === entry.id}
+              isOpen={openId === entry.id}
+              onToggle={() => setOpenId((prev) => prev === entry.id ? null : entry.id)}
               onClaim={() => handleClaim(entry)}
               onDismiss={() => handleDismiss(entry.id)}
               onViewProfile={onViewProfile}
@@ -168,6 +171,8 @@ function MailCard({
   entry,
   claimed,
   claiming,
+  isOpen,
+  onToggle,
   onClaim,
   onDismiss,
   onViewProfile,
@@ -175,6 +180,8 @@ function MailCard({
   entry:         MailboxEntry;
   claimed:       boolean;
   claiming:      boolean;
+  isOpen:        boolean;
+  onToggle:      () => void;
   onClaim:       () => void;
   onDismiss:     () => void;
   onViewProfile: (username: string) => void;
@@ -188,7 +195,6 @@ function MailCard({
   let attachEmoji = "📦";
   let attachTitle = "";
   let attachSub   = "";
-  let glow        = "";
 
   if (isCoins) {
     attachEmoji = "🟡";
@@ -215,7 +221,6 @@ function MailCard({
       attachEmoji = def.emoji;
       attachTitle = def.name;
       attachSub   = rarity?.label ?? "Gear";
-      glow        = rarity?.glow ?? "";
     }
 
   } else if (isFlower && entry.species_id) {
@@ -228,7 +233,6 @@ function MailCard({
         : (species.emoji.bloom ?? "🌸");
       attachTitle = species.name + (entry.kind === "seed" ? " Seed" : "");
       attachSub   = [mut?.name, rarity?.label].filter(Boolean).join(" · ");
-      glow        = rarity?.glow ?? "";
     }
   }
 
@@ -236,15 +240,14 @@ function MailCard({
   const isAdmin  = !sender && entry.subject !== "Listing Sold" && entry.subject !== "Marketplace Purchase";
   const subject  = entry.subject || (isCoins ? "Listing Sold" : "New Item");
 
-  const [open, setOpen]       = useState(false);
   const bodyRef               = useRef<HTMLDivElement>(null);
   const [height, setHeight]   = useState<number | undefined>(undefined);
 
   // Measure content height whenever open changes so we can animate smoothly
   useEffect(() => {
     if (!bodyRef.current) return;
-    setHeight(open ? bodyRef.current.scrollHeight : 0);
-  }, [open, entry]);
+    setHeight(isOpen ? bodyRef.current.scrollHeight : 0);
+  }, [isOpen, entry]);
 
   // Small attachment preview shown in the collapsed header row
   const attachPreview = attachTitle
@@ -252,14 +255,14 @@ function MailCard({
     : null;
 
   return (
-    <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ${glow} ${open ? "border-primary/40" : "border-border"} ${claimed ? "opacity-40" : "bg-card/60"}`}>
+    <div className={`border rounded-2xl overflow-hidden transition-all duration-300 ${isOpen ? "border-primary/40" : "border-border"} ${claimed ? "opacity-40" : "bg-card/60"}`}>
 
       {/* ── Collapsed header — always visible, click to toggle ── */}
       <div
         role="button"
         tabIndex={0}
-        onClick={() => setOpen((v) => !v)}
-        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") setOpen((v) => !v); }}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") onToggle(); }}
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-primary/5 transition-colors cursor-pointer"
       >
         {/* Sender avatar: profile flower for friends, 👑 for admin, 🏪 for marketplace */}
@@ -293,7 +296,7 @@ function MailCard({
             ✕
           </button>
         ) : (
-          <span className={`text-muted-foreground text-xs transition-transform duration-200 flex-shrink-0 ${open ? "rotate-180" : ""}`}>
+          <span className={`text-muted-foreground text-xs transition-transform duration-200 flex-shrink-0 ${isOpen ? "rotate-180" : ""}`}>
             ▼
           </span>
         )}
@@ -301,7 +304,7 @@ function MailCard({
 
       {/* ── Expandable body ── */}
       <div
-        style={{ height: height ?? (open ? "auto" : 0) }}
+        style={{ height: height ?? (isOpen ? "auto" : 0) }}
         className="overflow-hidden transition-[height] duration-200 ease-in-out"
       >
         <div ref={bodyRef} className="px-4 pb-4 space-y-3">
