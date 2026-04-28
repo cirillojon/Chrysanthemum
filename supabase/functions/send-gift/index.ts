@@ -67,8 +67,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── Verify JWT + load sender's save + sender's username in parallel ───────
-    const [authResult, saveResult, senderProfileResult] = await Promise.all([
+    const GIFT_RATE_LIMIT    = 5;
+    const GIFT_WINDOW_MS     = 60 * 60 * 1_000; // 1 hour
+    const windowStart        = new Date(Date.now() - GIFT_WINDOW_MS).toISOString();
+
+    // ── Verify JWT + load sender's save + username + rate-limit count in parallel
+    const [authResult, saveResult, senderProfileResult, rateLimitResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
@@ -80,6 +84,12 @@ Deno.serve(async (req: Request) => {
         .select("username")
         .eq("id", userId)
         .single(),
+      supabaseAdmin
+        .from("mailbox")
+        .select("id", { count: "exact", head: true })
+        .eq("from_user_id", userId)
+        .eq("user_id", receiverId)
+        .gt("created_at", windowStart),
     ]);
 
     if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
@@ -90,6 +100,12 @@ Deno.serve(async (req: Request) => {
     if (saveResult.error || !saveResult.data) {
       return new Response(JSON.stringify({ error: "Save not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if ((rateLimitResult.count ?? 0) >= GIFT_RATE_LIMIT) {
+      return new Response(JSON.stringify({ error: "Gift limit reached — max 5 gifts per recipient per hour" }), {
+        status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
