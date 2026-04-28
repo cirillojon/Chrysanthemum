@@ -1889,23 +1889,14 @@ export function removeGear(
   const plot = state.grid[row]?.[col];
   if (!plot?.gear) return null;
 
-  const { gearType } = plot.gear;
-
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>
       ri === row && ci === col ? { ...p, gear: null } : p
     )
   );
 
-  // Return gear to inventory
-  const existing = state.gearInventory.find((g) => g.gearType === gearType);
-  const newGearInv = existing
-    ? state.gearInventory.map((g) =>
-        g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g
-      )
-    : [...state.gearInventory, { gearType, quantity: 1 }];
-
-  // If it's a composter, also return stored fertilizers
+  // Removal destroys the gear (no refund). Stored fertilizers from composters
+  // are still returned since the player earned them.
   const stored = plot.gear.storedFertilizers ?? [];
   let newFertilizers = state.fertilizers;
   for (const fertType of stored) {
@@ -1915,7 +1906,7 @@ export function removeGear(
       : [...newFertilizers, { type: fertType, quantity: 1 }];
   }
 
-  return { ...state, grid: newGrid, gearInventory: newGearInv, fertilizers: newFertilizers };
+  return { ...state, grid: newGrid, fertilizers: newFertilizers };
 }
 
 /** Collect all fertilizers stored in a composter and add them to player inventory. */

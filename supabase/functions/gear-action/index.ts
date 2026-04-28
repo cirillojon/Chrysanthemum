@@ -140,21 +140,18 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── remove ────────────────────────────────────────────────────────────────
+    // Removal destroys the gear (no refund) — closes the duration-reset exploit
+    // where players could remove near-expiry gear and re-place it fresh.
+    // Stored fertilizers from composters are still returned since the player earned them.
     if (action === "remove") {
       if (!cell.gear) return err("No gear at this cell");
 
-      const { gearType }  = cell.gear;
-      const stored        = cell.gear.storedFertilizers ?? [];
+      const { gearType } = cell.gear;
+      const stored      = cell.gear.storedFertilizers ?? [];
 
       grid = grid.map((r, ri) =>
         r.map((p, ci) => ri === row && ci === col ? { ...p, gear: null } : p)
       );
-
-      // Return gear to inventory
-      const existing = gearInventory.find((g) => g.gearType === gearType);
-      gearInventory = existing
-        ? gearInventory.map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g)
-        : [...gearInventory, { gearType, quantity: 1 }];
 
       // Return any stored fertilizers (composter)
       for (const fertType of stored) {
@@ -166,14 +163,14 @@ Deno.serve(async (req: Request) => {
 
       const { error: ue } = await supabaseAdmin
         .from("game_saves")
-        .update({ grid, gear_inventory: gearInventory, fertilizers, updated_at: new Date().toISOString() })
+        .update({ grid, fertilizers, updated_at: new Date().toISOString() })
         .eq("user_id", userId);
 
       if (ue) return err("Failed to save", 500);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_remove",
-        payload: { gearType, row, col }, result: { storedReturned: stored.length },
+        payload: { gearType, row, col }, result: { storedReturned: stored.length, gearDestroyed: true },
       });
 
       return json({ ok: true, grid, gearInventory, fertilizers });

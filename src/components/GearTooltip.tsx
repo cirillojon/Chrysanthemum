@@ -82,13 +82,6 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
               ri === row && ci === col ? { ...p, gear: savedGear } : p
             )
           ),
-          gearInventory: (cur.gearInventory ?? [])
-            .map((g) =>
-              g.gearType === savedGear.gearType
-                ? { ...g, quantity: Math.max(0, g.quantity - 1) }
-                : g
-            )
-            .filter((g) => g.quantity > 0),
         }),
       }
     );
