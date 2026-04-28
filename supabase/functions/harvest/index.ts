@@ -170,10 +170,12 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ── Verify JWT + load save in parallel ────────────────────────────────────
-    const [authResult, saveResult] = await Promise.all([
+    // ── Verify JWT + load save + load authoritative planting time in parallel ──
+    const [authResult, saveResult, timingResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin.from("game_saves").select("coins, grid, inventory, discovered, updated_at").eq("user_id", userId).single(),
+      // plant_timings has no client write policy — planted_at cannot be forged
+      supabaseAdmin.from("plant_timings").select("planted_at").eq("user_id", userId).eq("row", row).eq("col", col).maybeSingle(),
     ]);
 
     if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
@@ -232,7 +234,16 @@ Deno.serve(async (req: Request) => {
     const totalGrowthMs  = growthTimes.seed + growthTimes.sprout;
     const fertMultiplier = plant.fertilizer ? (FERTILIZER_MULTIPLIERS[plant.fertilizer] ?? 1.0) : 1.0;
     const masteredBonus  = plant.masteredBonus ?? 1.0;
-    const minBloomTime   = plant.timePlanted + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
+
+    // Use server-authoritative planted_at from plant_timings when available.
+    // Falls back to timePlanted for plants that predate this fix — those remain
+    // vulnerable until they are harvested and replanted, at which point plant-seed
+    // will create a plant_timings entry for them.
+    const authoritativePlantedAt = timingResult?.data?.planted_at
+      ? new Date(timingResult.data.planted_at).getTime()
+      : plant.timePlanted;
+
+    const minBloomTime = authoritativePlantedAt + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
 
     if (Date.now() < minBloomTime) {
       return new Response(JSON.stringify({ error: "Plant is not ready to harvest" }), {
@@ -292,6 +303,9 @@ Deno.serve(async (req: Request) => {
         status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Remove the plant_timings entry now that the plot is clear
+    void supabaseAdmin.from("plant_timings").delete().eq("user_id", userId).eq("row", row).eq("col", col);
 
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "harvest",

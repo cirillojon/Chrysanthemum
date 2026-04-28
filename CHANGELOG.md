@@ -1,3 +1,10 @@
+## [v2.2.3] — 2026-04-28 — Security Patch
+
+### Security
+- **timePlanted manipulation exploit closed (#126)** — a server-authoritative `plant_timings` table (no client write policy) now stores the real planting timestamp set by the server when a seed is planted; the harvest edge function validates bloom time against this instead of the client-writable `timePlanted` field in `game_saves.grid`, closing both the localStorage and direct REST PATCH attack vectors
+
+---
+
 ## [v2.2.2] — 2026-04-28 — Mailbox & Bug Fixes
 
 ### Added
