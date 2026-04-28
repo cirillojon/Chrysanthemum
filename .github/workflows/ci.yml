@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Regression tests
+        run: npm run test:ci
+
+      - name: Build
+        env:
+          # Build-time placeholders so Vite doesn't choke on missing env vars.
+          # Real production secrets are injected separately at deploy time.
+          VITE_SUPABASE_URL: http://localhost
+          VITE_SUPABASE_ANON_KEY: ci-build-placeholder
+        run: npm run build
