@@ -15,6 +15,8 @@
 CREATE OR REPLACE FUNCTION advance_weather(p_utc_hour int DEFAULT 12)
 RETURNS void
 LANGUAGE plpgsql
+SECURITY DEFINER                -- runs as function owner, bypasses RLS/table grants
+SET search_path = public
 AS $$
 DECLARE
   v_row            RECORD;
@@ -61,6 +63,14 @@ DECLARE
 BEGIN
   SELECT * INTO v_row FROM weather WHERE id = 1 FOR UPDATE;
   v_now_ms := (extract(epoch FROM clock_timestamp()) * 1000)::bigint;
+
+  -- ── Idempotency guard ─────────────────────────────────────────────────────
+  -- If the current weather hasn't expired yet, do nothing.
+  -- This prevents multiple concurrent clients from double-advancing
+  -- when they all call advance_weather at the same time.
+  IF v_row.ends_at > v_now_ms THEN
+    RETURN;
+  END IF;
 
   -- ── Step 1: pop the front of the forecast queue ───────────────────────────
   v_forecast := COALESCE(v_row.forecast, '[]'::jsonb);
@@ -141,3 +151,8 @@ BEGIN
 
 END;
 $$;
+
+-- Allow authenticated and anonymous callers to invoke this function.
+-- The SECURITY DEFINER above means the UPDATE runs as the function owner,
+-- so callers only need EXECUTE — no direct table grants required.
+GRANT EXECUTE ON FUNCTION advance_weather(int) TO anon, authenticated;
