@@ -109,7 +109,7 @@ Deno.serve(async (req: Request) => {
     let inventory    = [...(save.inventory     ?? []) as InventoryItem[]];
     let fertilizers  = [...(save.fertilizers   ?? []) as FertilizerItem[]];
     let gearInventory = [...(save.gear_inventory ?? []) as GearItem[]];
-    let discovered   = [...(save.discovered    ?? []) as string[]];
+    const discovered = [...(save.discovered    ?? []) as string[]];
 
     const kind      = mail.kind      as string;
     const speciesId = mail.species_id as string | null;

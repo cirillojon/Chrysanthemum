@@ -107,13 +107,6 @@ const OFFSETS_DIAMOND: [number, number][] = [
   [ 1, -1], [ 1, 0], [ 1, 1],
   [ 2, 0],
 ];
-const OFFSETS_5X5: [number, number][] = [
-  [-2, -2], [-2, -1], [-2,  0], [-2,  1], [-2,  2],
-  [-1, -2], [-1, -1], [-1,  0], [-1,  1], [-1,  2],
-  [ 0, -2], [ 0, -1],           [ 0,  1], [ 0,  2],
-  [ 1, -2], [ 1, -1], [ 1,  0], [ 1,  1], [ 1,  2],
-  [ 2, -2], [ 2, -1], [ 2,  0], [ 2,  1], [ 2,  2],
-];
 
 // ── Gear definitions ───────────────────────────────────────────────────────
 interface GearDef { subtype: "harvest_bell" | "auto_planter"; offsets: [number, number][]; durationMs: number; }

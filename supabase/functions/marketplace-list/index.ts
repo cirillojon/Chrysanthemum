@@ -88,7 +88,7 @@ const MARKETPLACE_SLOT_UPGRADES = [
   { slots: 5, cost: 650_000 },
 ];
 
-const MAX_MARKETPLACE_SLOTS = 5;
+const _MAX_MARKETPLACE_SLOTS = 5;
 const LISTING_FEE_PCT       = 0.05; // 5% listing fee, non-refundable
 const LISTING_DURATION_MS   = 48 * 60 * 60 * 1_000; // 48 hours
 
