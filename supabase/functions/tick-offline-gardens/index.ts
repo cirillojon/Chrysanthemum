@@ -59,7 +59,7 @@ const FERT_MULT: Record<string, number> = {
 // ── Weather growth multipliers (mirrors src/data/weather.ts) ──────────────
 // Only rain and thunderstorm differ from 1.0
 const WEATHER_MULT: Record<string, number> = {
-  rain: 2.0, thunderstorm: 2.0,
+  rain: 1.5, thunderstorm: 1.5,
 };
 
 // ── Weather mutation types (mirrors src/store/gameStore.ts) ───────────────
@@ -77,7 +77,7 @@ const WEATHER_MUTATION_TYPE: Record<string, string> = {
 // Per-minute cumulative mutation chances = 1 - (1 - perSecondChance)^60
 // Mirrors the per-tick constants in gameStore.ts
 const WEATHER_MUTATION_CHANCE_PER_MIN: Record<string, number> = {
-  rain:            0.0443,  // 1-(1-0.00076)^60  ≈ 60% over 20-min event
+  rain:            0.0501,  // 1-(1-0.00116)^60  ≈ 75% over 20-min event
   heatwave:        0.0335,  // 1-(1-0.00057)^60  ≈ 40% over 15-min event
   cold_front:      0.0335,
   star_shower:     0.01268, // 1-(1-0.000213)^60 ≈ 20% over 17.5-min event
@@ -316,9 +316,9 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
     // Skip already-mutated plants (string = assigned; null = Giant-tried, weather can still apply)
     if (typeof plot.plant.mutation === "string") return plot;
 
-    // Thunderstorm: null → wet
-    if (weatherType === "thunderstorm" && plot.plant.mutation === null) {
-      if (Math.random() < 0.0443) {
+    // Thunderstorm: null/undefined → wet
+    if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
+      if (Math.random() < 0.0501) {
         changed = true;
         return { ...plot, plant: { ...plot.plant, mutation: "wet" } };
       }
@@ -412,7 +412,7 @@ Deno.serve(async (req: Request) => {
         return !!def && !isExpired(plot.gear, now);
       });
       const hasBloomedForMutation = weatherType !== "clear" &&
-        grid.flat().some(plot => plot.plant?.bloomedAt && now >= plot.plant.bloomedAt);
+        grid.flat().some(plot => plot.plant && hasBloom(plot.plant, now, weatherMult));
       if (!hasActiveGear && !hasBloomedForMutation) continue;
 
       const original: Save = {
