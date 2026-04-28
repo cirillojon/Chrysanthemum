@@ -30,6 +30,7 @@ const REQUIRED_EXPORTS = [
   "edgePlaceGear",
   "edgeRemoveGear",
   "edgeCollectFromComposter",
+  "edgeSetFanDirection",
   // Supply shop
   "edgeBuyFromSupplyShop",
   "edgeSyncSupplyShop",

@@ -10,8 +10,7 @@ import {
 // ── Called by a Supabase cron schedule every minute ────────────────────────
 // Simulates offline gear auto-actions (harvest bell, auto-planter) for every
 // player who has active gear in their garden but isn't currently online.
-// No auth check — response exposes no sensitive data; worst-case unauthorized
-// call just runs a harmless game tick.
+// Auth: requires Authorization: Bearer <CRON_SECRET>
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -352,6 +351,15 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
+  }
+
+  // Verify cron secret
+  const cronSecret = Deno.env.get("CRON_SECRET");
+  const authHeader = req.headers.get("Authorization");
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 
   try {
