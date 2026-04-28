@@ -340,7 +340,7 @@ function MailCard({
           {/* Body message */}
           {entry.message && (
             <div className="bg-background border border-border rounded-xl px-3 py-2">
-              <p className="text-xs text-foreground/80 italic">"{entry.message}"</p>
+              <p className="text-xs text-foreground/80 italic break-words">"{entry.message}"</p>
             </div>
           )}
 
