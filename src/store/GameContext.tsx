@@ -86,10 +86,10 @@ const EMPTY_SUMMARY: OfflineSummary = {
   supplyRestocked: false,
 };
 
-// Reject local saves whose lastSaved is more than 30 s in the future.
+// Reject local saves whose lastSaved is more than 1 s in the future.
 // This directly closes the exploit where a user sets lastSaved = Date.now() + 60_000
 // to force their manipulated localStorage to override the authoritative cloud save.
-const CLOCK_SKEW_TOLERANCE_MS = 30_000;
+const CLOCK_SKEW_TOLERANCE_MS = 1_000;
 function isTamperedTimestamp(lastSaved: number): boolean {
   return lastSaved > Date.now() + CLOCK_SKEW_TOLERANCE_MS;
 }
