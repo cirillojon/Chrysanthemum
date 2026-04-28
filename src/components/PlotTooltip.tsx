@@ -18,7 +18,7 @@ interface Props {
   col:                 number;
   onClose?:            () => void;
   isUnderSprinkler?:   boolean;
-  sprinklerMutations?: string[];
+  sprinklerMutations?: { emoji: string; label: string }[];
   isUnderGrowLamp?:    boolean;
   isUnderScarecrow?:   boolean;
   isUnderComposter?:   boolean;
@@ -211,9 +211,9 @@ export function PlotTooltip({
                   <span>💧</span><span>Sprinkler</span>
                 </span>
               )}
-              {sprinklerMutations.map((emoji, i) => (
+              {sprinklerMutations.map(({ emoji, label }, i) => (
                 <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-400/10 border border-blue-400/20 text-[10px] text-blue-300">
-                  <span>{emoji}</span><span>Sprinkler</span>
+                  <span>{emoji}</span><span>{label}</span>
                 </span>
               ))}
               {isUnderScarecrow && (

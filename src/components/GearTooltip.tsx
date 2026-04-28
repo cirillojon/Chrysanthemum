@@ -54,7 +54,9 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
   // keyframes are only 12% opacity (designed for tile backgrounds, not bar fills).
   const rarityBarBg = rarity.color === "rainbow-text"
     ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
-    : rarity.color.replace("text-", "bg-");
+    : rarity.color === "text-black"
+      ? "bg-slate-300"
+      : rarity.color.replace("text-", "bg-");
 
   const msRemaining    = def.durationMs ? Math.max(0, gear.placedAt + def.durationMs - now) : null;
   const expiryProgress = (def.durationMs && msRemaining !== null)

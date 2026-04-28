@@ -30,8 +30,8 @@ interface Props {
   isHighlighted?:  boolean;
   /** True when this cell is covered by at least one active regular (growth) sprinkler. */
   isUnderSprinkler?: boolean;
-  /** Mutation emojis from any active mutation sprinklers covering this cell. */
-  sprinklerMutations?: string[];
+  /** Mutation sprinklers covering this cell — emoji for display, label for tooltip. */
+  sprinklerMutations?: { emoji: string; label: string }[];
   /** True when this cell is within a scarecrow's radius. */
   isUnderScarecrow?: boolean;
   /** True when this cell is within a composter's radius. */
@@ -163,10 +163,12 @@ export function PlotTile({
       ? Math.max(0, (gear.placedAt + def.durationMs - now) / def.durationMs)
       : null;
 
-    // Prismatic uses "rainbow-text" which doesn't follow text-* — map to gradient fill
+    // Prismatic uses "rainbow-text" and Exalted uses "text-black" — both need manual mapping
     const gearBarBg = gearRarity.color === "rainbow-text"
       ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
-      : gearRarity.color.replace("text-", "bg-");
+      : gearRarity.color === "text-black"
+        ? "bg-slate-300"
+        : gearRarity.color.replace("text-", "bg-");
 
     // Prismatic gear: drive all three rainbow animations via inline style so CSS cascade
     // order doesn't matter (inline style wins over any class-based `animation` shorthand).
@@ -323,7 +325,7 @@ export function PlotTile({
               </>
             )}
             {/* Mutation sprinkler: emoji floating up, 2 per mutation type */}
-            {sprinklerMutations.flatMap((emoji, mi) => [
+            {sprinklerMutations.flatMap(({ emoji }, mi) => [
               <span key={`m${mi}a`} className="gear-float" style={{ left: `${16 + mi * 28}%`, animationDelay: `${mi * 0.5}s`       }}>{emoji}</span>,
               <span key={`m${mi}b`} className="gear-float" style={{ left: `${40 + mi * 28}%`, animationDelay: `${mi * 0.5 + 1.1}s` }}>{emoji}</span>,
             ])}
@@ -396,8 +398,8 @@ export function PlotTile({
         {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
-            {sprinklerMutations.map((emoji, i) => (
-              <span key={i} className="text-[9px]" title="Mutation sprinkler">{emoji}</span>
+            {sprinklerMutations.map(({ emoji, label }, i) => (
+              <span key={i} className="text-[9px]" title={label}>{emoji}</span>
             ))}
             {isUnderScarecrow && <span className="text-[9px]" title="Under scarecrow">🧹</span>}
             {isUnderComposter && <span className="text-[9px]" title="Near composter">🧺</span>}

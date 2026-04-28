@@ -208,7 +208,7 @@ export function Garden() {
   const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, autoPlantCoveredCells } =
     useMemo(() => {
       const regular  = new Set<string>();
-      const mutation = new Map<string, string[]>(); // cellKey → unique mutation emojis
+      const mutation = new Map<string, { emoji: string; label: string }[]>(); // cellKey → unique mutation sprinklers
       const scarecrow = new Set<string>();
       const composter = new Set<string>();
       const growLamp  = new Set<string>();
@@ -227,10 +227,11 @@ export function Garden() {
             keys.forEach((k) => regular.add(k));
           } else if (def.category === "sprinkler_mutation" && def.mutationType) {
             const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
+            const label = def.name;
             keys.forEach((k) => {
               const existing = mutation.get(k);
-              if (!existing) mutation.set(k, [emoji]);
-              else if (!existing.includes(emoji)) existing.push(emoji);
+              if (!existing) mutation.set(k, [{ emoji, label }]);
+              else if (!existing.some((e) => e.emoji === emoji)) existing.push({ emoji, label });
             });
           } else if (def.passiveSubtype === "scarecrow") {
             keys.forEach((k) => scarecrow.add(k));

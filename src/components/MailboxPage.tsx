@@ -34,9 +34,10 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
 
   const [mail,      setMail]      = useState<MailboxEntry[]>([]);
   const [loading,   setLoading]   = useState(true);
-  const [claiming,  setClaiming]  = useState<string | null>(null);
-  const [claimedIds, setClaimedIds] = useState<string[]>([]);
-  const [error,     setError]     = useState<string | null>(null);
+  const [claiming,    setClaiming]    = useState<string | null>(null);
+  const [claimedIds,  setClaimedIds]  = useState<string[]>([]);
+  const [dismissedIds, setDismissedIds] = useState<string[]>([]);
+  const [error,       setError]       = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -77,9 +78,20 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
     }
   }
 
+  function handleDismiss(id: string) {
+    setDismissedIds((prev) => [...prev, id]);
+  }
+
+  function handleClearClaimed() {
+    const claimedAll = mail.filter((m) => m.claimed || claimedIds.includes(m.id)).map((m) => m.id);
+    setDismissedIds((prev) => [...new Set([...prev, ...claimedAll])]);
+  }
+
   if (!user) return null;
 
-  const unclaimedCount = mail.filter((m) => !m.claimed && !claimedIds.includes(m.id)).length;
+  const visibleMail    = mail.filter((m) => !dismissedIds.includes(m.id));
+  const unclaimedCount = visibleMail.filter((m) => !m.claimed && !claimedIds.includes(m.id)).length;
+  const claimedCount   = visibleMail.filter((m) => m.claimed || claimedIds.includes(m.id)).length;
 
   if (loading) return (
     <div className="flex items-center justify-center py-24">
@@ -98,12 +110,22 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
             {unclaimedCount} unclaimed item{unclaimedCount !== 1 ? "s" : ""}
           </p>
         </div>
-        <button
-          onClick={load}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          ↻ Refresh
-        </button>
+        <div className="flex items-center gap-3">
+          {claimedCount > 0 && (
+            <button
+              onClick={handleClearClaimed}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Clear claimed
+            </button>
+          )}
+          <button
+            onClick={load}
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ↻ Refresh
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -113,7 +135,7 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
         </div>
       )}
 
-      {mail.length === 0 ? (
+      {visibleMail.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-24 gap-3 text-center">
           <p className="text-4xl">📬</p>
           <p className="font-medium text-muted-foreground">Mailbox empty</p>
@@ -123,13 +145,14 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
         </div>
       ) : (
         <div className="flex flex-col gap-3">
-          {mail.map((entry) => (
+          {visibleMail.map((entry) => (
             <MailCard
               key={entry.id}
               entry={entry}
               claimed={entry.claimed || claimedIds.includes(entry.id)}
               claiming={claiming === entry.id}
               onClaim={() => handleClaim(entry)}
+              onDismiss={() => handleDismiss(entry.id)}
               onViewProfile={onViewProfile}
             />
           ))}
@@ -146,12 +169,14 @@ function MailCard({
   claimed,
   claiming,
   onClaim,
+  onDismiss,
   onViewProfile,
 }: {
   entry:         MailboxEntry;
   claimed:       boolean;
   claiming:      boolean;
   onClaim:       () => void;
+  onDismiss:     () => void;
   onViewProfile: (username: string) => void;
 }) {
   // ── Resolve attachment display ─────────────────────────────────────────────
@@ -255,10 +280,20 @@ function MailCard({
           </p>
         </div>
 
-        {/* Chevron */}
-        <span className={`text-muted-foreground text-xs transition-transform duration-200 flex-shrink-0 ${open ? "rotate-180" : ""}`}>
-          ▼
-        </span>
+        {/* Chevron / dismiss */}
+        {claimed ? (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDismiss(); }}
+            className="text-muted-foreground hover:text-foreground text-xs flex-shrink-0 leading-none px-1"
+            aria-label="Dismiss"
+          >
+            ✕
+          </button>
+        ) : (
+          <span className={`text-muted-foreground text-xs transition-transform duration-200 flex-shrink-0 ${open ? "rotate-180" : ""}`}>
+            ▼
+          </span>
+        )}
       </button>
 
       {/* ── Expandable body ── */}
