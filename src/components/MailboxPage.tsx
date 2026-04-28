@@ -207,8 +207,9 @@ function MailCard({
     }
   }
 
-  const sender  = entry.from_profile;
-  const subject = entry.subject || (isCoins ? "Listing Sold" : "New Item");
+  const sender   = entry.from_profile;
+  const isAdmin  = !sender && entry.subject !== "Listing Sold" && entry.subject !== "Marketplace Purchase";
+  const subject  = entry.subject || (isCoins ? "Listing Sold" : "New Item");
 
   const [open, setOpen]       = useState(false);
   const bodyRef               = useRef<HTMLDivElement>(null);
@@ -233,10 +234,10 @@ function MailCard({
         onClick={() => setOpen((v) => !v)}
         className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-primary/5 transition-colors"
       >
-        {/* Sender avatar: profile flower + mutation for friends, marketplace icon for system */}
+        {/* Sender avatar: profile flower for friends, 👑 for admin, 🏪 for marketplace */}
         <div className="relative flex-shrink-0 w-7 h-7 flex items-center justify-center">
           <span className="text-xl leading-none">
-            {sender ? (getFlower(sender.display_flower)?.emoji.bloom ?? "🌱") : "🏪"}
+            {sender ? (getFlower(sender.display_flower)?.emoji.bloom ?? "🌱") : isAdmin ? "👑" : "🏪"}
           </span>
           {sender?.display_mutation && (
             <span className="absolute -top-1 -right-1 text-[10px] leading-none">
@@ -248,7 +249,7 @@ function MailCard({
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate">{subject}</p>
           <p className="text-xs text-muted-foreground truncate">
-            {sender ? `From ${sender.username}` : "From Marketplace 🏪"}
+            {sender ? `From ${sender.username}` : isAdmin ? "From Admin 👑" : "From Marketplace 🏪"}
             {attachPreview ? ` · ${attachPreview}` : ""}
             {" · "}{timeAgo(entry.created_at)}
           </p>
@@ -279,6 +280,8 @@ function MailCard({
                   {sender.username}
                 </button>
               </>
+            ) : isAdmin ? (
+              <span>From Admin 👑</span>
             ) : (
               <span>From Marketplace 🏪</span>
             )}
