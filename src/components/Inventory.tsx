@@ -1,18 +1,39 @@
+import { useState } from "react";
 import { useGame } from "../store/GameContext";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, type InventoryItem } from "../store/gameStore";
 import { edgeSellFlower } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
+import { GEAR } from "../data/gear";
+import type { GearInventoryItem } from "../data/gear";
 
-export function Inventory() {
+type Tab = 0 | 1 | 2;
+const TAB_LABELS = ["Seeds", "Blooms", "Supplies"] as const;
+
+interface Props {
+  newSeeds?:    number;
+  newBlooms?:   number;
+  newSupplies?: number;
+  onSubTabView?: (subTab: "seeds" | "blooms" | "supplies") => void;
+}
+
+export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView }: Props) {
   const { state, update } = useGame();
+  const [tab, setTab] = useState<Tab>(0);
 
   const items       = state.inventory.filter((i) => i.quantity > 0);
   const seeds       = items.filter((i) => i.isSeed);
   const blooms      = items.filter((i) => !i.isSeed);
   const fertilizers = state.fertilizers.filter((f) => f.quantity > 0);
+  const gearItems   = (state.gearInventory ?? []).filter((g) => g.quantity > 0);
+
+  const seedCount   = seeds.reduce((s, i) => s + i.quantity, 0);
+  const bloomCount  = blooms.reduce((s, i) => s + i.quantity, 0);
+  const supplyCount = fertilizers.reduce((s, f) => s + f.quantity, 0)
+                    + gearItems.reduce((s, g) => s + g.quantity, 0);
 
   const totalBloomValue = blooms.reduce((sum, item) => {
     const species = getFlower(item.speciesId);
@@ -37,7 +58,7 @@ export function Inventory() {
     }
   }
 
-  const isEmpty = items.length === 0 && fertilizers.length === 0;
+  const isEmpty = items.length === 0 && fertilizers.length === 0 && gearItems.length === 0;
 
   if (isEmpty) {
     return (
@@ -59,21 +80,11 @@ export function Inventory() {
         <div>
           <h2 className="text-lg font-bold">Inventory</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {seeds.reduce((s, i) => s + i.quantity, 0)} seeds ·{" "}
-            {blooms.reduce((s, i) => s + i.quantity, 0)} blooms
-            {fertilizers.length > 0 && (
-              <> · {fertilizers.reduce((s, f) => s + f.quantity, 0)} fertilizers</>
-            )}
+            {seedCount} seed{seedCount !== 1 ? "s" : ""} ·{" "}
+            {bloomCount} bloom{bloomCount !== 1 ? "s" : ""}
+            {supplyCount > 0 && <> · {supplyCount} supplies</>}
           </p>
         </div>
-        {blooms.length > 0 && (
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground">Bloom value</p>
-            <p className="text-sm font-mono font-semibold text-primary">
-              {totalBloomValue.toLocaleString()} 🟡
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Coins */}
@@ -84,73 +95,148 @@ export function Inventory() {
         </span>
       </div>
 
-      {/* Sell all blooms */}
-      {blooms.length > 0 && (
-        <button
-          onClick={handleSellAll}
-          className="w-full py-2.5 rounded-xl border border-primary text-primary text-sm font-semibold hover:bg-primary/10 transition-colors text-center"
-        >
-          Sell All Blooms — {totalBloomValue.toLocaleString()} 🟡
-        </button>
-      )}
+      {/* Tab bar */}
+      <div className="flex gap-1 bg-card/40 border border-border rounded-xl p-1">
+        {TAB_LABELS.map((label, i) => {
+          const count    = i === 0 ? seedCount : i === 1 ? bloomCount : supplyCount;
+          const newCount = i === 0 ? newSeeds  : i === 1 ? newBlooms  : newSupplies;
+          const subKey   = (i === 0 ? "seeds" : i === 1 ? "blooms" : "supplies") as "seeds" | "blooms" | "supplies";
+          return (
+            <button
+              key={label}
+              onClick={() => {
+                setTab(i as Tab);
+                onSubTabView?.(subKey);
+              }}
+              className={`
+                flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all relative
+                ${tab === i
+                  ? "bg-primary/20 text-primary border border-primary/30"
+                  : "text-muted-foreground hover:text-foreground"
+                }
+              `}
+            >
+              {label}
+              {count > 0 && (
+                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                  tab === i ? "bg-primary/20 text-primary" : "bg-border text-muted-foreground"
+                }`}>
+                  {count}
+                </span>
+              )}
+              {newCount > 0 && tab !== i && (
+                <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
+                  {newCount > 9 ? "9+" : newCount}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* Fertilizers */}
-      {fertilizers.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            Fertilizers ({fertilizers.reduce((s, f) => s + f.quantity, 0)}) — Apply in garden
-          </h3>
-          {fertilizers.map((f) => {
-            const fert = FERTILIZERS[f.type];
-            return (
-              <div
-                key={f.type}
-                className="flex items-center gap-4 bg-card/60 border border-border rounded-xl px-4 py-3"
+      {/* Tab content */}
+      <div className="space-y-3">
+
+        {/* ── Seeds ───────────────────────────────────────────────────────── */}
+        {tab === 0 && (
+          seeds.length > 0 ? (
+            seeds.map((item, i) => (
+              <SeedInventoryRow key={`seed-${item.speciesId}-${i}`} item={item} />
+            ))
+          ) : (
+            <EmptyTab emoji="🌱" message="No seeds in inventory" hint="Buy seeds from the Shop to get started." />
+          )
+        )}
+
+        {/* ── Blooms ──────────────────────────────────────────────────────── */}
+        {tab === 1 && (
+          blooms.length > 0 ? (
+            <>
+              <button
+                onClick={handleSellAll}
+                className="w-full py-2.5 rounded-xl border border-primary text-primary text-sm font-semibold hover:bg-primary/10 transition-colors text-center"
               >
-                <span className="text-3xl flex-shrink-0">{fert.emoji}</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="font-semibold text-sm">{fert.name}</h3>
-                    <span className={`text-xs font-mono ${fert.color}`}>
-                      {fert.speedMultiplier}× speed
-                    </span>
+                Sell All — {totalBloomValue.toLocaleString()} 🟡
+              </button>
+              {blooms.map((item, i) => (
+                <InventoryItemCard
+                  key={`bloom-${item.speciesId}-${item.mutation ?? "none"}-${i}`}
+                  item={item}
+                />
+              ))}
+            </>
+          ) : (
+            <EmptyTab emoji="🌸" message="No blooms to sell" hint="Harvest fully-grown flowers from your Garden." />
+          )
+        )}
+
+        {/* ── Supplies ────────────────────────────────────────────────────── */}
+        {tab === 2 && (
+          fertilizers.length > 0 || gearItems.length > 0 ? (
+            <>
+              {fertilizers.map((f) => {
+                const fert = FERTILIZERS[f.type];
+                return (
+                  <div
+                    key={f.type}
+                    className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${fert.cardBorder}`}
+                  >
+                    <span className="text-3xl flex-shrink-0">{fert.emoji}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-sm">{fert.name}</h3>
+                        <span className={`text-xs font-mono ${fert.color}`}>
+                          {fert.speedMultiplier}× speed
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        ×{f.quantity} · Apply to a growing plant in the garden
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    ×{f.quantity} · Apply to a growing plant
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+                );
+              })}
+              {gearItems.map((g) => (
+                <GearInventoryRow key={g.gearType} item={g} />
+              ))}
+            </>
+          ) : (
+            <EmptyTab emoji="🧪" message="No supplies" hint="Buy fertilizers and gear from the Supply Shop." />
+          )
+        )}
 
-      {/* Seeds — can only be planted */}
-      {seeds.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            Seeds ({seeds.reduce((s, i) => s + i.quantity, 0)}) — Plant in garden
-          </h3>
-          {seeds.map((item, i) => (
-            <SeedInventoryRow key={`seed-${item.speciesId}-${i}`} item={item} />
-          ))}
-        </div>
-      )}
+      </div>
 
-      {/* Blooms — can be sold */}
-      {blooms.length > 0 && (
-        <div className="space-y-3">
-          <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
-            Harvested ({blooms.reduce((s, i) => s + i.quantity, 0)}) — Ready to sell
-          </h3>
-          {blooms.map((item, i) => (
-            <InventoryItemCard
-              key={`bloom-${item.speciesId}-${item.mutation ?? "none"}-${i}`}
-              item={item}
-            />
-          ))}
+    </div>
+  );
+}
+
+function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hint: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+      <span className="text-4xl">{emoji}</span>
+      <p className="font-medium text-muted-foreground text-sm">{message}</p>
+      <p className="text-xs text-muted-foreground max-w-xs">{hint}</p>
+    </div>
+  );
+}
+
+function GearInventoryRow({ item }: { item: GearInventoryItem }) {
+  const def    = GEAR[item.gearType];
+  const rarity = RARITY_CONFIG[def.rarity];
+  return (
+    <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${def.rarity === "prismatic" ? "rainbow-border rainbow-glow" : `${rarity?.glow ?? ""} border-border`}`}>
+      <span className="text-3xl flex-shrink-0">{def.emoji}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-sm">{def.name}</h3>
+          <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
         </div>
-      )}
+        <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{def.description}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          ×{item.quantity} · Place in your garden to activate
+        </p>
+      </div>
     </div>
   );
 }
@@ -161,13 +247,14 @@ function SeedInventoryRow({ item }: { item: InventoryItem }) {
   if (!species) return null;
 
   return (
-    <div className="flex items-center gap-4 bg-card/60 border border-border rounded-xl px-4 py-3">
+    <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${rarity?.glow ?? ""} border-border`}>
       <span className="text-3xl flex-shrink-0">{species.emoji.seed}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <h3 className="font-semibold text-sm">{species.name} Seed</h3>
           <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
         </div>
+        <FlowerTypeBadges types={species.types} className="mt-1" />
         <p className="text-xs text-muted-foreground mt-0.5">
           ×{item.quantity} · Plant in your garden to grow
         </p>

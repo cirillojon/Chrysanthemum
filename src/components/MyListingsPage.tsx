@@ -3,6 +3,10 @@ import { supabase } from "../lib/supabase";
 import { useGame } from "../store/GameContext";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
+import { FERTILIZERS } from "../data/upgrades";
+import type { FertilizerType } from "../data/upgrades";
+import { GEAR as GEAR_CATALOG } from "../data/gear";
+import type { GearType } from "../data/gear";
 import { edgeMarketplaceCancel } from "../lib/edgeFunctions";
 
 interface MyListing {
@@ -90,7 +94,12 @@ export function MyListingsPage({ onRefreshNeeded }: Props) {
     try {
       const result = await edgeMarketplaceCancel(listing.id);
       const cur = getState();
-      update({ ...cur, inventory: result.inventory });
+      update({
+        ...cur,
+        inventory: result.inventory,
+        ...(result.fertilizers   ? { fertilizers:   result.fertilizers   } : {}),
+        ...(result.gearInventory ? { gearInventory: result.gearInventory } : {}),
+      });
       setListings((prev) =>
         prev.map((l) => l.id === listing.id ? { ...l, status: "cancelled" } : l)
       );
@@ -186,29 +195,53 @@ function ActiveListingRow({
   cancelling: boolean;
   onCancel:   () => void;
 }) {
-  const species  = getFlower(listing.species_id);
-  const mut      = listing.mutation ? MUTATIONS[listing.mutation as MutationType] : null;
-  const rarity   = species ? RARITY_CONFIG[species.rarity] : null;
-  const expiring = new Date(listing.expires_at).getTime() - Date.now() < 2 * 3_600_000;
+  const isFertilizer = listing.species_id.startsWith("fert:");
+  const isGear       = listing.species_id.startsWith("gear:");
+  const fertDef      = isFertilizer ? FERTILIZERS[listing.species_id.replace("fert:", "") as FertilizerType] : null;
+  const gearDef      = isGear       ? GEAR_CATALOG[listing.species_id.replace("gear:", "") as GearType]      : null;
+  const species      = (isFertilizer || isGear) ? null : getFlower(listing.species_id);
+  const mut          = (!isFertilizer && !isGear && listing.mutation) ? MUTATIONS[listing.mutation as MutationType] : null;
+  const rarity       = species ? RARITY_CONFIG[species.rarity] : (isGear && gearDef) ? RARITY_CONFIG[gearDef.rarity] : null;
+  const expiring     = new Date(listing.expires_at).getTime() - Date.now() < 2 * 3_600_000;
 
   return (
     <div className={`bg-card/60 border rounded-2xl p-4 space-y-3 transition-all ${rarity?.glow ?? ""} border-border`}>
       <div className="flex items-center gap-3">
         <div className="relative flex-shrink-0">
           <span className="text-3xl">
-            {listing.is_seed ? (species?.emoji.seed ?? "🌱") : (species?.emoji.bloom ?? "❓")}
+            {isFertilizer ? (fertDef?.emoji ?? "🧪")
+             : isGear     ? (gearDef?.emoji  ?? "⚙️")
+             : listing.is_seed
+               ? (species?.emoji.seed ?? "🌱")
+               : (species?.emoji.bloom ?? "❓")}
           </span>
-          {!listing.is_seed && mut && <span className="absolute -top-1 -right-1 text-sm">{mut.emoji}</span>}
+          {!isFertilizer && !isGear && !listing.is_seed && mut && (
+            <span className="absolute -top-1 -right-1 text-sm">{mut.emoji}</span>
+          )}
         </div>
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <p className="text-sm font-bold">{species?.name ?? listing.species_id}</p>
-            {listing.is_seed
-              ? <span className="text-xs font-mono text-muted-foreground">Seed</span>
-              : mut && <span className={`text-xs font-mono font-bold ${mut.color}`}>{mut.name}</span>
-            }
-            <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+            {isFertilizer ? (
+              <>
+                <p className={`text-sm font-bold ${fertDef?.color ?? ""}`}>{fertDef?.name ?? listing.species_id}</p>
+                <span className="text-xs font-mono text-muted-foreground">Fertilizer</span>
+              </>
+            ) : isGear ? (
+              <>
+                <p className="text-sm font-bold">{gearDef?.name ?? listing.species_id}</p>
+                <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-bold">{species?.name ?? listing.species_id}</p>
+                {listing.is_seed
+                  ? <span className="text-xs font-mono text-muted-foreground">Seed</span>
+                  : mut && <span className={`text-xs font-mono font-bold ${mut.color}`}>{mut.name}</span>
+                }
+                <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+              </>
+            )}
           </div>
           <p className={`text-xs font-mono mt-0.5 ${expiring ? "text-orange-400" : "text-muted-foreground"}`}>
             {expiring && "⚠ "}expires in {formatExpiry(listing.expires_at)}
@@ -239,27 +272,51 @@ function ActiveListingRow({
 // ── History row ────────────────────────────────────────────────────────────
 
 function HistoryListingRow({ listing }: { listing: MyListing }) {
-  const species = getFlower(listing.species_id);
-  const mut     = listing.mutation ? MUTATIONS[listing.mutation as MutationType] : null;
-  const rarity  = species ? RARITY_CONFIG[species.rarity] : null;
+  const isFertilizer = listing.species_id.startsWith("fert:");
+  const isGear       = listing.species_id.startsWith("gear:");
+  const fertDef      = isFertilizer ? FERTILIZERS[listing.species_id.replace("fert:", "") as FertilizerType] : null;
+  const gearDef      = isGear       ? GEAR_CATALOG[listing.species_id.replace("gear:", "") as GearType]      : null;
+  const species      = (isFertilizer || isGear) ? null : getFlower(listing.species_id);
+  const mut          = (!isFertilizer && !isGear && listing.mutation) ? MUTATIONS[listing.mutation as MutationType] : null;
+  const rarity       = species ? RARITY_CONFIG[species.rarity] : (isGear && gearDef) ? RARITY_CONFIG[gearDef.rarity] : null;
 
   return (
     <div className="bg-card/40 border border-border/40 rounded-2xl px-4 py-3 flex items-center gap-3 opacity-70">
       <div className="relative flex-shrink-0">
         <span className="text-2xl">
-            {listing.is_seed ? (species?.emoji.seed ?? "🌱") : (species?.emoji.bloom ?? "❓")}
-          </span>
-          {!listing.is_seed && mut && <span className="absolute -top-1 -right-1 text-xs">{mut.emoji}</span>}
+          {isFertilizer ? (fertDef?.emoji ?? "🧪")
+           : isGear     ? (gearDef?.emoji  ?? "⚙️")
+           : listing.is_seed
+             ? (species?.emoji.seed ?? "🌱")
+             : (species?.emoji.bloom ?? "❓")}
+        </span>
+        {!isFertilizer && !isGear && !listing.is_seed && mut && (
+          <span className="absolute -top-1 -right-1 text-xs">{mut.emoji}</span>
+        )}
       </div>
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <p className="text-sm font-semibold">{species?.name ?? listing.species_id}</p>
-          {listing.is_seed
-            ? <span className="text-xs font-mono text-muted-foreground">Seed</span>
-            : mut && <span className={`text-xs font-mono ${mut.color}`}>{mut.name}</span>
-          }
-          <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+          {isFertilizer ? (
+            <>
+              <p className={`text-sm font-semibold ${fertDef?.color ?? ""}`}>{fertDef?.name ?? listing.species_id}</p>
+              <span className="text-xs font-mono text-muted-foreground">Fertilizer</span>
+            </>
+          ) : isGear ? (
+            <>
+              <p className="text-sm font-semibold">{gearDef?.name ?? listing.species_id}</p>
+              <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+            </>
+          ) : (
+            <>
+              <p className="text-sm font-semibold">{species?.name ?? listing.species_id}</p>
+              {listing.is_seed
+                ? <span className="text-xs font-mono text-muted-foreground">Seed</span>
+                : mut && <span className={`text-xs font-mono ${mut.color}`}>{mut.name}</span>
+              }
+              <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+            </>
+          )}
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">
           {listing.sold_at ? formatDate(listing.sold_at) : formatDate(listing.created_at)}

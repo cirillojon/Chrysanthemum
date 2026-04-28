@@ -3,12 +3,12 @@ import type { Rarity } from "./flowers";
 // ── How many completed flowers of each rarity are required for a conversion ─
 // Edit these values to balance the system
 export const BOTANY_REQUIREMENTS: Partial<Record<Rarity, number>> = {
-  common:    5,
-  uncommon:  5,
+  common:    3,
+  uncommon:  4,
   rare:      5,
   legendary: 5,
-  mythic:    5,
-  exalted:   5,
+  mythic:    6,
+  exalted:   7,
 };
 
 // Conversion chain — prismatic is terminal (cannot be converted further)

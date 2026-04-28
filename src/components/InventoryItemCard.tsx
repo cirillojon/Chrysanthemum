@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { useGame } from "../store/GameContext";
 import { sellFlower } from "../store/gameStore";
 import { edgeSellFlower } from "../lib/edgeFunctions";
@@ -94,6 +95,7 @@ export function InventoryItemCard({ item }: Props) {
             {rarity.label}
           </span>
         </div>
+        <FlowerTypeBadges types={species.types} className="mt-1" />
         <p className="text-xs text-muted-foreground mt-0.5">
           {item.quantity}× · {valuePerItem} 🟡 each · {totalValue} 🟡 total
         </p>

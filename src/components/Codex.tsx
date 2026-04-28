@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { FLOWERS, MUTATIONS, RARITY_CONFIG } from "../data/flowers";
 import type { Rarity, MutationType } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import {
   getTotalCodexEntries,
   isDiscovered,
@@ -196,8 +197,9 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                       {rarity.label}
                     </span>
                   </div>
+                  {hasBase && <FlowerTypeBadges types={f.types} className="mt-1" />}
                   {hasBase && (
-                    <p className={`text-xs text-muted-foreground mt-0.5 ${isExpanded ? "" : "truncate"}`}>
+                    <p className={`text-xs text-muted-foreground mt-1 ${isExpanded ? "" : "truncate"}`}>
                       {f.description}
                     </p>
                   )}

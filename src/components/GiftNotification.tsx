@@ -33,7 +33,7 @@ export function GiftNotification({ onDismiss, onView }: Props) {
             onClick={() => { setVisible(false); setTimeout(onView, 400); }}
             className="text-xs text-primary hover:underline mt-0.5"
           >
-            View in Gifts tab →
+            View in Mailbox →
           </button>
         </div>
         <button

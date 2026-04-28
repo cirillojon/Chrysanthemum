@@ -84,7 +84,7 @@ const FLOWERS: { id: string; rarity: Rarity }[] = [
 ];
 
 const BOTANY_REQUIREMENTS: Partial<Record<Rarity, number>> = {
-  common: 5, uncommon: 5, rare: 5, legendary: 5, mythic: 5, exalted: 5,
+  common: 3, uncommon: 4, rare: 5, legendary: 5, mythic: 6, exalted: 7,
 };
 const NEXT_RARITY: Partial<Record<Rarity, Rarity>> = {
   common: "uncommon", uncommon: "rare", rare: "legendary",

@@ -8,6 +8,14 @@ export interface CloudProfile {
   display_mutation: string | null;
   status: string | null;
   created_at: string;
+  last_seen_at: string | null;
+}
+
+export async function updatePresence(userId: string): Promise<void> {
+  await supabase
+    .from("users")
+    .update({ last_seen_at: new Date().toISOString() })
+    .eq("id", userId);
 }
 
 // ── Profile ────────────────────────────────────────────────────────────────
@@ -124,6 +132,11 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       discovered:           (data.discovered as string[]) ?? [],
       weatherForecastSlots: (data.weather_forecast_slots as number) ?? 0,
       marketplaceSlots:     (data.marketplace_slots as number) ?? 0,
+      // Farm Update fields
+      gearInventory:        (data.gear_inventory  as GameState["gearInventory"])  ?? [],
+      supplyShop:           (data.supply_shop     as GameState["supplyShop"])     ?? [],
+      supplySlots:          (data.supply_slots    as number)                      ?? 2,
+      lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
     } as GameState;
   } catch {
     return null;
@@ -151,6 +164,11 @@ export async function saveToCloud(
       discovered:             state.discovered ?? [],
       weather_forecast_slots: state.weatherForecastSlots ?? 0,
       marketplace_slots:      state.marketplaceSlots ?? 0,
+      // Farm Update fields
+      gear_inventory:         state.gearInventory     ?? [],
+      supply_shop:            state.supplyShop        ?? [],
+      supply_slots:           state.supplySlots       ?? 2,
+      last_supply_reset:      state.lastSupplyReset   ?? 0,
       updated_at:             new Date().toISOString(),
     });
 
@@ -212,6 +230,10 @@ export async function getPublicSave(userId: string): Promise<GameState | null> {
     discovered:           (data.discovered as string[]) ?? [],
     weatherForecastSlots: (data.weather_forecast_slots as number) ?? 0,
     marketplaceSlots:     (data.marketplace_slots as number) ?? 2,
+    gearInventory:        (data.gear_inventory  as GameState["gearInventory"])  ?? [],
+    supplyShop:           (data.supply_shop     as GameState["supplyShop"])     ?? [],
+    supplySlots:          (data.supply_slots    as number)                      ?? 2,
+    lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
   } as GameState;
 }
 
@@ -421,6 +443,70 @@ export async function getSentGifts(userId: string): Promise<Gift[]> {
     .limit(20);
 
   return error || !data ? [] : (data as Gift[]);
+}
+
+// ── Mailbox ───────────────────────────────────────────────────────────────
+
+export interface MailboxEntry {
+  id:           string;
+  user_id:      string;
+  from_user_id: string | null;   // null = system (marketplace proceeds, etc.)
+  subject:      string;
+  kind:         "coins" | "flower" | "seed" | "fertilizer" | "gear";
+  species_id:   string | null;
+  mutation:     string | null;
+  is_seed:      boolean;
+  amount:       number | null;
+  message:      string;
+  claimed:      boolean;
+  created_at:   string;
+  // Populated client-side after fetching sender profile
+  from_profile?: CloudProfile | null;
+}
+
+export async function getUnclaimedMail(userId: string): Promise<MailboxEntry[]> {
+  try {
+    const { data, error } = await supabase
+      .from("mailbox")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("claimed", false)
+      .order("created_at", { ascending: false })
+      .limit(50);
+
+    if (error || !data) return [];
+
+    const entries = data as MailboxEntry[];
+
+    // Fetch sender profiles for entries that have a from_user_id
+    const senderIds = [...new Set(entries.map((e) => e.from_user_id).filter(Boolean))] as string[];
+    if (senderIds.length > 0) {
+      const profiles = await Promise.all(senderIds.map((id) => getProfile(id)));
+      const profileMap = new Map(profiles.filter(Boolean).map((p) => [p!.id, p!]));
+      return entries.map((e) => ({
+        ...e,
+        from_profile: e.from_user_id ? (profileMap.get(e.from_user_id) ?? null) : null,
+      }));
+    }
+
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+export async function getUnclaimedMailCount(userId: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from("mailbox")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", userId)
+      .eq("claimed", false);
+
+    return error ? 0 : (count ?? 0);
+  } catch {
+    return 0;
+  }
 }
 
 // ── Leaderboard ───────────────────────────────────────────────────────────

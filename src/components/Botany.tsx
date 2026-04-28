@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useGame } from "../store/GameContext";
 import { FLOWERS, RARITY_CONFIG, getFlower, type MutationType } from "../data/flowers";
 import { MUTATIONS } from "../data/flowers";
@@ -276,6 +276,10 @@ export function Botany() {
     localStorage.getItem("botany_auto_convert") === "true"
   );
 
+  // Guards against re-entrant auto-convert runs and rollback-triggered retry loops
+  const autoConvertRunning  = useRef(false);
+  const autoConvertCooldown = useRef(false);
+
   function toggleAutoConvert() {
     setAutoConvert((v) => {
       const next = !v;
@@ -284,15 +288,63 @@ export function Botany() {
     });
   }
 
-  // When auto-convert is on, run conversions whenever inventory changes
+  // When auto-convert is on, run conversions whenever inventory changes.
+  // Uses a lock + cooldown to prevent rollback-triggered retry loops.
   useEffect(() => {
     if (!autoConvert) return;
-    BOTANY_RARITY_ORDER.forEach((rarity) => {
+    if (autoConvertRunning.current || autoConvertCooldown.current) return;
+
+    // Walk rarities sequentially, carrying the locally-optimistic state
+    // forward so each tier sees the result of the previous conversion.
+    autoConvertRunning.current = true;
+    let cur = state;
+
+    for (const rarity of BOTANY_RARITY_ORDER) {
       const required = BOTANY_REQUIREMENTS[rarity] ?? 0;
-      if (getTotalEligible(rarity) >= required) {
-        handleConvertAll(rarity);
-      }
-    });
+      const eligible = cur.inventory
+        .filter((i) => {
+          if (i.isSeed) return false;
+          const s = getFlower(i.speciesId);
+          return s?.rarity === rarity && i.quantity > 0;
+        })
+        .reduce((sum, i) => sum + i.quantity, 0);
+
+      if (eligible < required) continue;
+
+      const res = botanyConvertAll(cur, rarity);
+      if (!res) continue;
+
+      // Carry the optimistic state forward so the next tier
+      // sees the correct post-conversion inventory.
+      cur = res.state;
+
+      // Capture rarity in closure for the callbacks below.
+      const capturedRarity = rarity;
+
+      perform(
+        res.state,
+        // Wrap the server call so we can detect failures and set the
+        // cooldown — this prevents the rollback-triggered inventory
+        // change from immediately re-firing this effect.
+        async () => {
+          try {
+            return await edgeBotanyConvertAll(capturedRarity);
+          } catch (e) {
+            autoConvertCooldown.current = true;
+            setTimeout(() => { autoConvertCooldown.current = false; }, 5_000);
+            throw e; // re-throw so perform can roll back to prev state
+          }
+        },
+        // onSuccess fires asynchronously after the server responds.
+        // Show the result banner here, NOT after the synchronous loop.
+        (result) => { setConvertAllResult(result.outputSpeciesIds); },
+        { serialize: true }
+        // No custom rollback — the default `setState(prev)` correctly
+        // restores the pre-optimistic snapshot when the server fails.
+      );
+    }
+
+    autoConvertRunning.current = false;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoConvert, state.inventory]);
 

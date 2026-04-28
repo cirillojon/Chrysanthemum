@@ -67,13 +67,18 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── Verify JWT + load sender's save in parallel ───────────────────────────
-    const [authResult, saveResult] = await Promise.all([
+    // ── Verify JWT + load sender's save + sender's username in parallel ───────
+    const [authResult, saveResult, senderProfileResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
         .select("inventory")
         .eq("user_id", userId)
+        .single(),
+      supabaseAdmin
+        .from("users")
+        .select("username")
+        .eq("id", userId)
         .single(),
     ]);
 
@@ -88,10 +93,10 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    const senderUsername = senderProfileResult.data?.username ?? "Someone";
     let inventory = (saveResult.data.inventory ?? []) as InventoryItem[];
 
     // ── Validate item in sender's inventory (blooms only, not seeds) ──────────
-    // Normalise mutation to null so null and undefined compare equal
     const mutNorm = mutation ?? null;
     const itemIdx = inventory.findIndex(
       (i) => i.speciesId === speciesId &&
@@ -104,34 +109,40 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── Deduct from inventory ─────────────────────────────────────────────────
+    // ── Deduct from sender's inventory ────────────────────────────────────────
     inventory = inventory
       .map((i, idx) => idx === itemIdx ? { ...i, quantity: i.quantity - 1 } : i)
       .filter((i) => i.quantity > 0);
 
-    // ── Insert gift row + save inventory atomically ───────────────────────────
-    const [giftResult, updateResult] = await Promise.all([
-      supabaseAdmin.from("gifts").insert({
-        sender_id:   userId,
-        receiver_id: receiverId,
-        species_id:  speciesId,
-        mutation:    mutation ?? null,
-        message:     message  ?? null,
+    const now = new Date().toISOString();
+
+    // ── Insert mailbox entry for receiver + update sender's save ─────────────
+    const [mailResult, updateResult] = await Promise.all([
+      supabaseAdmin.from("mailbox").insert({
+        user_id:      receiverId,
+        from_user_id: userId,
+        subject:      `Gift from ${senderUsername} 🎁`,
+        kind:         "flower",
+        species_id:   speciesId,
+        mutation:     mutation ?? null,
+        is_seed:      false,
+        message:      message ?? "",
+        created_at:   now,
       }),
       supabaseAdmin
         .from("game_saves")
-        .update({ inventory, updated_at: new Date().toISOString() })
+        .update({ inventory, updated_at: now })
         .eq("user_id", userId),
     ]);
 
-    if (giftResult.error) {
-      console.error("gift insert failed:", giftResult.error);
+    if (mailResult.error) {
+      console.error("send-gift: mailbox insert failed:", mailResult.error);
       return new Response(JSON.stringify({ error: "Failed to send gift" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
     if (updateResult.error) {
-      console.error("inventory update failed:", updateResult.error);
+      console.error("send-gift: inventory update failed:", updateResult.error);
       return new Response(JSON.stringify({ error: "Failed to update inventory" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

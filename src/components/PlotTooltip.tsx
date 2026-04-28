@@ -8,14 +8,22 @@ import {
 } from "../store/gameStore";
 import { edgeApplyFertilizer, edgeRemovePlant } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
 
 interface Props {
-  plant: PlantedFlower;
-  row: number;
-  col: number;
-  onClose?: () => void;
+  plant:               PlantedFlower;
+  row:                 number;
+  col:                 number;
+  onClose?:            () => void;
+  isUnderSprinkler?:   boolean;
+  sprinklerMutations?: string[];
+  isUnderGrowLamp?:    boolean;
+  isUnderScarecrow?:   boolean;
+  isUnderComposter?:   boolean;
+  isUnderFan?:         boolean;
+  isUnderHarvestBell?: boolean;
 }
 
 function formatMs(ms: number): string {
@@ -32,7 +40,11 @@ function formatMs(ms: number): string {
   return remH > 0 ? `${d}d ${remH}h` : `${d}d`;
 }
 
-export function PlotTooltip({ plant, row, col, onClose }: Props) {
+export function PlotTooltip({
+  plant, row, col, onClose,
+  isUnderSprinkler, sprinklerMutations = [],
+  isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell,
+}: Props) {
   const { state, getState, perform, activeWeather } = useGame();
   const [showFertPicker,  setShowFertPicker]  = useState(false);
   const [confirmRemove,   setConfirmRemove]   = useState(false);
@@ -126,7 +138,7 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
       className={`absolute ${flipped ? "top-full mt-2" : "bottom-full mb-2"} left-1/2 z-40 pointer-events-none`}
       style={{ transform: `translateX(calc(-50% + ${nudge}px))` }}
     >
-      <div className="pointer-events-auto bg-card border border-border rounded-xl p-3 shadow-xl w-48 space-y-2">
+      <div className="pointer-events-auto bg-card/80 backdrop-blur-sm border border-border rounded-xl p-3 shadow-xl w-48 space-y-2">
 
         {/* Header */}
         <div className="flex items-center gap-2">
@@ -134,6 +146,7 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold leading-tight">{species.name}</p>
             <p className={`text-[10px] font-mono ${rarity.color}`}>{rarity.label}</p>
+            <FlowerTypeBadges types={species.types} className="mt-1" />
           </div>
           {/* Close button */}
           {onClose && (
@@ -178,6 +191,54 @@ export function PlotTooltip({ plant, row, col, onClose }: Props) {
             <p className="text-[10px] text-muted-foreground font-mono">No mutation</p>
           )}
         </div>
+
+        {/* Active gear effects */}
+        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell) && (
+          <div className="pt-1 border-t border-border space-y-1">
+            <p className="text-[10px] text-muted-foreground">Active gear</p>
+
+            {/* Chip labels */}
+            <div className="flex flex-wrap gap-1">
+              {isUnderGrowLamp && (
+                <span className="relative inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-400/10 border border-amber-400/30 text-[10px] text-amber-300 overflow-hidden">
+                  <div className="absolute inset-0 gear-lamp-glow pointer-events-none" />
+                  <span className="relative">💡</span>
+                  <span className="relative">Grow lamp</span>
+                </span>
+              )}
+              {isUnderSprinkler && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-400/10 border border-blue-400/20 text-[10px] text-blue-300">
+                  <span>💧</span><span>Sprinkler</span>
+                </span>
+              )}
+              {sprinklerMutations.map((emoji, i) => (
+                <span key={i} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-400/10 border border-blue-400/20 text-[10px] text-blue-300">
+                  <span>{emoji}</span><span>Sprinkler</span>
+                </span>
+              ))}
+              {isUnderScarecrow && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-400/10 border border-green-400/20 text-[10px] text-green-300">
+                  <span>🧹</span><span>Scarecrow</span>
+                </span>
+              )}
+              {isUnderComposter && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-400/10 border border-green-400/20 text-[10px] text-green-300">
+                  <span>🧺</span><span>Composter</span>
+                </span>
+              )}
+              {isUnderFan && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-stone-400/10 border border-stone-400/20 text-[10px] text-stone-300">
+                  <span>💨</span><span>Fan</span>
+                </span>
+              )}
+              {isUnderHarvestBell && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/20 text-[10px] text-yellow-300">
+                  <span>🔔</span><span>Harvest Bell</span>
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Fertilizer section */}
         {!isBloomed && (

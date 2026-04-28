@@ -22,9 +22,9 @@ const GREETINGS: Record<string, (name: string) => string> = {
 };
 
 export function OfflineBanner({ summary, onDismiss, changelog, username }: Props) {
-  const { minutesAway, readyToHarvest, shopRestocked } = summary;
+  const { minutesAway, readyToHarvest, shopRestocked, supplyRestocked } = summary;
 
-  const hasOfflineContent = minutesAway >= 1 || readyToHarvest || shopRestocked;
+  const hasOfflineContent = minutesAway >= 1 || readyToHarvest || shopRestocked || supplyRestocked;
 
   // Nothing to show — skip
   if (!hasOfflineContent && !changelog) return null;
@@ -76,6 +76,17 @@ export function OfflineBanner({ summary, onDismiss, changelog, username }: Props
                   <p className="text-sm font-semibold">Shop has restocked</p>
                   <p className="text-xs text-muted-foreground">
                     Fresh seeds and fertilizer available
+                  </p>
+                </div>
+              </div>
+            )}
+            {supplyRestocked && (
+              <div className="flex items-center gap-3 bg-card/80 border border-border rounded-xl px-4 py-3">
+                <span className="text-2xl">🧪</span>
+                <div>
+                  <p className="text-sm font-semibold">Supply shop has restocked</p>
+                  <p className="text-xs text-muted-foreground">
+                    Fresh gear and fertilizer available
                   </p>
                 </div>
               </div>

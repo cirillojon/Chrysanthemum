@@ -64,7 +64,8 @@ export function useWeather() {
         .format(new Date()),
       10
     ) % 24; // % 24 handles the Intl edge-case where midnight returns "24"
-    await supabase.rpc("advance_weather", { p_utc_hour: etHour });
+    const { error } = await supabase.rpc("advance_weather", { p_utc_hour: etHour });
+    if (error) console.error("[useWeather] advance_weather RPC failed:", error.message);
     await fetchAndApply();
   }
 

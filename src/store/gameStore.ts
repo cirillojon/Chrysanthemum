@@ -1,8 +1,16 @@
 import { FLOWERS, MUTATIONS, getFlower, type GrowthStage, type MutationType, type Rarity } from "../data/flowers";
-import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplaceSlotUpgrade, DEFAULT_SHOP_SLOTS, type FertilizerType } from "../data/upgrades";
+import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplaceSlotUpgrade, getNextSupplySlotUpgrade, DEFAULT_SHOP_SLOTS, DEFAULT_SUPPLY_SLOTS, type FertilizerType } from "../data/upgrades";
 import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
+import {
+  GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
+  isRegularSprinkler, isMutationSprinkler,
+  isScarecrow, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
+  rollComposterFertilizer,
+  SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
+  type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
+} from "../data/gear";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -25,9 +33,13 @@ export interface PlantedFlower {
 }
 
 export interface Plot {
-  id: string;
+  id:    string;
   plant: PlantedFlower | null;
+  /** A piece of gear occupying this slot — mutually exclusive with plant */
+  gear:  PlacedGear | null;
 }
+
+export type { GearType, PlacedGear, GearInventoryItem };
 
 export interface InventoryItem {
   speciesId: string;
@@ -42,25 +54,28 @@ export interface FertilizerItem {
 }
 
 export interface ShopSlot {
-  speciesId: string;
-  price: number;
-  quantity: number;
+  speciesId:     string;
+  price:         number;
+  quantity:      number;
   isFertilizer?: boolean;
   fertilizerType?: FertilizerType;
-  isEmpty?: boolean;
+  isEmpty?:      boolean;
+  /** Supply shop: this slot is a gear item */
+  isGear?:       boolean;
+  gearType?:     GearType;
 }
 
 export interface GameState {
-  coins: number;
+  coins:    number;
   farmSize: number; // column count (max 6)
   farmRows: number; // row count (equals farmSize for square grids, can exceed for 7×6+)
-  shopSlots: number;
-  grid: Plot[][];
-  inventory: InventoryItem[];
+  shopSlots:   number;
+  grid:        Plot[][];
+  inventory:   InventoryItem[];
   fertilizers: FertilizerItem[];
-  shop: ShopSlot[];
+  shop:          ShopSlot[];
   lastShopReset: number;
-  lastSaved: number;
+  lastSaved:     number;
   // Codex — tracks every species + mutation combo ever harvested
   // Format: "speciesId" for base, "speciesId:mutationId" for mutated
   discovered: string[];
@@ -68,12 +83,18 @@ export interface GameState {
   weatherForecastSlots: number;
   // Marketplace — number of active listing slots the player has purchased (0 = not unlocked)
   marketplaceSlots: number;
+  // Supply shop (fertilizers + gear)
+  supplySlots:      number;
+  supplyShop:       ShopSlot[];
+  lastSupplyReset:  number;
+  gearInventory:    GearInventoryItem[];
 }
 
 export interface OfflineSummary {
   minutesAway: number;
   readyToHarvest: number;
   shopRestocked: boolean;
+  supplyRestocked: boolean;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -86,8 +107,9 @@ const SHOP_RESET_INTERVAL = 5 * 60 * 1_000; // 5 minutes
 export function makeGrid(rows: number, cols: number): Plot[][] {
   return Array.from({ length: rows }, (_, row) =>
     Array.from({ length: cols }, (_, col) => ({
-      id: `${row}-${col}`,
+      id:    `${row}-${col}`,
       plant: null,
+      gear:  null,
     }))
   );
 }
@@ -96,7 +118,7 @@ export function resizeGrid(old: Plot[][], newRows: number, newCols: number): Plo
   return Array.from({ length: newRows }, (_, row) =>
     Array.from({ length: newCols }, (_, col) => {
       const existing = old[row]?.[col];
-      return existing ?? { id: `${row}-${col}`, plant: null };
+      return existing ?? { id: `${row}-${col}`, plant: null, gear: null };
     })
   );
 }
@@ -237,10 +259,69 @@ function generateShop(shopSlots: number = DEFAULT_SHOP_SLOTS): ShopSlot[] {
 
   return chosen;
 }
+// ── Supply shop generation ─────────────────────────────────────────────────
+
+export const SUPPLY_RESET_INTERVAL = 10 * 60 * 1_000; // 10 minutes
+
+export function msUntilSupplyReset(state: GameState): number {
+  return Math.max(0, SUPPLY_RESET_INTERVAL - (Date.now() - (state.lastSupplyReset ?? 0)));
+}
+
+function generateSupplyShop(supplySlots: number = DEFAULT_SUPPLY_SLOTS): ShopSlot[] {
+  const chosen: ShopSlot[] = [];
+
+  const eligibleRarities = (Object.entries(SUPPLY_RARITY_WEIGHTS) as [Rarity, number][])
+    .filter(([rarity]) => isRarityUnlocked(rarity, supplySlots) && (SUPPLY_POOLS[rarity]?.length ?? 0) > 0);
+
+  let attempts = 0;
+  while (chosen.length < supplySlots && attempts < 1000) {
+    attempts++;
+
+    if (eligibleRarities.length === 0) break;
+
+    // Roll a rarity by weight
+    const totalWeight = eligibleRarities.reduce((s, [, w]) => s + w, 0);
+    let roll = Math.random() * totalWeight;
+    let chosenRarity: Rarity = eligibleRarities[eligibleRarities.length - 1][0];
+    for (const [rarity, weight] of eligibleRarities) {
+      roll -= weight;
+      if (roll <= 0) { chosenRarity = rarity; break; }
+    }
+
+    const pool = SUPPLY_POOLS[chosenRarity];
+    if (!pool || pool.length === 0) continue;
+
+    const item = pool[Math.floor(Math.random() * pool.length)];
+
+    if (item.kind === "fertilizer") {
+      const fert = FERTILIZERS[item.fertilizerType];
+      chosen.push({
+        speciesId:    `supply_fert_${item.fertilizerType}_${chosen.length}`,
+        isFertilizer: true,
+        fertilizerType: item.fertilizerType,
+        price:        fert.shopPrice,
+        quantity:     Math.floor(Math.random() * 3) + 1,
+      });
+    } else {
+      const gearDef = GEAR[item.gearType];
+      chosen.push({
+        speciesId: `supply_gear_${item.gearType}_${chosen.length}`,
+        isGear:    true,
+        gearType:  item.gearType,
+        price:     gearDef.shopPrice,
+        quantity:  1,
+      });
+    }
+  }
+
+  return chosen;
+}
+
 // ── Default state ──────────────────────────────────────────────────────────
 
 export function defaultState(): GameState {
   const size = 3;
+  const now  = Date.now();
   return {
     coins:                100,
     farmSize:             size,
@@ -250,11 +331,15 @@ export function defaultState(): GameState {
     inventory:            [],
     fertilizers:          [{ type: "basic", quantity: 3 }],
     shop:                 generateShop(DEFAULT_SHOP_SLOTS),
-    lastShopReset:        Date.now(),
-    lastSaved:            Date.now(),
+    lastShopReset:        now,
+    lastSaved:            now,
     discovered:           [],
     weatherForecastSlots: 0,
     marketplaceSlots:     0,
+    supplySlots:          DEFAULT_SUPPLY_SLOTS,
+    supplyShop:           generateSupplyShop(DEFAULT_SUPPLY_SLOTS),
+    lastSupplyReset:      now,
+    gearInventory:        [],
   };
 }
 
@@ -273,7 +358,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
       const state = defaultState();
-      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false } };
+      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false } };
     }
     const parsed = JSON.parse(raw) as GameState;
     // Backfill discovered for saves that predate the codex
@@ -282,7 +367,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
   } catch (e) {
     // console.warn("Failed to load save, starting fresh:", e);
     const state = defaultState();
-    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false } };
+    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false } };
   }
 }
 
@@ -293,7 +378,21 @@ export function resetGame(): GameState {
 
 // ── Offline tick ───────────────────────────────────────────────────────────
 
-export function applyOfflineTick(save: GameState): { state: GameState; summary: OfflineSummary } {
+/**
+ * Describes the active weather event that was (partially) in progress while the
+ * player was offline.  Passed into applyOfflineTick so that rain / thunderstorm
+ * growth bonuses are correctly applied to offline growth.
+ */
+export interface WeatherWindow {
+  type:      WeatherType;
+  startedAt: number;
+  endsAt:    number;
+}
+
+export function applyOfflineTick(
+  save: GameState,
+  offlineWeather?: WeatherWindow,
+): { state: GameState; summary: OfflineSummary } {
   const now         = Date.now();
   const minutesAway = Math.floor((now - save.lastSaved) / 60_000);
 
@@ -305,13 +404,20 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
     save.grid.length    !== expectedRows ||
     save.grid[0]?.length !== expectedCols;
 
+  const now2 = Date.now();
   let updated: GameState = {
     ...save,
     farmRows:             expectedRows,
-    grid:                 needsRebuild ? makeGrid(expectedRows, expectedCols) : save.grid,
+    grid:                 needsRebuild ? makeGrid(expectedRows, expectedCols) : save.grid.map((row) =>
+      row.map((plot) => plot.gear !== undefined ? plot : { ...plot, gear: null })
+    ),
     discovered:           save.discovered           ?? [],
     shopSlots:            save.shopSlots            ?? DEFAULT_SHOP_SLOTS,
     weatherForecastSlots: save.weatherForecastSlots ?? 0,
+    supplySlots:          save.supplySlots          ?? DEFAULT_SUPPLY_SLOTS,
+    supplyShop:           save.supplyShop           ?? generateSupplyShop(save.supplySlots ?? DEFAULT_SUPPLY_SLOTS),
+    lastSupplyReset:      save.lastSupplyReset       ?? now2,
+    gearInventory:        save.gearInventory         ?? [],
   };
 
   let shopRestocked    = false;
@@ -322,14 +428,118 @@ export function applyOfflineTick(save: GameState): { state: GameState; summary: 
     shopRestocked = true;
   }
 
+  // Tick supply shop reset
+  let supplyRestocked = false;
+  const timeSinceSupplyReset = now - (updated.lastSupplyReset ?? 0);
+  if (timeSinceSupplyReset >= SUPPLY_RESET_INTERVAL) {
+    updated         = { ...updated, supplyShop: generateSupplyShop(updated.supplySlots), lastSupplyReset: now };
+    supplyRestocked = true;
+  }
+
+  // Always sync prices from current data definitions so price changes take effect immediately on load
+  updated = {
+    ...updated,
+    supplyShop: updated.supplyShop.map((slot) => {
+      if (slot.isEmpty) return slot;
+      if (slot.isFertilizer && slot.fertilizerType) {
+        const fert = FERTILIZERS[slot.fertilizerType as FertilizerType];
+        return fert ? { ...slot, price: fert.shopPrice } : slot;
+      }
+      if (slot.isGear && slot.gearType) {
+        const gearDef = GEAR[slot.gearType as GearType];
+        return gearDef ? { ...slot, price: gearDef.shopPrice } : slot;
+      }
+      return slot;
+    }),
+  };
+
+  // Prune expired gear from grid on load
+  updated = { ...updated, grid: pruneExpiredGear(updated.grid, now) };
+
+  // ── Offline weather growth bonus ──────────────────────────────────────────
+  // If rain / thunderstorm was active during part of the offline period,
+  // bake the extra growth into each plant's growthMs checkpoint so that
+  // getCurrentStage() and the progress bar reflect the real offline progress.
+  if (offlineWeather) {
+    const weatherMult = WEATHER[offlineWeather.type]?.growthMultiplier ?? 1.0;
+    if (weatherMult > 1.0) {
+      const offlineStart = save.lastSaved;
+      // How long the weather overlapped with the offline window
+      const weatherStart  = Math.max(offlineWeather.startedAt, offlineStart);
+      const weatherEnd    = Math.min(offlineWeather.endsAt, now);
+      const overlapMs     = Math.max(0, weatherEnd - weatherStart);
+
+      if (overlapMs > 0) {
+        const extraMult = weatherMult - 1.0; // additional multiplier above clear (1.0)
+        updated = {
+          ...updated,
+          grid: updated.grid.map((row) =>
+            row.map((plot) => {
+              if (!plot.plant || plot.plant.bloomedAt) return plot;
+              const fert = plot.plant.fertilizer
+                ? FERTILIZERS[plot.plant.fertilizer].speedMultiplier
+                : 1.0;
+              const mast = plot.plant.masteredBonus ?? 1.0;
+              // Compute growth accrued up to the moment the player went offline
+              const growthAtSave = computeGrowthMs(plot.plant, offlineStart, "clear");
+              // Extra effective ms from the weather window
+              const bonusMs      = overlapMs * extraMult * fert * mast;
+              return {
+                ...plot,
+                plant: {
+                  ...plot.plant,
+                  growthMs:   growthAtSave + bonusMs,
+                  lastTickAt: offlineStart,
+                },
+              };
+            })
+          ),
+        };
+      }
+    }
+  }
+
+  // Stamp stage transitions first — ensures bloomedAt is written on plants that
+  // grew to bloom while offline, so tickHarvestBells can see and harvest them.
+  // Stamp 6 s in the past so the bell's 5-second grace period doesn't block them.
+  updated = stampStageTransitions(updated, now - 6_000, "clear");
+
+  // Auto-harvest via any active Harvest Bells (captures offline progress)
+  updated = tickHarvestBells(updated, "clear");
+
+  // Auto-plant via any active Auto-Planters (captures offline progress)
+  updated = tickAutoPlanter(updated);
+
   const readyToHarvest = updated.grid
     .flat()
     .filter((p) => p.plant && getCurrentStage(p.plant, now) === "bloom").length;
 
   return {
     state:   updated,
-    summary: { minutesAway, readyToHarvest, shopRestocked },
+    summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked },
   };
+}
+
+/**
+ * Purely visual offline simulation — used when displaying another player's garden
+ * on the profile page.  Does NOT write to the DB.  Applies the same catch-up steps
+ * as applyOfflineTick so the garden looks as it would if the owner had been online:
+ *   1. Stamp stage transitions  →  sets bloomedAt on plants that matured offline
+ *   2. Tick harvest bells       →  removes bloomed plants in bell range
+ *   3. Tick auto-planter        →  fills empty plots in planter range from inventory
+ */
+export function simulateOfflineGarden(save: GameState): GameState {
+  const now = Date.now();
+  // Prune any expired gear first (same as applyOfflineTick does)
+  let sim = { ...save, grid: pruneExpiredGear(save.grid, now) };
+  // Stamp bloomedAt / sproutedAt slightly in the past so tickHarvestBells'
+  // 5-second grace period doesn't block plants that bloomed while offline.
+  sim = stampStageTransitions(sim, now - 6_000, "clear");
+  // Harvest bell auto-harvest
+  sim = tickHarvestBells(sim, "clear");
+  // Auto-planter fill
+  sim = tickAutoPlanter(sim);
+  return sim;
 }
 
 // ── Weather forecast ────────────────────────────────────────────────────────
@@ -376,6 +586,43 @@ export function msUntilShopReset(state: GameState): number {
   return Math.max(0, SHOP_RESET_INTERVAL - (Date.now() - state.lastShopReset));
 }
 
+export function tickSupplyShop(state: GameState): GameState {
+  const now = Date.now();
+  if (now - (state.lastSupplyReset ?? 0) < SUPPLY_RESET_INTERVAL) return state;
+  return {
+    ...state,
+    supplyShop:     generateSupplyShop(state.supplySlots),
+    lastSupplyReset: now,
+  };
+}
+
+/** Returns all PlacedGear items that have expired but not yet been removed from the grid. */
+export function getExpiredGear(grid: Plot[][], now: number): PlacedGear[] {
+  const expired: PlacedGear[] = [];
+  for (const row of grid) {
+    for (const plot of row) {
+      if (plot.gear && isGearExpired(plot.gear, now)) expired.push(plot.gear);
+    }
+  }
+  return expired;
+}
+
+/** Remove gear that has expired from the grid (called on load and each tick). */
+export function pruneExpiredGear(grid: Plot[][], now: number): Plot[][] {
+  let changed = false;
+  const newGrid = grid.map((row) =>
+    row.map((plot) => {
+      if (!plot.gear) return plot;
+      if (isGearExpired(plot.gear, now)) {
+        changed = true;
+        return { ...plot, gear: null };
+      }
+      return plot;
+    })
+  );
+  return changed ? newGrid : grid;
+}
+
 // ── Growth calculation ─────────────────────────────────────────────────────
 
 /**
@@ -385,10 +632,40 @@ export function msUntilShopReset(state: GameState): number {
  * This means the progress bar can never snap by more than ~1 tick of error
  * (as long as stampStageTransitions runs every ~1 s to refresh checkpoints).
  */
+/**
+ * Returns the combined growth multiplier from sprinklers and grow lamps
+ * affecting the cell at (row, col). Pass sprinklerMult=1.0 when no grid context.
+ */
+export function getPassiveGrowthMultiplier(
+  grid: Plot[][],
+  row: number,
+  col: number,
+  now: number
+): number {
+  const night = isNighttime();
+  let bestSprinkler = 1.0;
+  let bestLamp      = 1.0;
+
+  const sources = getGearAffectingCell(grid, row, col, now);
+  for (const { def } of sources) {
+    // Regular sprinkler: take the highest multiplier across all covering sprinklers
+    if (isRegularSprinkler(def) && def.growthMultiplier) {
+      bestSprinkler = Math.max(bestSprinkler, def.growthMultiplier);
+    }
+    // Grow lamp: only active at night — stacks multiplicatively with the sprinkler
+    if (isGrowLamp(def) && night && def.nightMultiplier) {
+      bestLamp = Math.max(bestLamp, def.nightMultiplier);
+    }
+  }
+  // Sprinkler and grow lamp multiply together (lamp is additive bonus on top)
+  return bestSprinkler * bestLamp;
+}
+
 function computeGrowthMs(
   plant: PlantedFlower,
   now: number,
-  weatherType: WeatherType
+  weatherType: WeatherType,
+  gearMultiplier = 1.0
 ): number {
   const species = getFlower(plant.speciesId);
   if (!species) return 0;
@@ -397,10 +674,10 @@ function computeGrowthMs(
     return species.growthTime.seed + species.growthTime.sprout; // fully grown
   }
 
-  const fertMultiplier    = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
-  const weatherMultiplier = WEATHER[weatherType].growthMultiplier;
+  const fertMultiplier     = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
+  const weatherMultiplier  = WEATHER[weatherType].growthMultiplier;
   const masteredMultiplier = plant.masteredBonus ?? 1.0;
-  const multiplier        = fertMultiplier * weatherMultiplier * masteredMultiplier;
+  const multiplier         = fertMultiplier * weatherMultiplier * masteredMultiplier * gearMultiplier;
 
   if (plant.growthMs !== undefined && plant.lastTickAt !== undefined) {
     // Extrapolate from last saved checkpoint (delta is always small — updated every ~1 s)
@@ -418,14 +695,15 @@ function computeGrowthMs(
 export function getCurrentStage(
   plant: PlantedFlower,
   now: number,
-  weatherType: WeatherType = "clear"
+  weatherType: WeatherType = "clear",
+  gearMultiplier = 1.0
 ): GrowthStage {
   if (plant.bloomedAt && now >= plant.bloomedAt) return "bloom";
 
   const species = getFlower(plant.speciesId);
   if (!species) return "seed";
 
-  const gMs    = computeGrowthMs(plant, now, weatherType);
+  const gMs    = computeGrowthMs(plant, now, weatherType, gearMultiplier);
   const seedMs = species.growthTime.seed;
 
   if (gMs >= seedMs + species.growthTime.sprout) return "bloom";
@@ -436,15 +714,16 @@ export function getCurrentStage(
 export function getStageProgress(
   plant: PlantedFlower,
   now: number,
-  weatherType: WeatherType = "clear"
+  weatherType: WeatherType = "clear",
+  gearMultiplier = 1.0
 ): number {
   if (plant.bloomedAt && now >= plant.bloomedAt) return 1;
 
   const species = getFlower(plant.speciesId);
   if (!species) return 0;
 
-  const gMs     = computeGrowthMs(plant, now, weatherType);
-  const seedMs  = species.growthTime.seed;
+  const gMs      = computeGrowthMs(plant, now, weatherType, gearMultiplier);
+  const seedMs   = species.growthTime.seed;
   const sproutMs = species.growthTime.sprout;
 
   if (gMs >= seedMs + sproutMs) return 1;
@@ -455,29 +734,28 @@ export function getStageProgress(
 export function getMsUntilNextStage(
   plant: PlantedFlower,
   now: number,
-  weatherType: WeatherType = "clear"
+  weatherType: WeatherType = "clear",
+  gearMultiplier = 1.0
 ): number {
   if (plant.bloomedAt && now >= plant.bloomedAt) return 0;
 
   const species = getFlower(plant.speciesId);
   if (!species) return 0;
 
-  const fertMultiplier    = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
-  const weatherMultiplier = WEATHER[weatherType].growthMultiplier;
+  const fertMultiplier     = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
+  const weatherMultiplier  = WEATHER[weatherType].growthMultiplier;
   const masteredMultiplier = plant.masteredBonus ?? 1.0;
-  const multiplier        = fertMultiplier * weatherMultiplier * masteredMultiplier;
+  const multiplier         = fertMultiplier * weatherMultiplier * masteredMultiplier * gearMultiplier;
 
-  const gMs     = computeGrowthMs(plant, now, weatherType);
-  const seedMs  = species.growthTime.seed;
+  const gMs      = computeGrowthMs(plant, now, weatherType, gearMultiplier);
+  const seedMs   = species.growthTime.seed;
   const sproutMs = species.growthTime.sprout;
 
   if (gMs >= seedMs + sproutMs) return 0;
   if (gMs >= seedMs) {
-    // In sprout — remaining base ms converted to real ms at current speed
     const remainingBase = (seedMs + sproutMs) - gMs;
     return Math.max(0, Math.ceil(remainingBase / multiplier));
   }
-  // In seed
   const remainingBase = seedMs - gMs;
   return Math.max(0, Math.ceil(remainingBase / multiplier));
 }
@@ -491,7 +769,7 @@ export function plantSeed(
   speciesId: string
 ): GameState | null {
   const plot = state.grid[row]?.[col];
-  if (!plot || plot.plant) return null;
+  if (!plot || plot.plant || plot.gear) return null;
 
   const invItem = state.inventory.find(
     (i) => i.speciesId === speciesId && i.isSeed
@@ -569,35 +847,36 @@ export function stampStageTransitions(
   now: number,
   weatherType: WeatherType = "clear"
 ): GameState {
-  const MIN_TICK_MS = 100; // don't save growthMs for sub-100 ms deltas (prevents render loops)
+  const MIN_TICK_MS = 100;
   let changed = false;
+  const newlyBloomedCells: [number, number][] = [];
 
-  const newGrid = state.grid.map((row) =>
-    row.map((plot) => {
+  let newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
       if (!plot.plant || plot.plant.bloomedAt) return plot; // fully grown — nothing to do
 
       const plant   = plot.plant;
       const species = getFlower(plant.speciesId);
       if (!species) return plot;
 
-      const fertMultiplier    = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
-      const weatherMultiplier = WEATHER[weatherType].growthMultiplier;
+      const gearMult           = getPassiveGrowthMultiplier(state.grid, ri, ci, now);
+      const fertMultiplier     = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
+      const weatherMultiplier  = WEATHER[weatherType].growthMultiplier;
       const masteredMultiplier = plant.masteredBonus ?? 1.0;
-      const multiplier        = fertMultiplier * weatherMultiplier * masteredMultiplier;
+      const multiplier         = fertMultiplier * weatherMultiplier * masteredMultiplier * gearMult;
 
       const seedMs   = species.growthTime.seed;
       const sproutMs = species.growthTime.sprout;
 
       // ── Step 1: compute new growthMs ──────────────────────────────────────
       let newGrowthMs: number;
-      let newLastTickAt = now;
+      const newLastTickAt = now;
 
       if (plant.growthMs !== undefined && plant.lastTickAt !== undefined) {
         const delta = Math.max(0, now - plant.lastTickAt);
         if (delta < MIN_TICK_MS) return plot; // too soon — skip to prevent render loop
         newGrowthMs = plant.growthMs + delta * multiplier;
       } else {
-        // First encounter — backfill from known timestamps (use current multiplier as best guess)
         if (plant.sproutedAt !== undefined) {
           newGrowthMs = seedMs + Math.max(0, now - plant.sproutedAt) * multiplier;
         } else {
@@ -605,26 +884,68 @@ export function stampStageTransitions(
         }
       }
 
-      let updated      = { ...plant, growthMs: newGrowthMs, lastTickAt: newLastTickAt };
-      let plantChanged = true; // growthMs always changes after MIN_TICK_MS guard
+      let updated: PlantedFlower = { ...plant, growthMs: newGrowthMs, lastTickAt: newLastTickAt };
 
-      // ── Step 2: stamp sproutedAt on first sprout transition ───────────────
+      // ── Step 2: stamp sproutedAt ──────────────────────────────────────────
       if (!plant.sproutedAt && newGrowthMs >= seedMs) {
         updated = { ...updated, sproutedAt: now };
       }
 
-      // ── Step 3: stamp bloomedAt on first bloom transition ─────────────────
+      // ── Step 3: stamp bloomedAt ───────────────────────────────────────────
       if (!plant.bloomedAt && newGrowthMs >= seedMs + sproutMs) {
         updated = { ...updated, bloomedAt: now };
+        newlyBloomedCells.push([ri, ci]);
       }
 
-      if (plantChanged) {
-        changed = true;
-        return { ...plot, plant: updated };
-      }
-      return plot;
+      changed = true;
+      return { ...plot, plant: updated };
     })
   );
+
+  // ── Feed composters from newly bloomed plants ──────────────────────────
+  if (newlyBloomedCells.length > 0) {
+    const gridRows = newGrid.length;
+    const gridCols = newGrid[0]?.length ?? 0;
+
+    for (const [bloomRow, bloomCol] of newlyBloomedCells) {
+      const bloomedPlant = newGrid[bloomRow][bloomCol].plant;
+      if (!bloomedPlant) continue;
+      const bloomedSpecies = getFlower(bloomedPlant.speciesId);
+      if (!bloomedSpecies) continue;
+
+      // Check all 3×3 neighbours for active composters
+      for (let dr = -1; dr <= 1; dr++) {
+        for (let dc = -1; dc <= 1; dc++) {
+          if (dr === 0 && dc === 0) continue;
+          const cr = bloomRow + dr;
+          const cc = bloomCol + dc;
+          if (cr < 0 || cr >= gridRows || cc < 0 || cc >= gridCols) continue;
+
+          const compPlot = newGrid[cr][cc];
+          if (!compPlot.gear) continue;
+          const gDef = GEAR[compPlot.gear.gearType];
+          if (!isComposter(gDef)) continue;
+          if (isGearExpired(compPlot.gear, now)) continue;
+
+          const stored    = compPlot.gear.storedFertilizers ?? [];
+          const maxStore  = gDef.maxStorage ?? 10;
+          if (stored.length >= maxStore) continue;
+
+          const fertType = rollComposterFertilizer(bloomedSpecies.rarity);
+          const updatedGear: PlacedGear = {
+            ...compPlot.gear,
+            storedFertilizers: [...stored, fertType],
+          };
+          newGrid = newGrid.map((r, ri2) =>
+            r.map((p, ci2) =>
+              ri2 === cr && ci2 === cc ? { ...p, gear: updatedGear } : p
+            )
+          );
+          changed = true;
+        }
+      }
+    }
+  }
 
   return changed ? { ...state, grid: newGrid } : state;
 }
@@ -683,16 +1004,20 @@ export function tickWeatherMutations(
 
   const now = Date.now();
 
-  const newGrid = state.grid.map((row) =>
-    row.map((plot) => {
+  const newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
       if (!plot.plant) return plot;
 
       // Weather mutations only apply at bloom — the plant must be at peak to be affected
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
 
+      // Scarecrow fully blocks all weather mutations on covered plants
+      const scarecrowSources = getGearAffectingCell(state.grid, ri, ci, now);
+      const hasScarecrow = scarecrowSources.some(({ def }) => isScarecrow(def));
+      if (hasScarecrow) return plot;
+
       // Thunderstorm combo: wet flowers have a ~50% chance to become shocked
-      // over the full 20-min storm duration (p ≈ 0.000578 per tick)
       if (weatherType === "thunderstorm" && plot.plant.mutation === "wet") {
         if (Math.random() < 0.000578) {
           changed = true;
@@ -704,14 +1029,12 @@ export function tickWeatherMutations(
       // Skip if already has any other mutation (string); allow null and undefined
       if (typeof plot.plant.mutation === "string") return plot;
 
-      // Thunderstorm: unmutated (null) plants can also become wet — same rate as rain.
-      // Those wet plants can then upgrade to shocked via the combo roll on the next tick.
+      // Thunderstorm: unmutated (null) plants can become wet
       if (weatherType === "thunderstorm" && plot.plant.mutation === null) {
         if (Math.random() < 0.00076) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
         }
-        // fall through to the direct shocked roll below
       }
 
       // Roll weather mutation
@@ -722,7 +1045,7 @@ export function tickWeatherMutations(
         }
       }
 
-      // Moonlit at night (outside star_shower — that's already covered above)
+      // Moonlit at night (outside star_shower)
       if (night && weatherType !== "star_shower") {
         if (Math.random() < MOONLIT_NIGHT_CHANCE) {
           changed = true;
@@ -735,6 +1058,271 @@ export function tickWeatherMutations(
   );
 
   return changed ? { ...state, grid: newGrid } : state;
+}
+
+/**
+ * Called every tick. Rolls mutation chances from active mutation sprinklers
+ * and wet chances from regular sprinklers for all bloomed, unmutated plants.
+ * Stacks additively with weather mutations (sprinklers are not blocked by scarecrows).
+ */
+export function tickSprinklerMutations(
+  state: GameState,
+  weatherType: WeatherType = "clear"
+): GameState {
+  const now     = Date.now();
+  let changed   = false;
+
+  const newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
+      if (!plot.plant) return plot;
+
+      const stage = getCurrentStage(plot.plant, now, weatherType);
+      if (stage !== "bloom") return plot;
+      // Only roll for unmutated plants (mutation === undefined or null)
+      if (typeof plot.plant.mutation === "string") return plot;
+
+      const sources = getGearAffectingCell(state.grid, ri, ci, now);
+
+      // Regular sprinklers — wet mutation chance
+      for (const { def } of sources) {
+        if (!isRegularSprinkler(def) || !def.wetChancePerTick) continue;
+        if (Math.random() < def.wetChancePerTick) {
+          changed = true;
+          return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
+        }
+      }
+
+      // Mutation sprinklers
+      for (const { def } of sources) {
+        if (!isMutationSprinkler(def) || !def.mutationType || !def.mutationChancePerTick) continue;
+        // Shocked can only be applied to wet plants — Generator skips non-wet blooms
+        if (def.mutationType === "shocked" && (plot.plant.mutation as string | null | undefined) !== "wet") continue;
+        if (Math.random() < def.mutationChancePerTick) {
+          changed = true;
+          return { ...plot, plant: { ...plot.plant, mutation: def.mutationType } };
+        }
+      }
+
+      return plot;
+    })
+  );
+
+  return changed ? { ...state, grid: newGrid } : state;
+}
+
+/** Called every tick. Fans either strip existing mutations from bloomed plants, or apply
+ *  Windstruck to bloomed plants that have no mutation. Each covered cell rolls independently. */
+export function tickFanMutations(
+  state: GameState,
+  weatherType: WeatherType = "clear"
+): GameState {
+  const now = Date.now();
+  let changed = false;
+
+  const newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
+      if (!plot.plant) return plot;
+
+      const stage = getCurrentStage(plot.plant, now, weatherType);
+      if (stage !== "bloom") return plot;
+
+      const sources = getGearAffectingCell(state.grid, ri, ci, now);
+
+      for (const { def } of sources) {
+        if (!isFan(def) || !def.fanStripChancePerTick) continue;
+        if (Math.random() < def.fanStripChancePerTick) {
+          changed = true;
+          if (typeof plot.plant.mutation === "string") {
+            // Strip the mutation (set to null — marks "Giant already tried")
+            return { ...plot, plant: { ...plot.plant, mutation: null } };
+          } else {
+            // No mutation — apply Windstruck
+            return { ...plot, plant: { ...plot.plant, mutation: "windstruck" as MutationType } };
+          }
+        }
+      }
+
+      return plot;
+    })
+  );
+
+  return changed ? { ...state, grid: newGrid } : state;
+}
+
+/** Scans for active Harvest Bells and auto-harvests any bloomed plants in range.
+ *  Called both in the live tick and in applyOfflineTick for offline progress. */
+export function tickHarvestBells(
+  state: GameState,
+  weatherType: WeatherType = "clear"
+): GameState {
+  const now     = Date.now();
+  let   updated = state;
+
+  for (let ri = 0; ri < state.grid.length; ri++) {
+    for (let ci = 0; ci < state.grid[ri].length; ci++) {
+      const bellPlot = updated.grid[ri][ci];
+      if (!bellPlot.gear) continue;
+
+      const def = GEAR[bellPlot.gear.gearType];
+      if (!isHarvestBell(def)) continue;
+      if (isGearExpired(bellPlot.gear, now)) continue;
+
+      const gridRows = updated.grid.length;
+      const gridCols = updated.grid[0]?.length ?? 0;
+      const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols);
+
+      for (const [ar, ac] of affected) {
+        if (ar === ri && ac === ci) continue; // never process bell's own cell
+        const targetPlot = updated.grid[ar]?.[ac];
+        if (!targetPlot?.plant) continue;
+        const stage = getCurrentStage(targetPlot.plant, now, weatherType);
+        if (stage !== "bloom") continue;
+        // Skip plants that bloomed less than 5 s ago — prevents same-render-tick harvesting
+        if (!targetPlot.plant.bloomedAt || now - targetPlot.plant.bloomedAt < 5_000) continue;
+
+        const result = harvestPlant(updated, ar, ac, weatherType);
+        if (result) updated = result.state;
+      }
+    }
+  }
+
+  return updated;
+}
+
+/** Pure read — returns the grid cells that an active Harvest Bell should harvest right now.
+ *  Does NOT mutate state. Used by the live garden tick so each harvest goes through
+ *  perform() + edgeHarvest() and the server stays in sync. */
+export function findHarvestBellTargets(
+  state: GameState,
+  weatherType: WeatherType = "clear"
+): Array<{ row: number; col: number }> {
+  const now = Date.now();
+  const targets: Array<{ row: number; col: number }> = [];
+
+  for (let ri = 0; ri < state.grid.length; ri++) {
+    for (let ci = 0; ci < state.grid[ri].length; ci++) {
+      const bellPlot = state.grid[ri][ci];
+      if (!bellPlot.gear) continue;
+      const def = GEAR[bellPlot.gear.gearType];
+      if (!isHarvestBell(def)) continue;
+      if (isGearExpired(bellPlot.gear, now)) continue;
+
+      const gridRows = state.grid.length;
+      const gridCols = state.grid[0]?.length ?? 0;
+      const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols);
+
+      for (const [ar, ac] of affected) {
+        if (ar === ri && ac === ci) continue;
+        const targetPlot = state.grid[ar]?.[ac];
+        if (!targetPlot?.plant) continue;
+        const stage = getCurrentStage(targetPlot.plant, now, weatherType);
+        if (stage !== "bloom") continue;
+        // Grace period: skip plants that bloomed < 5 s ago (avoids same-tick self-harvest)
+        if (!targetPlot.plant.bloomedAt || now - targetPlot.plant.bloomedAt < 5_000) continue;
+        targets.push({ row: ar, col: ac });
+      }
+    }
+  }
+
+  return targets;
+}
+
+// ── Auto-Planter ──────────────────────────────────────────────────────────
+
+/** Picks the seed with the highest quantity from the current inventory.
+ *  Returns null if the player has no seeds. */
+function pickBestSeed(inventory: GameState["inventory"]): string | null {
+  const best = inventory
+    .filter((i) => i.isSeed && i.quantity > 0)
+    .sort((a, b) => b.quantity - a.quantity)[0];
+  return best?.speciesId ?? null;
+}
+
+/** Scans for active Auto-Planters and plants seeds into every empty covered cell.
+ *  Called from applyOfflineTick — mutates state in-place via plantSeed chaining. */
+export function tickAutoPlanter(state: GameState): GameState {
+  const now = Date.now();
+  let updated = state;
+
+  for (let ri = 0; ri < state.grid.length; ri++) {
+    for (let ci = 0; ci < state.grid[ri].length; ci++) {
+      const planterPlot = updated.grid[ri][ci];
+      if (!planterPlot.gear) continue;
+      const def = GEAR[planterPlot.gear.gearType];
+      if (!isAutoPlanter(def)) continue;
+      if (isGearExpired(planterPlot.gear, now)) continue;
+
+      const gridRows = updated.grid.length;
+      const gridCols = updated.grid[0]?.length ?? 0;
+      const affected = getAffectedCells(planterPlot.gear.gearType, ri, ci, gridRows, gridCols);
+
+      for (const [ar, ac] of affected) {
+        const targetPlot = updated.grid[ar]?.[ac];
+        if (!targetPlot || targetPlot.plant || targetPlot.gear) continue;
+
+        const speciesId = pickBestSeed(updated.inventory);
+        if (!speciesId) return updated; // no more seeds — stop
+
+        const result = plantSeed(updated, ar, ac, speciesId);
+        if (result) updated = result;
+      }
+    }
+  }
+
+  return updated;
+}
+
+/** Pure read — returns the cells an Auto-Planter should fill right now, with the
+ *  seed to use in each. Simulates inventory depletion to avoid double-spending.
+ *  Used by the live garden tick so each plant goes through perform() + edgePlantSeed(). */
+export function findAutoPlantTargets(
+  state: GameState
+): Array<{ row: number; col: number; speciesId: string }> {
+  const now = Date.now();
+  const targets: Array<{ row: number; col: number; speciesId: string }> = [];
+
+  // Shallow-copy quantities so we can simulate depletion without touching real state
+  const simQty = new Map<string, number>(
+    state.inventory.filter((i) => i.isSeed && i.quantity > 0).map((i) => [i.speciesId, i.quantity])
+  );
+
+  function pickSeed(): string | null {
+    let best: string | null = null;
+    let bestQty = 0;
+    simQty.forEach((qty, id) => {
+      if (qty > bestQty) { best = id; bestQty = qty; }
+    });
+    if (!best) return null;
+    simQty.set(best, (simQty.get(best) ?? 0) - 1);
+    if ((simQty.get(best) ?? 0) <= 0) simQty.delete(best);
+    return best;
+  }
+
+  for (let ri = 0; ri < state.grid.length; ri++) {
+    for (let ci = 0; ci < state.grid[ri].length; ci++) {
+      const planterPlot = state.grid[ri][ci];
+      if (!planterPlot.gear) continue;
+      const def = GEAR[planterPlot.gear.gearType];
+      if (!isAutoPlanter(def)) continue;
+      if (isGearExpired(planterPlot.gear, now)) continue;
+
+      const gridRows = state.grid.length;
+      const gridCols = state.grid[0]?.length ?? 0;
+      const affected = getAffectedCells(planterPlot.gear.gearType, ri, ci, gridRows, gridCols);
+
+      for (const [ar, ac] of affected) {
+        const targetPlot = state.grid[ar]?.[ac];
+        if (!targetPlot || targetPlot.plant || targetPlot.gear) continue;
+
+        const speciesId = pickSeed();
+        if (!speciesId) return targets; // no seeds left
+
+        targets.push({ row: ar, col: ac, speciesId });
+      }
+    }
+  }
+
+  return targets;
 }
 
 /** Called every tick. Assigns Giant to newly-bloomed plants that have no mutation yet.
@@ -862,7 +1450,7 @@ export function plantAll(state: GameState): GameState {
 
   for (let row = 0; row < current.grid.length; row++) {
     for (let col = 0; col < current.grid[row].length; col++) {
-      if (current.grid[row][col].plant) continue;
+      if (current.grid[row][col].plant || current.grid[row][col].gear) continue;
 
       // Find next available seed
       const seedItem = seeds.find((s) => {
@@ -1237,6 +1825,199 @@ export function botanyConvertAll(
 
   if (outputs.length === 0) return null;
   return { state: current, outputSpeciesIds: outputs };
+}
+
+// ── Gear actions ───────────────────────────────────────────────────────────
+
+export function placeGear(
+  state: GameState,
+  row: number,
+  col: number,
+  gearType: GearType,
+  direction?: FanDirection
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot || plot.plant || plot.gear) return null;
+
+  const invItem = state.gearInventory.find((g) => g.gearType === gearType);
+  if (!invItem || invItem.quantity < 1) return null;
+
+  const placedGear: PlacedGear = direction
+    ? { gearType, placedAt: Date.now(), direction }
+    : { gearType, placedAt: Date.now() };
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col ? { ...p, gear: placedGear } : p
+    )
+  );
+
+  const newGearInv = state.gearInventory
+    .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)
+    .filter((g) => g.quantity > 0);
+
+  return { ...state, grid: newGrid, gearInventory: newGearInv };
+}
+
+/** Updates the direction of a fan placed at (row, col). No-op if no fan is there. */
+export function setFanDirection(
+  state: GameState,
+  row: number,
+  col: number,
+  direction: FanDirection
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot?.gear) return null;
+  const def = GEAR[plot.gear.gearType];
+  if (def.passiveSubtype !== "fan") return null;
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col
+        ? { ...p, gear: { ...p.gear!, direction } }
+        : p
+    )
+  );
+  return { ...state, grid: newGrid };
+}
+
+export function removeGear(
+  state: GameState,
+  row: number,
+  col: number
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot?.gear) return null;
+
+  const { gearType } = plot.gear;
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col ? { ...p, gear: null } : p
+    )
+  );
+
+  // Return gear to inventory
+  const existing = state.gearInventory.find((g) => g.gearType === gearType);
+  const newGearInv = existing
+    ? state.gearInventory.map((g) =>
+        g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g
+      )
+    : [...state.gearInventory, { gearType, quantity: 1 }];
+
+  // If it's a composter, also return stored fertilizers
+  const stored = plot.gear.storedFertilizers ?? [];
+  let newFertilizers = state.fertilizers;
+  for (const fertType of stored) {
+    const fert = newFertilizers.find((f) => f.type === fertType);
+    newFertilizers = fert
+      ? newFertilizers.map((f) => f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f)
+      : [...newFertilizers, { type: fertType, quantity: 1 }];
+  }
+
+  return { ...state, grid: newGrid, gearInventory: newGearInv, fertilizers: newFertilizers };
+}
+
+/** Collect all fertilizers stored in a composter and add them to player inventory. */
+export function collectFromComposter(
+  state: GameState,
+  row: number,
+  col: number
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot?.gear) return null;
+
+  const gDef = GEAR[plot.gear.gearType];
+  if (!isComposter(gDef)) return null;
+
+  const stored = plot.gear.storedFertilizers ?? [];
+  if (stored.length === 0) return null;
+
+  let newFertilizers = state.fertilizers;
+  for (const fertType of stored) {
+    const fert = newFertilizers.find((f) => f.type === fertType);
+    newFertilizers = fert
+      ? newFertilizers.map((f) => f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f)
+      : [...newFertilizers, { type: fertType, quantity: 1 }];
+  }
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) =>
+      ri === row && ci === col
+        ? { ...p, gear: { ...p.gear!, storedFertilizers: [] } }
+        : p
+    )
+  );
+
+  return { ...state, grid: newGrid, fertilizers: newFertilizers };
+}
+
+export function buyFromSupplyShop(
+  state: GameState,
+  slotSpeciesId: string
+): GameState | null {
+  const slot = state.supplyShop.find((s) => s.speciesId === slotSpeciesId);
+  if (!slot || slot.quantity < 1) return null;
+  if (state.coins < slot.price) return null;
+
+  const newSupplyShop = state.supplyShop.map((s) =>
+    s.speciesId === slotSpeciesId ? { ...s, quantity: s.quantity - 1 } : s
+  );
+
+  if (slot.isFertilizer && slot.fertilizerType) {
+    const existing = state.fertilizers.find((f) => f.type === slot.fertilizerType);
+    const newFertilizers = existing
+      ? state.fertilizers.map((f) =>
+          f.type === slot.fertilizerType ? { ...f, quantity: f.quantity + 1 } : f
+        )
+      : [...state.fertilizers, { type: slot.fertilizerType, quantity: 1 }];
+
+    return {
+      ...state,
+      coins:       state.coins - slot.price,
+      supplyShop:  newSupplyShop,
+      fertilizers: newFertilizers,
+    };
+  }
+
+  if (slot.isGear && slot.gearType) {
+    const existing = state.gearInventory.find((g) => g.gearType === slot.gearType);
+    const newGearInv = existing
+      ? state.gearInventory.map((g) =>
+          g.gearType === slot.gearType ? { ...g, quantity: g.quantity + 1 } : g
+        )
+      : [...state.gearInventory, { gearType: slot.gearType!, quantity: 1 }];
+
+    return {
+      ...state,
+      coins:        state.coins - slot.price,
+      supplyShop:   newSupplyShop,
+      gearInventory: newGearInv,
+    };
+  }
+
+  return null;
+}
+
+export function upgradeSupplySlots(state: GameState): GameState | null {
+  const next = getNextSupplySlotUpgrade(state.supplySlots);
+  if (!next) return null;
+  if (state.coins < next.cost) return null;
+
+  const newSlotCount  = next.slots - state.supplySlots;
+  const emptySlots: ShopSlot[] = Array.from({ length: newSlotCount }, (_, i) => ({
+    speciesId: `supply_empty_${Date.now()}_${i}`,
+    price:     0,
+    quantity:  0,
+    isEmpty:   true,
+  }));
+
+  return {
+    ...state,
+    coins:       state.coins - next.cost,
+    supplySlots: next.slots,
+    supplyShop:  [...(state.supplyShop ?? []), ...emptySlots],
+  };
 }
 
 export function upgradeFarm(state: GameState): GameState | null {

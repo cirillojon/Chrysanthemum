@@ -141,6 +141,49 @@ export function edgeUpgradeShopSlots() {
   return callEdge<UpgradeResult>("upgrade", { action: "shop_slots" });
 }
 
+export function edgeUpgradeSupplySlots() {
+  return callEdge<UpgradeResult>("upgrade", { action: "supply_slots" });
+}
+
+// ── Gear actions ──────────────────────────────────────────────────────────────
+
+export interface GearActionResult {
+  ok:            true;
+  grid:          GameState["grid"];
+  gearInventory?: GameState["gearInventory"];
+  fertilizers?:  GameState["fertilizers"];
+}
+
+export function edgePlaceGear(row: number, col: number, gearType: string, direction?: string) {
+  return callEdge<GearActionResult>("gear-action", { action: "place", row, col, gearType, direction });
+}
+
+export function edgeRemoveGear(row: number, col: number) {
+  return callEdge<GearActionResult>("gear-action", { action: "remove", row, col });
+}
+
+export function edgeCollectFromComposter(row: number, col: number) {
+  return callEdge<GearActionResult>("gear-action", { action: "collect", row, col });
+}
+
+// ── Supply shop actions ───────────────────────────────────────────────────────
+
+export interface SupplyBuyResult {
+  ok:            true;
+  coins:         number;
+  supplyShop:    GameState["supplyShop"];
+  fertilizers:   GameState["fertilizers"];
+  gearInventory: GameState["gearInventory"];
+}
+
+export function edgeBuyFromSupplyShop(slotId: string) {
+  return callEdge<SupplyBuyResult>("supply-action", { action: "buy", slotId });
+}
+
+export function edgeSyncSupplyShop(supplyShop: GameState["supplyShop"], lastSupplyReset: number) {
+  return callEdge<{ ok: true }>("supply-action", { action: "sync", supplyShop, lastSupplyReset });
+}
+
 export function edgeBotanyConvert(selections: { speciesId: string; mutation?: string }[]) {
   return callEdge<BotanyResult>("botany-convert", { action: "convert", selections });
 }
@@ -178,10 +221,12 @@ export function edgeClaimGift(giftId: string) {
 // ── Marketplace ───────────────────────────────────────────────────────────────
 
 export interface MarketplaceListResult {
-  ok:        true;
-  coins:     number;
-  inventory: GameState["inventory"];
-  listingId: string;
+  ok:             true;
+  coins:          number;
+  inventory:      GameState["inventory"];
+  fertilizers?:   GameState["fertilizers"];
+  gearInventory?: GameState["gearInventory"];
+  listingId:      string;
 }
 
 export interface MarketplaceUpgradeSlotsResult {
@@ -191,15 +236,27 @@ export interface MarketplaceUpgradeSlotsResult {
 }
 
 export interface MarketplaceBuyResult {
-  ok:         true;
-  coins:      number;
-  inventory:  GameState["inventory"];
-  discovered: GameState["discovered"];
+  ok:    true;
+  coins: number;
+  // Item is delivered via mailbox — no direct inventory update
+}
+
+export interface ClaimMailResult {
+  ok:             true;
+  kind:           "coins" | "flower" | "seed" | "fertilizer" | "gear";
+  coins:          number;
+  inventory:      GameState["inventory"];
+  fertilizers:    GameState["fertilizers"];
+  gearInventory:  GameState["gearInventory"];
+  discovered:     GameState["discovered"];
+  alreadyClaimed?: boolean;
 }
 
 export interface MarketplaceCancelResult {
-  ok:        true;
-  inventory: GameState["inventory"];
+  ok:             true;
+  inventory:      GameState["inventory"];
+  fertilizers?:   GameState["fertilizers"];
+  gearInventory?: GameState["gearInventory"];
 }
 
 export function edgeMarketplaceCreateListing(
@@ -217,6 +274,30 @@ export function edgeMarketplaceCreateListing(
   });
 }
 
+export function edgeMarketplaceCreateFertilizerListing(
+  fertilizerType: string,
+  askPrice: number,
+) {
+  return callEdge<MarketplaceListResult>("marketplace-list", {
+    action:         "create_listing",
+    isFertilizer:   true,
+    fertilizerType,
+    askPrice,
+  });
+}
+
+export function edgeMarketplaceCreateGearListing(
+  gearType: string,
+  askPrice: number,
+) {
+  return callEdge<MarketplaceListResult>("marketplace-list", {
+    action:   "create_listing",
+    isGear:   true,
+    gearType,
+    askPrice,
+  });
+}
+
 export function edgeMarketplaceUpgradeSlots() {
   return callEdge<MarketplaceUpgradeSlotsResult>("marketplace-list", {
     action: "upgrade_slots",
@@ -229,4 +310,8 @@ export function edgeMarketplaceBuy(listingId: string) {
 
 export function edgeMarketplaceCancel(listingId: string) {
   return callEdge<MarketplaceCancelResult>("marketplace-cancel", { listingId });
+}
+
+export function edgeClaimMail(mailId: string) {
+  return callEdge<ClaimMailResult>("claim-mail", { mailId });
 }

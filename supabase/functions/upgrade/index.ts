@@ -35,11 +35,22 @@ const SHOP_SLOT_UPGRADES = [
   { slots: 12, cost: 750_000 },
 ];
 
+// ── Supply slot upgrades (mirrors src/data/upgrades.ts) ──────────────────────
+const SUPPLY_SLOT_UPGRADES = [
+  { slots: 3, cost: 15_000  },
+  { slots: 4, cost: 50_000  },
+  { slots: 5, cost: 150_000 },
+  { slots: 6, cost: 350_000 },
+];
+
 function getNextFarmUpgrade(rows: number, cols: number) {
   return FARM_UPGRADES.find((u) => u.rows > rows || (u.rows === rows && u.cols > cols)) ?? null;
 }
 function getNextShopSlotUpgrade(currentSlots: number) {
   return SHOP_SLOT_UPGRADES.find((u) => u.slots > currentSlots) ?? null;
+}
+function getNextSupplySlotUpgrade(currentSlots: number) {
+  return SUPPLY_SLOT_UPGRADES.find((u) => u.slots > currentSlots) ?? null;
 }
 
 function resizeGrid(old: { id: string; plant: unknown }[][], newRows: number, newCols: number) {
@@ -76,10 +87,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Parse action first so we can target the right columns ─────────────────
-    const { action } = await req.json() as { action: "farm" | "shop_slots" };
+    const { action } = await req.json() as { action: "farm" | "shop_slots" | "supply_slots" };
 
-    if (action !== "farm" && action !== "shop_slots") {
-      return new Response(JSON.stringify({ error: "Invalid action — use 'farm' or 'shop_slots'" }), {
+    if (action !== "farm" && action !== "shop_slots" && action !== "supply_slots") {
+      return new Response(JSON.stringify({ error: "Invalid action — use 'farm', 'shop_slots', or 'supply_slots'" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -89,9 +100,10 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const selectCols = action === "farm"
-      ? "coins, farm_rows, farm_size, grid"
-      : "coins, shop_slots, shop";
+    const selectCols =
+      action === "farm"          ? "coins, farm_rows, farm_size, grid"     :
+      action === "shop_slots"    ? "coins, shop_slots, shop"               :
+                                   "coins, supply_slots, supply_shop";
 
     // ── Verify JWT + load save in parallel ────────────────────────────────────
     const [authResult, saveResult] = await Promise.all([
@@ -164,6 +176,38 @@ Deno.serve(async (req: Request) => {
       updatePayload = {
         coins, shop_slots: next.slots,
         shop: [...shop.filter((s) => !s.isFertilizer), ...emptySlots, ...shop.filter((s) => s.isFertilizer)],
+      };
+      logResult = { from: currentSlots, to: next.slots, cost: next.cost };
+    }
+
+    // ── Upgrade supply slots ──────────────────────────────────────────────────
+    if (action === "supply_slots") {
+      const currentSlots = (save.supply_slots ?? 2) as number;
+      const next         = getNextSupplySlotUpgrade(currentSlots);
+
+      if (!next) {
+        return new Response(JSON.stringify({ error: "Supply slots already at maximum" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (coins < next.cost) {
+        return new Response(JSON.stringify({ error: "Not enough coins" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      coins -= next.cost;
+      const newSlotCount  = next.slots - currentSlots;
+      const supplyShop    = (save.supply_shop ?? []) as { isEmpty?: boolean }[];
+      const emptySlots    = Array.from({ length: newSlotCount }, (_, i) => ({
+        speciesId: `supply_empty_${Date.now()}_${i}`,
+        price: 0, quantity: 0, isEmpty: true,
+      }));
+
+      updatePayload = {
+        coins,
+        supply_slots: next.slots,
+        supply_shop:  [...supplyShop, ...emptySlots],
       };
       logResult = { from: currentSlots, to: next.slots, cost: next.cost };
     }

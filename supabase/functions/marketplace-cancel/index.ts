@@ -11,7 +11,9 @@ function b64url(s: string): string {
   return t + "=".repeat((4 - t.length % 4) % 4);
 }
 
-interface InventoryItem { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface InventoryItem  { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface FertilizerItem { type: string; quantity: number; }
+interface GearItem       { gearType: string; quantity: number; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -55,12 +57,12 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("inventory")
+        .select("inventory, fertilizers, gear_inventory")
         .eq("user_id", userId)
         .single(),
       supabaseAdmin
         .from("marketplace_listings")
-        .select("id, seller_id, species_id, mutation, status")
+        .select("id, seller_id, species_id, mutation, is_seed, status")
         .eq("id", body.listingId)
         .single(),
     ]);
@@ -94,20 +96,47 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    let inventory = [...(saveResult.data.inventory ?? []) as InventoryItem[]];
-    const mutation = listing.mutation ?? undefined;
+    let inventory    = [...(saveResult.data.inventory ?? []) as InventoryItem[]];
+    let fertilizers  = [...(saveResult.data.fertilizers ?? []) as FertilizerItem[]];
+    let gearInventory = [...(saveResult.data.gear_inventory ?? []) as GearItem[]];
 
-    // Return item to inventory
-    const existing = inventory.find(
-      (i) => i.speciesId === listing.species_id && i.mutation === mutation && !i.isSeed
-    );
-    inventory = existing
-      ? inventory.map((i) =>
-          i.speciesId === listing.species_id && i.mutation === mutation && !i.isSeed
-            ? { ...i, quantity: i.quantity + 1 }
-            : i
-        )
-      : [...inventory, { speciesId: listing.species_id, quantity: 1, mutation, isSeed: false }];
+    const speciesId    = listing.species_id as string;
+    const isFertilizer = speciesId.startsWith("fert:");
+    const isGear       = speciesId.startsWith("gear:");
+
+    if (isFertilizer) {
+      // Return fertilizer to fertilizers array
+      const fertType = speciesId.replace("fert:", "");
+      const existing = fertilizers.find((f) => f.type === fertType);
+      fertilizers = existing
+        ? fertilizers.map((f) =>
+            f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f
+          )
+        : [...fertilizers, { type: fertType, quantity: 1 }];
+    } else if (isGear) {
+      // Return gear to gear inventory
+      const gearType = speciesId.replace("gear:", "");
+      const existing = gearInventory.find((g) => g.gearType === gearType);
+      gearInventory = existing
+        ? gearInventory.map((g) =>
+            g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g
+          )
+        : [...gearInventory, { gearType, quantity: 1 }];
+    } else {
+      // Return flower/seed to inventory
+      const mutation = listing.mutation ?? undefined;
+      const isSeed   = (listing.is_seed as boolean) ?? false;
+      const existing = inventory.find(
+        (i) => i.speciesId === speciesId && i.mutation === mutation && (i.isSeed ?? false) === isSeed
+      );
+      inventory = existing
+        ? inventory.map((i) =>
+            i.speciesId === speciesId && i.mutation === mutation && (i.isSeed ?? false) === isSeed
+              ? { ...i, quantity: i.quantity + 1 }
+              : i
+          )
+        : [...inventory, { speciesId, quantity: 1, mutation, isSeed }];
+    }
 
     // Mark listing cancelled (optimistic lock)
     const { error: cancelError } = await supabaseAdmin
@@ -125,7 +154,7 @@ Deno.serve(async (req: Request) => {
     // Return item to save
     const { error: updateError } = await supabaseAdmin
       .from("game_saves")
-      .update({ inventory, updated_at: new Date().toISOString() })
+      .update({ inventory, fertilizers, gear_inventory: gearInventory, updated_at: new Date().toISOString() })
       .eq("user_id", userId);
 
     if (updateError) {
@@ -136,7 +165,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, inventory }),
+      JSON.stringify({ ok: true, inventory, fertilizers, gearInventory }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

@@ -6,6 +6,8 @@ import { FLOWERS, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
+import { GEAR } from "../data/gear";
+import type { GearType } from "../data/gear";
 import { useGame } from "../store/GameContext";
 import { codexKey } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
@@ -16,7 +18,7 @@ async function setWeather(type: WeatherType) {
   await supabase.rpc("dev_set_weather", { p_type: type, p_duration_ms: DURATION_MS });
 }
 
-type Tab = "weather" | "items";
+type Tab = "weather" | "items" | "broadcast";
 
 export function DevWeatherPanel() {
   const { state, update, user } = useGame();
@@ -37,7 +39,21 @@ export function DevWeatherPanel() {
   const [coins, setCoins]           = useState(1000);
   const [fertType, setFertType]     = useState<FertilizerType>("basic");
   const [fertQty, setFertQty]       = useState(5);
+  const [gearType, setGearType]     = useState<GearType>("sprinkler_rare");
+  const [gearQty, setGearQty]       = useState(1);
   const [toast, setToast]           = useState<string | null>(null);
+
+  // ── Broadcast tab state ───────────────────────────────────────────────────
+  const [bcSubject,   setBcSubject]   = useState("📢 Message from Admin");
+  const [bcMessage,   setBcMessage]   = useState("");
+  const [bcKind,      setBcKind]      = useState<"coins" | "flower" | "seed" | "fertilizer" | "gear" | "none">("none");
+  const [bcAmount,    setBcAmount]    = useState(100);
+  const [bcFlower,    setBcFlower]    = useState(FLOWERS[0].id);
+  const [bcMutation,  setBcMutation]  = useState<MutationType | "none">("none");
+  const [bcFert,      setBcFert]      = useState<FertilizerType>("basic");
+  const [bcGear,      setBcGear]      = useState<GearType>("sprinkler_rare");
+  const [bcSending,   setBcSending]   = useState(false);
+  const [bcResult,    setBcResult]    = useState<string | null>(null);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function showToast(msg: string) {
@@ -130,6 +146,52 @@ export function DevWeatherPanel() {
     showToast(`+${fertQty} ${FERTILIZERS[fertType].name}`);
   }
 
+  async function giveGear() {
+    const newGearInventory = [...(state.gearInventory ?? [])];
+    const existing = newGearInventory.find((g) => g.gearType === gearType);
+    if (existing) {
+      existing.quantity += gearQty;
+    } else {
+      newGearInventory.push({ gearType, quantity: gearQty });
+    }
+    const newState = { ...state, gearInventory: newGearInventory };
+    update(newState);
+    if (user) await saveToCloud(user.id, newState);
+    showToast(`+${gearQty} ${GEAR[gearType].name} (${GEAR[gearType].rarity})`);
+  }
+
+  // ── Broadcast send ────────────────────────────────────────────────────────
+  async function sendBroadcast() {
+    if (!bcSubject.trim()) return;
+    setBcSending(true);
+    setBcResult(null);
+    try {
+      const secret = import.meta.env.VITE_CRON_SECRET as string | undefined;
+      const kind   = bcKind === "none" ? "coins" : bcKind;
+      const body: Record<string, unknown> = {
+        subject: bcSubject.trim(),
+        message: bcMessage.trim(),
+        kind,
+        ...(kind === "coins"      && { amount:        bcKind === "none" ? 0 : bcAmount }),
+        ...(kind === "flower"     && { speciesId: bcFlower, mutation: bcMutation === "none" ? null : bcMutation }),
+        ...(kind === "seed"       && { speciesId: bcFlower }),
+        ...(kind === "fertilizer" && { fertilizerType: bcFert }),
+        ...(kind === "gear"       && { gearType: bcGear }),
+      };
+      const { data, error } = await supabase.functions.invoke("admin-broadcast", {
+        body,
+        headers: secret ? { "x-admin-secret": secret } : {},
+      });
+      if (error) throw error;
+      setBcResult(`✓ Sent to ${(data as { sent: number }).sent} players`);
+      setBcMessage("");
+    } catch (e) {
+      setBcResult(`✗ ${e instanceof Error ? e.message : "Failed"}`);
+    } finally {
+      setBcSending(false);
+    }
+  }
+
   // ── Filtered flower list ───────────────────────────────────────────────────
   const filteredFlowers = FLOWERS.filter((f) =>
     flowerSearch.trim() === "" ||
@@ -148,17 +210,17 @@ export function DevWeatherPanel() {
       </div>
 
       <div className="flex gap-1 mb-3">
-        {(["weather", "items"] as Tab[]).map((t) => (
+        {(["weather", "items", "broadcast"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all capitalize
+            className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all capitalize text-center
               ${tab === t
                 ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400"
                 : "bg-white/5 border border-white/10 text-white/50 hover:text-white/70"
               }`}
           >
-            {t === "weather" ? "🌦 Weather" : "🎒 Items"}
+            {t === "weather" ? "🌦 Weather" : t === "items" ? "🎒 Items" : "📢 Broadcast"}
           </button>
         ))}
       </div>
@@ -199,7 +261,7 @@ export function DevWeatherPanel() {
           <button
             onClick={cycling ? stopCycle : startCycle}
             className={`
-              w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center
+              w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center block
               ${cycling
                 ? "bg-red-500/20 border border-red-500/50 text-red-400"
                 : "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/30"
@@ -209,6 +271,136 @@ export function DevWeatherPanel() {
             {cycling ? `⏹ Stop cycle (on: ${WEATHER[current!]?.name ?? "…"})` : "▶ Auto-cycle all (30s each)"}
           </button>
         </>
+      )}
+
+      {/* ── BROADCAST TAB ───────────────────────────────────────────────────── */}
+      {tab === "broadcast" && (
+        <div className="flex flex-col gap-3 overflow-y-auto min-h-0 flex-1">
+
+          {/* Subject */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">Subject</p>
+            <input
+              type="text"
+              value={bcSubject}
+              onChange={(e) => setBcSubject(e.target.value)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+            />
+          </div>
+
+          {/* Message */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">Message</p>
+            <textarea
+              value={bcMessage}
+              onChange={(e) => setBcMessage(e.target.value)}
+              rows={3}
+              placeholder="Write your message..."
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-yellow-500/50 resize-none"
+            />
+          </div>
+
+          {/* Attachment type */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">Attachment</p>
+            <select
+              value={bcKind}
+              onChange={(e) => setBcKind(e.target.value as typeof bcKind)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+            >
+              <option value="none">None (message only)</option>
+              <option value="coins">🟡 Coins</option>
+              <option value="flower">🌸 Flower (bloom)</option>
+              <option value="seed">🌱 Flower (seed)</option>
+              <option value="fertilizer">🌿 Fertilizer</option>
+              <option value="gear">⚙️ Gear</option>
+            </select>
+
+            {/* Coins amount */}
+            {bcKind === "coins" && (
+              <div className="flex gap-1.5 items-center">
+                <span className="text-white/50 text-[10px]">Amount</span>
+                <input
+                  type="number"
+                  value={bcAmount}
+                  min={1}
+                  onChange={(e) => setBcAmount(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="flex-1 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white font-mono text-xs focus:outline-none focus:border-yellow-500/50"
+                />
+              </div>
+            )}
+
+            {/* Flower / Seed */}
+            {(bcKind === "flower" || bcKind === "seed") && (
+              <>
+                <select
+                  value={bcFlower}
+                  onChange={(e) => setBcFlower(e.target.value)}
+                  className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+                  size={4}
+                >
+                  {FLOWERS.map((f) => (
+                    <option key={f.id} value={f.id}>{f.emoji.bloom} {f.name} ({f.rarity})</option>
+                  ))}
+                </select>
+                {bcKind === "flower" && (
+                  <select
+                    value={bcMutation}
+                    onChange={(e) => setBcMutation(e.target.value as MutationType | "none")}
+                    className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+                  >
+                    <option value="none">No mutation</option>
+                    {(Object.keys(MUTATIONS) as MutationType[]).map((m) => (
+                      <option key={m} value={m}>{MUTATIONS[m].emoji} {MUTATIONS[m].name}</option>
+                    ))}
+                  </select>
+                )}
+              </>
+            )}
+
+            {/* Fertilizer */}
+            {bcKind === "fertilizer" && (
+              <select
+                value={bcFert}
+                onChange={(e) => setBcFert(e.target.value as FertilizerType)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+              >
+                {Object.values(FERTILIZERS).map((f) => (
+                  <option key={f.id} value={f.id}>{f.emoji} {f.name}</option>
+                ))}
+              </select>
+            )}
+
+            {/* Gear */}
+            {bcKind === "gear" && (
+              <select
+                value={bcGear}
+                onChange={(e) => setBcGear(e.target.value as GearType)}
+                className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+                size={4}
+              >
+                {(Object.values(GEAR) as typeof GEAR[GearType][]).map((def) => (
+                  <option key={def.id} value={def.id}>{def.emoji} {def.name} ({def.rarity})</option>
+                ))}
+              </select>
+            )}
+          </div>
+
+          {/* Send button */}
+          <button
+            onClick={sendBroadcast}
+            disabled={bcSending || !bcSubject.trim()}
+            className="w-full py-2 rounded-xl text-xs font-bold bg-red-500/20 border border-red-500/40 text-red-400 hover:bg-red-500/30 transition-all disabled:opacity-40 text-center"
+          >
+            {bcSending ? "Sending..." : "👑 Send to All Players"}
+          </button>
+
+          {bcResult && (
+            <p className={`text-[10px] font-mono text-center ${bcResult.startsWith("✓") ? "text-green-400" : "text-red-400"}`}>
+              {bcResult}
+            </p>
+          )}
+        </div>
       )}
 
       {/* ── ITEMS TAB ───────────────────────────────────────────────────────── */}
@@ -227,7 +419,7 @@ export function DevWeatherPanel() {
               />
               <button
                 onClick={giveCoins}
-                className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all"
+                className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
               >
                 {coins >= 0 ? "Give" : "Take"}
               </button>
@@ -256,7 +448,7 @@ export function DevWeatherPanel() {
               />
               <button
                 onClick={giveFertilizer}
-                className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all"
+                className="px-3 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
               >
                 Give
               </button>
@@ -296,7 +488,7 @@ export function DevWeatherPanel() {
                 <button
                   key={t}
                   onClick={() => setItemType(t)}
-                  className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all capitalize
+                  className={`flex-1 py-1 rounded-lg text-[10px] font-semibold transition-all capitalize text-center
                     ${itemType === t
                       ? "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400"
                       : "bg-white/5 border border-white/10 text-white/50 hover:text-white/70"
@@ -332,7 +524,7 @@ export function DevWeatherPanel() {
               />
               <button
                 onClick={giveItem}
-                className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all"
+                className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
               >
                 Give Item
               </button>
@@ -341,10 +533,42 @@ export function DevWeatherPanel() {
             {/* Fill codex */}
             <button
               onClick={fillCodex}
-              className="w-full py-1 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg font-semibold hover:bg-green-500/30 transition-all"
+              className="w-full py-1 bg-green-500/20 border border-green-500/40 text-green-400 rounded-lg font-semibold hover:bg-green-500/30 transition-all text-center"
             >
               ⚡ Fill Codex (all 10)
             </button>
+          </div>
+
+          {/* Gear */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">Gear</p>
+            <select
+              value={gearType}
+              onChange={(e) => setGearType(e.target.value as GearType)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+              size={5}
+            >
+              {(Object.values(GEAR) as typeof GEAR[GearType][]).map((def) => (
+                <option key={def.id} value={def.id}>
+                  {def.emoji} {def.name} ({def.rarity})
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-1.5">
+              <input
+                type="number"
+                value={gearQty}
+                min={1}
+                onChange={(e) => setGearQty(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-14 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white font-mono text-xs focus:outline-none focus:border-yellow-500/50"
+              />
+              <button
+                onClick={giveGear}
+                className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
+              >
+                Give Gear
+              </button>
+            </div>
           </div>
 
         </div>

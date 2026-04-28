@@ -3,13 +3,17 @@ import type { User } from "@supabase/supabase-js";
 import {
   type GameState,
   type OfflineSummary,
+  type WeatherWindow,
   loadGame,
   saveGame,
   tickShop,
+  tickSupplyShop,
   msUntilShopReset,
   applyOfflineTick,
   defaultState,
   buyWeatherForecastSlot,
+  pruneExpiredGear,
+  getExpiredGear,
 } from "./gameStore";
 import {
   loadCloudSave,
@@ -18,7 +22,7 @@ import {
   type CloudProfile,
 } from "./cloudSave";
 import { supabase } from "../lib/supabase";
-import { edgeSyncShop } from "../lib/edgeFunctions";
+import { edgeSyncShop, edgeSyncSupplyShop } from "../lib/edgeFunctions";
 import { useWeather } from "../hooks/useWeather";
 import type { ForecastEntry } from "../hooks/useWeather";
 import { useTimeOfDay } from "../hooks/useTimeOfDay";
@@ -49,6 +53,10 @@ interface GameContextValue {
   clearSummary: () => void;
   shopJustRestocked: boolean;
   clearShopNotification: () => void;
+  supplyJustRestocked: boolean;
+  clearSupplyNotification: () => void;
+  gearExpiry: { gearType: string } | null;
+  clearGearExpiry: () => void;
   user: User | null;
   profile: CloudProfile | null;
   authLoading: boolean;
@@ -75,6 +83,7 @@ const EMPTY_SUMMARY: OfflineSummary = {
   minutesAway: 0,
   readyToHarvest: 0,
   shopRestocked: false,
+  supplyRestocked: false,
 };
 
 // Reject local saves whose lastSaved is more than 30 s in the future.
@@ -88,7 +97,9 @@ function isTamperedTimestamp(lastSaved: number): boolean {
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [state, setState]                       = useState<GameState>(() => defaultState());
   const [offlineSummary, setOfflineSummary]     = useState<OfflineSummary>(EMPTY_SUMMARY);
-  const [shopJustRestocked, setShopJustRestocked] = useState(false);
+  const [shopJustRestocked,   setShopJustRestocked]   = useState(false);
+  const [supplyJustRestocked, setSupplyJustRestocked] = useState(false);
+  const [gearExpiry, setGearExpiry]                   = useState<{ gearType: string } | null>(null);
   const [user, setUser]                         = useState<User | null>(null);
   const [profile, setProfile]                   = useState<CloudProfile | null>(null);
   const [authLoading, setAuthLoading]           = useState(true);
@@ -122,6 +133,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       const { state: localState, summary } = loadGame();
       setState(localState);
       setOfflineSummary(summary);
+      if (summary.supplyRestocked) setSupplyJustRestocked(true);
       setUser(null);
       setProfile(null);
       loadedFor.current   = null;
@@ -157,29 +169,49 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // Pick the newer save — local is kept as a rolling backup so a refresh
       // or mid-flight cloud save never loses this user's progress.
       let saveToUse: GameState;
-      let needsCloudSync = false;
 
       if (!cloudSave) {
-        saveToUse      = localSave ?? defaultState();
-        needsCloudSync = true;
+        saveToUse = localSave ?? defaultState();
       } else if (
         localSave &&
         localSave.lastSaved > cloudSave.lastSaved &&
         !isTamperedTimestamp(localSave.lastSaved)
       ) {
-        saveToUse      = localSave;
-        needsCloudSync = true;
+        saveToUse = localSave;
       } else {
         saveToUse = cloudSave;
       }
 
-      const { state: ticked, summary } = applyOfflineTick(saveToUse);
+      // Fetch current weather so offline growth can apply rain / storm bonuses.
+      let offlineWeather: WeatherWindow | undefined;
+      try {
+        const { data: wRow } = await supabase
+          .from("weather")
+          .select("type,started_at,ends_at")
+          .eq("id", 1)
+          .single();
+        if (wRow) {
+          offlineWeather = {
+            type:      wRow.type as import("../data/weather").WeatherType,
+            startedAt: wRow.started_at as number,
+            endsAt:    wRow.ends_at    as number,
+          };
+        }
+      } catch { /* non-critical — offline tick still runs without weather bonus */ }
+
+      const { state: ticked, summary } = applyOfflineTick(saveToUse, offlineWeather);
       setState(ticked);
       setOfflineSummary(summary);
+      if (summary.shopRestocked)   setShopJustRestocked(true);
+      if (summary.supplyRestocked) setSupplyJustRestocked(true);
 
-      if (needsCloudSync) {
-        await saveToCloud(u.id, ticked);
-      }
+      // Always write the offline-ticked state back to cloud. This is critical
+      // when the cron job already harvested/planted while the user was offline —
+      // applyOfflineTick may further modify the cloud state (or the state may
+      // simply need to reflect the latest tick checkpoints). Without this write,
+      // the DB can be out of sync with the client, causing plant-seed / harvest
+      // edge functions to see stale occupied / empty plots.
+      await saveToCloud(u.id, ticked);
 
       setTimeout(() => { saveEnabled.current = true; }, 1_000);
 
@@ -269,26 +301,48 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
   }, [state]);
 
-  // ── Shop tick ─────────────────────────────────────────────────────────────
+  // ── Shop + supply tick ────────────────────────────────────────────────────
   useEffect(() => {
     const interval = setInterval(() => {
       if (!saveEnabled.current) return;
       setState((prev) => {
-        const msLeft = msUntilShopReset(prev);
+        let next = prev;
+
+        // Seed shop restock
+        const msLeft = msUntilShopReset(next);
         if (msLeft === 0) {
-          const next = tickShop(prev);
-          if (next !== prev) {
+          const ticked = tickShop(next);
+          if (ticked !== next) {
             setShopJustRestocked(true);
-            // Queue the sync behind any in-flight harvests — this ensures a
-            // buy that's also serialized won't fire before the new shop is
-            // written to the server (which caused "Flower not in stock" errors).
             harvestQueue.current = harvestQueue.current
-              .then(() => edgeSyncShop(next.shop, next.lastShopReset))
+              .then(() => edgeSyncShop(ticked.shop, ticked.lastShopReset))
               .catch(() => {});
+            next = ticked;
           }
-          return next;
         }
-        return prev;
+
+        // Supply shop restock
+        const supplyTicked = tickSupplyShop(next);
+        if (supplyTicked !== next) {
+          const shop  = supplyTicked.supplyShop;
+          const reset = supplyTicked.lastSupplyReset;
+          setSupplyJustRestocked(true);
+          harvestQueue.current = harvestQueue.current
+            .then(() => edgeSyncSupplyShop(shop, reset))
+            .catch(() => {});
+          next = supplyTicked;
+        }
+
+        // Prune expired gear from grid — surface the first expiry as a toast
+        const tickNow = Date.now();
+        const expired = getExpiredGear(next.grid, tickNow);
+        const prunedGrid = pruneExpiredGear(next.grid, tickNow);
+        if (prunedGrid !== next.grid) {
+          if (expired.length > 0) setGearExpiry({ gearType: expired[0].gearType });
+          next = { ...next, grid: prunedGrid };
+        }
+
+        return next;
       });
     }, 1_000);
     return () => clearInterval(interval);
@@ -401,7 +455,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     <GameContext.Provider value={{
       state, update, getState, perform, awaitHarvests,
       offlineSummary, clearSummary: () => setOfflineSummary(EMPTY_SUMMARY),
-      shopJustRestocked, clearShopNotification: () => setShopJustRestocked(false),
+      shopJustRestocked,   clearShopNotification:   () => setShopJustRestocked(false),
+      supplyJustRestocked, clearSupplyNotification: () => setSupplyJustRestocked(false),
+      gearExpiry, clearGearExpiry: () => setGearExpiry(null),
       user, profile, authLoading,
       signInWithGoogle, signOut,
       refreshProfile,

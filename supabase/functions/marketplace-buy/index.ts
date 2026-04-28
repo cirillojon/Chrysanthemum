@@ -11,8 +11,6 @@ function b64url(s: string): string {
   return t + "=".repeat((4 - t.length % 4) % 4);
 }
 
-interface InventoryItem { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
-
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -50,17 +48,17 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ── Verify JWT + load buyer save + load listing in parallel ───────────────
-    const [authResult, buyerSaveResult, listingResult] = await Promise.all([
+    // ── Load buyer coins + listing in parallel ────────────────────────────────
+    const [authResult, buyerCoinsResult, listingResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, inventory, discovered")
+        .select("coins")
         .eq("user_id", userId)
         .single(),
       supabaseAdmin
         .from("marketplace_listings")
-        .select("id, seller_id, species_id, mutation, is_seed, ask_price, status")
+        .select("id, seller_id, species_id, mutation, is_seed, ask_price, base_value, status")
         .eq("id", body.listingId)
         .single(),
     ]);
@@ -70,7 +68,7 @@ Deno.serve(async (req: Request) => {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (buyerSaveResult.error || !buyerSaveResult.data) {
+    if (buyerCoinsResult.error || !buyerCoinsResult.data) {
       return new Response(JSON.stringify({ error: "Save not found" }), {
         status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -94,51 +92,33 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const buyerSave = buyerSaveResult.data;
-    let buyerCoins       = buyerSave.coins as number;
-    let buyerInventory   = [...(buyerSave.inventory ?? []) as InventoryItem[]];
-    let buyerDiscovered  = [...(buyerSave.discovered ?? []) as string[]];
-
+    const buyerCoins = (buyerCoinsResult.data.coins as number);
     if (buyerCoins < listing.ask_price) {
       return new Response(JSON.stringify({ error: "Not enough coins" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    buyerCoins -= listing.ask_price;
+    const newBuyerCoins = buyerCoins - listing.ask_price;
 
-    // Add item to buyer inventory (preserve isSeed flag from listing)
-    const mutation = listing.mutation ?? undefined;
-    const isSeed   = (listing.is_seed as boolean) ?? false;
-    const existing = buyerInventory.find(
-      (i) => i.speciesId === listing.species_id &&
-             i.mutation === mutation &&
-             (i.isSeed ?? false) === isSeed
-    );
-    buyerInventory = existing
-      ? buyerInventory.map((i) =>
-          i.speciesId === listing.species_id &&
-          i.mutation === mutation &&
-          (i.isSeed ?? false) === isSeed
-            ? { ...i, quantity: i.quantity + 1 }
-            : i
-        )
-      : [...buyerInventory, { speciesId: listing.species_id, quantity: 1, mutation, isSeed }];
+    const speciesId    = listing.species_id as string;
+    const isFertilizer = speciesId.startsWith("fert:");
+    const isGear       = speciesId.startsWith("gear:");
+    const isSeed       = (listing.is_seed as boolean) ?? false;
 
-    // Register in buyer's codex
-    const baseKey = listing.species_id;
-    if (!buyerDiscovered.includes(baseKey)) buyerDiscovered.push(baseKey);
-    if (mutation) {
-      const mutKey = `${listing.species_id}:${mutation}`;
-      if (!buyerDiscovered.includes(mutKey)) buyerDiscovered.push(mutKey);
-    }
+    // Determine item kind for mailbox
+    let itemKind: string;
+    if (isFertilizer)    itemKind = "fertilizer";
+    else if (isGear)     itemKind = "gear";
+    else if (isSeed)     itemKind = "seed";
+    else                 itemKind = "flower";
 
-    // Mark listing sold
+    // ── Mark listing sold (optimistic lock prevents double-buy) ───────────────
     const { error: listingUpdateError } = await supabaseAdmin
       .from("marketplace_listings")
       .update({ status: "sold", buyer_id: userId, sold_at: new Date().toISOString() })
       .eq("id", listing.id)
-      .eq("status", "active"); // optimistic lock — prevents double-buy
+      .eq("status", "active");
 
     if (listingUpdateError) {
       return new Response(JSON.stringify({ error: "Listing no longer available" }), {
@@ -146,46 +126,67 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Credit seller, update buyer save, record sale history — all in parallel
-    const sellerCredit = supabaseAdmin.rpc("add_coins_to_user", {
-      target_user_id: listing.seller_id,
-      amount:         listing.ask_price,
+    // ── Deliver via mailbox + deduct buyer coins + record sale in parallel ────
+    const now = new Date().toISOString();
+
+    const buyerMailInsert = supabaseAdmin.from("mailbox").insert({
+      user_id:    userId,
+      subject:    "Marketplace Purchase",
+      kind:       itemKind,
+      species_id: speciesId,
+      mutation:   listing.mutation ?? null,
+      is_seed:    isSeed,
+      message:    "",
+      created_at: now,
     });
 
-    const buyerUpdate = supabaseAdmin
+    const sellerMailInsert = supabaseAdmin.from("mailbox").insert({
+      user_id:    listing.seller_id,
+      subject:    "Listing Sold",
+      kind:       "coins",
+      amount:     listing.ask_price,
+      message:    "",
+      created_at: now,
+    });
+
+    const buyerCoinUpdate = supabaseAdmin
       .from("game_saves")
-      .update({ coins: buyerCoins, inventory: buyerInventory, discovered: buyerDiscovered, updated_at: new Date().toISOString() })
+      .update({ coins: newBuyerCoins, updated_at: now })
       .eq("user_id", userId);
 
     const saleRecord = supabaseAdmin.from("marketplace_sales").insert({
-      species_id: listing.species_id,
+      species_id: speciesId,
       mutation:   listing.mutation ?? null,
-      item_type:  isSeed ? "seed" : "flower",
+      item_type:  itemKind,
       price:      listing.ask_price,
-      sold_at:    new Date().toISOString(),
+      sold_at:    now,
     });
 
-    const [sellerResult, buyerResult, saleResult] = await Promise.all([sellerCredit, buyerUpdate, saleRecord]);
+    const [buyerMailResult, sellerMailResult, coinResult, saleResult] = await Promise.all([
+      buyerMailInsert,
+      sellerMailInsert,
+      buyerCoinUpdate,
+      saleRecord,
+    ]);
 
+    if (buyerMailResult.error) {
+      console.error("marketplace-buy: buyer mailbox insert failed", buyerMailResult.error);
+    }
+    if (sellerMailResult.error) {
+      console.error("marketplace-buy: seller mailbox insert failed", sellerMailResult.error);
+    }
     if (saleResult.error) {
       console.error("marketplace-buy: sale record failed", saleResult.error);
     }
-
-    if (buyerResult.error) {
-      // This is bad — listing is sold but buyer save failed. Log it.
-      console.error("marketplace-buy: buyer save failed after listing sold", buyerResult.error);
+    if (coinResult.error) {
+      console.error("marketplace-buy: buyer coin update failed", coinResult.error);
       return new Response(JSON.stringify({ error: "Failed to update save" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    if (sellerResult.error) {
-      // Non-fatal: seller credit failed, but buyer got the item. Log for manual review.
-      console.error("marketplace-buy: seller credit failed", sellerResult.error, "listing:", listing.id);
-    }
-
     return new Response(
-      JSON.stringify({ ok: true, coins: buyerCoins, inventory: buyerInventory, discovered: buyerDiscovered }),
+      JSON.stringify({ ok: true, coins: newBuyerCoins }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

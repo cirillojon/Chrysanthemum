@@ -8,6 +8,11 @@ import {
 } from "../store/cloudSave";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
+import {
+  getPresenceStatus, formatLastSeen,
+  STATUS_DOT,
+  type PresenceStatus,
+} from "../lib/presence";
 
 interface Props {
   onViewProfile: (username: string) => void;
@@ -116,11 +121,15 @@ export function FriendsPage({ onViewProfile }: Props) {
           <h3 className="text-xs font-mono text-muted-foreground uppercase tracking-wide">
             Friends ({friends.length})
           </h3>
-          {friends.map((f) => (
+          {[...friends].sort((a, b) => {
+            const order: Record<PresenceStatus, number> = { online: 0, away: 1, offline: 2 };
+            return order[getPresenceStatus(a.profile.last_seen_at)] - order[getPresenceStatus(b.profile.last_seen_at)];
+          }).map((f) => (
             <FriendRow
               key={f.friendship.id}
               entry={f}
               onViewProfile={onViewProfile}
+              showPresence
               actions={
                 <button
                   onClick={() => handleDecline(f)}
@@ -177,15 +186,19 @@ function FriendRow({
   entry,
   onViewProfile,
   actions,
+  showPresence = false,
 }: {
   entry: FriendWithProfile;
   onViewProfile: (username: string) => void;
   actions: React.ReactNode;
+  showPresence?: boolean;
 }) {
   const { profile } = entry;
   const flower  = getFlower(profile.display_flower);
   const rarity  = flower ? RARITY_CONFIG[flower.rarity] : null;
   const mutObj  = profile.display_mutation ? MUTATIONS[profile.display_mutation as MutationType] : null;
+
+  const status  = showPresence ? getPresenceStatus(profile.last_seen_at) : null;
 
   return (
     <div className="flex items-center gap-3 bg-card/60 border border-border rounded-xl px-4 py-3 hover:border-primary/30 transition-colors">
@@ -193,21 +206,39 @@ function FriendRow({
         onClick={() => onViewProfile(profile.username)}
         className="flex items-center gap-3 flex-1 min-w-0 text-left"
       >
+        {/* Avatar with presence dot */}
         <div className={`relative w-10 h-10 rounded-xl border flex items-center justify-center text-xl flex-shrink-0 border-border bg-background ${rarity?.glow ?? ""}`}>
           {flower?.emoji.bloom ?? "🌱"}
           {mutObj && (
             <span className="absolute -top-1 -right-1 text-sm leading-none">{mutObj.emoji}</span>
           )}
+          {status && (
+            <span
+              className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${STATUS_DOT[status]}`}
+              title={status === "offline"
+                ? `Last seen ${formatLastSeen(profile.last_seen_at)}`
+                : status === "away" ? "Away" : "Online"
+              }
+            />
+          )}
         </div>
+
+        {/* Name + status text */}
         <div className="min-w-0">
           <p className="text-sm font-semibold truncate hover:text-primary transition-colors">
             {profile.username}
           </p>
-          {flower && (
-            <p className={`text-xs font-mono ${rarity?.color}`}>
-              {flower.name}
+          {status === "offline" ? (
+            <p className="text-xs text-zinc-500 font-mono">
+              Last seen {formatLastSeen(profile.last_seen_at)}
             </p>
-          )}
+          ) : status === "away" ? (
+            <p className="text-xs text-yellow-400 font-mono">Away</p>
+          ) : status === "online" ? (
+            <p className="text-xs text-green-500 font-mono">Online</p>
+          ) : flower ? (
+            <p className={`text-xs font-mono ${rarity?.color}`}>{flower.name}</p>
+          ) : null}
         </div>
       </button>
       {actions}

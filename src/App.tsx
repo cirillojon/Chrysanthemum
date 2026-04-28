@@ -1,15 +1,16 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useSwipe } from "./hooks/useSwipe";
 import { Garden } from "./components/Garden";
 import { Shop } from "./components/Shop";
 import { Inventory } from "./components/Inventory";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { ShopRestockBanner } from "./components/ShopRestockBanner";
+import { GearExpiryBanner } from "./components/GearExpiryBanner";
 import { UsernameModal } from "./components/UsernameModal";
 import { SearchPage } from "./components/SearchPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { FriendsPage } from "./components/FriendsPage";
-import { GiftsPage } from "./components/GiftsPage";
+import { MailboxPage } from "./components/MailboxPage";
 import { LeaderboardPage } from "./components/LeaderboardPage";
 import { FriendRequestNotification } from "./components/FriendRequestNotification";
 import { GiftNotification } from "./components/GiftNotification";
@@ -22,32 +23,44 @@ import { WeatherBanner } from "./components/WeatherBanner";
 import { WeatherForecastPanel } from "./components/WeatherForecastPanel";
 import { DayNightOverlay } from "./components/DayNightOverlay";
 import { useGame } from "./store/GameContext";
+import { SettingsProvider } from "./store/SettingsContext";
 import { useFriendRequests } from "./hooks/useFriendRequests";
 import { useGiftNotifications } from "./hooks/useGiftNotifications";
+import { useMailbox } from "./hooks/useMailbox";
 import { useDayNight } from "./hooks/useDayNight";
 import { getFlower, MUTATIONS } from "./data/flowers";
 import type { MutationType } from "./data/flowers";
 import { useVersionCheck } from "./hooks/useVersionCheck";
+import { usePresence } from "./hooks/usePresence";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
 type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
-type ShopView   = "seeds" | "fertilizers";
-type SocialView = "search" | "friends" | "gifts" | "leaderboard" | "marketplace";
+type ShopView   = "seeds" | "supply";
+type SocialView = "search" | "friends" | "mailbox" | "leaderboard" | "marketplace";
 
 
 export default function App() {
+  return <SettingsProvider><AppInner /></SettingsProvider>;
+}
+
+function AppInner() {
   const {
     state, offlineSummary, clearSummary,
-    shopJustRestocked, clearShopNotification,
+    shopJustRestocked,   clearShopNotification,
+    supplyJustRestocked, clearSupplyNotification,
+    gearExpiry, clearGearExpiry,
     user, profile, authLoading,
     signInWithGoogle, signOut,
     needsUsername, completeUsername,
     activeWeather, weatherMsLeft, weatherIsActive,
   } = useGame();
 
+  usePresence();
+
   const { pendingCount, newRequest, clearNewRequest } = useFriendRequests(user?.id ?? null);
-  const { pendingCount: giftCount, newGift, clearNewGift } = useGiftNotifications(user?.id ?? null);
+  const { newGift, clearNewGift } = useGiftNotifications(user?.id ?? null);
+  const { unreadCount: mailboxUnreadCount } = useMailbox(user?.id ?? null);
 
   const [tab, setTab]               = useState<Tab>("garden");
   const [shopView,   setShopView]   = useState<ShopView>("seeds");
@@ -71,12 +84,107 @@ export default function App() {
   const dayPeriod = useDayNight();
 
 
-  const inventoryCount = state.inventory.reduce((s, i) => s + i.quantity, 0);
+  // ── Garden bloom badge ────────────────────────────────────────────────────────
+  // Tracks new blooms since the user last visited the garden tab.
+  // Cleared when they open garden; only increments while on another tab.
+  const currentBloomedCount = state.grid.flat().filter((cell) => cell.plant?.bloomedAt).length;
+
+  const gardenBloomBaselineRef = useRef<number | null>(null);
+  const [gardenNewBlooms, setGardenNewBlooms] = useState(0);
+
+  useEffect(() => {
+    if (gardenBloomBaselineRef.current === null) {
+      gardenBloomBaselineRef.current = currentBloomedCount;
+      return;
+    }
+    const delta = currentBloomedCount - gardenBloomBaselineRef.current;
+    if (delta > 0 && tabRef.current !== "garden") {
+      setGardenNewBlooms((n) => n + delta);
+    }
+    gardenBloomBaselineRef.current = currentBloomedCount;
+  }, [currentBloomedCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Shop restock badges ───────────────────────────────────────────────────────
+  // Each restock that the user hasn't acknowledged = +1 badge on that sub-tab.
+  const prevShopRestockedRef   = useRef(false);
+  const prevSupplyRestockedRef = useRef(false);
+  const [newSeedsShopBadge,  setNewSeedsShopBadge]  = useState(0);
+  const [newSupplyShopBadge, setNewSupplyShopBadge] = useState(0);
+
+  useEffect(() => {
+    if (shopJustRestocked && !prevShopRestockedRef.current) {
+      // Only add badge if user isn't already looking at seeds tab
+      if (tabRef.current !== "shop" || shopViewRef.current !== "seeds") {
+        setNewSeedsShopBadge((n) => n + 1);
+      }
+    }
+    prevShopRestockedRef.current = shopJustRestocked;
+  }, [shopJustRestocked]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (supplyJustRestocked && !prevSupplyRestockedRef.current) {
+      if (tabRef.current !== "shop" || shopViewRef.current !== "supply") {
+        setNewSupplyShopBadge((n) => n + 1);
+      }
+    }
+    prevSupplyRestockedRef.current = supplyJustRestocked;
+  }, [supplyJustRestocked]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Inventory new-items badge ─────────────────────────────────────────────────
+  // Tracks items added since the user last opened each inventory sub-tab.
+  const currentSeedCount   = state.inventory.filter((i) =>  i.isSeed && i.quantity > 0).reduce((s, i) => s + i.quantity, 0);
+  const currentBloomCount  = state.inventory.filter((i) => !i.isSeed && i.quantity > 0).reduce((s, i) => s + i.quantity, 0);
+  const currentSupplyCount = (state.fertilizers   ?? []).reduce((s, f) => s + f.quantity, 0)
+                           + (state.gearInventory ?? []).reduce((s, g) => s + g.quantity, 0);
+
+  const seedBaselineRef   = useRef<number | null>(null);
+  const bloomBaselineRef  = useRef<number | null>(null);
+  const supplyBaselineRef = useRef<number | null>(null);
+  const tabRef            = useRef(tab);
+  const shopViewRef       = useRef(shopView);
+
+  const [newSeeds,    setNewSeeds]    = useState(0);
+  const [newBlooms,   setNewBlooms]   = useState(0);
+  const [newSupplies, setNewSupplies] = useState(0);
+
+  useEffect(() => { tabRef.current = tab; }, [tab]);
+  useEffect(() => { shopViewRef.current = shopView; }, [shopView]);
+
+  useEffect(() => {
+    // First render: initialise baselines without counting anything as "new"
+    if (seedBaselineRef.current === null) {
+      seedBaselineRef.current   = currentSeedCount;
+      bloomBaselineRef.current  = currentBloomCount;
+      supplyBaselineRef.current = currentSupplyCount;
+      return;
+    }
+
+    const dSeeds   = currentSeedCount   - seedBaselineRef.current;
+    const dBlooms  = currentBloomCount  - (bloomBaselineRef.current  ?? 0);
+    const dSupplies = currentSupplyCount - (supplyBaselineRef.current ?? 0);
+
+    // Only accumulate when user is NOT viewing inventory (so they notice the badge)
+    if (tabRef.current !== "inventory") {
+      if (dSeeds   > 0) setNewSeeds((n)   => n + dSeeds);
+      if (dBlooms  > 0) setNewBlooms((n)  => n + dBlooms);
+      if (dSupplies > 0) setNewSupplies((n) => n + dSupplies);
+    }
+
+    seedBaselineRef.current   = currentSeedCount;
+    bloomBaselineRef.current  = currentBloomCount;
+    supplyBaselineRef.current = currentSupplyCount;
+  }, [currentSeedCount, currentBloomCount, currentSupplyCount]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const newInvTotal = newSeeds + newBlooms + newSupplies;
+
+  // Social tab badge = friend requests + unread mailbox
+  // (gifts now arrive via mailbox so mailboxUnreadCount already includes them)
+  const socialBadgeCount = pendingCount + mailboxUnreadCount;
 
   // ── Swipe navigation ─────────────────────────────────────────────────────────
-  // Flat order: garden(0) → shop:seeds(1) → shop:fertilizers(2) →
+  // Flat order: garden(0) → shop:seeds(1) → shop:supply(2) →
   //             inventory(3) → botany(4) → codex(5) →
-  //             social:search(6) → friends(7) → gifts(8) →
+  //             social:search(6) → friends(7) → mailbox(8) →
   //             marketplace(9) → leaderboard(10) → me(profile)
   const MAIN_TABS: Tab[] = ["garden", "shop", "inventory", "botany", "codex", "social"];
 
@@ -148,7 +256,7 @@ export default function App() {
     if (tab === "inventory") {
       setTabDir("right"); setSubDir(null);
       setTab("shop");
-      setShopView("fertilizers");
+      setShopView("supply");
       return;
     }
     const idx = MAIN_TABS.indexOf(tab);
@@ -161,11 +269,11 @@ export default function App() {
   const swipeHandlers = useSwipe(handleSwipeLeft, handleSwipeRight);
 
   // Flat index across the entire nav sequence:
-  // garden(0) → shop:seeds(1) → shop:fertilizers(2) → inventory(3) →
-  // botany(4) → codex(5) → social:search(6) → friends(7) → gifts(8) →
+  // garden(0) → shop:seeds(1) → shop:supply(2) → inventory(3) →
+  // botany(4) → codex(5) → social:search(6) → friends(7) → mailbox(8) →
   // marketplace(9) → leaderboard(10)
-  const SHOP_VIEWS:   ShopView[]   = ["seeds", "fertilizers"];
-  const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "gifts", "marketplace", "leaderboard"];
+  const SHOP_VIEWS:   ShopView[]   = ["seeds", "supply"];
+  const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "mailbox", "marketplace", "leaderboard"];
 
   function flatNavIndex(t: Tab, shv: ShopView, sv: SocialView): number {
     if (t === "garden")    return 0;
@@ -192,6 +300,26 @@ export default function App() {
     if (t === "shop")   setShopView("seeds");
     if (t === "social") setSocialView("search");
     setProfileUsername(null);
+
+    // Clear inventory new-items badges and reset baselines when entering inventory
+    if (t === "inventory") {
+      setNewSeeds(0);
+      setNewBlooms(0);
+      setNewSupplies(0);
+      seedBaselineRef.current   = currentSeedCount;
+      bloomBaselineRef.current  = currentBloomCount;
+      supplyBaselineRef.current = currentSupplyCount;
+    }
+    // Clear garden badge when entering garden
+    if (t === "garden") {
+      setGardenNewBlooms(0);
+      gardenBloomBaselineRef.current = currentBloomedCount;
+    }
+    // Clear shop badges when entering shop
+    if (t === "shop") {
+      setNewSeedsShopBadge(0);
+      setNewSupplyShopBadge(0);
+    }
   }
 
   function handleShopViewChange(v: ShopView) {
@@ -199,6 +327,9 @@ export default function App() {
     setSubDir(dir);
     setTabDir(null);
     setShopView(v);
+    // Clear the badge for whichever sub-tab the user is now viewing
+    if (v === "seeds")  setNewSeedsShopBadge(0);
+    if (v === "supply") setNewSupplyShopBadge(0);
   }
 
   function handleSocialViewChange(v: SocialView) {
@@ -229,7 +360,13 @@ export default function App() {
         />
       )}
       {shopJustRestocked && (
-        <ShopRestockBanner onDismiss={clearShopNotification} />
+        <ShopRestockBanner onDismiss={clearShopNotification} type="seeds" />
+      )}
+      {supplyJustRestocked && (
+        <ShopRestockBanner onDismiss={clearSupplyNotification} type="supply" />
+      )}
+      {gearExpiry && (
+        <GearExpiryBanner gearType={gearExpiry.gearType} onDismiss={clearGearExpiry} />
       )}
       {newRequest && (
         <FriendRequestNotification
@@ -247,7 +384,7 @@ export default function App() {
           onDismiss={clearNewGift}
           onView={() => {
             clearNewGift();
-            setSocialView("gifts");
+            setSocialView("mailbox");
             setTab("social");
             setProfileUsername(null);
           }}
@@ -362,14 +499,24 @@ export default function App() {
                : "🌍"}
               <span className="ml-1 hidden sm:inline capitalize">{t}</span>
 
-              {t === "inventory" && inventoryCount > 0 && (
-                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
-                  {inventoryCount > 9 ? "9+" : inventoryCount}
+              {t === "garden" && gardenNewBlooms > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-yellow-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                  {gardenNewBlooms > 9 ? "9+" : gardenNewBlooms}
                 </span>
               )}
-              {t === "social" && (pendingCount + giftCount) > 0 && (
+              {t === "shop" && (newSeedsShopBadge + newSupplyShopBadge) > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-yellow-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                  {(newSeedsShopBadge + newSupplyShopBadge) > 9 ? "9+" : newSeedsShopBadge + newSupplyShopBadge}
+                </span>
+              )}
+              {t === "inventory" && newInvTotal > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
+                  {newInvTotal > 9 ? "9+" : newInvTotal}
+                </span>
+              )}
+              {t === "social" && socialBadgeCount > 0 && (
                 <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
-                  {(pendingCount + giftCount) > 9 ? "9+" : pendingCount + giftCount}
+                  {socialBadgeCount > 9 ? "9+" : socialBadgeCount}
                 </span>
               )}
             </button>
@@ -393,21 +540,29 @@ export default function App() {
             <>
               {/* Shop sub-nav */}
               <div className="flex gap-2 mb-6">
-                {(["seeds", "fertilizers"] as ShopView[]).map((v) => (
-                  <button
-                    key={v}
-                    onClick={() => handleShopViewChange(v)}
-                    className={`
-                      flex-1 py-2 rounded-xl text-xs font-semibold transition-all text-center
-                      ${shopView === v
-                        ? "bg-primary/20 border border-primary/50 text-primary"
-                        : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
-                      }
-                    `}
-                  >
-                    {v === "seeds" ? "🌱 Seeds" : "🌿 Fertilizers"}
-                  </button>
-                ))}
+                {(["seeds", "supply"] as ShopView[]).map((v) => {
+                  const badge = v === "seeds" ? newSeedsShopBadge : newSupplyShopBadge;
+                  return (
+                    <button
+                      key={v}
+                      onClick={() => handleShopViewChange(v)}
+                      className={`
+                        flex-1 py-2 rounded-xl text-xs font-semibold transition-all text-center relative
+                        ${shopView === v
+                          ? "bg-primary/20 border border-primary/50 text-primary"
+                          : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                        }
+                      `}
+                    >
+                      {v === "seeds" ? "🌱 Seeds" : "🧪 Supply"}
+                      {badge > 0 && shopView !== v && (
+                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                          {badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
               {/* Animated shop content */}
               <div
@@ -418,7 +573,18 @@ export default function App() {
               </div>
             </>
           )}
-          {tab === "inventory"   && <Inventory />}
+          {tab === "inventory"   && (
+            <Inventory
+              newSeeds={newSeeds}
+              newBlooms={newBlooms}
+              newSupplies={newSupplies}
+              onSubTabView={(subTab) => {
+                if (subTab === "seeds")    setNewSeeds(0);
+                if (subTab === "blooms")   setNewBlooms(0);
+                if (subTab === "supplies") setNewSupplies(0);
+              }}
+            />
+          )}
           {tab === "botany"      && <Botany />}
           {tab === "codex"       && <Codex />}
           {tab === "social"    && (
@@ -426,44 +592,47 @@ export default function App() {
               {/* Sub-nav — always visible for signed-in users; guests only see Market */}
               {(user || socialView === "marketplace") && (
                 <div className="flex gap-2 mb-6">
-                  {(["search", "friends", "gifts", "marketplace", "leaderboard"] as SocialView[]).map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => handleSocialViewChange(v)}
-                      className={`
-                        flex-1 py-2 rounded-xl text-xs font-semibold transition-all relative text-center
-                        ${socialView === v && !profileUsername
-                          ? "bg-primary/20 border border-primary/50 text-primary"
-                          : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
-                        }
-                      `}
-                    >
-                      <span>
-                        {v === "search"        ? "🔍"
-                         : v === "friends"     ? "👥"
-                         : v === "gifts"       ? "🎁"
-                         : v === "marketplace" ? "🏪"
-                         : "🏆"}
-                      </span>
-                      <span className="hidden sm:inline ml-1">
-                        {v === "search"        ? "Search"
-                         : v === "friends"     ? "Friends"
-                         : v === "gifts"       ? "Gifts"
-                         : v === "marketplace" ? "Market"
-                         : "Ranks"}
-                      </span>
-                      {v === "friends" && pendingCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
-                          {pendingCount}
+                  {(["search", "friends", "mailbox", "marketplace", "leaderboard"] as SocialView[]).map((v) => {
+                    const mailboxBadge = mailboxUnreadCount;
+                    return (
+                      <button
+                        key={v}
+                        onClick={() => handleSocialViewChange(v)}
+                        className={`
+                          flex-1 py-2 rounded-xl text-xs font-semibold transition-all relative text-center
+                          ${socialView === v && !profileUsername
+                            ? "bg-primary/20 border border-primary/50 text-primary"
+                            : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                          }
+                        `}
+                      >
+                        <span>
+                          {v === "search"        ? "🔍"
+                           : v === "friends"     ? "👥"
+                           : v === "mailbox"     ? "📬"
+                           : v === "marketplace" ? "🏪"
+                           : "🏆"}
                         </span>
-                      )}
-                      {v === "gifts" && giftCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
-                          {giftCount}
+                        <span className="hidden sm:inline ml-1">
+                          {v === "search"        ? "Search"
+                           : v === "friends"     ? "Friends"
+                           : v === "mailbox"     ? "Mailbox"
+                           : v === "marketplace" ? "Market"
+                           : "Ranks"}
                         </span>
-                      )}
-                    </button>
-                  ))}
+                        {v === "friends" && pendingCount > 0 && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                            {pendingCount}
+                          </span>
+                        )}
+                        {v === "mailbox" && mailboxBadge > 0 && (
+                          <span className="absolute -top-1 -right-1 w-4 h-4 bg-yellow-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                            {mailboxBadge > 9 ? "9+" : mailboxBadge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                   {user && (
                     <button
                       onClick={() => handleViewProfile(profile?.username ?? "")}
@@ -487,23 +656,20 @@ export default function App() {
                 key={profileUsername ?? socialView}
                 className={subDir === "left" ? "slide-from-right" : subDir === "right" ? "slide-from-left" : ""}
               >
-                {socialView === "marketplace" ? (
+                {/* Profile page takes priority over any social sub-view (including marketplace) */}
+                {profileUsername ? (
+                  <ProfilePage username={profileUsername} />
+                ) : socialView === "marketplace" ? (
                   <MarketplaceTab
                     onViewProfile={handleViewProfile}
                     onSignIn={signInWithGoogle}
                   />
                 ) : user ? (
                   <>
-                    {profileUsername ? (
-                      <ProfilePage username={profileUsername} />
-                    ) : (
-                      <>
-                        {socialView === "search"      && <SearchPage onViewProfile={handleViewProfile} />}
-                        {socialView === "friends"     && <FriendsPage onViewProfile={handleViewProfile} />}
-                        {socialView === "gifts"       && <GiftsPage onViewProfile={handleViewProfile} />}
-                        {socialView === "leaderboard" && <LeaderboardPage onViewProfile={handleViewProfile} />}
-                      </>
-                    )}
+                    {socialView === "search"      && <SearchPage onViewProfile={handleViewProfile} />}
+                    {socialView === "friends"     && <FriendsPage onViewProfile={handleViewProfile} />}
+                    {socialView === "mailbox"     && <MailboxPage onViewProfile={handleViewProfile} />}
+                    {socialView === "leaderboard" && <LeaderboardPage onViewProfile={handleViewProfile} />}
                   </>
                 ) : (
                   <GuestSocialPrompt onSignIn={signInWithGoogle} />

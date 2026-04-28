@@ -1,5 +1,6 @@
 import { useState, useRef } from "react";
 import { getFlower, RARITY_CONFIG } from "../data/flowers";
+import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
 import { buyFromShop, buyFertilizer, buyAllFromShop, buyAllFertilizer, getSpeciesCompletion } from "../store/gameStore";
@@ -140,7 +141,7 @@ export function ShopSlotCard({ slot }: Props) {
           flex flex-col gap-3 bg-card/60 border rounded-xl p-4 transition-all duration-200
           ${outOfStock ? "border-border opacity-50"
             : justBought ? "border-green-400/70 bg-green-400/5"
-            : "border-border hover:border-primary/40"}
+            : `${fert.cardBorder} hover:opacity-90`}
         `}
       >
         <div className="flex items-start justify-between">
@@ -317,7 +318,8 @@ export function ShopSlotCard({ slot }: Props) {
 
       <div>
         <h3 className="font-semibold text-sm">{species.name}</h3>
-        <p className="text-xs text-muted-foreground leading-relaxed mt-0.5">
+        <FlowerTypeBadges types={species.types} className="mt-1.5" />
+        <p className="text-xs text-muted-foreground leading-relaxed mt-1">
           {species.description}
         </p>
       </div>
