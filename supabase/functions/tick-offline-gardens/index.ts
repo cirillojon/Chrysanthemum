@@ -100,10 +100,12 @@ function isNightUTC(now: number): boolean {
 
 // ── Gear range offsets ─────────────────────────────────────────────────────
 const OFFSETS_CROSS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-const OFFSETS_3X3:  [number, number][] = [
+const OFFSETS_DIAMOND: [number, number][] = [
+  [-2, 0],
   [-1, -1], [-1, 0], [-1, 1],
-  [ 0, -1],          [ 0, 1],
+  [ 0, -2], [ 0, -1], [ 0, 1], [ 0, 2],
   [ 1, -1], [ 1, 0], [ 1, 1],
+  [ 2, 0],
 ];
 const OFFSETS_5X5: [number, number][] = [
   [-2, -2], [-2, -1], [-2,  0], [-2,  1], [-2,  2],
@@ -116,9 +118,9 @@ const OFFSETS_5X5: [number, number][] = [
 // ── Gear definitions ───────────────────────────────────────────────────────
 interface GearDef { subtype: "harvest_bell" | "auto_planter"; offsets: [number, number][]; durationMs: number; }
 const GEAR_DEFS: Record<string, GearDef> = {
-  harvest_bell_rare:      { subtype: "harvest_bell", offsets: OFFSETS_CROSS, durationMs: 4  * 60 * 60 * 1_000 },
-  harvest_bell_legendary: { subtype: "harvest_bell", offsets: OFFSETS_3X3,  durationMs: 8  * 60 * 60 * 1_000 },
-  auto_planter_prismatic: { subtype: "auto_planter", offsets: OFFSETS_5X5,  durationMs: 24 * 60 * 60 * 1_000 },
+  harvest_bell_rare:      { subtype: "harvest_bell", offsets: OFFSETS_CROSS,   durationMs:  4 * 60 * 60 * 1_000 },
+  harvest_bell_legendary: { subtype: "harvest_bell", offsets: OFFSETS_3X3,    durationMs:  8 * 60 * 60 * 1_000 },
+  auto_planter_prismatic: { subtype: "auto_planter", offsets: OFFSETS_DIAMOND, durationMs: 12 * 60 * 60 * 1_000 },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────

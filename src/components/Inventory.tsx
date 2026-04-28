@@ -225,7 +225,7 @@ function GearInventoryRow({ item }: { item: GearInventoryItem }) {
   const def    = GEAR[item.gearType];
   const rarity = RARITY_CONFIG[def.rarity];
   return (
-    <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${rarity?.glow ?? ""} border-border`}>
+    <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${def.rarity === "prismatic" ? "rainbow-border rainbow-glow" : `${rarity?.glow ?? ""} border-border`}`}>
       <span className="text-3xl flex-shrink-0">{def.emoji}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">

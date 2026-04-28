@@ -165,6 +165,7 @@ function SupplyCard({ slot }: { slot: ShopSlot }) {
           flex flex-col gap-3 bg-card/60 border rounded-xl p-4 transition-all duration-200
           ${outOfStock ? "border-border opacity-50"
             : justBought ? "border-green-400/70 bg-green-400/5"
+            : def.rarity === "prismatic" ? "rainbow-border rainbow-glow hover:brightness-110"
             : `border-border hover:border-primary/40 ${rarity.glow}`}
         `}
       >

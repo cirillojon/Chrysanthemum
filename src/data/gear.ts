@@ -145,10 +145,11 @@ function wetOverHours(hours: number): number {
 }
 const MUT_CHANCE_TARGET  = 0.50; // 50% over full duration
 
-const DURATION_1H  = 1 * 60 * 60 * 1_000;
-const DURATION_2H  = 2 * 60 * 60 * 1_000;
-const DURATION_4H  = 4 * 60 * 60 * 1_000;
-const DURATION_8H  = 8 * 60 * 60 * 1_000;
+const DURATION_1H  =  1 * 60 * 60 * 1_000;
+const DURATION_2H  =  2 * 60 * 60 * 1_000;
+const DURATION_4H  =  4 * 60 * 60 * 1_000;
+const DURATION_8H  =  8 * 60 * 60 * 1_000;
+const DURATION_12H = 12 * 60 * 60 * 1_000;
 
 // ── Gear catalog ───────────────────────────────────────────────────────────
 
@@ -436,14 +437,14 @@ export const GEAR: Record<GearType, GearDefinition> = {
   auto_planter_prismatic: {
     id:             "auto_planter_prismatic",
     name:           "Auto-Planter",
-    description:    "Automatically plants seeds from your inventory into empty cells within a 5×5 area, even while offline. Lasts 24 hours.",
+    description:    "Automatically plants seeds from your inventory into empty cells in a diamond area, even while offline. Lasts 12 hours.",
     emoji:          "🌾",
     rarity:         "prismatic",
     shopPrice:      500_000,
     category:       "passive",
     passiveSubtype: "auto_planter",
-    radiusOffsets:  OFFSETS_5X5,
-    durationMs:     24 * 60 * 60 * 1_000,
+    radiusOffsets:  OFFSETS_DIAMOND,
+    durationMs:     DURATION_12H,
   },
 };
 
