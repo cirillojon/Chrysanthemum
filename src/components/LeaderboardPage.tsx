@@ -62,9 +62,14 @@ export function LeaderboardPage({ onViewProfile }: Props) {
 
   useEffect(() => { load(); }, [load]);
 
-  // Sort + re-rank client-side when switching sort mode
+  // Sort + re-rank client-side when switching sort mode.
+  // Always reassign sequential ranks (i + 1) regardless of sort mode — the DB
+  // view uses RANK() which produces duplicate rank numbers for tied players.
   const sortedEntries = useMemo(() => {
-    if (sortBy === "coins") return entries; // already ranked by coins from DB
+    if (sortBy === "coins") {
+      // DB already returns entries sorted by rank/coins — just renumber sequentially
+      return entries.map((e, i) => ({ ...e, rank: i + 1 }));
+    }
     const sorted = [...entries].sort(
       (a, b) => (b.discovered_count ?? 0) - (a.discovered_count ?? 0)
     );
