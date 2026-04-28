@@ -14,6 +14,19 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.2.2",
+    title:   "Mailbox & Bug Fixes",
+    items: [
+      { type: "added",   text: "Claim All button — collect every unclaimed mail item in one tap" },
+      { type: "fixed",   text: "New mail now appears instantly while the mailbox is open, without needing to refresh or navigate away (#123)" },
+      { type: "fixed",   text: "Long URLs and unbroken strings in gift messages no longer overflow the message card on narrow screens (#110)" },
+      { type: "fixed",   text: "Claiming a mail item now automatically collapses the card (#128)" },
+      { type: "fixed",   text: "Cleared claimed mail is now deleted from the server and no longer reappears after navigating away and back (#112)" },
+      { type: "fixed",   text: "Leaderboard rank numbers are now always sequential — tied players no longer share the same rank number (#113)" },
+      { type: "fixed",   text: "Navigating to a player profile now scrolls to the top of the page (#111)" },
+    ],
+  },
+  {
     version: "2.2.1",
     title:   "Security & Bug Fixes",
     items: [

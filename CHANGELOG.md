@@ -1,3 +1,18 @@
+## [v2.2.2] — 2026-04-28 — Mailbox & Bug Fixes
+
+### Added
+- **Claim All button** — collect every unclaimed mail item in one tap; claims run sequentially so no items are dropped (#127)
+
+### Fixed
+- **Mailbox real-time updates** — new mail now appears instantly while the mailbox is open, without needing to refresh or navigate away (#123)
+- **Mailbox message text overflow** — long URLs and unbroken strings in gift messages no longer overflow the message card on narrow screens (#110)
+- **Mail card stays open after collecting** — claiming a mail item now collapses the card automatically (#128)
+- **Clear claimed mail persists** — claimed mail cleared via "Clear claimed" is now deleted from the server; it no longer reappears after navigating away and back (#112)
+- **Leaderboard duplicate rank numbers** — players tied on coins no longer share the same rank number; ranks are always assigned sequentially (#113)
+- **Profile page scroll position** — navigating to a player's profile from the leaderboard or mailbox now scrolls to the top of the page (#111)
+
+---
+
 ## [v2.2.1] — 2026-04-28 — Security & Bug Fixes
 
 ### Security
