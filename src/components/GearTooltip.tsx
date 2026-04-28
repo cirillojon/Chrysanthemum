@@ -4,7 +4,7 @@ import { MUTATIONS, RARITY_CONFIG } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
 import { removeGear, collectFromComposter, setFanDirection } from "../store/gameStore";
 import { useGame } from "../store/GameContext";
-import { edgeRemoveGear, edgeCollectFromComposter } from "../lib/edgeFunctions";
+import { edgeRemoveGear, edgeCollectFromComposter, edgeSetFanDirection } from "../lib/edgeFunctions";
 
 interface Props {
   gear:    PlacedGear;
@@ -26,7 +26,7 @@ function formatMs(ms: number): string {
 }
 
 export function GearTooltip({ gear, row, col, onClose }: Props) {
-  const { state, perform, update } = useGame();
+  const { state, perform } = useGame();
   const [nudge,   setNudge]   = useState(0);
   const [flipped, setFlipped] = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -130,7 +130,15 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
 
   function handleFanDirection(dir: FanDirection) {
     const next = setFanDirection(state, row, col, dir);
-    if (next) update(next);
+    if (!next) return;
+    perform(
+      next,
+      () => edgeSetFanDirection(row, col, dir),
+      undefined,
+      {
+        rollback: (cur) => setFanDirection(cur, row, col, gear.direction ?? "right") ?? cur,
+      }
+    );
   }
 
   const isFan = def.passiveSubtype === "fan";

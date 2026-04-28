@@ -14,8 +14,9 @@ function b64url(s: string): string {
 // ── Types (mirror src/data/gear.ts + src/store/gameStore.ts) ─────────────────
 
 type PlacedGear = {
-  gearType:          string;
-  placedAt:          number;
+  gearType:           string;
+  placedAt:           number;
+  direction?:         string;
   storedFertilizers?: string[];
 };
 
@@ -60,15 +61,16 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json() as {
-      action:    "place" | "remove" | "collect";
-      row:       number;
-      col:       number;
-      gearType?: string;
+      action:     "place" | "remove" | "collect" | "set_direction";
+      row:        number;
+      col:        number;
+      gearType?:  string;
+      direction?: string;
     };
 
     const { action, row, col } = body;
-    if (!["place", "remove", "collect"].includes(action)) {
-      return err("Invalid action — use place | remove | collect");
+    if (!["place", "remove", "collect", "set_direction"].includes(action)) {
+      return err("Invalid action — use place | remove | collect | set_direction");
     }
 
     const supabaseAdmin = createClient(
@@ -105,7 +107,7 @@ Deno.serve(async (req: Request) => {
 
     // ── place ─────────────────────────────────────────────────────────────────
     if (action === "place") {
-      const { gearType } = body;
+      const { gearType, direction } = body;
       if (!gearType)              return err("gearType required");
       if (cell.plant)             return err("Cell has a plant");
       if (cell.gear)              return err("Cell already has gear");
@@ -114,10 +116,13 @@ Deno.serve(async (req: Request) => {
       if (!invItem || invItem.quantity < 1) return err("Gear not in inventory");
 
       const placedAt = Date.now();
+      const placedGear: PlacedGear = direction
+        ? { gearType, placedAt, direction }
+        : { gearType, placedAt };
       grid = grid.map((r, ri) =>
         r.map((p, ci) =>
           ri === row && ci === col
-            ? { ...p, gear: { gearType, placedAt } }
+            ? { ...p, gear: placedGear }
             : p
         )
       );
@@ -222,6 +227,33 @@ Deno.serve(async (req: Request) => {
       });
 
       return json({ ok: true, grid, fertilizers });
+    }
+
+    // ── set_direction (fan) ───────────────────────────────────────────────────
+    if (action === "set_direction") {
+      const { direction } = body;
+      if (!direction) return err("direction required");
+      if (!cell.gear)  return err("No gear at this cell");
+
+      grid = grid.map((r, ri) =>
+        r.map((p, ci) =>
+          ri === row && ci === col
+            ? { ...p, gear: { ...p.gear!, direction } }
+            : p
+        )
+      );
+
+      const { data: ud, error: ue } = await supabaseAdmin
+        .from("game_saves")
+        .update({ grid, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
+
+      if (ue || !ud) return err("Save was modified by another action", 409);
+
+      return json({ ok: true, grid });
     }
 
     return err("Unhandled action");

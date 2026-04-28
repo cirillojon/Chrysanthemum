@@ -162,6 +162,10 @@ export function edgeRemoveGear(row: number, col: number) {
   return callEdge<GearActionResult>("gear-action", { action: "remove", row, col });
 }
 
+export function edgeSetFanDirection(row: number, col: number, direction: string) {
+  return callEdge<GearActionResult>("gear-action", { action: "set_direction", row, col, direction });
+}
+
 export function edgeCollectFromComposter(row: number, col: number) {
   return callEdge<GearActionResult>("gear-action", { action: "collect", row, col });
 }
