@@ -310,7 +310,7 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter) && (
+        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -348,6 +348,14 @@ export function PlotTile({
                 <span className="gear-planter-seed" style={{ left: "20%", animationDelay: "0s"    }}>🌱</span>
                 <span className="gear-planter-seed" style={{ left: "52%", animationDelay: "0.8s"  }}>🌱</span>
                 <span className="gear-planter-seed" style={{ left: "76%", animationDelay: "1.6s"  }}>🌱</span>
+              </>
+            )}
+            {/* Harvest Bell: 🔔 bell sways upward hinting at auto-harvest */}
+            {isUnderHarvestBell && (
+              <>
+                <span className="gear-bell" style={{ left: "18%", animationDelay: "0s"    }}>🔔</span>
+                <span className="gear-bell" style={{ left: "52%", animationDelay: "1.1s"  }}>🔔</span>
+                <span className="gear-bell" style={{ left: "74%", animationDelay: "2.2s"  }}>🔔</span>
               </>
             )}
             {/* Fan: 💨 gusts drifting in the fan's direction */}

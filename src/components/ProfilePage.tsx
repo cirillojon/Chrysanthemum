@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getProfileByUsername, getPublicSave, updateDisplayFlower, updateStatus, updateUsername } from "../store/cloudSave";
 import type { CloudProfile } from "../store/cloudSave";
+import { supabase } from "../lib/supabase";
 import type { GameState } from "../store/gameStore";
 import { ReadOnlyGarden } from "./ReadOnlyGarden";
 import { getFlower, RARITY_CONFIG, MUTATIONS, FLOWERS } from "../data/flowers";
@@ -74,6 +75,32 @@ export function ProfilePage({ username }: Props) {
       setProfile(myProfile);
     }
   }, [myProfile]);
+
+  // ── Realtime: refresh the garden when the viewed user saves ───────────────
+  useEffect(() => {
+    if (!profile) return;
+    // Own profile is already live via GameContext — only subscribe for others
+    if (user?.id === profile.id) return;
+
+    const channel = supabase
+      .channel(`profile-garden:${profile.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event:  "UPDATE",
+          schema: "public",
+          table:  "game_saves",
+          filter: `user_id=eq.${profile.id}`,
+        },
+        async () => {
+          const fresh = await getPublicSave(profile.id);
+          if (fresh) setSave(fresh);
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [profile?.id, user?.id]);
 
   if (loading) return (
     <div className="flex items-center justify-center py-24">

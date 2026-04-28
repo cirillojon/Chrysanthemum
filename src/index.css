@@ -190,6 +190,23 @@
   pointer-events: none;
 }
 
+/* Harvest Bell: 🔔 bell sways and floats upward, hinting at auto-harvest */
+@keyframes gear-bell-sway {
+  0%   { transform: translateY(0)     rotate(-20deg) scale(0.9); opacity: 0;    }
+  12%  { transform: translateY(-4px)  rotate( 20deg) scale(1.0); opacity: 0.85; }
+  30%  { transform: translateY(-12px) rotate(-12deg) scale(1.0); opacity: 0.75; }
+  60%  { transform: translateY(-28px) rotate(  6deg) scale(0.85); opacity: 0.5; }
+  100% { transform: translateY(-54px) rotate(  0deg) scale(0.6); opacity: 0;    }
+}
+.gear-bell {
+  animation: gear-bell-sway 2.8s ease-out infinite;
+  position: absolute;
+  bottom: 2px;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+}
+
 /* Fan: 💨 gusts drift in the fan's facing direction */
 @keyframes gear-wind-right {
   0%   { transform: translateX(-4px); opacity: 0;    }
