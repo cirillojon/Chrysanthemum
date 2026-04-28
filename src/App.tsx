@@ -290,6 +290,7 @@ function AppInner() {
     setTabDir(null);
     setTab("social");
     setProfileUsername(username);
+    window.scrollTo({ top: 0, behavior: "instant" });
   }
 
   function handleTabChange(t: Tab) {
