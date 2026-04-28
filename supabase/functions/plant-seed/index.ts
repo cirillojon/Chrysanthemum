@@ -151,6 +151,17 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Record server-authoritative planting time.
+    // plant_timings has no client write policy — only service role can upsert here.
+    // harvest validates bloom time against this instead of the client-writable
+    // timePlanted field stored in game_saves.grid.
+    void supabaseAdmin.from("plant_timings").upsert({
+      user_id:    userId,
+      row,
+      col,
+      planted_at: new Date(newPlant.timePlanted).toISOString(),
+    }, { onConflict: "user_id,row,col" });
+
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "plant_seed",
       payload: { row, col, speciesId },

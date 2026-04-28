@@ -14,6 +14,13 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.2.3",
+    title:   "Security Patch",
+    items: [
+      { type: "fixed", text: "timePlanted manipulation exploit closed — harvest time is now validated against a server-authoritative timestamp that clients cannot modify, closing the instant-harvest exploit (#126)" },
+    ],
+  },
+  {
     version: "2.2.2",
     title:   "Mailbox & Bug Fixes",
     items: [
