@@ -9,6 +9,7 @@ import type { GearType } from "../data/gear";
 import { getAllMail, clearClaimedMail } from "../store/cloudSave";
 import type { MailboxEntry } from "../store/cloudSave";
 import { edgeClaimMail } from "../lib/edgeFunctions";
+import { supabase } from "../lib/supabase";
 
 interface Props {
   onViewProfile:  (username: string) => void;
@@ -55,6 +56,25 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
   }, [user, onCountChange]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Realtime: reload full list whenever a new mail arrives for this user
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("mailbox-page")
+      .on(
+        "postgres_changes",
+        {
+          event:  "INSERT",
+          schema: "public",
+          table:  "mailbox",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => { load(); }
+      )
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, load]);
 
   async function handleClaim(entry: MailboxEntry) {
     if (!user || claiming) return;
