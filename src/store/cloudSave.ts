@@ -161,7 +161,6 @@ export async function saveToCloud(
       shop:                   state.shop,
       last_shop_reset:        state.lastShopReset,
       last_saved:             Date.now(),
-      discovered:             state.discovered ?? [],
       weather_forecast_slots: state.weatherForecastSlots ?? 0,
       marketplace_slots:      state.marketplaceSlots ?? 0,
       // Farm Update fields
