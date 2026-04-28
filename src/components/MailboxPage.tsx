@@ -6,7 +6,7 @@ import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
 import { GEAR as GEAR_CATALOG } from "../data/gear";
 import type { GearType } from "../data/gear";
-import { getUnclaimedMail } from "../store/cloudSave";
+import { getAllMail } from "../store/cloudSave";
 import type { MailboxEntry } from "../store/cloudSave";
 import { edgeClaimMail } from "../lib/edgeFunctions";
 
@@ -42,7 +42,7 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
     if (!user) return;
     setLoading(true);
     try {
-      const m = await getUnclaimedMail(user.id);
+      const m = await getAllMail(user.id);
       setMail(m);
       onCountChange?.(m.length);
     } catch {
@@ -69,7 +69,7 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
         discovered:    result.discovered,
       });
       setClaimedIds((prev) => [...prev, entry.id]);
-      onCountChange?.(mail.filter((m) => m.id !== entry.id && !claimedIds.includes(m.id)).length);
+      onCountChange?.(mail.filter((m) => m.id !== entry.id && !m.claimed && !claimedIds.includes(m.id)).length);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to claim");
     } finally {
@@ -79,7 +79,7 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
 
   if (!user) return null;
 
-  const unclaimedCount = mail.filter((m) => !claimedIds.includes(m.id)).length;
+  const unclaimedCount = mail.filter((m) => !m.claimed && !claimedIds.includes(m.id)).length;
 
   if (loading) return (
     <div className="flex items-center justify-center py-24">
@@ -127,7 +127,7 @@ export function MailboxPage({ onViewProfile, onCountChange }: Props) {
             <MailCard
               key={entry.id}
               entry={entry}
-              claimed={claimedIds.includes(entry.id)}
+              claimed={entry.claimed || claimedIds.includes(entry.id)}
               claiming={claiming === entry.id}
               onClaim={() => handleClaim(entry)}
               onViewProfile={onViewProfile}

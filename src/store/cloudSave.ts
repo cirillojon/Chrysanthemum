@@ -464,14 +464,14 @@ export interface MailboxEntry {
   from_profile?: CloudProfile | null;
 }
 
-export async function getUnclaimedMail(userId: string): Promise<MailboxEntry[]> {
+export async function getAllMail(userId: string): Promise<MailboxEntry[]> {
   try {
     const { data, error } = await supabase
       .from("mailbox")
       .select("*")
       .eq("user_id", userId)
-      .eq("claimed", false)
-      .order("created_at", { ascending: false })
+      .order("claimed",     { ascending: true  })   // unclaimed first
+      .order("created_at",  { ascending: false })
       .limit(50);
 
     if (error || !data) return [];
