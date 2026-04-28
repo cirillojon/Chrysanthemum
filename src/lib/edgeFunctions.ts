@@ -335,3 +335,17 @@ export function edgeMarketplaceCancel(listingId: string) {
 export function edgeClaimMail(mailId: string) {
   return callEdge<ClaimMailResult>("claim-mail", { mailId });
 }
+
+// ── Alchemy ───────────────────────────────────────────────────────────────────
+
+export interface AlchemySacrificeResult {
+  ok:        true;
+  inventory: GameState["inventory"];
+  essences:  GameState["essences"];
+}
+
+export function edgeAlchemySacrifice(
+  sacrifices: { speciesId: string; mutation?: string; quantity: number }[]
+) {
+  return callEdge<AlchemySacrificeResult>("alchemy-sacrifice", { sacrifices });
+}

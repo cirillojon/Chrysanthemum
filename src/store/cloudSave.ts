@@ -138,6 +138,8 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       supplySlots:          (data.supply_slots    as number)                      ?? 2,
       lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
       serverUpdatedAt:      (data.updated_at as string) ?? null,
+      // Alchemy & Botany
+      essences:             (data.essences        as GameState["essences"])       ?? [],
     } as GameState;
   } catch {
     return null;
@@ -166,6 +168,8 @@ export async function saveToCloud(
     supply_shop:            state.supplyShop        ?? [],
     supply_slots:           state.supplySlots       ?? 2,
     last_supply_reset:      state.lastSupplyReset   ?? 0,
+    // Alchemy & Botany
+    essences:               state.essences          ?? [],
     updated_at:             new Date().toISOString(),
   };
 
@@ -252,6 +256,7 @@ export async function getPublicSave(userId: string): Promise<GameState | null> {
     supplyShop:           (data.supply_shop     as GameState["supplyShop"])     ?? [],
     supplySlots:          (data.supply_slots    as number)                      ?? 2,
     lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
+    essences:             (data.essences        as GameState["essences"])       ?? [],
   } as GameState;
 }
 
