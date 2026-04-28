@@ -982,6 +982,12 @@ const WEATHER_MUTATION_TYPE: Partial<Record<WeatherType, MutationType>> = {
 };
 
 const MOONLIT_NIGHT_CHANCE = 0.000019; // 50% over a 10-hour night (1 - 0.5^(1/36000))
+
+// Dev-only runtime multiplier for weather mutation chances.
+// Default 1 (no change). Set higher via DevWeatherPanel to test mutations instantly.
+let _devMutationMultiplier = 1;
+export function setDevMutationMultiplier(x: number) { _devMutationMultiplier = Math.max(0, x); }
+export function getDevMutationMultiplier() { return _devMutationMultiplier; }
 const GIANT_BLOOM_CHANCE   = 0.08;   // 8% flat, only at bloom transition
 
 function isNighttime(): boolean {
@@ -1017,9 +1023,11 @@ export function tickWeatherMutations(
       const hasScarecrow = scarecrowSources.some(({ def }) => isScarecrow(def));
       if (hasScarecrow) return plot;
 
+      const m = _devMutationMultiplier;
+
       // Thunderstorm combo: wet flowers have a ~50% chance to become shocked
       if (weatherType === "thunderstorm" && plot.plant.mutation === "wet") {
-        if (Math.random() < 0.000578) {
+        if (Math.random() < 0.000578 * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "shocked" as MutationType } };
         }
@@ -1031,7 +1039,7 @@ export function tickWeatherMutations(
 
       // Thunderstorm: unmutated (undefined or null) plants can become wet
       if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
-        if (Math.random() < 0.00116) { // 75% over 20-min event
+        if (Math.random() < 0.00116 * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "wet" as MutationType } };
         }
@@ -1039,7 +1047,7 @@ export function tickWeatherMutations(
 
       // Roll weather mutation
       if (weatherMut && weatherChance > 0) {
-        if (Math.random() < weatherChance) {
+        if (Math.random() < weatherChance * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: weatherMut } };
         }
@@ -1047,7 +1055,7 @@ export function tickWeatherMutations(
 
       // Moonlit at night (outside star_shower)
       if (night && weatherType !== "star_shower") {
-        if (Math.random() < MOONLIT_NIGHT_CHANCE) {
+        if (Math.random() < MOONLIT_NIGHT_CHANCE * m) {
           changed = true;
           return { ...plot, plant: { ...plot.plant, mutation: "moonlit" as MutationType } };
         }

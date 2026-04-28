@@ -9,7 +9,7 @@ import type { FertilizerType } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearType } from "../data/gear";
 import { useGame } from "../store/GameContext";
-import { codexKey } from "../store/gameStore";
+import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
 
 const DURATION_MS = 30_000;
@@ -28,6 +28,7 @@ export function DevWeatherPanel() {
   const [current, setCurrent]   = useState<WeatherType | null>(null);
   const cycleRef                = useRef<ReturnType<typeof setTimeout> | null>(null);
   const weatherTypes            = WEATHER_LIST.map((w) => w.id);
+  const [mutMult, setMutMult]   = useState(getDevMutationMultiplier());
 
   // ── Items tab state ────────────────────────────────────────────────────────
   const [tab, setTab]               = useState<Tab>("weather");
@@ -228,14 +229,6 @@ export function DevWeatherPanel() {
       {/* ── WEATHER TAB ─────────────────────────────────────────────────────── */}
       {tab === "weather" && (
         <>
-          <div className="flex items-center justify-between mb-2">
-            {cycling && (
-              <button onClick={stopCycle} className="text-red-400 hover:text-red-300 font-semibold ml-auto">
-                ✕ Stop
-              </button>
-            )}
-          </div>
-
           <div className="grid grid-cols-3 gap-1.5 mb-3">
             {weatherTypes.map((type) => {
               const def = WEATHER[type];
@@ -258,18 +251,60 @@ export function DevWeatherPanel() {
             })}
           </div>
 
-          <button
-            onClick={cycling ? stopCycle : startCycle}
-            className={`
-              w-full py-1.5 rounded-lg text-xs font-semibold transition-all text-center block
-              ${cycling
-                ? "bg-red-500/20 border border-red-500/50 text-red-400"
-                : "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/30"
-              }
-            `}
-          >
-            {cycling ? `⏹ Stop cycle (on: ${WEATHER[current!]?.name ?? "…"})` : "▶ Auto-cycle all (30s each)"}
-          </button>
+          <div className="flex gap-1.5 mb-2">
+            <button
+              onClick={cycling ? stopCycle : startCycle}
+              className={`
+                flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all text-center
+                ${cycling
+                  ? "bg-red-500/20 border border-red-500/50 text-red-400"
+                  : "bg-yellow-500/20 border border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/30"
+                }
+              `}
+            >
+              {cycling ? `⏹ Stop (${WEATHER[current!]?.name ?? "…"})` : "▶ Auto-cycle (30s)"}
+            </button>
+            <button
+              onClick={async () => {
+                await supabase.rpc("dev_force_advance_weather");
+                showToast("Skipped to next weather");
+              }}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-blue-400/40 bg-blue-500/10 text-blue-300 hover:bg-blue-500/20 transition-all"
+              title="Advance forecast queue to next slot"
+            >
+              ⏭ Skip
+            </button>
+          </div>
+
+          {/* Mutation rate multiplier */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">
+              Mutation Rate ×{mutMult}
+            </p>
+            <div className="flex gap-1.5 items-center">
+              <input
+                type="range"
+                min={1}
+                max={500}
+                value={mutMult}
+                onChange={(e) => {
+                  const v = parseInt(e.target.value);
+                  setMutMult(v);
+                  setDevMutationMultiplier(v);
+                }}
+                className="flex-1 accent-yellow-400"
+              />
+              <button
+                onClick={() => { setMutMult(1); setDevMutationMultiplier(1); }}
+                className="text-[10px] text-white/40 hover:text-white/70 transition-colors"
+              >
+                Reset
+              </button>
+            </div>
+            <p className="text-[9px] text-white/30 font-mono">
+              Multiplies client-side weather mutation chances
+            </p>
+          </div>
         </>
       )}
 
