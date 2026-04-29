@@ -38,8 +38,8 @@ export interface PlantedFlower {
   lastTickAt?: number;
   /** 1.25 if this species was fully mastered in the codex at plant time (20% faster growth), otherwise undefined */
   masteredBonus?: number;
-  /** true when a Flower Infuser has been applied to this plant — marks it as an active cross-breed participant */
-  infused?: boolean;
+  /** true when an Attunement Crystal has been applied to this plant — marks it as an active cross-breed participant */
+  infused?: boolean; // kept as "infused" in DB/persistence; displayed as "Attuned" in UI
   /** Set by Heirloom Charm — harvest returns the seed to inventory instead of consuming it */
   heirloomActive?: boolean;
   /** Set by Purity Vial — harvest clears any mutation and does not roll a new one */
@@ -114,8 +114,8 @@ export interface GameState {
   essences:          EssenceItem[];
   // Cross-breeding (passive Cropsticks system) — recipe IDs discovered via farm production.
   discoveredRecipes: string[];
-  // Flower Infusers — consumable items applied to bloomed plants to mark them as cross-breed
-  // participants. Stored by rarity (must match the flower's rarity to apply).
+  // Attunement Crystals — applied to bloomed plants to mark them as cross-breed participants.
+  // Stored by rarity (must match the flower's rarity to apply). DB column: "infusers".
   infusers: { rarity: Rarity; quantity: number }[];
   // Crafted consumable items (Bloom Burst, vials, Eclipse Tonic, etc.)
   consumables: ConsumableItem[];

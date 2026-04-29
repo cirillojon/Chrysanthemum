@@ -65,7 +65,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const bellTargets = findHarvestBellTargets(next, weather);
     const nowBell = Date.now();
     if (nowBell - lastBellActionRef.current >= GEAR_ACTION_INTERVAL_MS) {
-      // Skip infused plants — they're marked for cross-breeding, not auto-harvest
+      // Skip attuned plants — they're marked for cross-breeding, not auto-harvest
       const bellTarget = bellTargets.find(({ row, col }) =>
         !harvestingPlots.current.has(`${row}-${col}`) &&
         !getState().grid[row]?.[col]?.plant?.infused
@@ -362,7 +362,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     for (let ri = 0; ri < currentState.grid.length; ri++) {
       for (let ci = 0; ci < currentState.grid[ri].length; ci++) {
         const p = currentState.grid[ri][ci];
-        // Skip infused plants — they're set up for cross-breeding and should not be auto-harvested
+        // Skip attuned plants — they're set up for cross-breeding and should not be auto-harvested
         if (p.plant && !p.plant.infused && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom") {
           bloomed.push({ row: ri, col: ci });
         }

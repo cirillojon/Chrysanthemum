@@ -7,6 +7,8 @@ export type SprinklerGearType =
   | "sprinkler_rare"
   | "sprinkler_legendary"
   | "sprinkler_mythic"
+  | "sprinkler_exalted"
+  | "sprinkler_prismatic"
   | "sprinkler_flame"
   | "sprinkler_frost"
   | "sprinkler_lightning"
@@ -19,21 +21,29 @@ export type PassiveGearType =
   | "grow_lamp_rare"
   | "scarecrow_rare"
   | "scarecrow_legendary"
+  | "scarecrow_mythic"
   | "composter_uncommon"
   | "composter_rare"
+  | "composter_legendary"
   | "fan_uncommon"
   | "fan_rare"
+  | "fan_legendary"
+  | "harvest_bell_uncommon"
   | "harvest_bell_rare"
   | "harvest_bell_legendary"
+  | "aegis_uncommon"
+  | "aegis_rare"
+  | "aegis_legendary"
+  | "garden_pin"
   | "auto_planter_prismatic"
   | "cropsticks";
 
 export type GearType = SprinklerGearType | PassiveGearType;
 
 export type GearCategory  = "sprinkler_regular" | "sprinkler_mutation" | "passive";
-export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks";
+export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis" | "garden_pin";
 
-/** Which way a Fan is pointing — set at placement time */
+/** Which way a Fan or Aegis is pointing — set at placement time */
 export type FanDirection = "up" | "down" | "left" | "right";
 
 // ── Placed gear (what lives in a grid cell) ────────────────────────────────
@@ -43,7 +53,7 @@ export interface PlacedGear {
   placedAt: number; // wall-clock timestamp
   /** Fertilizers waiting to be collected — composter only, max 10 */
   storedFertilizers?: FertilizerType[];
-  /** Which direction the fan is blowing — fan gear only */
+  /** Which direction the fan / aegis is blowing — fan and aegis gear only */
   direction?: FanDirection;
 }
 
@@ -85,10 +95,12 @@ export interface GearDefinition {
   nightMultiplier?: number;
   /** Composter: max fertilizers that can be stored before collection is needed */
   maxStorage?: number;
-  /** Fan: how many cells it reaches in the chosen direction */
+  /** Fan / Aegis: how many cells it reaches in the chosen direction */
   fanRange?: number;
   /** Fan: per-tick probability to strip mutation (or apply windstruck if none) */
   fanStripChancePerTick?: number;
+  /** Scarecrow: per-tick probability to strip an existing mutation from a covered plant */
+  mutationStripChancePerTick?: number;
 }
 
 // ── Radius pattern helpers ─────────────────────────────────────────────────
@@ -119,6 +131,21 @@ const OFFSETS_DIAMOND: [number, number][] = [
   [ 0, -2], [ 0, -1], [ 0, 1], [ 0, 2],
   [ 1, -1], [ 1, 0], [ 1, 1],
   [ 2, 0],
+];
+
+/** Full 5×5 square — all 24 surrounding cells (Exalted sprinkler) */
+const OFFSETS_5X5: [number, number][] = [
+  [-2,-2],[-2,-1],[-2, 0],[-2, 1],[-2, 2],
+  [-1,-2],[-1,-1],[-1, 0],[-1, 1],[-1, 2],
+  [ 0,-2],[ 0,-1],         [ 0, 1],[ 0, 2],
+  [ 1,-2],[ 1,-1],[ 1, 0],[ 1, 1],[ 1, 2],
+  [ 2,-2],[ 2,-1],[ 2, 0],[ 2, 1],[ 2, 2],
+];
+
+/** 5×5 square + four star-tip cells — 28 cells total (Prismatic sprinkler) */
+const OFFSETS_GRAND_STAR: [number, number][] = [
+  ...OFFSETS_5X5,
+  [-3, 0], [0, -3], [0, 3], [3, 0],
 ];
 
 
@@ -152,7 +179,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   sprinkler_rare: {
     id:               "sprinkler_rare",
-    name:             "Sprinkler",
+    name:             "Sprinkler I",
     description:      "Speeds up adjacent plants by 1.5×. May get them wet. Lasts 1 hour.",
     emoji:            "🚿",
     rarity:           "rare",
@@ -166,7 +193,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   sprinkler_legendary: {
     id:               "sprinkler_legendary",
-    name:             "Sprinkler",
+    name:             "Sprinkler II",
     description:      "Speeds up surrounding plants by 1.75×. May get them wet. Lasts 2 hours.",
     emoji:            "🚿",
     rarity:           "legendary",
@@ -180,7 +207,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   sprinkler_mythic: {
     id:               "sprinkler_mythic",
-    name:             "Sprinkler",
+    name:             "Sprinkler III",
     description:      "Speeds up all nearby plants by 2×. May get them wet. Lasts 4 hours.",
     emoji:            "🚿",
     rarity:           "mythic",
@@ -190,6 +217,34 @@ export const GEAR: Record<GearType, GearDefinition> = {
     radiusOffsets:    OFFSETS_DIAMOND,
     growthMultiplier: 2.0,
     wetChancePerTick: perTickChance(wetOverHours(4), DURATION_4H),
+  },
+
+  sprinkler_exalted: {
+    id:               "sprinkler_exalted",
+    name:             "Sprinkler IV",
+    description:      "Speeds up plants in a wide area by 2.5×. May get them wet. Lasts 8 hours.",
+    emoji:            "🚿",
+    rarity:           "exalted",
+    shopPrice:        350_000,
+    category:         "sprinkler_regular",
+    durationMs:       DURATION_8H,
+    radiusOffsets:    OFFSETS_5X5,
+    growthMultiplier: 2.5,
+    wetChancePerTick: perTickChance(wetOverHours(8), DURATION_8H),
+  },
+
+  sprinkler_prismatic: {
+    id:               "sprinkler_prismatic",
+    name:             "Sprinkler V",
+    description:      "Speeds up plants in a massive star-shaped area by 3×. May get them wet. Lasts 12 hours.",
+    emoji:            "🚿",
+    rarity:           "prismatic",
+    shopPrice:        2_000_000,
+    category:         "sprinkler_regular",
+    durationMs:       DURATION_12H,
+    radiusOffsets:    OFFSETS_GRAND_STAR,
+    growthMultiplier: 3.0,
+    wetChancePerTick: perTickChance(wetOverHours(12), DURATION_12H),
   },
 
   // ── Mutation sprinklers ──────────────────────────────────────────────────
@@ -282,7 +337,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   grow_lamp_uncommon: {
     id:              "grow_lamp_uncommon",
-    name:            "Grow Lamp",
+    name:            "Grow Lamp I",
     description:     "Adds a 1.2× night boost that stacks with sprinklers. Lasts 4 hours.",
     emoji:           "💡",
     rarity:          "uncommon",
@@ -296,7 +351,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   grow_lamp_rare: {
     id:              "grow_lamp_rare",
-    name:            "Grow Lamp",
+    name:            "Grow Lamp II",
     description:     "Adds a 1.5× night boost that stacks with sprinklers. Lasts 8 hours.",
     emoji:           "💡",
     rarity:          "rare",
@@ -310,8 +365,8 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   scarecrow_rare: {
     id:             "scarecrow_rare",
-    name:           "Scarecrow",
-    description:    "Fully blocks weather mutations on nearby plants. Sprinkler mutations still apply. Lasts 4 hours.",
+    name:           "Scarecrow I",
+    description:    "Blocks weather mutations on nearby plants. Has a 15% chance per hour to strip an existing mutation. Lasts 4 hours.",
     emoji:          "🧹",
     rarity:         "rare",
     shopPrice:      700,
@@ -319,12 +374,13 @@ export const GEAR: Record<GearType, GearDefinition> = {
     passiveSubtype: "scarecrow",
     radiusOffsets:  OFFSETS_3X3,
     durationMs:     4 * 60 * 60 * 1_000,
+    mutationStripChancePerTick: perTickChance(0.15, DURATION_1H),
   },
 
   scarecrow_legendary: {
     id:             "scarecrow_legendary",
-    name:           "Scarecrow",
-    description:    "Fully blocks weather mutations on nearby plants. Sprinkler mutations still apply. Lasts 8 hours.",
+    name:           "Scarecrow II",
+    description:    "Blocks weather mutations on nearby plants. Has a 25% chance per hour to strip an existing mutation. Lasts 8 hours.",
     emoji:          "🧹",
     rarity:         "legendary",
     shopPrice:      7_500,
@@ -332,11 +388,26 @@ export const GEAR: Record<GearType, GearDefinition> = {
     passiveSubtype: "scarecrow",
     radiusOffsets:  OFFSETS_3X3,
     durationMs:     8 * 60 * 60 * 1_000,
+    mutationStripChancePerTick: perTickChance(0.25, DURATION_1H),
+  },
+
+  scarecrow_mythic: {
+    id:             "scarecrow_mythic",
+    name:           "Scarecrow III",
+    description:    "Blocks weather mutations on nearby plants in a wide area. Has a 40% chance per hour to strip an existing mutation. Lasts 12 hours.",
+    emoji:          "🧹",
+    rarity:         "mythic",
+    shopPrice:      50_000,
+    category:       "passive",
+    passiveSubtype: "scarecrow",
+    radiusOffsets:  OFFSETS_DIAMOND,
+    durationMs:     DURATION_12H,
+    mutationStripChancePerTick: perTickChance(0.40, DURATION_1H),
   },
 
   composter_uncommon: {
     id:             "composter_uncommon",
-    name:           "Composter",
+    name:           "Composter I",
     description:    "Generates a fertilizer each time a nearby plant blooms. Stores up to 10. Lasts 4 hours.",
     emoji:          "🧺",
     rarity:         "uncommon",
@@ -350,7 +421,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   composter_rare: {
     id:             "composter_rare",
-    name:           "Composter",
+    name:           "Composter II",
     description:    "Generates a fertilizer each time a nearby plant blooms. Stores up to 20. Lasts 8 hours.",
     emoji:          "🧺",
     rarity:         "rare",
@@ -362,13 +433,27 @@ export const GEAR: Record<GearType, GearDefinition> = {
     maxStorage:     20,
   },
 
+  composter_legendary: {
+    id:             "composter_legendary",
+    name:           "Composter III",
+    description:    "Generates a fertilizer each time a nearby plant blooms. Stores up to 30. Lasts 12 hours.",
+    emoji:          "🧺",
+    rarity:         "legendary",
+    shopPrice:      5_000,
+    category:       "passive",
+    passiveSubtype: "composter",
+    radiusOffsets:  OFFSETS_3X3,
+    durationMs:     DURATION_12H,
+    maxStorage:     30,
+  },
+
   // ── Fan ──────────────────────────────────────────────────────────────────
   // Blows in a player-chosen direction. Each tick: strips mutation from
   // a bloomed plant in range, OR applies Windstruck if the plant has none.
 
   fan_uncommon: {
     id:                    "fan_uncommon",
-    name:                  "Fan",
+    name:                  "Fan I",
     description:           "Blows in one direction across 2 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 2 hours.",
     emoji:                 "💨",
     rarity:                "uncommon",
@@ -382,7 +467,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   fan_rare: {
     id:                    "fan_rare",
-    name:                  "Fan",
+    name:                  "Fan II",
     description:           "Blows in one direction across 3 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 4 hours.",
     emoji:                 "💨",
     rarity:                "rare",
@@ -394,12 +479,39 @@ export const GEAR: Record<GearType, GearDefinition> = {
     fanStripChancePerTick: perTickChance(0.70, DURATION_4H),
   },
 
+  fan_legendary: {
+    id:                    "fan_legendary",
+    name:                  "Fan III",
+    description:           "Blows in one direction across 4 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 8 hours.",
+    emoji:                 "💨",
+    rarity:                "legendary",
+    shopPrice:             8_000,
+    category:              "passive",
+    passiveSubtype:        "fan",
+    durationMs:            DURATION_8H,
+    fanRange:              4,
+    fanStripChancePerTick: perTickChance(0.80, DURATION_8H),
+  },
+
   // ── Harvest Bell ─────────────────────────────────────────────────────────
   // Automatically harvests bloomed plants in range, even while offline.
 
+  harvest_bell_uncommon: {
+    id:             "harvest_bell_uncommon",
+    name:           "Harvest Bell I",
+    description:    "Automatically harvests bloomed plants on adjacent cells, even while offline. Lasts 2 hours.",
+    emoji:          "🔔",
+    rarity:         "uncommon",
+    shopPrice:      400,
+    category:       "passive",
+    passiveSubtype: "harvest_bell",
+    radiusOffsets:  OFFSETS_CROSS,
+    durationMs:     DURATION_2H,
+  },
+
   harvest_bell_rare: {
     id:             "harvest_bell_rare",
-    name:           "Harvest Bell",
+    name:           "Harvest Bell II",
     description:    "Automatically harvests bloomed plants on adjacent cells, even while offline. Lasts 4 hours.",
     emoji:          "🔔",
     rarity:         "rare",
@@ -412,7 +524,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   harvest_bell_legendary: {
     id:             "harvest_bell_legendary",
-    name:           "Harvest Bell",
+    name:           "Harvest Bell III",
     description:    "Automatically harvests bloomed plants in surrounding cells, even while offline. Lasts 8 hours.",
     emoji:          "🔔",
     rarity:         "legendary",
@@ -421,6 +533,65 @@ export const GEAR: Record<GearType, GearDefinition> = {
     passiveSubtype: "harvest_bell",
     radiusOffsets:  OFFSETS_3X3,
     durationMs:     DURATION_8H,
+  },
+
+  // ── Aegis ─────────────────────────────────────────────────────────────────
+  // Points in a player-chosen direction. Blocks weather mutations on all
+  // plants in the line ahead. Does NOT strip existing mutations.
+
+  aegis_uncommon: {
+    id:             "aegis_uncommon",
+    name:           "Aegis I",
+    description:    "Blocks weather mutations on 2 plants in a chosen direction. Lasts 2 hours.",
+    emoji:          "🛡️",
+    rarity:         "uncommon",
+    shopPrice:      300,
+    category:       "passive",
+    passiveSubtype: "aegis",
+    durationMs:     DURATION_2H,
+    fanRange:       2,
+  },
+
+  aegis_rare: {
+    id:             "aegis_rare",
+    name:           "Aegis II",
+    description:    "Blocks weather mutations on 3 plants in a chosen direction. Lasts 4 hours.",
+    emoji:          "🛡️",
+    rarity:         "rare",
+    shopPrice:      1_500,
+    category:       "passive",
+    passiveSubtype: "aegis",
+    durationMs:     DURATION_4H,
+    fanRange:       3,
+  },
+
+  aegis_legendary: {
+    id:             "aegis_legendary",
+    name:           "Aegis III",
+    description:    "Blocks weather mutations on 4 plants in a chosen direction. Lasts 8 hours.",
+    emoji:          "🛡️",
+    rarity:         "legendary",
+    shopPrice:      10_000,
+    category:       "passive",
+    passiveSubtype: "aegis",
+    durationMs:     DURATION_8H,
+    fanRange:       4,
+  },
+
+  // ── Garden Pin ────────────────────────────────────────────────────────────
+  // Placed in any plot cell. Marks the plot as "pinned" — blocks manual
+  // harvests and all mutations (weather and sprinkler) until removed.
+  // Permanent — no expiry.
+
+  garden_pin: {
+    id:             "garden_pin",
+    name:           "Garden Pin",
+    description:    "Marks this plot. Blocks harvests and mutations until removed. Permanent.",
+    emoji:          "📌",
+    rarity:         "uncommon",
+    shopPrice:      0,
+    category:       "passive",
+    passiveSubtype: "garden_pin",
   },
 
   // ── Auto-Planter ─────────────────────────────────────────────────────────
@@ -442,14 +613,14 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   // ── Cropsticks ───────────────────────────────────────────────────────────
   // Placed in an empty cell. Each server tick, scans the 4 adjacent cells for
-  // bloomed flowers marked as infused. If 2+ infused neighbors match a
+  // bloomed flowers marked as attuned. If 2+ attuned neighbors match a
   // cross-breed recipe, there's a chance (~0.58%/tick → ~50% over an hour)
   // to produce a hybrid seed. Permanent — no expiry.
 
   cropsticks: {
     id:             "cropsticks",
     name:           "Cropsticks",
-    description:    "Passively cross-breeds adjacent flowers marked with Infusers. Place next to two infused blooms of compatible types and wait for a hybrid seed to appear. Permanent.",
+    description:    "Passively cross-breeds adjacent flowers marked with Attunement. Place next to two attuned blooms of compatible types and wait for a hybrid seed to appear. Permanent.",
     emoji:          "🥢",
     rarity:         "legendary",
     shopPrice:      12_000,
@@ -463,7 +634,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
 export function isGearExpired(gear: PlacedGear, now: number): boolean {
   const def = GEAR[gear.gearType];
-  if (!def.durationMs) return false; // passive gear never expires
+  if (!def.durationMs) return false; // permanent gear never expires
   return now >= gear.placedAt + def.durationMs;
 }
 
@@ -472,7 +643,7 @@ export function isGearExpired(gear: PlacedGear, now: number): boolean {
 /**
  * Returns all [row, col] pairs that a piece of gear at (gearRow, gearCol)
  * affects, clamped to the grid dimensions.
- * For fans, `direction` must be supplied to compute the line of cells.
+ * For fans and aegis, `direction` must be supplied to compute the line of cells.
  */
 export function getAffectedCells(
   gearType:  GearType,
@@ -484,9 +655,9 @@ export function getAffectedCells(
 ): [number, number][] {
   const def = GEAR[gearType];
 
-  // Fan: compute a line of cells in the chosen direction
-  if (def.passiveSubtype === "fan" && def.fanRange) {
-    if (!direction) return []; // direction required for fans
+  // Fan / Aegis: compute a line of cells in the chosen direction
+  if ((def.passiveSubtype === "fan" || def.passiveSubtype === "aegis") && def.fanRange) {
+    if (!direction) return []; // direction required
     const range = def.fanRange;
     const offsets: [number, number][] = [];
     for (let i = 1; i <= range; i++) {
@@ -576,6 +747,10 @@ export function isFan(def: GearDefinition): boolean {
   return def.passiveSubtype === "fan";
 }
 
+export function isAegis(def: GearDefinition): boolean {
+  return def.passiveSubtype === "aegis";
+}
+
 export function isHarvestBell(def: GearDefinition): boolean {
   return def.passiveSubtype === "harvest_bell";
 }
@@ -588,53 +763,33 @@ export function isCropsticks(def: GearDefinition): boolean {
   return def.passiveSubtype === "cropsticks";
 }
 
+export function isGardenPin(def: GearDefinition): boolean {
+  return def.passiveSubtype === "garden_pin";
+}
+
 // ── Supply shop pools ──────────────────────────────────────────────────────
 
 export type SupplyItem =
   | { kind: "fertilizer"; fertilizerType: FertilizerType }
   | { kind: "gear";       gearType: GearType };
 
-/** Items available at each rarity tier in the Supply Shop */
+/** Items available at each rarity tier in the Supply Shop.
+ *  Gear has moved to the Crafting system — only fertilizers appear here. */
 export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
   common: [
     { kind: "fertilizer", fertilizerType: "basic" },
   ],
   uncommon: [
     { kind: "fertilizer", fertilizerType: "advanced" },
-    { kind: "gear",       gearType: "grow_lamp_uncommon" },
-    { kind: "gear",       gearType: "composter_uncommon" },
-    { kind: "gear",       gearType: "fan_uncommon" },
   ],
   rare: [
     { kind: "fertilizer", fertilizerType: "premium" },
-    { kind: "gear",       gearType: "grow_lamp_rare" },
-    { kind: "gear",       gearType: "scarecrow_rare" },
-    { kind: "gear",       gearType: "sprinkler_rare" },
-    { kind: "gear",       gearType: "composter_rare" },
-    { kind: "gear",       gearType: "fan_rare" },
-    { kind: "gear",       gearType: "harvest_bell_rare" },
   ],
   legendary: [
     { kind: "fertilizer", fertilizerType: "elite" },
-    { kind: "gear",       gearType: "scarecrow_legendary" },
-    { kind: "gear",       gearType: "sprinkler_legendary" },
-    { kind: "gear",       gearType: "sprinkler_flame" },
-    { kind: "gear",       gearType: "sprinkler_frost" },
-    { kind: "gear",       gearType: "harvest_bell_legendary" },
-    { kind: "gear",       gearType: "cropsticks" },
   ],
   mythic: [
     { kind: "fertilizer", fertilizerType: "miracle" },
-    { kind: "gear",       gearType: "sprinkler_mythic" },
-    { kind: "gear",       gearType: "sprinkler_lightning" },
-    { kind: "gear",       gearType: "sprinkler_lunar" },
-  ],
-  exalted: [
-    { kind: "gear", gearType: "sprinkler_midas" },
-  ],
-  prismatic: [
-    { kind: "gear", gearType: "sprinkler_prism" },
-    { kind: "gear", gearType: "auto_planter_prismatic" },
   ],
 };
 

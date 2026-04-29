@@ -351,17 +351,31 @@ export function edgeClaimMail(mailId: string) {
   return callEdge<ClaimMailResult>("claim-mail", { mailId });
 }
 
-// ── Infuser ───────────────────────────────────────────────────────────────────
+// ── Attunement ────────────────────────────────────────────────────────────────
 
-export interface ApplyInfuserResult {
+export interface ApplyAttunementResult {
   ok:              true;
   grid:            GameState["grid"];
   infusers:        GameState["infusers"];
   serverUpdatedAt: string;
 }
 
-export function edgeApplyInfuser(row: number, col: number) {
-  return callEdge<ApplyInfuserResult>("apply-infuser", { row, col });
+export function edgeApplyAttunement(row: number, col: number) {
+  return callEdge<ApplyAttunementResult>("apply-infuser", { row, col });
+}
+
+// ── Gear crafting ─────────────────────────────────────────────────────────
+
+export interface CraftGearResult {
+  ok:            true;
+  essences:      GameState["essences"];
+  gearInventory: GameState["gearInventory"];
+  consumables:   GameState["consumables"];
+  serverUpdatedAt: string;
+}
+
+export function edgeCraftGear(outputGearType: string) {
+  return callEdge<CraftGearResult>("craft-gear", { outputGearType });
 }
 
 // ── Seed pouches ──────────────────────────────────────────────────────────
@@ -415,7 +429,7 @@ export interface AlchemyCraftResult {
 }
 
 export function edgeAlchemyCraft(
-  craftType: "consumable" | "infuser",
+  craftType: "consumable" | "attunement",
   id: string,
 ) {
   return callEdge<AlchemyCraftResult>("alchemy-craft", { craftType, id });
@@ -423,7 +437,7 @@ export function edgeAlchemyCraft(
 
 // ── Alchemy infuse ────────────────────────────────────────────────────────────
 
-export interface AlchemyInfuseResult {
+export interface AlchemyAttuneResult {
   ok:              true;
   inventory:       GameState["inventory"];
   essences:        GameState["essences"];
@@ -441,13 +455,13 @@ export interface AlchemyStripResult {
   serverUpdatedAt: string;
 }
 
-/** Infuse an unmutated bloom — spends essence + coins, returns a randomly mutated bloom. */
-export function edgeAlchemyInfuse(
+/** Attune an unmutated bloom — spends essence + coins, returns a randomly mutated bloom. */
+export function edgeAlchemyAttune(
   speciesId:   string,
   essenceType: string,
   quantity:    number,
 ) {
-  return callEdge<AlchemyInfuseResult>("alchemy-infuse", {
+  return callEdge<AlchemyAttuneResult>("alchemy-infuse", {
     action: "infuse", speciesId, essenceType, quantity,
   });
 }

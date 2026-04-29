@@ -17,12 +17,12 @@ type EssenceCostEntry = { type: string; amount: number };
 type CraftCost =
   | { kind: "essence";    amounts: EssenceCostEntry[] }
   | { kind: "consumable"; id: string; quantity: number };
-type InfuserCost =
-  | { kind: "essence"; amounts: EssenceCostEntry[] }
-  | { kind: "infuser";  tier: number; quantity: number };
+type AttunementCost =
+  | { kind: "essence";    amounts: EssenceCostEntry[] }
+  | { kind: "attunement"; tier: number; quantity: number };
 
-interface ConsumableRecipeDef { id: string; cost: CraftCost }
-interface InfuserRecipeDef    { tier: number; rarity: string; cost: InfuserCost }
+interface ConsumableRecipeDef  { id: string; cost: CraftCost }
+interface AttunementRecipeDef  { tier: number; rarity: string; cost: AttunementCost }
 
 const TIER_RARITIES: Record<number, string> = {
   1: "rare", 2: "legendary", 3: "mythic", 4: "exalted", 5: "prismatic",
@@ -98,6 +98,30 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "rainbow_vial_3", cost: U("rainbow_vial_2", 2) },
   { id: "rainbow_vial_4", cost: U("rainbow_vial_3", 2) },
   { id: "rainbow_vial_5", cost: U("rainbow_vial_4", 2) },
+  // Magnifying Glass
+  { id: "magnifying_glass_1", cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  { id: "magnifying_glass_2", cost: U("magnifying_glass_1", 2) },
+  { id: "magnifying_glass_3", cost: U("magnifying_glass_2", 2) },
+  { id: "magnifying_glass_4", cost: U("magnifying_glass_3", 2) },
+  { id: "magnifying_glass_5", cost: U("magnifying_glass_4", 2) },
+  // Verdant Rush
+  { id: "verdant_rush_1", cost: E([{ type: "grove", amount: 4 }, { type: "zephyr", amount: 4 }]) },
+  { id: "verdant_rush_2", cost: U("verdant_rush_1", 2) },
+  { id: "verdant_rush_3", cost: U("verdant_rush_2", 2) },
+  { id: "verdant_rush_4", cost: U("verdant_rush_3", 2) },
+  { id: "verdant_rush_5", cost: U("verdant_rush_4", 2) },
+  // Forge Haste
+  { id: "forge_haste_1", cost: E([{ type: "blaze", amount: 4 }, { type: "storm", amount: 4 }]) },
+  { id: "forge_haste_2", cost: U("forge_haste_1", 2) },
+  { id: "forge_haste_3", cost: U("forge_haste_2", 2) },
+  { id: "forge_haste_4", cost: U("forge_haste_3", 2) },
+  { id: "forge_haste_5", cost: U("forge_haste_4", 2) },
+  // Resonance Draft
+  { id: "resonance_draft_1", cost: E([{ type: "stellar", amount: 4 }, { type: "arcane", amount: 4 }]) },
+  { id: "resonance_draft_2", cost: U("resonance_draft_1", 2) },
+  { id: "resonance_draft_3", cost: U("resonance_draft_2", 2) },
+  { id: "resonance_draft_4", cost: U("resonance_draft_3", 2) },
+  { id: "resonance_draft_5", cost: U("resonance_draft_4", 2) },
   // Wind Shear / Slot Lock (non-tiered)
   { id: "wind_shear", cost: E([{ type: "zephyr", amount: 6 }, { type: "storm", amount: 6 }]) },
   { id: "slot_lock",  cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
@@ -123,12 +147,12 @@ for (const t of ["blaze","tide","grove","frost","storm","lunar","solar","fairy",
 
 const CONSUMABLE_RECIPE_MAP = Object.fromEntries(CONSUMABLE_RECIPES.map((r) => [r.id, r]));
 
-const INFUSER_RECIPES: InfuserRecipeDef[] = [
-  { tier: 1, rarity: "rare",      cost: { kind: "essence", amounts: [{ type: "universal", amount: 2 }] } },
-  { tier: 2, rarity: "legendary", cost: { kind: "infuser", tier: 1, quantity: 2 } },
-  { tier: 3, rarity: "mythic",    cost: { kind: "infuser", tier: 2, quantity: 2 } },
-  { tier: 4, rarity: "exalted",   cost: { kind: "infuser", tier: 3, quantity: 2 } },
-  { tier: 5, rarity: "prismatic", cost: { kind: "infuser", tier: 4, quantity: 2 } },
+const ATTUNEMENT_RECIPES: AttunementRecipeDef[] = [
+  { tier: 1, rarity: "rare",      cost: { kind: "essence",    amounts: [{ type: "universal", amount: 2 }] } },
+  { tier: 2, rarity: "legendary", cost: { kind: "attunement", tier: 1, quantity: 2 } },
+  { tier: 3, rarity: "mythic",    cost: { kind: "attunement", tier: 2, quantity: 2 } },
+  { tier: 4, rarity: "exalted",   cost: { kind: "attunement", tier: 3, quantity: 2 } },
+  { tier: 5, rarity: "prismatic", cost: { kind: "attunement", tier: 4, quantity: 2 } },
 ];
 
 // ── Handlers ─────────────────────────────────────────────────────────────────
@@ -160,7 +184,7 @@ Deno.serve(async (req: Request) => {
     const body = await req.json() as { craftType: string; id?: string };
     const { craftType, id } = body;
 
-    if (!craftType || !["consumable", "infuser"].includes(craftType)) {
+    if (!craftType || !["consumable", "attunement"].includes(craftType)) {
       return new Response(JSON.stringify({ error: "Invalid craftType" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -175,7 +199,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("essences, consumables, infusers, updated_at")
+        .select("essences, consumables, infusers, updated_at") // "infusers" is the DB column name for attunements
         .eq("user_id", userId)
         .single(),
     ]);
@@ -196,7 +220,8 @@ Deno.serve(async (req: Request) => {
 
     let essences:    { type: string; amount: number }[]    = (save.essences    ?? []) as { type: string; amount: number }[];
     let consumables: { id: string;   quantity: number }[]  = (save.consumables ?? []) as { id: string;   quantity: number }[];
-    let infusers:    { rarity: string; quantity: number }[] = (save.infusers   ?? []) as { rarity: string; quantity: number }[];
+    // "infusers" DB column stores attunement crystals (renamed in app layer)
+    let attunements: { rarity: string; quantity: number }[] = (save.infusers ?? []) as { rarity: string; quantity: number }[];
 
     // ── Craft consumable ────────────────────────────────────────────────────
     if (craftType === "consumable") {
@@ -246,12 +271,12 @@ Deno.serve(async (req: Request) => {
         : [...consumables, { id, quantity: 1 }];
     }
 
-    // ── Craft infuser ───────────────────────────────────────────────────────
-    if (craftType === "infuser") {
+    // ── Craft attunement crystal ────────────────────────────────────────────
+    if (craftType === "attunement") {
       const tier = typeof id === "string" ? parseInt(id, 10) : NaN;
-      const recipe = INFUSER_RECIPES.find((r) => r.tier === tier);
+      const recipe = ATTUNEMENT_RECIPES.find((r) => r.tier === tier);
       if (!recipe) {
-        return new Response(JSON.stringify({ error: `Unknown infuser tier: ${id}` }), {
+        return new Response(JSON.stringify({ error: `Unknown attunement tier: ${id}` }), {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -273,27 +298,27 @@ Deno.serve(async (req: Request) => {
         }
       } else {
         const prevRarity = TIER_RARITIES[cost.tier];
-        const have = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
+        const have = attunements.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
         if (have < cost.quantity) {
-          return new Response(JSON.stringify({ error: `Not enough Infuser ${cost.tier}` }), {
+          return new Response(JSON.stringify({ error: `Not enough Attunement ${cost.tier}` }), {
             status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        infusers = infusers
+        attunements = attunements
           .map((i) => i.rarity === prevRarity ? { ...i, quantity: i.quantity - cost.quantity } : i)
           .filter((i) => i.quantity > 0);
       }
 
-      const existingIdx = infusers.findIndex((i) => i.rarity === recipe.rarity);
-      infusers = existingIdx >= 0
-        ? infusers.map((i, idx) => idx === existingIdx ? { ...i, quantity: i.quantity + 1 } : i)
-        : [...infusers, { rarity: recipe.rarity, quantity: 1 }];
+      const existingIdx = attunements.findIndex((i) => i.rarity === recipe.rarity);
+      attunements = existingIdx >= 0
+        ? attunements.map((i, idx) => idx === existingIdx ? { ...i, quantity: i.quantity + 1 } : i)
+        : [...attunements, { rarity: recipe.rarity, quantity: 1 }];
     }
 
     // ── Write ────────────────────────────────────────────────────────────────
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
-      .update({ essences, consumables, infusers, updated_at: new Date().toISOString() })
+      .update({ essences, consumables, infusers: attunements, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .eq("updated_at", priorUpdatedAt)
       .select("updated_at")
@@ -309,11 +334,11 @@ Deno.serve(async (req: Request) => {
       user_id: userId,
       action:  "alchemy_craft",
       payload: { craftType, id },
-      result:  { essences, consumables, infusers },
+      result:  { essences, consumables, attunements },
     });
 
     return new Response(
-      JSON.stringify({ ok: true, essences, consumables, infusers, serverUpdatedAt: updateData.updated_at }),
+      JSON.stringify({ ok: true, essences, consumables, infusers: attunements, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (err) {
