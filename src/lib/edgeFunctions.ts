@@ -350,3 +350,37 @@ export function edgeAlchemySacrifice(
 ) {
   return callEdge<AlchemySacrificeResult>("alchemy-sacrifice", { sacrifices });
 }
+
+// ── Cross-breeding ────────────────────────────────────────────────────────────
+
+export type CrossBreedResponse =
+  | {
+      ok:               true;
+      result:           "match";
+      firstDiscovery:   boolean;
+      recipeId:         string;
+      outputSpeciesId:  string;
+      outputCount:      1 | 2;
+      /** Present on first discovery and subsequent crafts */
+      discoveredRecipes: string[];
+      /** Present only on subsequent crafts (inventory changed) */
+      inventory?:       GameState["inventory"];
+      discovered?:      GameState["discovered"];
+      serverUpdatedAt:  string;
+    }
+  | {
+      ok:          true;
+      result:      "no_match";
+      almostThere: boolean;
+    };
+
+export function edgeCrossBreed(
+  speciesIdA: string,
+  mutationA:  string | undefined,
+  speciesIdB: string,
+  mutationB:  string | undefined,
+) {
+  return callEdge<CrossBreedResponse>("cross-breed", {
+    speciesIdA, mutationA, speciesIdB, mutationB,
+  });
+}

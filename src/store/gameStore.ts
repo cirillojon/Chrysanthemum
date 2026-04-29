@@ -98,11 +98,15 @@ export interface GameState {
   lastSupplyReset:  number;
   gearInventory:    GearInventoryItem[];
   // Alchemy — essence tokens per flower type
-  essences:         EssenceItem[];
+  essences:          EssenceItem[];
+  // Cross-breeding — recipe IDs that have been discovered at least once.
+  // First cross-breed of each recipe is "free" (inputs returned); subsequent
+  // crafts consume both inputs and yield the output seed.
+  discoveredRecipes: string[];
   // Server sync — the updated_at value from the last successful DB read or write.
   // saveToCloud uses this as a CAS guard so stale sessions can't overwrite
   // server-authoritative state (inventory, coins, etc.) with stale client data.
-  serverUpdatedAt:  string | null;
+  serverUpdatedAt:   string | null;
 }
 
 export interface OfflineSummary {
@@ -356,6 +360,7 @@ export function defaultState(): GameState {
     lastSupplyReset:      now,
     gearInventory:        [],
     essences:             [],
+    discoveredRecipes:    [],
     serverUpdatedAt:      null,
   };
 }
@@ -436,6 +441,7 @@ export function applyOfflineTick(
     lastSupplyReset:      save.lastSupplyReset       ?? now2,
     gearInventory:        save.gearInventory         ?? [],
     essences:             save.essences              ?? [],
+    discoveredRecipes:    save.discoveredRecipes     ?? [],
   };
 
   let shopRestocked    = false;
@@ -2090,6 +2096,70 @@ export function sacrificeFlowers(
   }
 
   return { ...state, inventory: newInventory, essences: newEssences };
+}
+
+// ── Cross-breeding ────────────────────────────────────────────────────────────
+
+/**
+ * Optimistic state update for a cross-breed attempt.
+ *
+ * firstDiscovery = true  → inputs are returned; only discoveredRecipes updated.
+ * firstDiscovery = false → inputs consumed, output seed(s) added, discovered updated.
+ */
+export function crossBreedOptimistic(
+  state:           GameState,
+  speciesIdA:      string,
+  mutationA:       string | undefined,
+  speciesIdB:      string,
+  mutationB:       string | undefined,
+  recipeId:        string,
+  outputSpeciesId: string,
+  isFirstDiscovery:boolean,
+  outputCount:     number,
+): GameState {
+  // Always mark the recipe as discovered
+  const discoveredRecipes = state.discoveredRecipes.includes(recipeId)
+    ? state.discoveredRecipes
+    : [...state.discoveredRecipes, recipeId];
+
+  if (isFirstDiscovery) {
+    // Inputs returned — no inventory change
+    return { ...state, discoveredRecipes };
+  }
+
+  // Consume one of flowerA from inventory
+  function removeOne(inv: InventoryItem[], sId: string, mut: string | undefined): InventoryItem[] {
+    let removed = false;
+    return inv
+      .map((item) => {
+        if (!removed && item.speciesId === sId && item.mutation === mut && !item.isSeed && item.quantity > 0) {
+          removed = true;
+          return { ...item, quantity: item.quantity - 1 };
+        }
+        return item;
+      })
+      .filter((i) => i.quantity > 0);
+  }
+
+  let inventory = removeOne(state.inventory, speciesIdA, mutationA);
+  inventory     = removeOne(inventory,       speciesIdB, mutationB);
+
+  // Add output seeds
+  const seedIdx = inventory.findIndex((i) => i.speciesId === outputSpeciesId && i.isSeed);
+  if (seedIdx >= 0) {
+    inventory = inventory.map((item, i) =>
+      i === seedIdx ? { ...item, quantity: item.quantity + outputCount } : item
+    );
+  } else {
+    inventory = [...inventory, { speciesId: outputSpeciesId, quantity: outputCount, isSeed: true }];
+  }
+
+  // Register the output species in discovered
+  const discovered = state.discovered.includes(outputSpeciesId)
+    ? state.discovered
+    : [...state.discovered, outputSpeciesId];
+
+  return { ...state, inventory, discovered, discoveredRecipes };
 }
 
 export function upgradeFarm(state: GameState): GameState | null {

@@ -42,6 +42,8 @@ const REQUIRED_EXPORTS = [
   "edgeClaimGift",
   // Alchemy
   "edgeAlchemySacrifice",
+  // Cross-breeding
+  "edgeCrossBreed",
   // Marketplace + mailbox
   "edgeMarketplaceCreateListing",
   "edgeMarketplaceCreateFertilizerListing",
