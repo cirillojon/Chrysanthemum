@@ -364,6 +364,16 @@ export function edgeAlchemySacrifice(
   return callEdge<AlchemySacrificeResult>("alchemy-sacrifice", { sacrifices });
 }
 
+export interface CraftUniversalResult {
+  ok:              true;
+  essences:        GameState["essences"];
+  serverUpdatedAt: string;
+}
+
+export function edgeCraftUniversalEssence(quantity: number) {
+  return callEdge<CraftUniversalResult>("craft-universal-essence", { quantity });
+}
+
 // ── Cross-breeding ────────────────────────────────────────────────────────────
 
 export type CrossBreedResponse =
