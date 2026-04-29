@@ -4,7 +4,7 @@ import { FLOWER_TYPES, RARITY_CONFIG, getFlower, MUTATIONS } from "../data/flowe
 import { ESSENCE_YIELD, calculateEssenceYield, mergeEssences } from "../data/essences";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
 import { edgeAlchemySacrifice } from "../lib/edgeFunctions";
-import type { MutationType, Rarity } from "../data/flowers";
+import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -108,6 +108,7 @@ export function AlchemyTab() {
   const [view, setView]             = useState<AlchemyView>("sacrifice");
   const [selections, setSelections] = useState<SacrificeMap>(new Map());
   const [activeRarity, setActiveRarity] = useState<Rarity | null>(null);
+  const [activeType,   setActiveType]   = useState<FlowerType | null>(null);
   const [sacrificing, setSacrificing]   = useState(false);
   const [error, setError]               = useState<string | null>(null);
   const [success, setSuccess]           = useState<EssenceItem[] | null>(null);
@@ -140,13 +141,31 @@ export function AlchemyTab() {
 
   const rarityOrder: Rarity[] = ["common", "uncommon", "rare", "legendary", "mythic", "exalted", "prismatic"];
 
-  const filteredItems = useMemo(() => {
-    if (!activeRarity) {
-      // All — sorted by rarity order
-      return rarityOrder.flatMap((r) => sacrificableByRarity.get(r) ?? []);
-    }
+  // Items after rarity filter (before type filter) — used to compute available types
+  const rarityFiltered = useMemo(() => {
+    if (!activeRarity) return rarityOrder.flatMap((r) => sacrificableByRarity.get(r) ?? []);
     return sacrificableByRarity.get(activeRarity) ?? [];
   }, [activeRarity, sacrificableByRarity]);
+
+  // Which types have at least one item in the current rarity selection
+  const availableTypes = useMemo(() => {
+    const set = new Set<FlowerType>();
+    for (const item of rarityFiltered) {
+      const flower = getFlower(item.speciesId);
+      flower?.types.forEach((t) => set.add(t));
+    }
+    return set;
+  }, [rarityFiltered]);
+
+  const typeOrder = Object.keys(FLOWER_TYPES) as FlowerType[];
+
+  const filteredItems = useMemo(() => {
+    if (!activeType) return rarityFiltered;
+    return rarityFiltered.filter((item) => {
+      const flower = getFlower(item.speciesId);
+      return flower?.types.includes(activeType) ?? false;
+    });
+  }, [activeType, rarityFiltered]);
 
   const totalSelected = useMemo(() =>
     Array.from(selections.values()).reduce((sum, n) => sum + n, 0),
@@ -364,15 +383,46 @@ export function AlchemyTab() {
             </div>
           </div>
 
+          {/* Type filter */}
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+              Filter by type
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {typeOrder.map((type) => {
+                const cfg     = FLOWER_TYPES[type];
+                const hasAny  = availableTypes.has(type);
+                const isActive = activeType === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setActiveType(isActive ? null : type)}
+                    disabled={!hasAny}
+                    className={`
+                      inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold transition-all duration-150
+                      ${isActive
+                        ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`
+                        : hasAny
+                          ? `border-border text-muted-foreground hover:${cfg.bgColor} hover:${cfg.borderColor} hover:${cfg.color}`
+                          : "border-border/30 text-muted-foreground/30 cursor-not-allowed"
+                      }
+                    `}
+                  >
+                    {cfg.emoji} {cfg.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {/* Flower grid */}
           {filteredItems.length > 0 && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold">
-                  {activeRarity
-                    ? <><span className={RARITY_CONFIG[activeRarity].color}>{RARITY_CONFIG[activeRarity].label}</span> flowers</>
-                    : "All flowers"
-                  }
+                  {activeRarity && <span className={RARITY_CONFIG[activeRarity].color}>{RARITY_CONFIG[activeRarity].label} </span>}
+                  {activeType && <span className={FLOWER_TYPES[activeType].color}>{FLOWER_TYPES[activeType].emoji} {FLOWER_TYPES[activeType].name} </span>}
+                  {!activeRarity && !activeType ? "All flowers" : "flowers"}
                 </p>
                 <div className="flex gap-2">
                   <button
