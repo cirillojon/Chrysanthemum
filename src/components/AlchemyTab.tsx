@@ -205,6 +205,9 @@ export function AlchemyTab() {
       return;
     }
 
+    // Snapshot essences before the sacrifice so we can compute the gain delta
+    const prevEssences = state.essences ?? [];
+
     let succeeded = false;
 
     await perform(
@@ -217,7 +220,14 @@ export function AlchemyTab() {
         }))
       ),
       (result) => {
-        setSuccess(result.essences);
+        // Show only what was gained, not the entire bank
+        const gained = result.essences
+          .map((e) => ({
+            type:   e.type,
+            amount: e.amount - (prevEssences.find((p) => p.type === e.type)?.amount ?? 0),
+          }))
+          .filter((e) => e.amount > 0);
+        setSuccess(gained);
         setSelections(new Map());
         succeeded = true;
       },
