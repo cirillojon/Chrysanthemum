@@ -374,35 +374,3 @@ export function edgeCraftUniversalEssence(quantity: number) {
   return callEdge<CraftUniversalResult>("craft-universal-essence", { quantity });
 }
 
-// ── Cross-breeding ────────────────────────────────────────────────────────────
-
-export type CrossBreedResponse =
-  | {
-      ok:               true;
-      result:           "match";
-      firstDiscovery:   boolean;
-      recipeId:         string;
-      outputSpeciesId:  string;
-      outputCount:      1 | 2;
-      discoveredRecipes: string[];
-      inventory:        GameState["inventory"];
-      discovered:       GameState["discovered"];
-      essences:         GameState["essences"];
-      serverUpdatedAt:  string;
-    }
-  | {
-      ok:          true;
-      result:      "no_match";
-      almostThere: boolean;
-    };
-
-export function edgeCrossBreed(
-  speciesIdA: string,
-  mutationA:  string | undefined,
-  speciesIdB: string,
-  mutationB:  string | undefined,
-) {
-  return callEdge<CrossBreedResponse>("cross-breed", {
-    speciesIdA, mutationA, speciesIdB, mutationB,
-  });
-}

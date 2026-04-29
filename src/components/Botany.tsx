@@ -8,9 +8,8 @@ import { edgeBotanyConvert, edgeBotanyConvertAll } from "../lib/edgeFunctions";
 import type { InventoryItem } from "../store/gameStore";
 import type { Rarity } from "../data/flowers";
 import { AlchemyTab } from "./AlchemyTab";
-import { CrossBreedTab } from "./CrossBreedTab";
 
-type BotanyTab = "convert" | "alchemy" | "crossbreed";
+type BotanyTab = "convert" | "alchemy";
 
 type Selection = { speciesId: string; mutation?: MutationType };
 
@@ -273,9 +272,10 @@ function SelectionScreen({
 export function Botany() {
   const { state, perform } = useGame();
 
-  const [activeTab, setActiveTab] = useState<BotanyTab>(() =>
-    (localStorage.getItem("botany_tab") as BotanyTab | null) ?? "convert"
-  );
+  const [activeTab, setActiveTab] = useState<BotanyTab>(() => {
+    const saved = localStorage.getItem("botany_tab");
+    return saved === "convert" || saved === "alchemy" ? saved : "convert";
+  });
 
   const [activeRarity, setActiveRarity]         = useState<Rarity | null>(null);
   const [resultSpeciesId, setResultSpeciesId]   = useState<string | null>(null);
@@ -436,18 +436,6 @@ export function Botany() {
           🔄 Convert
         </button>
         <button
-          onClick={() => setTab("crossbreed")}
-          className={`
-            flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center transition-all duration-150
-            ${activeTab === "crossbreed"
-              ? "bg-card text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-            }
-          `}
-        >
-          🌿 Cross-breed
-        </button>
-        <button
           onClick={() => setTab("alchemy")}
           className={`
             flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center transition-all duration-150
@@ -460,9 +448,6 @@ export function Botany() {
           ⚗️ Alchemy
         </button>
       </div>
-
-      {/* Cross-breed tab */}
-      {activeTab === "crossbreed" && <CrossBreedTab />}
 
       {/* Alchemy tab */}
       {activeTab === "alchemy" && <AlchemyTab />}

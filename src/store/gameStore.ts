@@ -2102,61 +2102,6 @@ export function sacrificeFlowers(
   return { ...state, inventory: newInventory, essences: newEssences };
 }
 
-// ── Cross-breeding ────────────────────────────────────────────────────────────
-
-/**
- * Optimistic state update for a cross-breed attempt.
- * Always consumes both inputs and awards the output seed(s).
- */
-export function crossBreedOptimistic(
-  state:           GameState,
-  speciesIdA:      string,
-  mutationA:       string | undefined,
-  speciesIdB:      string,
-  mutationB:       string | undefined,
-  recipeId:        string,
-  outputSpeciesId: string,
-  outputCount:     number,
-): GameState {
-  // Always mark the recipe as discovered
-  const discoveredRecipes = state.discoveredRecipes.includes(recipeId)
-    ? state.discoveredRecipes
-    : [...state.discoveredRecipes, recipeId];
-
-  // Consume one of flowerA from inventory
-  function removeOne(inv: InventoryItem[], sId: string, mut: string | undefined): InventoryItem[] {
-    let removed = false;
-    return inv
-      .map((item) => {
-        if (!removed && item.speciesId === sId && item.mutation === mut && !item.isSeed && item.quantity > 0) {
-          removed = true;
-          return { ...item, quantity: item.quantity - 1 };
-        }
-        return item;
-      })
-      .filter((i) => i.quantity > 0);
-  }
-
-  let inventory = removeOne(state.inventory, speciesIdA, mutationA);
-  inventory     = removeOne(inventory,       speciesIdB, mutationB);
-
-  // Add output seeds
-  const seedIdx = inventory.findIndex((i) => i.speciesId === outputSpeciesId && i.isSeed);
-  if (seedIdx >= 0) {
-    inventory = inventory.map((item, i) =>
-      i === seedIdx ? { ...item, quantity: item.quantity + outputCount } : item
-    );
-  } else {
-    inventory = [...inventory, { speciesId: outputSpeciesId, quantity: outputCount, isSeed: true }];
-  }
-
-  // Register the output species in discovered
-  const discovered = state.discovered.includes(outputSpeciesId)
-    ? state.discovered
-    : [...state.discovered, outputSpeciesId];
-
-  return { ...state, inventory, discovered, discoveredRecipes };
-}
 
 export function upgradeFarm(state: GameState): GameState | null {
   const next = getNextUpgrade(state.farmRows, state.farmSize);
