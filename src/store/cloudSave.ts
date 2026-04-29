@@ -144,6 +144,9 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       discoveredRecipes:    (data.discovered_recipes    as string[])                   ?? [],
       // Attunement Crystals (DB column: "infusers")
       infusers:             (data.infusers              as GameState["infusers"])       ?? [],
+      // Phase 3 — time-gated crafting queue
+      craftingQueue:        (data.crafting_queue        as GameState["craftingQueue"])  ?? [],
+      craftingSlotCount:    (data.crafting_slot_count   as number)                      ?? 1,
     } as GameState;
   } catch {
     return null;
@@ -183,6 +186,9 @@ export async function saveToCloud(
     discovered_recipes:     state.discoveredRecipes ?? [],
     // Attunement Crystals (DB column: "infusers")
     infusers:               state.infusers          ?? [],
+    // Phase 3 — time-gated crafting queue
+    crafting_queue:         state.craftingQueue     ?? [],
+    crafting_slot_count:    state.craftingSlotCount ?? 1,
     updated_at:             newUpdatedAt,
   };
 
@@ -272,6 +278,8 @@ export async function getPublicSave(userId: string): Promise<GameState | null> {
     essences:             (data.essences              as GameState["essences"])  ?? [],
     discoveredRecipes:    (data.discovered_recipes    as string[])              ?? [],
     infusers:             (data.infusers              as GameState["infusers"]) ?? [], // Attunement Crystals
+    craftingQueue:        [],
+    craftingSlotCount:    1,
   } as GameState;
 }
 

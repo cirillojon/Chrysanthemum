@@ -364,8 +364,72 @@ export function edgeApplyAttunement(row: number, col: number) {
   return callEdge<ApplyAttunementResult>("apply-infuser", { row, col });
 }
 
-// ── Gear crafting ─────────────────────────────────────────────────────────
+// ── Gear crafting (Phase 3 — time-gated queue) ───────────────────────────────
 
+export interface CraftStartResult {
+  ok:              true;
+  coins:           number;
+  essences:        GameState["essences"];
+  gearInventory:   GameState["gearInventory"];
+  consumables:     GameState["consumables"];
+  infusers:        GameState["infusers"];
+  craftingQueue:   GameState["craftingQueue"];
+  serverUpdatedAt: string;
+}
+
+export interface CraftCollectResult {
+  ok:              true;
+  craftingQueue:   GameState["craftingQueue"];
+  gearInventory:   GameState["gearInventory"];
+  consumables:     GameState["consumables"];
+  infusers:        GameState["infusers"];
+  serverUpdatedAt: string;
+}
+
+export interface CraftCancelResult {
+  ok:              true;
+  craftingQueue:   GameState["craftingQueue"];
+  essences:        GameState["essences"];
+  gearInventory:   GameState["gearInventory"];
+  consumables:     GameState["consumables"];
+  infusers:        GameState["infusers"];
+  serverUpdatedAt: string;
+}
+
+export interface UpgradeCraftingSlotsResult {
+  ok:                  true;
+  coins:               number;
+  crafting_slot_count: number;
+  serverUpdatedAt:     string;
+}
+
+export function edgeCraftStart(
+  kind:        "gear" | "consumable" | "attunement",
+  outputId:    string,
+  durationMs?: number,
+  costs?: {
+    essenceCosts?:    { type: string; amount: number }[];
+    consumableCosts?: { id: string; quantity: number }[];
+    attunementCosts?: { rarity: string; quantity: number }[];
+  },
+) {
+  return callEdge<CraftStartResult>("craft-start", { kind, outputId, durationMs, costs });
+}
+
+export function edgeCraftCollect(craftId: string) {
+  return callEdge<CraftCollectResult>("craft-collect", { craftId });
+}
+
+export function edgeCraftCancel(craftId: string) {
+  return callEdge<CraftCancelResult>("craft-cancel", { craftId });
+}
+
+export function edgeUpgradeCraftingSlots() {
+  return callEdge<UpgradeCraftingSlotsResult>("upgrade", { action: "crafting_slots" });
+}
+
+// ── Gear crafting (legacy — superseded by Phase 3 queue) ─────────────────────
+/** @deprecated Use edgeCraftStart / edgeCraftCollect instead. */
 export interface CraftGearResult {
   ok:            true;
   essences:      GameState["essences"];
@@ -374,6 +438,7 @@ export interface CraftGearResult {
   serverUpdatedAt: string;
 }
 
+/** @deprecated Use edgeCraftStart / edgeCraftCollect instead. */
 export function edgeCraftGear(outputGearType: string) {
   return callEdge<CraftGearResult>("craft-gear", { outputGearType });
 }

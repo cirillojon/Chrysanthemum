@@ -1,0 +1,331 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
+
+function b64url(s: string): string {
+  const t = s.replace(/-/g, "+").replace(/_/g, "/");
+  return t + "=".repeat((4 - t.length % 4) % 4);
+}
+
+// ── Mirrored gear recipe data ──────────────────────────────────────────────────
+// Edge functions cannot import from src/ — data is hardcoded here.
+// Only used for gear crafts (server-authoritative).
+
+type GearIngredient =
+  | { kind: "essence";    essenceType: string; amount: number }
+  | { kind: "gear";       gearType:    string; quantity: number }
+  | { kind: "consumable"; consumableId: string; quantity: number };
+
+interface GearRecipe {
+  outputGearType: string;
+  ingredients:    GearIngredient[];
+  coinCost:       number;
+  durationMs:     number;
+}
+
+const DU = 5  * 60_000;
+const DR = 20 * 60_000;
+const DL = 90 * 60_000;
+const DM = 5  * 60 * 60_000;
+const DE = 12 * 60 * 60_000;
+const DP = 24 * 60 * 60_000;
+
+const E = (essenceType: string, amount: number): GearIngredient => ({ kind: "essence", essenceType, amount });
+const G = (gearType: string, quantity = 2): GearIngredient => ({ kind: "gear", gearType, quantity });
+const C = (consumableId: string, quantity: number): GearIngredient => ({ kind: "consumable", consumableId, quantity });
+
+const GEAR_RECIPES: GearRecipe[] = [
+  { outputGearType: "sprinkler_rare",        ingredients: [E("grove", 5), E("zephyr", 5)],                                                           coinCost: 400,     durationMs: DR },
+  { outputGearType: "sprinkler_legendary",   ingredients: [G("sprinkler_rare")],                                                                      coinCost: 5_500,   durationMs: DL },
+  { outputGearType: "sprinkler_mythic",      ingredients: [G("sprinkler_legendary")],                                                                  coinCost: 60_000,  durationMs: DM },
+  { outputGearType: "sprinkler_exalted",     ingredients: [G("sprinkler_mythic")],                                                                     coinCost: 200_000, durationMs: DE },
+  { outputGearType: "sprinkler_prismatic",   ingredients: [G("sprinkler_exalted")],                                                                    coinCost: 800_000, durationMs: DP },
+  { outputGearType: "sprinkler_flame",       ingredients: [G("sprinkler_legendary", 1), C("ember_vial_2", 2)],                                         coinCost: 6_000,   durationMs: DL },
+  { outputGearType: "sprinkler_frost",       ingredients: [G("sprinkler_legendary", 1), C("frost_vial_2", 2)],                                         coinCost: 6_000,   durationMs: DL },
+  { outputGearType: "sprinkler_lightning",   ingredients: [G("sprinkler_mythic", 1), C("storm_vial_3", 2)],                                            coinCost: 50_000,  durationMs: DM },
+  { outputGearType: "sprinkler_lunar",       ingredients: [G("sprinkler_mythic", 1), C("moon_vial_3", 2)],                                             coinCost: 50_000,  durationMs: DM },
+  { outputGearType: "sprinkler_midas",       ingredients: [G("sprinkler_exalted", 1), C("golden_vial_4", 2)],                                          coinCost: 200_000, durationMs: DE },
+  { outputGearType: "sprinkler_prism",       ingredients: [G("sprinkler_prismatic", 1), C("rainbow_vial_5", 2)],                                       coinCost: 800_000, durationMs: DP },
+  { outputGearType: "grow_lamp_uncommon",    ingredients: [E("solar", 4), E("grove", 4)],                                                             coinCost: 200,     durationMs: DU },
+  { outputGearType: "grow_lamp_rare",        ingredients: [G("grow_lamp_uncommon")],                                                                   coinCost: 1_500,   durationMs: DR },
+  { outputGearType: "scarecrow_rare",        ingredients: [E("arcane", 5), E("storm", 5)],                                                            coinCost: 500,     durationMs: DR },
+  { outputGearType: "scarecrow_legendary",   ingredients: [G("scarecrow_rare")],                                                                       coinCost: 7_000,   durationMs: DL },
+  { outputGearType: "scarecrow_mythic",      ingredients: [G("scarecrow_legendary")],                                                                  coinCost: 65_000,  durationMs: DM },
+  { outputGearType: "composter_uncommon",    ingredients: [E("grove", 4), E("solar", 4)],                                                             coinCost: 200,     durationMs: DU },
+  { outputGearType: "composter_rare",        ingredients: [G("composter_uncommon")],                                                                   coinCost: 1_500,   durationMs: DR },
+  { outputGearType: "composter_legendary",   ingredients: [G("composter_rare")],                                                                       coinCost: 7_000,   durationMs: DL },
+  { outputGearType: "fan_uncommon",          ingredients: [E("zephyr", 4), E("storm", 4)],                                                            coinCost: 200,     durationMs: DU },
+  { outputGearType: "fan_rare",              ingredients: [G("fan_uncommon")],                                                                         coinCost: 1_500,   durationMs: DR },
+  { outputGearType: "fan_legendary",         ingredients: [G("fan_rare")],                                                                             coinCost: 7_000,   durationMs: DL },
+  { outputGearType: "harvest_bell_uncommon", ingredients: [E("stellar", 4), E("fairy", 4)],                                                           coinCost: 300,     durationMs: DU },
+  { outputGearType: "harvest_bell_rare",     ingredients: [G("harvest_bell_uncommon")],                                                                coinCost: 1_500,   durationMs: DR },
+  { outputGearType: "harvest_bell_legendary",ingredients: [G("harvest_bell_rare")],                                                                    coinCost: 7_000,   durationMs: DL },
+  { outputGearType: "aegis_uncommon",        ingredients: [E("zephyr", 5), E("shadow", 3)],                                                           coinCost: 500,     durationMs: DU },
+  { outputGearType: "aegis_rare",            ingredients: [G("aegis_uncommon")],                                                                       coinCost: 2_000,   durationMs: DR },
+  { outputGearType: "aegis_legendary",       ingredients: [G("aegis_rare")],                                                                           coinCost: 15_000,  durationMs: DL },
+  { outputGearType: "garden_pin",            ingredients: [E("arcane", 3), E("fairy", 3)],                                                            coinCost: 200,     durationMs: DU },
+  { outputGearType: "cropsticks",            ingredients: [E("arcane", 4), E("stellar", 4), E("grove", 4)],                                           coinCost: 20_000,  durationMs: DL },
+  { outputGearType: "auto_planter_prismatic",ingredients: [G("sprinkler_prismatic", 1), G("harvest_bell_legendary", 1), E("universal", 10)],          coinCost: 500_000, durationMs: DP },
+];
+
+const GEAR_RECIPE_MAP = Object.fromEntries(GEAR_RECIPES.map((r) => [r.outputGearType, r]));
+
+// ── Response helpers ──────────────────────────────────────────────────────────
+
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+const err = (msg: string, status = 400) => json({ error: msg }, status);
+
+// ── Main handler ──────────────────────────────────────────────────────────────
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) return err("Unauthorized", 401);
+
+    const token = authHeader.replace("Bearer ", "");
+    let userId: string;
+    try {
+      userId = JSON.parse(atob(b64url(token.split(".")[1]))).sub;
+    } catch {
+      return err("Unauthorized", 401);
+    }
+
+    const body = await req.json() as {
+      kind:        "gear" | "consumable" | "attunement";
+      outputId:    string;
+      durationMs?: number;
+      costs?: {
+        essenceCosts?:    { type: string; amount: number }[];
+        consumableCosts?: { id: string; quantity: number }[];
+        attunementCosts?: { rarity: string; quantity: number }[];
+      };
+    };
+
+    const { kind, outputId } = body;
+    if (!kind || !outputId)                                          return err("kind and outputId are required");
+    if (kind !== "gear" && kind !== "consumable" && kind !== "attunement") {
+      return err("kind must be 'gear', 'consumable', or 'attunement'");
+    }
+
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    const [authResult, saveResult] = await Promise.all([
+      supabaseAdmin.auth.getUser(token),
+      supabaseAdmin
+        .from("game_saves")
+        .select("coins, essences, gear_inventory, consumables, infusers, crafting_queue, crafting_slot_count, updated_at")
+        .eq("user_id", userId)
+        .single(),
+    ]);
+
+    if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
+      return err("Unauthorized", 401);
+    }
+    if (saveResult.error || !saveResult.data) return err("Save not found", 404);
+
+    const save           = saveResult.data;
+    const priorUpdatedAt = save.updated_at as string;
+
+    let coins         = save.coins as number;
+    let essences      = (save.essences       ?? []) as { type: string; amount: number }[];
+    let gearInventory = (save.gear_inventory ?? []) as { gearType: string; quantity: number }[];
+    let consumables   = (save.consumables    ?? []) as { id: string; quantity: number }[];
+    let infusers      = (save.infusers       ?? []) as { rarity: string; quantity: number }[];
+    const craftingQueue     = (save.crafting_queue     ?? []) as Record<string, unknown>[];
+    const craftingSlotCount = (save.crafting_slot_count ?? 1) as number;
+
+    // ── Validate slot availability ─────────────────────────────────────────────
+    if (craftingQueue.length >= craftingSlotCount) {
+      return err("No crafting slots available");
+    }
+
+    // ── Resolve ingredients, costs, and duration ───────────────────────────────
+
+    let durationMs = 0;
+    let coinCost   = 0;
+
+    // Stored ingredient costs — used by craft-cancel for refunds
+    let newEntryEssenceCosts:    { type: string; amount: number }[]    | undefined;
+    let newEntryGearCosts:       { gearType: string; quantity: number }[] | undefined;
+    let newEntryConsumableCosts: { id: string; quantity: number }[]    | undefined;
+    let newEntryAttunementCosts: { rarity: string; quantity: number }[] | undefined;
+
+    if (kind === "gear") {
+      // ── Server-authoritative: look up the recipe ────────────────────────────
+      const recipe = GEAR_RECIPE_MAP[outputId] as GearRecipe | undefined;
+      if (!recipe) return err(`Unknown gear type: ${outputId}`);
+
+      durationMs = recipe.durationMs;
+      coinCost   = recipe.coinCost;
+
+      if (coins < coinCost) {
+        return err(`Not enough coins (need ${coinCost}, have ${coins})`);
+      }
+
+      for (const ing of recipe.ingredients) {
+        if (ing.kind === "essence") {
+          const have = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
+          if (have < ing.amount) return err(`Not enough ${ing.essenceType} essence (need ${ing.amount}, have ${have})`);
+        } else if (ing.kind === "gear") {
+          const have = gearInventory.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
+          if (have < ing.quantity) return err(`Not enough ${ing.gearType} (need ${ing.quantity}, have ${have})`);
+        } else {
+          const have = consumables.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
+          if (have < ing.quantity) return err(`Not enough ${ing.consumableId} (need ${ing.quantity}, have ${have})`);
+        }
+      }
+
+      // Deduct
+      coins -= coinCost;
+      for (const ing of recipe.ingredients) {
+        if (ing.kind === "essence") {
+          essences = essences
+            .map((e) => e.type === ing.essenceType ? { ...e, amount: e.amount - ing.amount } : e)
+            .filter((e) => e.amount > 0);
+        } else if (ing.kind === "gear") {
+          gearInventory = gearInventory
+            .map((g) => g.gearType === ing.gearType ? { ...g, quantity: g.quantity - ing.quantity } : g)
+            .filter((g) => g.quantity > 0);
+        } else {
+          consumables = consumables
+            .map((c) => c.id === ing.consumableId ? { ...c, quantity: c.quantity - ing.quantity } : c)
+            .filter((c) => c.quantity > 0);
+        }
+      }
+
+      // Store costs for refund
+      const eCosts = recipe.ingredients
+        .filter((i): i is { kind: "essence"; essenceType: string; amount: number } => i.kind === "essence")
+        .map(({ essenceType: type, amount }) => ({ type, amount }));
+      const gCosts = recipe.ingredients
+        .filter((i): i is { kind: "gear"; gearType: string; quantity: number } => i.kind === "gear")
+        .map(({ gearType, quantity }) => ({ gearType, quantity }));
+      const cCosts = recipe.ingredients
+        .filter((i): i is { kind: "consumable"; consumableId: string; quantity: number } => i.kind === "consumable")
+        .map(({ consumableId: id, quantity }) => ({ id, quantity }));
+
+      if (eCosts.length) newEntryEssenceCosts    = eCosts;
+      if (gCosts.length) newEntryGearCosts       = gCosts;
+      if (cCosts.length) newEntryConsumableCosts = cCosts;
+
+    } else {
+      // ── Client-declared costs (consumable / attunement) ────────────────────
+      // The server trusts the recipe structure from the client but validates
+      // the player actually has the required amounts before deducting.
+      const clientDurationMs = body.durationMs;
+      if (!clientDurationMs || clientDurationMs <= 0) {
+        return err("durationMs is required for consumable/attunement crafts");
+      }
+      durationMs = clientDurationMs;
+
+      const costs              = body.costs ?? {};
+      const essenceCostList    = costs.essenceCosts    ?? [];
+      const consumableCostList = costs.consumableCosts ?? [];
+      const attunementCostList = costs.attunementCosts ?? [];
+
+      // Validate + deduct essence costs
+      for (const { type, amount } of essenceCostList) {
+        const have = essences.find((e) => e.type === type)?.amount ?? 0;
+        if (have < amount) return err(`Not enough ${type} essence (need ${amount}, have ${have})`);
+      }
+      essences = essences.map((e) => {
+        const cost = essenceCostList.find((c) => c.type === e.type);
+        return cost ? { ...e, amount: e.amount - cost.amount } : e;
+      }).filter((e) => e.amount > 0);
+
+      // Validate + deduct consumable costs
+      for (const { id, quantity } of consumableCostList) {
+        const have = consumables.find((c) => c.id === id)?.quantity ?? 0;
+        if (have < quantity) return err(`Not enough ${id} (need ${quantity}, have ${have})`);
+      }
+      consumables = consumables.map((c) => {
+        const cost = consumableCostList.find((x) => x.id === c.id);
+        return cost ? { ...c, quantity: c.quantity - cost.quantity } : c;
+      }).filter((c) => c.quantity > 0);
+
+      // Validate + deduct attunement costs (infusers)
+      for (const { rarity, quantity } of attunementCostList) {
+        const have = infusers.find((i) => i.rarity === rarity)?.quantity ?? 0;
+        if (have < quantity) return err(`Not enough ${rarity} attunement (need ${quantity}, have ${have})`);
+      }
+      infusers = infusers.map((inf) => {
+        const cost = attunementCostList.find((x) => x.rarity === inf.rarity);
+        return cost ? { ...inf, quantity: inf.quantity - cost.quantity } : inf;
+      }).filter((inf) => inf.quantity > 0);
+
+      // Store costs for refund
+      if (essenceCostList.length)    newEntryEssenceCosts    = essenceCostList;
+      if (consumableCostList.length) newEntryConsumableCosts = consumableCostList;
+      if (attunementCostList.length) newEntryAttunementCosts = attunementCostList;
+    }
+
+    // ── Build queue entry ──────────────────────────────────────────────────────
+    const newEntry: Record<string, unknown> = {
+      id:        crypto.randomUUID(),
+      kind,
+      outputId,
+      startedAt: new Date().toISOString(),
+      durationMs,
+    };
+    if (coinCost)                        newEntry.coinCost        = coinCost;
+    if (newEntryEssenceCosts?.length)    newEntry.essenceCosts    = newEntryEssenceCosts;
+    if (newEntryGearCosts?.length)       newEntry.gearCosts       = newEntryGearCosts;
+    if (newEntryConsumableCosts?.length) newEntry.consumableCosts = newEntryConsumableCosts;
+    if (newEntryAttunementCosts?.length) newEntry.attunementCosts = newEntryAttunementCosts;
+
+    const newQueue = [...craftingQueue, newEntry];
+
+    // ── CAS write ─────────────────────────────────────────────────────────────
+    const { data: updateData, error: updateError } = await supabaseAdmin
+      .from("game_saves")
+      .update({
+        coins,
+        essences,
+        gear_inventory: gearInventory,
+        consumables,
+        infusers,
+        crafting_queue: newQueue,
+        updated_at:     new Date().toISOString(),
+      })
+      .eq("user_id", userId)
+      .eq("updated_at", priorUpdatedAt)
+      .select("updated_at")
+      .single();
+
+    if (updateError || !updateData) {
+      return err("Save was modified by another action — please retry", 409);
+    }
+
+    void supabaseAdmin.from("action_log").insert({
+      user_id: userId,
+      action:  "craft_start",
+      payload: { kind, outputId },
+      result:  { newEntry },
+    });
+
+    return json({
+      ok:              true,
+      coins,
+      essences,
+      gearInventory,
+      consumables,
+      infusers,
+      craftingQueue:   newQueue,
+      serverUpdatedAt: updateData.updated_at,
+    });
+
+  } catch (e) {
+    console.error("craft-start error:", e);
+    return err("Internal server error", 500);
+  }
+});
