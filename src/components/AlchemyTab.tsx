@@ -469,7 +469,8 @@ export function AlchemyTab() {
                             {flower.name}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
-                            {avail} available
+                            <span className={RARITY_CONFIG[flower.rarity].color}>{RARITY_CONFIG[flower.rarity].label}</span>
+                            {" · "}{avail} available
                             {isSelected && ` · ${qty} selected`}
                           </p>
                         </div>
