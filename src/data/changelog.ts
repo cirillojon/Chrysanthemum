@@ -15,11 +15,17 @@ export interface ChangelogEntry {
 export const CHANGELOGS: ChangelogEntry[] = [
   {
     version: "2.2.4",
-    title:   "Data Loss Hotfix",
+    title:   "Hotfix & Gear Polish",
     items: [
       { type: "fixed", text: "Selling all blooms at once no longer risks losing flowers with no coins received — Sell All is now a single atomic server write instead of N sequential calls that could partially fail and roll back incorrectly" },
-      { type: "fixed", text: "Rapidly harvesting multiple plots no longer causes the coin counter to stutter or snap backward — each harvest's coin bonus now accumulates correctly instead of being overwritten by a stale server total" },
+      { type: "fixed", text: "Mutated flowers no longer award bonus coins when harvested — coins are only gained by selling blooms" },
+      { type: "fixed", text: "Harvest Bell and Auto-Planter now keep running when you navigate away from the Garden tab — gear actions no longer stop while you browse Inventory, Shop, or Social" },
+      { type: "fixed", text: "Harvest popup now appears on any tab — bell auto-harvests show the notification even when you're not on the Garden screen" },
+      { type: "fixed", text: "Your own profile garden now updates in real-time without a page reload" },
+      { type: "fixed", text: "Viewing another player's profile now shows live plant growth and bell harvests between server ticks, updated every 5 seconds" },
+      { type: "fixed", text: "Auto-Planter no longer spams server calls when a plot was already filled by an offline cron tick" },
       { type: "fixed", text: "Buying gear or fertilizer from the Supply Shop is now protected against concurrent saves — a conflicting write returns a clean rollback instead of silently corrupting coins or inventory" },
+      { type: "changed", text: "Harvest popup redesigned — shows the bloom emoji with the mutation label inline; harvesting the same flower rapidly accumulates into a single +N pill instead of firing duplicate popups; different species each get their own pill stacked on screen" },
     ],
   },
   {
