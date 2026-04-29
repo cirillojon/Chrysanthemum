@@ -378,3 +378,18 @@ export function edgeCraftUniversalEssence(quantity: number) {
   return callEdge<CraftUniversalResult>("craft-universal-essence", { quantity });
 }
 
+export interface AlchemyCraftResult {
+  ok:              true;
+  essences:        GameState["essences"];
+  consumables:     GameState["consumables"];
+  infusers:        GameState["infusers"];
+  serverUpdatedAt: string;
+}
+
+export function edgeAlchemyCraft(
+  craftType: "consumable" | "infuser",
+  id: string,
+) {
+  return callEdge<AlchemyCraftResult>("alchemy-craft", { craftType, id });
+}
+

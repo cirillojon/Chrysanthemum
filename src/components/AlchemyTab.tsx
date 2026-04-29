@@ -6,8 +6,15 @@ import {
   UNIVERSAL_ESSENCE_DISPLAY, UNIVERSAL_ESSENCE_COST_PER_TYPE,
   universalEssenceCraftable, ALL_FLOWER_TYPES,
 } from "../data/essences";
+import {
+  CONSUMABLE_RECIPES, CONSUMABLE_RECIPE_MAP, INFUSER_RECIPES,
+  canCraftConsumable, canCraftInfuser,
+  applyCraftConsumable, applyCraftInfuser,
+  TIER_RARITIES, ROMAN,
+  type ConsumableId, type ConsumableCategory,
+} from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
-import { edgeAlchemySacrifice, edgeCraftUniversalEssence } from "../lib/edgeFunctions";
+import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft } from "../lib/edgeFunctions";
 import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
 
@@ -107,9 +114,203 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
   );
 }
 
+// ── CraftView component ───────────────────────────────────────────────────
+
+interface CraftViewProps {
+  essences:      EssenceItem[];
+  consumables:   { id: string; quantity: number }[];
+  infusers:      { rarity: string; quantity: number }[];
+  craftingItemId: string | null;
+  itemCraftError: string | null;
+  onCraft:       (craftType: "consumable" | "infuser", id: string) => void;
+}
+
+function CostChips({
+  cost,
+  essences,
+  consumables,
+  infusers,
+}: {
+  cost: { kind: string; amounts?: { type: string; amount: number }[]; id?: string; quantity?: number; tier?: number };
+  essences:    { type: string; amount: number }[];
+  consumables: { id: string; quantity: number }[];
+  infusers:    { rarity: string; quantity: number }[];
+}) {
+  if (cost.kind === "essence" && cost.amounts) {
+    return (
+      <div className="flex flex-wrap gap-1">
+        {cost.amounts.map(({ type, amount }) => {
+          const have = essences.find((e) => e.type === type)?.amount ?? 0;
+          const ok   = have >= amount;
+          const cfg  = type === "universal" ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
+          return (
+            <span
+              key={type}
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[10px] font-medium
+                ${ok ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}` : "bg-border/10 border-border/40 text-muted-foreground/50"}`}
+            >
+              {cfg.emoji} {amount}
+              {!ok && <span className="text-[9px] opacity-60"> ({have})</span>}
+            </span>
+          );
+        })}
+      </div>
+    );
+  }
+  if (cost.kind === "consumable" && cost.id) {
+    const recipe = CONSUMABLE_RECIPE_MAP[cost.id as ConsumableId];
+    const have   = consumables.find((c) => c.id === cost.id)?.quantity ?? 0;
+    const ok     = have >= (cost.quantity ?? 2);
+    return (
+      <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}>
+        {recipe?.emoji ?? "?"} ×{cost.quantity} {recipe?.name ?? cost.id}
+        <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
+      </span>
+    );
+  }
+  if (cost.kind === "infuser" && cost.tier != null) {
+    const prevRarity = TIER_RARITIES[cost.tier as 1 | 2 | 3 | 4 | 5];
+    const have = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
+    const ok   = have >= (cost.quantity ?? 2);
+    return (
+      <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}>
+        🥢 ×{cost.quantity} Infuser {ROMAN[cost.tier as 1 | 2 | 3 | 4 | 5]}
+        <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
+      </span>
+    );
+  }
+  return null;
+}
+
+function RecipeCard({
+  emoji, name, rarity, description, owned, canAfford, isCrafting, cost,
+  essences, consumables, infusers, onCraft,
+}: {
+  emoji: string; name: string; rarity: Rarity; description: string;
+  owned: number; canAfford: boolean; isCrafting: boolean;
+  cost: Parameters<typeof CostChips>[0]["cost"];
+  essences: CraftViewProps["essences"]; consumables: CraftViewProps["consumables"];
+  infusers: CraftViewProps["infusers"]; onCraft: () => void;
+}) {
+  const rc = RARITY_CONFIG[rarity];
+  return (
+    <div className={`rounded-xl border p-3 transition-colors ${canAfford ? "border-border bg-card/60" : "border-border/40 bg-card/20 opacity-60"}`}>
+      <div className="flex items-start gap-2.5 mb-2">
+        <span className="text-xl mt-0.5 shrink-0">{emoji}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold flex items-center gap-1.5 flex-wrap">
+            {name}
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${rc.color} border-current bg-current/10`}>
+              {rc.label}
+            </span>
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{description}</p>
+        </div>
+      </div>
+
+      <CostChips cost={cost} essences={essences} consumables={consumables} infusers={infusers} />
+
+      <div className="flex items-center justify-between mt-2.5">
+        <span className="text-[10px] text-muted-foreground">Owned: <span className="text-foreground font-semibold">{owned}</span></span>
+        <button
+          onClick={onCraft}
+          disabled={!canAfford || isCrafting}
+          className="px-3 py-1 rounded-lg text-[11px] font-semibold border transition-colors
+            disabled:opacity-40 disabled:cursor-not-allowed
+            border-primary/50 text-primary hover:bg-primary/10 enabled:hover:scale-[1.02]"
+        >
+          {isCrafting ? "…" : "Craft"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const CRAFT_CATEGORIES: { id: ConsumableCategory | "infuser"; label: string; emoji: string }[] = [
+  { id: "infuser",        label: "Infusers",        emoji: "🥢" },
+  { id: "growth",         label: "Growth",          emoji: "🌱" },
+  { id: "mutation_boost", label: "Mutation Boosts",  emoji: "🧪" },
+  { id: "utility",        label: "Utility",          emoji: "⚙️" },
+];
+
+function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftError, onCraft }: CraftViewProps) {
+  return (
+    <div className="flex flex-col gap-5">
+      <p className="text-[11px] text-muted-foreground">
+        Craft consumable items and infusers from your essence bank. Tier I items cost essence; higher tiers upgrade from 2 of the previous tier.
+      </p>
+
+      {itemCraftError && (
+        <div className="bg-destructive/10 border border-destructive/40 rounded-xl px-3 py-2 text-xs text-destructive">
+          {itemCraftError}
+        </div>
+      )}
+
+      {CRAFT_CATEGORIES.map(({ id: catId, label, emoji: catEmoji }) => {
+        const isInfuser = catId === "infuser";
+
+        const cards = isInfuser
+          ? INFUSER_RECIPES.map((recipe) => {
+              const owned     = infusers.find((i) => i.rarity === recipe.rarity)?.quantity ?? 0;
+              const affordable = canCraftInfuser(recipe, essences, infusers);
+              return (
+                <RecipeCard
+                  key={`infuser-${recipe.tier}`}
+                  emoji="🥢"
+                  name={recipe.name}
+                  rarity={recipe.rarity}
+                  description={recipe.description}
+                  owned={owned}
+                  canAfford={affordable}
+                  isCrafting={craftingItemId === String(recipe.tier)}
+                  cost={recipe.cost as Parameters<typeof CostChips>[0]["cost"]}
+                  essences={essences}
+                  consumables={consumables}
+                  infusers={infusers}
+                  onCraft={() => onCraft("infuser", String(recipe.tier))}
+                />
+              );
+            })
+          : CONSUMABLE_RECIPES
+              .filter((r) => r.category === catId)
+              .map((recipe) => {
+                const owned      = consumables.find((c) => c.id === recipe.id)?.quantity ?? 0;
+                const affordable = canCraftConsumable(recipe, essences, consumables);
+                return (
+                  <RecipeCard
+                    key={recipe.id}
+                    emoji={recipe.emoji}
+                    name={recipe.name}
+                    rarity={recipe.rarity}
+                    description={recipe.description}
+                    owned={owned}
+                    canAfford={affordable}
+                    isCrafting={craftingItemId === recipe.id}
+                    cost={recipe.cost as Parameters<typeof CostChips>[0]["cost"]}
+                    essences={essences}
+                    consumables={consumables}
+                    infusers={infusers}
+                    onCraft={() => onCraft("consumable", recipe.id)}
+                  />
+                );
+              });
+
+        return (
+          <div key={catId}>
+            <p className="text-xs font-semibold mb-2">{catEmoji} {label}</p>
+            <div className="grid grid-cols-1 gap-2">
+              {cards}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── Main AlchemyTab component ─────────────────────────────────────────────
 
-type AlchemyView = "sacrifice" | "essences";
+type AlchemyView = "sacrifice" | "essences" | "craft";
 
 export function AlchemyTab() {
   const { state, perform, getState, update } = useGame();
@@ -129,6 +330,12 @@ export function AlchemyTab() {
   const [craftError,    setCraftError]    = useState<string | null>(null);
   const [craftSuccess,  setCraftSuccess]  = useState<number | null>(null);
   const [craftSuccessVisible, setCraftSuccessVisible] = useState(false);
+
+  // Consumable / infuser craft state
+  const [craftingItemId,        setCraftingItemId]        = useState<string | null>(null);
+  const [itemCraftError,        setItemCraftError]        = useState<string | null>(null);
+  const [itemCraftSuccess,      setItemCraftSuccess]      = useState<{ name: string; emoji: string } | null>(null);
+  const [itemCraftSuccessVisible, setItemCraftSuccessVisible] = useState(false);
 
   // Auto-dismiss success toast
   useEffect(() => {
@@ -286,6 +493,67 @@ export function AlchemyTab() {
     setSacrificing(false);
   }
 
+  // Auto-dismiss item craft success toast
+  useEffect(() => {
+    if (!itemCraftSuccess) return;
+    const frame = requestAnimationFrame(() => setItemCraftSuccessVisible(true));
+    const timer = setTimeout(() => {
+      setItemCraftSuccessVisible(false);
+      setTimeout(() => setItemCraftSuccess(null), 400);
+    }, 2_500);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [itemCraftSuccess]);
+
+  async function handleCraftItem(craftType: "consumable" | "infuser", id: string) {
+    if (craftingItemId) return;
+    setCraftingItemId(id);
+    setItemCraftError(null);
+
+    const cur = getState();
+    const essences    = cur.essences    ?? [];
+    const consumables = cur.consumables ?? [];
+    const infusers    = cur.infusers    ?? [];
+
+    let optimistic: typeof cur | null = null;
+    let displayName = "";
+    let displayEmoji = "";
+
+    if (craftType === "consumable") {
+      const recipe = CONSUMABLE_RECIPE_MAP[id as ConsumableId];
+      if (!recipe) { setItemCraftError("Unknown recipe."); setCraftingItemId(null); return; }
+      const result = applyCraftConsumable(recipe, essences, consumables);
+      if (!result) { setItemCraftError("Not enough ingredients."); setCraftingItemId(null); return; }
+      optimistic = { ...cur, essences: result.essences, consumables: result.consumables };
+      displayName  = recipe.name;
+      displayEmoji = recipe.emoji;
+    } else {
+      const tier   = parseInt(id, 10) as 1 | 2 | 3 | 4 | 5;
+      const recipe = INFUSER_RECIPES.find((r) => r.tier === tier);
+      if (!recipe) { setItemCraftError("Unknown infuser tier."); setCraftingItemId(null); return; }
+      const result = applyCraftInfuser(recipe, essences, infusers);
+      if (!result) { setItemCraftError("Not enough ingredients."); setCraftingItemId(null); return; }
+      optimistic = { ...cur, essences: result.essences, infusers: result.infusers };
+      displayName  = recipe.name;
+      displayEmoji = "🥢";
+    }
+
+    try {
+      perform(
+        optimistic!,
+        () => edgeAlchemyCraft(craftType, id),
+        (res) => {
+          const fresh = getState();
+          update({ ...fresh, essences: res.essences, consumables: res.consumables, infusers: res.infusers, serverUpdatedAt: res.serverUpdatedAt });
+          setItemCraftSuccess({ name: displayName, emoji: displayEmoji });
+        },
+      );
+    } catch (e: unknown) {
+      setItemCraftError(e instanceof Error ? e.message : "Craft failed.");
+    } finally {
+      setCraftingItemId(null);
+    }
+  }
+
   // Universal Essence craftable count
   const universalCraftable = universalEssenceCraftable(state.essences ?? []);
 
@@ -311,9 +579,9 @@ export function AlchemyTab() {
   return (
     <div className="flex flex-col gap-5">
 
-      {/* Tab switcher: Sacrifice | Essences */}
+      {/* Tab switcher: Sacrifice | Essences | Craft */}
       <div className="flex rounded-xl border border-border bg-card/40 p-0.5 gap-0.5">
-        {(["sacrifice", "essences"] as AlchemyView[]).map((v) => (
+        {(["sacrifice", "essences", "craft"] as AlchemyView[]).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -325,7 +593,7 @@ export function AlchemyTab() {
               }
             `}
           >
-            {v === "sacrifice" ? "⚗️ Sacrifice" : "✨ Essences"}
+            {v === "sacrifice" ? "⚗️ Sacrifice" : v === "essences" ? "✨ Essences" : "🔨 Craft"}
           </button>
         ))}
       </div>
@@ -690,6 +958,37 @@ export function AlchemyTab() {
             </div>
           )}
 
+        </div>
+      )}
+
+      {/* ── CRAFT view ── */}
+      {view === "craft" && (
+        <CraftView
+          essences={state.essences ?? []}
+          consumables={state.consumables ?? []}
+          infusers={state.infusers ?? []}
+          craftingItemId={craftingItemId}
+          itemCraftError={itemCraftError}
+          onCraft={handleCraftItem}
+        />
+      )}
+
+      {/* ── Item craft success toast ── */}
+      {itemCraftSuccess && (
+        <div
+          className={`
+            fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none
+            transition-all duration-400
+            ${itemCraftSuccessVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
+          `}
+        >
+          <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-56">
+            <span className="text-2xl">{itemCraftSuccess.emoji}</span>
+            <div>
+              <p className="text-sm font-bold text-primary mb-0.5">Crafted!</p>
+              <p className="text-[11px] text-muted-foreground">{itemCraftSuccess.name}</p>
+            </div>
+          </div>
         </div>
       )}
 

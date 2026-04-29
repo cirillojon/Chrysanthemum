@@ -1,0 +1,307 @@
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin":  "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+function b64url(s: string): string {
+  const t = s.replace(/-/g, "+").replace(/_/g, "/");
+  return t + "=".repeat((4 - t.length % 4) % 4);
+}
+
+// ── Mirrored recipe data (mirrors src/data/consumables.ts) ───────────────
+// Edge functions can't import from src/ — recipe costs are hardcoded here.
+
+type EssenceCostEntry = { type: string; amount: number };
+type CraftCost =
+  | { kind: "essence";    amounts: EssenceCostEntry[] }
+  | { kind: "consumable"; id: string; quantity: number };
+type InfuserCost =
+  | { kind: "essence"; amounts: EssenceCostEntry[] }
+  | { kind: "infuser";  tier: number; quantity: number };
+
+interface ConsumableRecipeDef { id: string; cost: CraftCost }
+interface InfuserRecipeDef    { tier: number; rarity: string; cost: InfuserCost }
+
+const TIER_RARITIES: Record<number, string> = {
+  1: "rare", 2: "legendary", 3: "mythic", 4: "exalted", 5: "prismatic",
+};
+
+const E = (amounts: EssenceCostEntry[]): CraftCost => ({ kind: "essence", amounts });
+const U = (id: string, quantity: number): CraftCost => ({ kind: "consumable", id, quantity });
+
+const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
+  // Bloom Burst
+  { id: "bloom_burst_1", cost: E([{ type: "solar", amount: 4 }, { type: "zephyr", amount: 4 }]) },
+  { id: "bloom_burst_2", cost: U("bloom_burst_1", 2) },
+  { id: "bloom_burst_3", cost: U("bloom_burst_2", 2) },
+  { id: "bloom_burst_4", cost: U("bloom_burst_3", 2) },
+  { id: "bloom_burst_5", cost: U("bloom_burst_4", 2) },
+  // Heirloom Charm
+  { id: "heirloom_charm_1", cost: E([{ type: "grove", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  { id: "heirloom_charm_2", cost: U("heirloom_charm_1", 2) },
+  { id: "heirloom_charm_3", cost: U("heirloom_charm_2", 2) },
+  { id: "heirloom_charm_4", cost: U("heirloom_charm_3", 2) },
+  { id: "heirloom_charm_5", cost: U("heirloom_charm_4", 2) },
+  // Eclipse Tonic
+  { id: "eclipse_tonic_1", cost: E([{ type: "solar", amount: 4 }, { type: "lunar", amount: 4 }]) },
+  { id: "eclipse_tonic_2", cost: U("eclipse_tonic_1", 2) },
+  { id: "eclipse_tonic_3", cost: U("eclipse_tonic_2", 2) },
+  { id: "eclipse_tonic_4", cost: U("eclipse_tonic_3", 2) },
+  { id: "eclipse_tonic_5", cost: U("eclipse_tonic_4", 2) },
+  // Purity Vial
+  { id: "purity_vial_1", cost: E([{ type: "arcane", amount: 4 }, { type: "frost", amount: 4 }]) },
+  { id: "purity_vial_2", cost: U("purity_vial_1", 2) },
+  { id: "purity_vial_3", cost: U("purity_vial_2", 2) },
+  { id: "purity_vial_4", cost: U("purity_vial_3", 2) },
+  { id: "purity_vial_5", cost: U("purity_vial_4", 2) },
+  // Giant Vial
+  { id: "giant_vial_1", cost: E([{ type: "grove", amount: 4 }, { type: "storm", amount: 4 }]) },
+  { id: "giant_vial_2", cost: U("giant_vial_1", 2) },
+  { id: "giant_vial_3", cost: U("giant_vial_2", 2) },
+  { id: "giant_vial_4", cost: U("giant_vial_3", 2) },
+  { id: "giant_vial_5", cost: U("giant_vial_4", 2) },
+  // Frost Vial
+  { id: "frost_vial_1", cost: E([{ type: "frost", amount: 6 }]) },
+  { id: "frost_vial_2", cost: U("frost_vial_1", 2) },
+  { id: "frost_vial_3", cost: U("frost_vial_2", 2) },
+  { id: "frost_vial_4", cost: U("frost_vial_3", 2) },
+  { id: "frost_vial_5", cost: U("frost_vial_4", 2) },
+  // Ember Vial
+  { id: "ember_vial_1", cost: E([{ type: "blaze", amount: 6 }]) },
+  { id: "ember_vial_2", cost: U("ember_vial_1", 2) },
+  { id: "ember_vial_3", cost: U("ember_vial_2", 2) },
+  { id: "ember_vial_4", cost: U("ember_vial_3", 2) },
+  { id: "ember_vial_5", cost: U("ember_vial_4", 2) },
+  // Storm Vial
+  { id: "storm_vial_1", cost: E([{ type: "storm", amount: 6 }]) },
+  { id: "storm_vial_2", cost: U("storm_vial_1", 2) },
+  { id: "storm_vial_3", cost: U("storm_vial_2", 2) },
+  { id: "storm_vial_4", cost: U("storm_vial_3", 2) },
+  { id: "storm_vial_5", cost: U("storm_vial_4", 2) },
+  // Moon Vial
+  { id: "moon_vial_1", cost: E([{ type: "lunar", amount: 6 }]) },
+  { id: "moon_vial_2", cost: U("moon_vial_1", 2) },
+  { id: "moon_vial_3", cost: U("moon_vial_2", 2) },
+  { id: "moon_vial_4", cost: U("moon_vial_3", 2) },
+  { id: "moon_vial_5", cost: U("moon_vial_4", 2) },
+  // Golden Vial
+  { id: "golden_vial_1", cost: E([{ type: "solar", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  { id: "golden_vial_2", cost: U("golden_vial_1", 2) },
+  { id: "golden_vial_3", cost: U("golden_vial_2", 2) },
+  { id: "golden_vial_4", cost: U("golden_vial_3", 2) },
+  { id: "golden_vial_5", cost: U("golden_vial_4", 2) },
+  // Rainbow Vial
+  { id: "rainbow_vial_1", cost: E([{ type: "universal", amount: 1 }]) },
+  { id: "rainbow_vial_2", cost: U("rainbow_vial_1", 2) },
+  { id: "rainbow_vial_3", cost: U("rainbow_vial_2", 2) },
+  { id: "rainbow_vial_4", cost: U("rainbow_vial_3", 2) },
+  { id: "rainbow_vial_5", cost: U("rainbow_vial_4", 2) },
+  // Wind Shear / Slot Lock (non-tiered)
+  { id: "wind_shear", cost: E([{ type: "zephyr", amount: 6 }, { type: "storm", amount: 6 }]) },
+  { id: "slot_lock",  cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
+];
+
+const CONSUMABLE_RECIPE_MAP = Object.fromEntries(CONSUMABLE_RECIPES.map((r) => [r.id, r]));
+
+const INFUSER_RECIPES: InfuserRecipeDef[] = [
+  { tier: 1, rarity: "rare",      cost: { kind: "essence", amounts: [{ type: "universal", amount: 2 }] } },
+  { tier: 2, rarity: "legendary", cost: { kind: "infuser", tier: 1, quantity: 2 } },
+  { tier: 3, rarity: "mythic",    cost: { kind: "infuser", tier: 2, quantity: 2 } },
+  { tier: 4, rarity: "exalted",   cost: { kind: "infuser", tier: 3, quantity: 2 } },
+  { tier: 5, rarity: "prismatic", cost: { kind: "infuser", tier: 4, quantity: 2 } },
+];
+
+// ── Handlers ─────────────────────────────────────────────────────────────────
+
+Deno.serve(async (req: Request) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
+
+  try {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    let userId: string;
+    try {
+      const p = JSON.parse(atob(b64url(token.split(".")[1])));
+      userId = p.sub;
+    } catch {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const body = await req.json() as { craftType: string; id?: string };
+    const { craftType, id } = body;
+
+    if (!craftType || !["consumable", "infuser"].includes(craftType)) {
+      return new Response(JSON.stringify({ error: "Invalid craftType" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL")!,
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
+    );
+
+    const [authResult, saveResult] = await Promise.all([
+      supabaseAdmin.auth.getUser(token),
+      supabaseAdmin
+        .from("game_saves")
+        .select("essences, consumables, infusers, updated_at")
+        .eq("user_id", userId)
+        .single(),
+    ]);
+
+    if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (saveResult.error || !saveResult.data) {
+      return new Response(JSON.stringify({ error: "Save not found" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const save          = saveResult.data;
+    const priorUpdatedAt = save.updated_at as string;
+
+    let essences:    { type: string; amount: number }[]    = (save.essences    ?? []) as { type: string; amount: number }[];
+    let consumables: { id: string;   quantity: number }[]  = (save.consumables ?? []) as { id: string;   quantity: number }[];
+    let infusers:    { rarity: string; quantity: number }[] = (save.infusers   ?? []) as { rarity: string; quantity: number }[];
+
+    // ── Craft consumable ────────────────────────────────────────────────────
+    if (craftType === "consumable") {
+      if (!id) {
+        return new Response(JSON.stringify({ error: "id required for consumable craft" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const recipe = CONSUMABLE_RECIPE_MAP[id];
+      if (!recipe) {
+        return new Response(JSON.stringify({ error: `Unknown consumable: ${id}` }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { cost } = recipe;
+      if (cost.kind === "essence") {
+        for (const { type, amount } of cost.amounts) {
+          const have = essences.find((e) => e.type === type)?.amount ?? 0;
+          if (have < amount) {
+            return new Response(JSON.stringify({ error: `Not enough ${type} essence` }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+        for (const { type, amount } of cost.amounts) {
+          essences = essences
+            .map((e) => e.type === type ? { ...e, amount: e.amount - amount } : e)
+            .filter((e) => e.amount > 0);
+        }
+      } else {
+        const have = consumables.find((c) => c.id === cost.id)?.quantity ?? 0;
+        if (have < cost.quantity) {
+          return new Response(JSON.stringify({ error: `Not enough ${cost.id}` }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        consumables = consumables
+          .map((c) => c.id === cost.id ? { ...c, quantity: c.quantity - cost.quantity } : c)
+          .filter((c) => c.quantity > 0);
+      }
+
+      const existingIdx = consumables.findIndex((c) => c.id === id);
+      consumables = existingIdx >= 0
+        ? consumables.map((c, i) => i === existingIdx ? { ...c, quantity: c.quantity + 1 } : c)
+        : [...consumables, { id, quantity: 1 }];
+    }
+
+    // ── Craft infuser ───────────────────────────────────────────────────────
+    if (craftType === "infuser") {
+      const tier = typeof id === "string" ? parseInt(id, 10) : NaN;
+      const recipe = INFUSER_RECIPES.find((r) => r.tier === tier);
+      if (!recipe) {
+        return new Response(JSON.stringify({ error: `Unknown infuser tier: ${id}` }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { cost } = recipe;
+      if (cost.kind === "essence") {
+        for (const { type, amount } of cost.amounts) {
+          const have = essences.find((e) => e.type === type)?.amount ?? 0;
+          if (have < amount) {
+            return new Response(JSON.stringify({ error: `Not enough ${type} essence` }), {
+              status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+        }
+        for (const { type, amount } of cost.amounts) {
+          essences = essences
+            .map((e) => e.type === type ? { ...e, amount: e.amount - amount } : e)
+            .filter((e) => e.amount > 0);
+        }
+      } else {
+        const prevRarity = TIER_RARITIES[cost.tier];
+        const have = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
+        if (have < cost.quantity) {
+          return new Response(JSON.stringify({ error: `Not enough Infuser ${cost.tier}` }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        infusers = infusers
+          .map((i) => i.rarity === prevRarity ? { ...i, quantity: i.quantity - cost.quantity } : i)
+          .filter((i) => i.quantity > 0);
+      }
+
+      const existingIdx = infusers.findIndex((i) => i.rarity === recipe.rarity);
+      infusers = existingIdx >= 0
+        ? infusers.map((i, idx) => idx === existingIdx ? { ...i, quantity: i.quantity + 1 } : i)
+        : [...infusers, { rarity: recipe.rarity, quantity: 1 }];
+    }
+
+    // ── Write ────────────────────────────────────────────────────────────────
+    const { data: updateData, error: updateError } = await supabaseAdmin
+      .from("game_saves")
+      .update({ essences, consumables, infusers, updated_at: new Date().toISOString() })
+      .eq("user_id", userId)
+      .eq("updated_at", priorUpdatedAt)
+      .select("updated_at")
+      .single();
+
+    if (updateError || !updateData) {
+      return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    void supabaseAdmin.from("action_log").insert({
+      user_id: userId,
+      action:  "alchemy_craft",
+      payload: { craftType, id },
+      result:  { essences, consumables, infusers },
+    });
+
+    return new Response(
+      JSON.stringify({ ok: true, essences, consumables, infusers, serverUpdatedAt: updateData.updated_at }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+    );
+  } catch (err) {
+    console.error("alchemy-craft error:", err);
+    return new Response(JSON.stringify({ error: "Internal server error" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+});

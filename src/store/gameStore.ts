@@ -4,6 +4,7 @@ import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
 import { mergeEssences, calculateEssenceYield, type EssenceItem } from "../data/essences";
+import type { ConsumableItem } from "../data/consumables";
 import {
   WEATHER_MUT_CHANCE_PER_TICK,
   THUNDERSTORM_WET_CHANCE_PER_TICK,
@@ -106,6 +107,12 @@ export interface GameState {
   // Flower Infusers — consumable items applied to bloomed plants to mark them as cross-breed
   // participants. Stored by rarity (must match the flower's rarity to apply).
   infusers: { rarity: Rarity; quantity: number }[];
+  // Crafted consumable items (Bloom Burst, vials, Eclipse Tonic, etc.)
+  consumables: ConsumableItem[];
+  // ISO date "YYYY-MM-DD" of last Eclipse Tonic use — enforces once-per-day limit
+  lastEclipseTonic: string | null;
+  // Unix timestamp of last Wind Shear use — enforces 1-hour cooldown
+  lastWindShearUsed: number | null;
   // Server sync — the updated_at value from the last successful DB read or write.
   // saveToCloud uses this as a CAS guard so stale sessions can't overwrite
   // server-authoritative state (inventory, coins, etc.) with stale client data.
@@ -365,6 +372,9 @@ export function defaultState(): GameState {
     essences:             [],
     discoveredRecipes:    [],
     infusers:             [],
+    consumables:          [],
+    lastEclipseTonic:     null,
+    lastWindShearUsed:    null,
     serverUpdatedAt:      null,
   };
 }
@@ -446,6 +456,10 @@ export function applyOfflineTick(
     gearInventory:        save.gearInventory         ?? [],
     essences:             save.essences              ?? [],
     discoveredRecipes:    save.discoveredRecipes     ?? [],
+    infusers:             save.infusers              ?? [],
+    consumables:          save.consumables           ?? [],
+    lastEclipseTonic:     save.lastEclipseTonic      ?? null,
+    lastWindShearUsed:    save.lastWindShearUsed     ?? null,
   };
 
   let shopRestocked    = false;
