@@ -5,12 +5,14 @@ import {
   getMsUntilNextStage,
   applyFertilizer,
   removePlant,
+  applyPlantConsumable,
 } from "../store/gameStore";
-import { edgeApplyFertilizer, edgeRemovePlant, edgeApplyInfuser } from "../lib/edgeFunctions";
+import { edgeApplyFertilizer, edgeRemovePlant, edgeApplyInfuser, edgeApplyPlantConsumable } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
+import { CONSUMABLE_RECIPE_MAP, ROMAN, type ConsumableId } from "../data/consumables";
 
 interface Props {
   plant:                 PlantedFlower;
@@ -51,12 +53,13 @@ export function PlotTooltip({
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell,
 }: Props) {
   const { state, getState, perform, update, activeWeather } = useGame();
-  const [showFertPicker,  setShowFertPicker]  = useState(false);
-  const [confirmRemove,   setConfirmRemove]   = useState(false);
-  const [removing,        setRemoving]        = useState(false);
-  const [applyingInfuser, setApplyingInfuser] = useState(false);
-  const [nudge,           setNudge]           = useState(0);
-  const [flipped,         setFlipped]         = useState(false);
+  const [showFertPicker,    setShowFertPicker]    = useState(false);
+  const [confirmRemove,     setConfirmRemove]     = useState(false);
+  const [removing,          setRemoving]          = useState(false);
+  const [applyingInfuser,   setApplyingInfuser]   = useState(false);
+  const [applyingConsumable,setApplyingConsumable]= useState<string | null>(null);
+  const [nudge,             setNudge]             = useState(0);
+  const [flipped,           setFlipped]           = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -99,6 +102,19 @@ export function PlotTooltip({
     (i) => i.rarity === species.rarity && i.quantity > 0
   );
 
+  // Consumables applicable to this plant right now
+  const applicableConsumables = (state.consumables ?? []).filter((c) => {
+    if (c.quantity <= 0) return false;
+    const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
+    if (!recipe || recipe.tier === null) return false;
+    if (recipe.rarity !== species.rarity) return false;
+    // Bloom Burst only works on non-bloomed plants
+    if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
+    // Heirloom Charm only works on bloomed plants
+    if (c.id.startsWith("heirloom_charm_") && !isBloomed) return false;
+    return true;
+  });
+
   async function handleApplyInfuser() {
     if (applyingInfuser) return;
     setApplyingInfuser(true);
@@ -119,6 +135,30 @@ export function PlotTooltip({
     if (optimistic) perform(optimistic, () => edgeApplyFertilizer(row, col, type));
     setShowFertPicker(false);
     onClose?.();
+  }
+
+  function handleUseConsumable(consumableId: string) {
+    if (applyingConsumable) return;
+    const cur = getState();
+    const optimistic = applyPlantConsumable(cur, row, col, consumableId);
+    if (!optimistic) return;
+    const savedCell       = cur.grid[row][col];
+    const savedConsumables = cur.consumables;
+    setApplyingConsumable(consumableId);
+    perform(
+      optimistic,
+      () => edgeApplyPlantConsumable(row, col, consumableId),
+      () => setApplyingConsumable(null),
+      {
+        rollback: (c) => ({
+          ...c,
+          grid: c.grid.map((r, ri) =>
+            r.map((p, ci) => ri === row && ci === col ? savedCell : p)
+          ),
+          consumables: savedConsumables,
+        }),
+      }
+    );
   }
 
   function handleRemove() {
@@ -216,7 +256,55 @@ export function PlotTooltip({
           {isBloomed && plant.mutation === null && (
             <p className="text-[10px] text-muted-foreground font-mono">No mutation</p>
           )}
+          {/* Active consumable flags */}
+          {plant.heirloomActive && (
+            <p className="text-[10px] font-mono text-emerald-400">🔮 Heirloom Charm active</p>
+          )}
+          {plant.mutationBlocked && (
+            <p className="text-[10px] font-mono text-sky-400">🫧 Purity Shield active</p>
+          )}
+          {plant.forcedMutation === "giant" && (
+            <p className="text-[10px] font-mono text-violet-400">🧬 Giant Force active</p>
+          )}
+          {plant.mutationBoost && !plant.mutationBlocked && (
+            <p className="text-[10px] font-mono text-amber-400">
+              Boost: {plant.mutationBoost.mutation} ×{plant.mutationBoost.multiplier}
+            </p>
+          )}
         </div>
+
+        {/* Plant-targeting consumables */}
+        {applicableConsumables.length > 0 && (
+          <div className="pt-1 border-t border-border">
+            <p className="text-[10px] text-muted-foreground mb-1">Use consumable</p>
+            <div className="flex flex-wrap gap-1">
+              {applicableConsumables.map((c) => {
+                const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
+                if (!recipe) return null;
+                const busy = applyingConsumable === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => handleUseConsumable(c.id)}
+                    disabled={!!applyingConsumable}
+                    title={`${recipe.name} — ${recipe.description}`}
+                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[10px] transition-colors disabled:opacity-50 ${
+                      busy
+                        ? "bg-primary/20 border-primary/40 text-primary"
+                        : "bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
+                    }`}
+                  >
+                    <span>{recipe.emoji}</span>
+                    {recipe.tier !== null && (
+                      <span>{ROMAN[recipe.tier as 1|2|3|4|5]}</span>
+                    )}
+                    <span className="text-muted-foreground ml-0.5">×{c.quantity}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Bloomed actions — Harvest + Infuser */}
         {isBloomed && (

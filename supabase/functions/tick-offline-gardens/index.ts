@@ -130,6 +130,9 @@ interface Plant {
   masteredBonus?: number;
   mutation?: string | null;
   infused?: boolean;
+  // Consumable flags — set by use-consumable, consumed at harvest
+  mutationBlocked?: boolean;
+  mutationBoost?:   { mutation: string; multiplier: number };
 }
 interface Gear { gearType: string; placedAt: number; }
 interface Plot { id: string; plant?: Plant | null; gear?: Gear | null; }
@@ -310,9 +313,21 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
   const next = grid.map(row => row.map(plot => {
     if (!plot.plant || !plot.plant.bloomedAt) return plot;
 
+    // ── Purity Vial guard ────────────────────────────────────────────────────
+    // mutationBlocked plants are shielded from all weather mutations.
+    // The flag is consumed at harvest time, not here.
+    if (plot.plant.mutationBlocked) return plot;
+
+    // Helper: look up any active mutation boost for a given mutation type.
+    const boostFor = (mt: string): number =>
+      plot.plant!.mutationBoost?.mutation === mt
+        ? (plot.plant!.mutationBoost!.multiplier ?? 1)
+        : 1;
+
     // Thunderstorm combo: wet → shocked
     if (weatherType === "thunderstorm" && plot.plant.mutation === "wet") {
-      if (Math.random() < THUNDERSTORM_SHOCKED_CHANCE_PER_MIN) {
+      const chance = Math.min(1.0, THUNDERSTORM_SHOCKED_CHANCE_PER_MIN * boostFor("shocked"));
+      if (Math.random() < chance) {
         changed = true;
         return { ...plot, plant: { ...plot.plant, mutation: "shocked" } };
       }
@@ -324,22 +339,27 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
 
     // Thunderstorm: null/undefined → wet
     if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
-      if (Math.random() < THUNDERSTORM_WET_CHANCE_PER_MIN) {
+      const chance = Math.min(1.0, THUNDERSTORM_WET_CHANCE_PER_MIN * boostFor("wet"));
+      if (Math.random() < chance) {
         changed = true;
         return { ...plot, plant: { ...plot.plant, mutation: "wet" } };
       }
       return plot;
     }
 
-    // Standard weather mutation roll
-    if (mutType && mutChance > 0 && Math.random() < mutChance) {
-      changed = true;
-      return { ...plot, plant: { ...plot.plant, mutation: mutType } };
+    // Standard weather mutation roll — apply boost if the vial matches this weather's mutation
+    if (mutType && mutChance > 0) {
+      const chance = Math.min(1.0, mutChance * boostFor(mutType));
+      if (Math.random() < chance) {
+        changed = true;
+        return { ...plot, plant: { ...plot.plant, mutation: mutType } };
+      }
     }
 
     // Moonlit at night (outside star_shower)
     if (night && weatherType !== "star_shower" && plot.plant.mutation === undefined) {
-      if (Math.random() < MOONLIT_NIGHT_CHANCE_PER_MIN) {
+      const chance = Math.min(1.0, MOONLIT_NIGHT_CHANCE_PER_MIN * boostFor("moonlit"));
+      if (Math.random() < chance) {
         changed = true;
         return { ...plot, plant: { ...plot.plant, mutation: "moonlit" } };
       }

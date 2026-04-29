@@ -4,14 +4,15 @@ import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
-import { sellFlower, type InventoryItem } from "../store/gameStore";
-import { edgeSellFlower } from "../lib/edgeFunctions";
+import { sellFlower, applyEclipseTonic, type InventoryItem } from "../store/gameStore";
+import { edgeSellFlower, edgeUseEclipseTonic } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";
+import { CONSUMABLE_RECIPE_MAP, ROMAN, type ConsumableId } from "../data/consumables";
 
-type Tab = 0 | 1 | 2;
-const TAB_LABELS = ["Seeds", "Blooms", "Supplies"] as const;
+type Tab = 0 | 1 | 2 | 3;
+const TAB_LABELS = ["Seeds", "Blooms", "Supplies", "Consumables"] as const;
 
 interface Props {
   newSeeds?:    number;
@@ -21,19 +22,22 @@ interface Props {
 }
 
 export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView }: Props) {
-  const { state, update, getState, awaitHarvests } = useGame();
-  const [tab, setTab] = useState<Tab>(0);
+  const { state, update, getState, perform, awaitHarvests } = useGame();
+  const [tab,          setTab]          = useState<Tab>(0);
+  const [usingEclipse, setUsingEclipse] = useState<string | null>(null);
 
-  const items       = state.inventory.filter((i) => i.quantity > 0);
-  const seeds       = items.filter((i) => i.isSeed);
-  const blooms      = items.filter((i) => !i.isSeed);
-  const fertilizers = state.fertilizers.filter((f) => f.quantity > 0);
-  const gearItems   = (state.gearInventory ?? []).filter((g) => g.quantity > 0);
+  const items           = state.inventory.filter((i) => i.quantity > 0);
+  const seeds           = items.filter((i) => i.isSeed);
+  const blooms          = items.filter((i) => !i.isSeed);
+  const fertilizers     = state.fertilizers.filter((f) => f.quantity > 0);
+  const gearItems       = (state.gearInventory ?? []).filter((g) => g.quantity > 0);
+  const consumableItems = (state.consumables ?? []).filter((c) => c.quantity > 0);
 
-  const seedCount   = seeds.reduce((s, i) => s + i.quantity, 0);
-  const bloomCount  = blooms.reduce((s, i) => s + i.quantity, 0);
-  const supplyCount = fertilizers.reduce((s, f) => s + f.quantity, 0)
-                    + gearItems.reduce((s, g) => s + g.quantity, 0);
+  const seedCount        = seeds.reduce((s, i) => s + i.quantity, 0);
+  const bloomCount       = blooms.reduce((s, i) => s + i.quantity, 0);
+  const supplyCount      = fertilizers.reduce((s, f) => s + f.quantity, 0)
+                         + gearItems.reduce((s, g) => s + g.quantity, 0);
+  const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0);
 
   const totalBloomValue = blooms.reduce((sum, item) => {
     const species = getFlower(item.speciesId);
@@ -65,7 +69,33 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
     }
   }
 
-  const isEmpty = items.length === 0 && fertilizers.length === 0 && gearItems.length === 0;
+  async function handleUseEclipseTonic(consumableId: ConsumableId) {
+    if (usingEclipse) return;
+    const recipe = CONSUMABLE_RECIPE_MAP[consumableId];
+    if (!recipe?.advanceHours) return;
+    const cur = getState();
+    const optimistic = applyEclipseTonic(cur, consumableId, recipe.advanceHours);
+    if (!optimistic) return;
+    const savedConsumables = cur.consumables;
+    const savedGrid        = cur.grid;
+    setUsingEclipse(consumableId);
+    perform(
+      optimistic,
+      () => edgeUseEclipseTonic(consumableId),
+      () => setUsingEclipse(null),
+      {
+        rollback: (c) => ({
+          ...c,
+          grid: savedGrid,
+          consumables: savedConsumables,
+          lastEclipseTonic: cur.lastEclipseTonic,
+        }),
+      }
+    );
+  }
+
+  const isEmpty = items.length === 0 && fertilizers.length === 0 && gearItems.length === 0
+               && consumableItems.length === 0;
 
   if (isEmpty) {
     return (
@@ -105,18 +135,18 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       {/* Tab bar */}
       <div className="flex gap-1 bg-card/40 border border-border rounded-xl p-1">
         {TAB_LABELS.map((label, i) => {
-          const count    = i === 0 ? seedCount : i === 1 ? bloomCount : supplyCount;
-          const newCount = i === 0 ? newSeeds  : i === 1 ? newBlooms  : newSupplies;
+          const count    = i === 0 ? seedCount : i === 1 ? bloomCount : i === 2 ? supplyCount : consumableCount;
+          const newCount = i === 0 ? newSeeds  : i === 1 ? newBlooms  : i === 2 ? newSupplies : 0;
           const subKey   = (i === 0 ? "seeds" : i === 1 ? "blooms" : "supplies") as "seeds" | "blooms" | "supplies";
           return (
             <button
               key={label}
               onClick={() => {
                 setTab(i as Tab);
-                onSubTabView?.(subKey);
+                if (i < 3) onSubTabView?.(subKey);
               }}
               className={`
-                flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all relative
+                flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold transition-all relative
                 ${tab === i
                   ? "bg-primary/20 text-primary border border-primary/30"
                   : "text-muted-foreground hover:text-foreground"
@@ -125,7 +155,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
             >
               {label}
               {count > 0 && (
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                <span className={`text-[10px] font-mono px-1 py-0.5 rounded-full ${
                   tab === i ? "bg-primary/20 text-primary" : "bg-border text-muted-foreground"
                 }`}>
                   {count}
@@ -174,6 +204,20 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
             </>
           ) : (
             <EmptyTab emoji="🌸" message="No blooms to sell" hint="Harvest fully-grown flowers from your Garden." />
+          )
+        )}
+
+        {/* ── Consumables ─────────────────────────────────────────────────── */}
+        {tab === 3 && (
+          consumableItems.length > 0 ? (
+            <ConsumablesTabContent
+              consumables={consumableItems}
+              lastEclipseTonic={state.lastEclipseTonic}
+              usingEclipse={usingEclipse}
+              onUseEclipse={handleUseEclipseTonic}
+            />
+          ) : (
+            <EmptyTab emoji="🧪" message="No consumables" hint="Craft consumables in the Alchemy lab." />
           )
         )}
 
@@ -244,6 +288,94 @@ function GearInventoryRow({ item }: { item: GearInventoryItem }) {
           ×{item.quantity} · Place in your garden to activate
         </p>
       </div>
+    </div>
+  );
+}
+
+// ── Consumables tab ──────────────────────────────────────────────────────────
+
+const USAGE_CONTEXT: Record<string, string> = {
+  bloom_burst:    "Use in Garden (tap a plant)",
+  heirloom_charm: "Use in Garden (tap a bloomed plant)",
+  purity_vial:    "Use in Garden (tap a plant)",
+  giant_vial:     "Use in Garden (tap a plant)",
+  frost_vial:     "Use in Garden (tap a plant)",
+  ember_vial:     "Use in Garden (tap a plant)",
+  storm_vial:     "Use in Garden (tap a plant)",
+  moon_vial:      "Use in Garden (tap a plant)",
+  golden_vial:    "Use in Garden (tap a plant)",
+  rainbow_vial:   "Use in Garden (tap a plant)",
+  eclipse_tonic:  "Use below — advances all garden plants",
+  wind_shear:     "Use in Supply Shop",
+  slot_lock:      "Use in Supply Shop",
+};
+
+function getConsumablePrefix(id: string): string {
+  // Trim trailing _1 … _5
+  return id.replace(/_\d+$/, "");
+}
+
+interface ConsumablesTabProps {
+  consumables:      { id: string; quantity: number }[];
+  lastEclipseTonic: string | null;
+  usingEclipse:     string | null;
+  onUseEclipse:     (id: ConsumableId) => void;
+}
+
+function ConsumablesTabContent({
+  consumables, lastEclipseTonic, usingEclipse, onUseEclipse,
+}: ConsumablesTabProps) {
+  const today = new Date().toISOString().slice(0, 10);
+  const alreadyUsedToday = lastEclipseTonic === today;
+
+  return (
+    <div className="space-y-3">
+      {consumables.map((c) => {
+        const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
+        if (!recipe) return null;
+        const prefix = getConsumablePrefix(c.id);
+        const context = USAGE_CONTEXT[prefix] ?? "Use contextually";
+        const isEclipse = c.id.startsWith("eclipse_tonic_");
+        const busy = usingEclipse === c.id;
+        const usedToday = isEclipse && alreadyUsedToday;
+
+        return (
+          <div
+            key={c.id}
+            className="flex items-start gap-3 bg-card/60 border border-border rounded-xl px-4 py-3"
+          >
+            <span className="text-2xl flex-shrink-0 mt-0.5">{recipe.emoji}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-semibold text-sm">{recipe.name}</h3>
+                {recipe.tier !== null && (
+                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full border ${RARITY_CONFIG[recipe.rarity]?.color ?? ""} border-current bg-current/10`}>
+                    {RARITY_CONFIG[recipe.rarity]?.label ?? recipe.rarity}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{recipe.description}</p>
+              <p className="text-[10px] text-muted-foreground/70 mt-0.5">×{c.quantity} · {context}</p>
+
+              {isEclipse && (
+                <button
+                  onClick={() => onUseEclipse(c.id as ConsumableId)}
+                  disabled={busy || usedToday}
+                  className={`mt-2 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                    usedToday
+                      ? "bg-card border border-border text-muted-foreground cursor-not-allowed"
+                      : busy
+                      ? "bg-primary/20 text-primary"
+                      : "bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30"
+                  }`}
+                >
+                  {busy ? "Advancing…" : usedToday ? "Used today" : `🌒 Use (${recipe.advanceHours}h advance)`}
+                </button>
+              )}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

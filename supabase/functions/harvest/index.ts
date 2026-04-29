@@ -247,6 +247,10 @@ Deno.serve(async (req: Request) => {
     const plant = plot.plant as {
       speciesId: string; timePlanted: number;
       fertilizer?: string | null; masteredBonus?: number; mutation?: string | null;
+      // Consumable flags — applied by use-consumable edge function
+      heirloomActive?:  boolean;
+      mutationBlocked?: boolean;
+      forcedMutation?:  string;
     };
 
     // ── Server-side bloom check ───────────────────────────────────────────────
@@ -325,10 +329,24 @@ Deno.serve(async (req: Request) => {
 
     // ── Compute changes ───────────────────────────────────────────────────────
     const { speciesId } = plant;
+
+    // ── Consumable flag: Purity Vial (mutationBlocked) ────────────────────────
+    // Shields this harvest from any mutation. Overrides forcedMutation too.
+    //
+    // ── Consumable flag: Giant Vial (forcedMutation) ──────────────────────────
+    // Forces a Giant mutation on this harvest, overriding any weather mutation.
+    //
     // Server-trusted mutation only — never accept client-supplied mutation IDs.
     // Both the client tick (cloud-saved grid) and the server tick-offline-gardens
     // function write to plant.mutation in the DB.
-    const mutation      = (plant.mutation as string | null | undefined) ?? undefined;
+    let mutation: string | undefined;
+    if (plant.mutationBlocked) {
+      mutation = undefined; // Purity Vial — no mutation
+    } else if (plant.forcedMutation === "giant") {
+      mutation = "giant";   // Giant Vial — force Giant
+    } else {
+      mutation = (plant.mutation as string | null | undefined) ?? undefined;
+    }
     const sellValue     = FLOWER_SELL_VALUES[speciesId] ?? 0;
     const mutMultiplier = mutation ? (MUTATION_MULTIPLIERS[mutation] ?? 1) : 1;
     // No bonus coins for bloom-placed plants — awarding them would allow
@@ -349,9 +367,20 @@ Deno.serve(async (req: Request) => {
     const existingIdx = inventory.findIndex(
       (i) => i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
     );
-    const newInventory = existingIdx >= 0
+    let newInventory = existingIdx >= 0
       ? inventory.map((i, idx) => idx === existingIdx ? { ...i, quantity: i.quantity + 1 } : i)
       : [...inventory, { speciesId, quantity: 1, mutation, isSeed: false }];
+
+    // ── Consumable flag: Heirloom Charm (heirloomActive) ─────────────────────
+    // Return the seed to inventory in addition to the normal bloom harvest.
+    if (plant.heirloomActive) {
+      const seedIdx = newInventory.findIndex(
+        (i) => i.speciesId === speciesId && i.isSeed && !i.mutation
+      );
+      newInventory = seedIdx >= 0
+        ? newInventory.map((i, idx) => idx === seedIdx ? { ...i, quantity: i.quantity + 1 } : i)
+        : [...newInventory, { speciesId, quantity: 1, isSeed: true }];
+    }
 
     const discovered    = (save.discovered ?? []) as string[];
     const newDiscovered = [...discovered];
