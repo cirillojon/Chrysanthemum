@@ -833,6 +833,52 @@ export function plantSeed(
   return { ...state, grid: newGrid, inventory: newInventory };
 }
 
+/** Optimistically place a bloom from inventory directly onto a plot at bloom stage. */
+export function plantBloom(
+  state: GameState,
+  row: number,
+  col: number,
+  speciesId: string,
+  mutation?: string,
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot || plot.plant || plot.gear) return null;
+
+  const invItem = state.inventory.find(
+    (i) => i.speciesId === speciesId && !i.isSeed && (i.mutation ?? undefined) === mutation
+  );
+  if (!invItem || invItem.quantity < 1) return null;
+
+  const mastered = isSpeciesMastered(state.discovered, speciesId);
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) => {
+      if (ri === row && ci === col)
+        return {
+          ...p,
+          plant: {
+            speciesId,
+            timePlanted: 0, // epoch → always past bloom threshold
+            fertilizer: null,
+            ...(mutation ? { mutation } : {}),
+            ...(mastered ? { masteredBonus: 1.25 } : {}),
+          },
+        };
+      return p;
+    })
+  );
+
+  const newInventory = state.inventory
+    .map((i) =>
+      i.speciesId === speciesId && !i.isSeed && (i.mutation ?? undefined) === mutation
+        ? { ...i, quantity: i.quantity - 1 }
+        : i
+    )
+    .filter((i) => i.quantity > 0);
+
+  return { ...state, grid: newGrid, inventory: newInventory };
+}
+
 /** Optimistically remove a growing (non-bloomed) plant and return its seed to inventory. */
 export function removePlant(
   state: GameState,
@@ -1412,7 +1458,11 @@ export function harvestPlant(
   const mutation = plot.plant.mutation ?? undefined;
   const species  = getFlower(speciesId)!;
 
-  const bonusCoins = mutation
+  // timePlanted === 0 is the sentinel for bloom-placed plants (placed via plant-bloom).
+  // No bonus coins for these — awarding them would allow harvest → re-place → harvest
+  // cycles for infinite coin generation.
+  const isBloomPlaced = plot.plant.timePlanted === 0;
+  const bonusCoins = (!isBloomPlaced && mutation)
     ? Math.floor(species.sellValue * (MUTATIONS[mutation].valueMultiplier - 1))
     : 0;
 

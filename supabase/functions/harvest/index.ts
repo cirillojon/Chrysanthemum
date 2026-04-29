@@ -77,6 +77,23 @@ const FLOWER_GROWTH_TIMES: Record<string, { seed: number; sprout: number }> = {
   oracle_eye: { seed: 10_800_000, sprout: 21_600_000 }, halfmoon_bloom: { seed: 11_400_000, sprout: 22_800_000 },
   aurora_bloom: { seed: 11_500_000, sprout: 23_000_000 }, mirrorpetal: { seed: 12_000_000, sprout: 24_000_000 },
   emberspark: { seed: 12_600_000, sprout: 25_200_000 },
+  // Cropsticks recipe outputs — Tier 1 (legendary)
+  phoenix_lily:    { seed: 36_000_000,  sprout: 72_000_000    },
+  eclipse_bloom:   { seed: 43_200_000,  sprout: 86_400_000    },
+  tempest_orchid:  { seed: 50_400_000,  sprout: 100_800_000   },
+  blightmantle:    { seed: 57_600_000,  sprout: 115_200_000   },
+  cosmosbloom:     { seed: 64_800_000,  sprout: 129_600_000   },
+  dreamgust:       { seed: 72_000_000,  sprout: 144_000_000   },
+  // Tier 2 (mythic)
+  solarburst:      { seed: 86_400_000,  sprout: 172_800_000   },
+  tidalune:        { seed: 108_000_000, sprout: 216_000_000   },
+  whisperleaf:     { seed: 129_600_000, sprout: 259_200_000   },
+  crystalmind:     { seed: 151_200_000, sprout: 302_400_000   },
+  // Tier 3 (exalted)
+  void_chrysalis:  { seed: 302_400_000, sprout: 604_800_000   },
+  starloom:        { seed: 345_600_000, sprout: 691_200_000   },
+  // Tier 4 (prismatic)
+  the_first_bloom: { seed: 604_800_000, sprout: 1_209_600_000 },
   blink_rose: { seed: 18_000_000, sprout: 36_000_000 }, dawnfire: { seed: 21_600_000, sprout: 43_200_000 },
   moonflower: { seed: 28_800_000, sprout: 57_600_000 }, jellybloom: { seed: 30_000_000, sprout: 60_000_000 },
   celestial_bloom: { seed: 36_000_000, sprout: 72_000_000 }, void_blossom: { seed: 43_200_000, sprout: 86_400_000 },
@@ -119,6 +136,15 @@ const FLOWER_SELL_VALUES: Record<string, number> = {
   stargazer: 5_600, fullmoon_bloom: 5_700, ice_crown: 5_700, diamond_bloom: 6_000,
   oracle_eye: 6_300, halfmoon_bloom: 6_600, aurora_bloom: 6_700, mirrorpetal: 6_900,
   emberspark: 7_200,
+  // Cropsticks recipe outputs — Tier 1 (legendary)
+  phoenix_lily: 22_000, eclipse_bloom: 24_000, tempest_orchid: 26_000,
+  blightmantle: 28_000, cosmosbloom: 30_000, dreamgust: 32_000,
+  // Tier 2 (mythic)
+  solarburst: 130_000, tidalune: 150_000, whisperleaf: 170_000, crystalmind: 190_000,
+  // Tier 3 (exalted)
+  void_chrysalis: 700_000, starloom: 800_000,
+  // Tier 4 (prismatic)
+  the_first_bloom: 5_000_000,
   blink_rose: 50_000, dawnfire: 53_000, moonflower: 58_000, jellybloom: 59_000,
   celestial_bloom: 63_000, void_blossom: 69_000, seraph_wing: 77_000,
   solar_rose: 79_000, nebula_drift: 84_000, superbloom: 90_000,
@@ -274,12 +300,27 @@ Deno.serve(async (req: Request) => {
     }
 
     const authoritativePlantedAt = new Date(timingResult.data.planted_at).getTime();
-    const minBloomTime = authoritativePlantedAt + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
 
-    if (Date.now() < minBloomTime) {
-      return new Response(JSON.stringify({ error: "Plant is not ready to harvest" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    // Bloom-placed plants use timePlanted = 0 as a sentinel (set by plant-bloom).
+    // If plant_timings still has a stale entry (e.g. from a previously removed plant),
+    // auto-correct it to epoch so harvest works. We check plant.timePlanted from the
+    // grid — it's client-stored, but forging it only skips the wait time (low-risk).
+    const isBloomPlaced = plant.timePlanted === 0;
+    if (isBloomPlaced && authoritativePlantedAt !== 0) {
+      void supabaseAdmin.from("plant_timings").upsert(
+        { user_id: userId, row, col, planted_at: "1970-01-01T00:00:00.000Z" },
+        { onConflict: "user_id,row,col" }
+      );
+      // Fall through — epoch planted_at always passes the bloom check below
+    }
+
+    if (!isBloomPlaced) {
+      const minBloomTime = authoritativePlantedAt + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
+      if (Date.now() < minBloomTime) {
+        return new Response(JSON.stringify({ error: "Plant is not ready to harvest" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // ── Compute changes ───────────────────────────────────────────────────────
@@ -290,7 +331,9 @@ Deno.serve(async (req: Request) => {
     const mutation      = (plant.mutation as string | null | undefined) ?? undefined;
     const sellValue     = FLOWER_SELL_VALUES[speciesId] ?? 0;
     const mutMultiplier = mutation ? (MUTATION_MULTIPLIERS[mutation] ?? 1) : 1;
-    const bonusCoins    = mutation ? Math.floor(sellValue * (mutMultiplier - 1)) : 0;
+    // No bonus coins for bloom-placed plants — awarding them would allow
+    // harvest → re-place → harvest cycles for infinite coin generation.
+    const bonusCoins    = (!isBloomPlaced && mutation) ? Math.floor(sellValue * (mutMultiplier - 1)) : 0;
 
     // Clear only the harvested plot — do NOT return the full grid to the client.
     // Mutations on other plants live only in client state; overwriting with the

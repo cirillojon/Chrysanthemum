@@ -102,6 +102,10 @@ export function edgePlantSeed(row: number, col: number, speciesId: string) {
   return callEdge<PlantSeedResult>("plant-seed", { row, col, speciesId });
 }
 
+export function edgePlantBloom(row: number, col: number, speciesId: string, mutation?: string) {
+  return callEdge<PlantSeedResult>("plant-bloom", { row, col, speciesId, mutation });
+}
+
 export interface RemovePlantResult {
   ok:        true;
   grid:      GameState["grid"];

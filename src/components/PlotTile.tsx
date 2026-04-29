@@ -34,7 +34,7 @@ interface Props {
   row:             number;
   col:             number;
   onEmptyClick:    () => void;
-  onHarvest:       (speciesId: string, mutation?: MutationType) => void;
+  onHarvest:       (speciesId: string, mutation?: MutationType, isBloomPlaced?: boolean) => void;
   onHarvestStart?: () => void;
   onHarvestEnd?:   () => void;
   /** Called at click time to check if this plot is already queued by Collect All. */
@@ -147,7 +147,7 @@ export function PlotTile({
             onHarvestEnd?.();
           }
         },
-        () => { onHarvest(plant.speciesId, optimistic.mutation); },
+        () => { onHarvest(plant.speciesId, optimistic.mutation, savedCell.plant?.timePlanted === 0); },
         {
           serialize: true,
           rollback: (cur) => ({

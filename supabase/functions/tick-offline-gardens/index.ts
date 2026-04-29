@@ -356,7 +356,7 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
 // Probability target: ~50% success per hour with 60-second ticks (60 ticks/hr).
 // p = 1 - 0.5^(1/60) ≈ 0.01154 (1.154% per tick).
 
-const CROPSTICKS_BREED_CHANCE_PER_TICK = 0.01154;
+const CROPSTICKS_BREED_CHANCE_PER_TICK = 0.01154; // ~50% chance over 1 hour (1 tick/min)
 
 const RARITY_IDX: Record<string, number> = {
   common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
@@ -783,7 +783,28 @@ Deno.serve(async (req: Request) => {
         .eq("user_id", sim.user_id)
         .eq("updated_at", original.updated_at); // only update if row hasn't changed
 
-      if (!writeErr) changed++;
+      if (!writeErr) {
+        changed++;
+
+        // Write plant_timings for any seeds the auto-planter just planted.
+        // Without this, harvest finds no timing entry → silently clears the plot
+        // and gives the player nothing (the "gets nothing from harvest" bug).
+        const newlyPlanted: Array<{ row: number; col: number; planted_at: string }> = [];
+        for (let ri = 0; ri < sim.grid.length; ri++) {
+          for (let ci = 0; ci < (sim.grid[ri]?.length ?? 0); ci++) {
+            if (!original.grid[ri]?.[ci]?.plant && sim.grid[ri]?.[ci]?.plant) {
+              const tp = sim.grid[ri][ci].plant!.timePlanted;
+              newlyPlanted.push({ row: ri, col: ci, planted_at: new Date(tp).toISOString() });
+            }
+          }
+        }
+        if (newlyPlanted.length > 0) {
+          void supabase.from("plant_timings").upsert(
+            newlyPlanted.map((p) => ({ user_id: sim.user_id, row: p.row, col: p.col, planted_at: p.planted_at })),
+            { onConflict: "user_id,row,col" }
+          );
+        }
+      }
     }
 
     return new Response(

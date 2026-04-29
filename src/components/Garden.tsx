@@ -7,6 +7,7 @@ import { HarvestPopup } from "./HarvestPopup";
 import {
   getCurrentStage,
   plantSeed,
+  plantBloom,
   upgradeFarm,
   harvestPlant,
   plantAll,
@@ -20,7 +21,7 @@ import {
   placeGear,
   getDevShowGrowthDebug,
 } from "../store/gameStore";
-import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
+import { edgePlantSeed, edgePlantBloom, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
 import { getAffectedCells, GEAR, isGearExpired } from "../data/gear";
 import { MUTATIONS } from "../data/flowers";
@@ -177,7 +178,7 @@ export function Garden() {
   });
 
   const [selectedPlot, setSelectedPlot]     = useState<{ row: number; col: number } | null>(null);
-  const [harvestPopup, setHarvestPopup]     = useState<{ speciesId: string; mutation?: MutationType } | null>(null);
+  const [harvestPopup, setHarvestPopup]     = useState<{ speciesId: string; mutation?: MutationType; isBloomPlaced?: boolean } | null>(null);
   /** Which gear cell has its tooltip open — used to highlight affected cells */
   const [highlightSource, setHighlightSource] = useState<{ row: number; col: number; gearType: GearType } | null>(null);
   /** Pending fan placement — waits for the player to choose a direction */
@@ -283,6 +284,14 @@ export function Garden() {
     const { row, col } = selectedPlot;
     const optimistic = plantSeed(state, row, col, speciesId);
     if (optimistic) perform(optimistic, () => edgePlantSeed(row, col, speciesId));
+    setSelectedPlot(null);
+  }
+
+  function handleBloomSelect(speciesId: string, mutation?: string) {
+    if (!selectedPlot) return;
+    const { row, col } = selectedPlot;
+    const optimistic = plantBloom(state, row, col, speciesId, mutation);
+    if (optimistic) perform(optimistic, () => edgePlantBloom(row, col, speciesId, mutation));
     setSelectedPlot(null);
   }
 
@@ -480,7 +489,7 @@ export function Garden() {
                 row={row}
                 col={col}
                 onEmptyClick={() => handlePlotClick(row, col)}
-                onHarvest={(speciesId, mutation) => setHarvestPopup({ speciesId, mutation })}
+                onHarvest={(speciesId, mutation, isBloomPlaced) => setHarvestPopup({ speciesId, mutation, isBloomPlaced })}
                 onHarvestStart={() => harvestingPlots.current.add(`${row}-${col}`)}
                 onHarvestEnd={() => harvestingPlots.current.delete(`${row}-${col}`)}
                 harvestPending={() => harvestingPlots.current.has(`${row}-${col}`)}
@@ -513,6 +522,7 @@ export function Garden() {
             <div onClick={(e) => e.stopPropagation()}>
               <SeedPicker
                 onSelect={handleSeedSelect}
+                onBloomSelect={handleBloomSelect}
                 onGearSelect={handleGearSelect}
                 onClose={() => setSelectedPlot(null)}
               />
@@ -569,6 +579,7 @@ export function Garden() {
             <HarvestPopup
               speciesId={harvestPopup.speciesId}
               mutation={harvestPopup.mutation}
+              isBloomPlaced={harvestPopup.isBloomPlaced}
               onDone={() => setHarvestPopup(null)}
             />
           </div>
