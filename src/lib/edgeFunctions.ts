@@ -29,15 +29,11 @@ async function callEdge<T>(name: string, body: unknown): Promise<T> {
 
 export interface HarvestResult {
   ok:         true;
-  // coins intentionally omitted — returning a full authoritative total per-harvest
-  // overwrites the optimistic sum from concurrent in-flight harvests, causing a
-  // visible "snap back". The server writes the correct value; the client's optimistic
-  // bonusCoins delta is already accurate.
+  // coins intentionally omitted — coins never change on harvest (only on sell).
   // grid intentionally omitted — client optimistic state owns the grid.
   inventory:  GameState["inventory"];
   discovered: GameState["discovered"];
   mutation:   string | undefined;
-  bonusCoins: number;
   serverUpdatedAt: string;
 }
 
