@@ -144,10 +144,15 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
   }
 }
 
+/** Saves state to the cloud.
+ *  Returns the new `updated_at` string on success, or `false` on failure (CAS miss or DB error).
+ *  Callers should update `state.serverUpdatedAt` with the returned value so subsequent
+ *  CAS writes and edge function calls use the correct stamp. */
 export async function saveToCloud(
   userId: string,
   state: GameState
-): Promise<boolean> {
+): Promise<string | false> {
+  const newUpdatedAt = new Date().toISOString();
   const payload = {
     user_id:                userId,
     coins:                  state.coins,
@@ -166,14 +171,14 @@ export async function saveToCloud(
     supply_shop:            state.supplyShop        ?? [],
     supply_slots:           state.supplySlots       ?? 2,
     last_supply_reset:      state.lastSupplyReset   ?? 0,
-    updated_at:             new Date().toISOString(),
+    updated_at:             newUpdatedAt,
   };
 
   // ── First save (new account) — no prior DB row exists ────────────────────
   if (!state.serverUpdatedAt) {
     const { error } = await supabase.from("game_saves").upsert(payload);
     if (error) { console.error("Failed to save to cloud:", error); return false; }
-    return true;
+    return newUpdatedAt;
   }
 
   // ── CAS update — only overwrite if DB updated_at matches last known value ─
@@ -194,7 +199,7 @@ export async function saveToCloud(
     if (error?.code !== "PGRST116") console.error("Failed to save to cloud:", error);
     return false;
   }
-  return true;
+  return data.updated_at as string;
 }
 
 // ── Public profile / save ──────────────────────────────────────────────────

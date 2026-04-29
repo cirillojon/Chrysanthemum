@@ -138,7 +138,49 @@ Deno.serve(async (req: Request) => {
         .select("updated_at")
         .single();
 
-      if (ue || !ud) return err("Save was modified by another action", 409);
+      if (ue || !ud) {
+        // CAS failed — the offline tick likely wrote to DB between our read and write.
+        // Retry once with a fresh DB read so gear placement survives the race.
+        const { data: fresh, error: freshErr } = await supabaseAdmin
+          .from("game_saves")
+          .select("grid, gear_inventory, updated_at")
+          .eq("user_id", userId)
+          .single();
+        if (freshErr || !fresh) return err("Save was modified by another action", 409);
+
+        const freshCell = (fresh.grid as GridCell[][])[row]?.[col];
+        if (!freshCell || freshCell.plant || freshCell.gear) {
+          return err("Cell is now occupied", 409);
+        }
+        const freshInv = (fresh.gear_inventory as GearInvItem[]).find((g) => g.gearType === gearType);
+        if (!freshInv || freshInv.quantity < 1) return err("Gear not in inventory", 409);
+
+        const retryPlacedAt = Date.now();
+        const retryGear: PlacedGear = direction
+          ? { gearType, placedAt: retryPlacedAt, direction }
+          : { gearType, placedAt: retryPlacedAt };
+        const retryGrid = (fresh.grid as GridCell[][]).map((r, ri) =>
+          r.map((p, ci) => ri === row && ci === col ? { ...p, gear: retryGear } : p)
+        );
+        const retryGearInv = (fresh.gear_inventory as GearInvItem[])
+          .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)
+          .filter((g) => g.quantity > 0);
+
+        const { data: retryUd, error: retryUe } = await supabaseAdmin
+          .from("game_saves")
+          .update({ grid: retryGrid, gear_inventory: retryGearInv, updated_at: new Date().toISOString() })
+          .eq("user_id", userId)
+          .eq("updated_at", fresh.updated_at as string)
+          .select("updated_at")
+          .single();
+        if (retryUe || !retryUd) return err("Save was modified by another action", 409);
+
+        void supabaseAdmin.from("action_log").insert({
+          user_id: userId, action: "gear_place",
+          payload: { gearType, row, col }, result: { placedAt: retryPlacedAt, retried: true },
+        });
+        return json({ ok: true, grid: retryGrid, gearInventory: retryGearInv, serverUpdatedAt: retryUd.updated_at });
+      }
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_place",

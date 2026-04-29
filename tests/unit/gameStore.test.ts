@@ -199,14 +199,12 @@ describe("harvestPlant (regression)", () => {
     expect(result!.mutation).toBeUndefined();
   });
 
-  it("harvesting a mutated bloom credits bonus coins and codex mutation entry", () => {
+  it("harvesting a mutated bloom does NOT award coins — only discovers codex entry", () => {
+    // Coins are awarded only at sell time, never at harvest (v2.2.4 fix).
     const s = baseState({ coins: 0 });
     s.grid[0][0].plant = bloomedPlant(fastFlower.id, "golden");
     const result = harvestPlant(s, 0, 0, "clear")!;
-    const expectedBonus = Math.floor(
-      fastFlower.sellValue * (MUTATIONS.golden.valueMultiplier - 1),
-    );
-    expect(result.state.coins).toBe(expectedBonus);
+    expect(result.state.coins).toBe(0);   // no bonus at harvest
     expect(result.mutation).toBe("golden");
     expect(result.state.discovered).toContain(`${fastFlower.id}:golden`);
   });

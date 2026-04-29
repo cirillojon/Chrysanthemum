@@ -55,10 +55,11 @@ const FLOWER_SELL_VALUES: Record<string, number> = {
   eternal_heart: 1_550_000, nova_bloom: 1_800_000, princess_blossom: 2_000_000,
 };
 
-type Action = "buy" | "buy_all" | "sell" | "sync";
+type Action = "buy" | "buy_all" | "sell" | "sell_all" | "sync";
 interface ShopSlot { speciesId: string; price: number; quantity: number; isFertilizer?: boolean; fertilizerType?: string; isEmpty?: boolean; }
 interface InventoryItem { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
 interface FertilizerItem { type: string; quantity: number; }
+interface SellAllItem  { speciesId: string; mutation?: string; quantity: number; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -90,7 +91,7 @@ Deno.serve(async (req: Request) => {
       shop?: ShopSlot[]; lastShopReset?: number;
     };
 
-    if (!["buy", "buy_all", "sell", "sync"].includes(body.action)) {
+    if (!["buy", "buy_all", "sell", "sell_all", "sync"].includes(body.action)) {
       return new Response(JSON.stringify({ error: "Invalid action" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -229,6 +230,32 @@ Deno.serve(async (req: Request) => {
         .map((i) => i.speciesId === body.speciesId && i.mutation === body.mutation && !i.isSeed ? { ...i, quantity: i.quantity - qty } : i)
         .filter((i) => i.quantity > 0);
       logResult = { speciesId: body.speciesId, mutation: body.mutation, qty, earned, coins };
+    }
+
+    // ── sell_all: atomically sell every bloom in the provided list ───────────
+    if (action === "sell_all") {
+      const items = (body as { items?: SellAllItem[] }).items ?? [];
+      for (const item of items) {
+        const { speciesId, mutation, quantity } = item;
+        const invItem = newInventory.find(
+          (i) => i.speciesId === speciesId && i.mutation === (mutation ?? undefined) && !i.isSeed
+        );
+        // Skip items that aren't in inventory (already sold / race) — never hard-fail
+        if (!invItem || invItem.quantity < quantity) continue;
+        const earned = Math.floor(
+          (FLOWER_SELL_VALUES[speciesId] ?? 0) *
+          (mutation ? (MUTATION_MULTIPLIERS[mutation] ?? 1) : 1)
+        ) * quantity;
+        coins += earned;
+        newInventory = newInventory
+          .map((i) =>
+            i.speciesId === speciesId && i.mutation === (mutation ?? undefined) && !i.isSeed
+              ? { ...i, quantity: i.quantity - quantity }
+              : i
+          )
+          .filter((i) => i.quantity > 0);
+        logResult = { ...(logResult as object), [`${speciesId}:${mutation ?? ""}`]: earned };
+      }
     }
 
     // ── Write to DB ───────────────────────────────────────────────────────────
