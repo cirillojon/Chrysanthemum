@@ -336,6 +336,19 @@ export function edgeClaimMail(mailId: string) {
   return callEdge<ClaimMailResult>("claim-mail", { mailId });
 }
 
+// ── Infuser ───────────────────────────────────────────────────────────────────
+
+export interface ApplyInfuserResult {
+  ok:              true;
+  grid:            GameState["grid"];
+  infusers:        GameState["infusers"];
+  serverUpdatedAt: string;
+}
+
+export function edgeApplyInfuser(row: number, col: number) {
+  return callEdge<ApplyInfuserResult>("apply-infuser", { row, col });
+}
+
 // ── Alchemy ───────────────────────────────────────────────────────────────────
 
 export interface AlchemySacrificeResult {
