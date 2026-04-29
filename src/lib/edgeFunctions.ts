@@ -29,15 +29,11 @@ async function callEdge<T>(name: string, body: unknown): Promise<T> {
 
 export interface HarvestResult {
   ok:         true;
-  // coins intentionally omitted — returning a full authoritative total per-harvest
-  // overwrites the optimistic sum from concurrent in-flight harvests, causing a
-  // visible "snap back". The server writes the correct value; the client's optimistic
-  // bonusCoins delta is already accurate.
+  // coins intentionally omitted — coins never change on harvest (only on sell).
   // grid intentionally omitted — client optimistic state owns the grid.
   inventory:  GameState["inventory"];
   discovered: GameState["discovered"];
   mutation:   string | undefined;
-  bonusCoins: number;
   serverUpdatedAt: string;
 }
 
@@ -406,5 +402,38 @@ export function edgeAlchemyCraft(
   id: string,
 ) {
   return callEdge<AlchemyCraftResult>("alchemy-craft", { craftType, id });
+}
+
+// ── Consumable usage ──────────────────────────────────────────────────────────
+
+export interface UseConsumableResult {
+  ok:              true;
+  grid?:           GameState["grid"];
+  consumables:     GameState["consumables"];
+  inventory?:      GameState["inventory"];   // returned when supply shop refreshed
+  supplyShop?:     GameState["supplyShop"];
+  lastWindShearUsed?: number;
+  lastEclipseTonic?:  string;
+  serverUpdatedAt: string;
+}
+
+/** Apply a plant-targeting consumable (Bloom Burst, vials, Heirloom Charm) */
+export function edgeApplyPlantConsumable(row: number, col: number, consumableId: string) {
+  return callEdge<UseConsumableResult>("use-consumable", { action: "apply_to_plant", row, col, consumableId });
+}
+
+/** Use Eclipse Tonic — advances all garden plants by advanceHours */
+export function edgeUseEclipseTonic(consumableId: string) {
+  return callEdge<UseConsumableResult>("use-consumable", { action: "eclipse_tonic", consumableId });
+}
+
+/** Use Wind Shear — refreshes supply shop bypassing cooldown */
+export function edgeUseWindShear() {
+  return callEdge<UseConsumableResult>("use-consumable", { action: "wind_shear", consumableId: "wind_shear" });
+}
+
+/** Use Slot Lock — locks a supply shop slot through the next refresh */
+export function edgeUseSlotLock(slotId: string) {
+  return callEdge<UseConsumableResult>("use-consumable", { action: "slot_lock", consumableId: "slot_lock", slotId });
 }
 

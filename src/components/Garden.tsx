@@ -383,9 +383,6 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const savedCell           = cur.grid[row][col];
       const harvestedSpeciesId  = savedCell.plant?.speciesId;
       const harvestedMutation   = savedCell.plant?.mutation ?? undefined;
-      // Capture the optimistic coin delta so the rollback can undo it precisely.
-      // bonusCoins = 0 for unmutated blooms, so this is a no-op in the common case.
-      const savedBonusCoins = opt.state.coins - cur.coins;
       perform(
         opt.state,
         async () => {
@@ -400,7 +397,6 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
           serialize: true,
           rollback: (c) => ({
             ...c,
-            coins: c.coins - savedBonusCoins,
             grid: c.grid.map((r2, ri2) =>
               r2.map((p2, ci2) => ri2 === row && ci2 === col ? savedCell : p2)
             ),

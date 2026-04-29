@@ -4,10 +4,15 @@ import {
   msUntilSupplyReset,
   buyFromSupplyShop,
   upgradeSupplySlots,
+  applyWindShear,
+  applySlotLock,
 } from "../store/gameStore";
 import {
   edgeBuyFromSupplyShop,
   edgeUpgradeSupplySlots,
+  edgeUseWindShear,
+  edgeUseSlotLock,
+  edgeSyncSupplyShop,
 } from "../lib/edgeFunctions";
 import {
   RARITY_CONFIG,
@@ -43,9 +48,10 @@ function formatDuration(ms: number): string {
 
 // ── Individual supply slot card ─────────────────────────────────────────────
 
-function SupplyCard({ slot }: { slot: ShopSlot }) {
-  const { state, perform } = useGame();
-  const [justBought, setJustBought] = useState(false);
+function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolean }) {
+  const { state, perform, getState } = useGame();
+  const [justBought,  setJustBought]  = useState(false);
+  const [lockingSlot, setLockingSlot] = useState(false);
 
   // ── Empty placeholder ─────────────────────────────────────────────────────
   if (slot.isEmpty) {
@@ -54,6 +60,28 @@ function SupplyCard({ slot }: { slot: ShopSlot }) {
         <span className="text-2xl">🧪</span>
         <p className="text-xs text-muted-foreground text-center">New slot — fills on next restock</p>
       </div>
+    );
+  }
+
+  function handleLockSlot() {
+    if (lockingSlot) return;
+    const cur = getState();
+    const optimistic = applySlotLock(cur, slot.speciesId);
+    if (!optimistic) return;
+    const savedConsumables = cur.consumables;
+    const savedShop = cur.supplyShop;
+    setLockingSlot(true);
+    perform(
+      optimistic,
+      () => edgeUseSlotLock(slot.speciesId),
+      () => setLockingSlot(false),
+      {
+        rollback: (c) => ({
+          ...c,
+          consumables: savedConsumables,
+          supplyShop: savedShop,
+        }),
+      }
     );
   }
 
@@ -134,21 +162,36 @@ function SupplyCard({ slot }: { slot: ShopSlot }) {
           <span className="text-xs text-muted-foreground">
             {outOfStock ? "Out of stock" : `${slot.quantity} left`}
           </span>
-          <button
-            onClick={handleBuy}
-            disabled={!canAfford || outOfStock}
-            className={`
-              px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150
-              ${justBought
-                ? "bg-green-500 text-white scale-105"
-                : canAfford && !outOfStock
-                ? "bg-primary text-primary-foreground hover:scale-105"
-                : "bg-secondary text-muted-foreground cursor-not-allowed"
-              }
-            `}
-          >
-            {justBought ? "✓ Bought!" : `${slot.price.toLocaleString()} 🟡`}
-          </button>
+          <div className="flex items-center gap-1.5">
+            {/* Slot Lock button */}
+            {slot.locked ? (
+              <span className="text-[10px] text-amber-400 font-mono">📌 Locked</span>
+            ) : hasSlotLock ? (
+              <button
+                onClick={handleLockSlot}
+                disabled={lockingSlot}
+                title="Slot Lock — keeps this slot through the next restock"
+                className="px-2 py-1 rounded-lg text-[10px] bg-amber-400/10 border border-amber-400/30 text-amber-400 hover:bg-amber-400/20 transition-colors disabled:opacity-50"
+              >
+                {lockingSlot ? "…" : "📌 Lock"}
+              </button>
+            ) : null}
+            <button
+              onClick={handleBuy}
+              disabled={!canAfford || outOfStock}
+              className={`
+                px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150
+                ${justBought
+                  ? "bg-green-500 text-white scale-105"
+                  : canAfford && !outOfStock
+                  ? "bg-primary text-primary-foreground hover:scale-105"
+                  : "bg-secondary text-muted-foreground cursor-not-allowed"
+                }
+              `}
+            >
+              {justBought ? "✓ Bought!" : `${slot.price.toLocaleString()} 🟡`}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -201,21 +244,35 @@ function SupplyCard({ slot }: { slot: ShopSlot }) {
           <span className="text-xs text-muted-foreground">
             {outOfStock ? "Out of stock" : `${slot.quantity} left`}
           </span>
-          <button
-            onClick={handleBuy}
-            disabled={!canAfford || outOfStock}
-            className={`
-              px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150
-              ${justBought
-                ? "bg-green-500 text-white scale-105"
-                : canAfford && !outOfStock
-                ? "bg-primary text-primary-foreground hover:scale-105"
-                : "bg-secondary text-muted-foreground cursor-not-allowed"
-              }
-            `}
-          >
-            {justBought ? "✓ Bought!" : `${slot.price.toLocaleString()} 🟡`}
-          </button>
+          <div className="flex items-center gap-1.5">
+            {slot.locked ? (
+              <span className="text-[10px] text-amber-400 font-mono">📌 Locked</span>
+            ) : hasSlotLock ? (
+              <button
+                onClick={handleLockSlot}
+                disabled={lockingSlot}
+                title="Slot Lock — keeps this slot through the next restock"
+                className="px-2 py-1 rounded-lg text-[10px] bg-amber-400/10 border border-amber-400/30 text-amber-400 hover:bg-amber-400/20 transition-colors disabled:opacity-50"
+              >
+                {lockingSlot ? "…" : "📌 Lock"}
+              </button>
+            ) : null}
+            <button
+              onClick={handleBuy}
+              disabled={!canAfford || outOfStock}
+              className={`
+                px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150
+                ${justBought
+                  ? "bg-green-500 text-white scale-105"
+                  : canAfford && !outOfStock
+                  ? "bg-primary text-primary-foreground hover:scale-105"
+                  : "bg-secondary text-muted-foreground cursor-not-allowed"
+                }
+              `}
+            >
+              {justBought ? "✓ Bought!" : `${slot.price.toLocaleString()} 🟡`}
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -235,14 +292,58 @@ function supplyUnlockSlots(rarity: Rarity): number | null {
 }
 
 export function SupplyShop() {
-  const { state, perform } = useGame();
-  const [countdown,  setCountdown]  = useState(() => msUntilSupplyReset(state));
-  const [showRates,  setShowRates]  = useState(false);
+  const { state, perform, getState } = useGame();
+  const [countdown,     setCountdown]     = useState(() => msUntilSupplyReset(state));
+  const [showRates,     setShowRates]     = useState(false);
+  const [usingWindShear,setUsingWindShear]= useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setCountdown(msUntilSupplyReset(state)), 1_000);
     return () => clearInterval(id);
   }, [state.lastSupplyReset]);
+
+  // Wind Shear — available if player owns it and cooldown has passed
+  const windShearItem = (state.consumables ?? []).find((c) => c.id === "wind_shear" && c.quantity > 0);
+  const windShearCooldownMs = 3_600_000; // 1 hour
+  const windShearOnCooldown = state.lastWindShearUsed != null
+    && Date.now() - state.lastWindShearUsed < windShearCooldownMs;
+  const windShearCooldownRemaining = state.lastWindShearUsed != null
+    ? Math.max(0, windShearCooldownMs - (Date.now() - state.lastWindShearUsed))
+    : 0;
+
+  // Slot Lock — does the player own at least one?
+  const hasSlotLock = (state.consumables ?? []).some((c) => c.id === "slot_lock" && c.quantity > 0);
+
+  function handleWindShear() {
+    if (usingWindShear || windShearOnCooldown || !windShearItem) return;
+    const cur = getState();
+    const optimistic = applyWindShear(cur);
+    if (!optimistic) return;
+    const savedConsumables  = cur.consumables;
+    const savedShop         = cur.supplyShop;
+    const savedLastReset    = cur.lastSupplyReset;
+    const savedLastUsed     = cur.lastWindShearUsed;
+    setUsingWindShear(true);
+    perform(
+      optimistic,
+      async () => {
+        const res = await edgeUseWindShear();
+        // After wind_shear server confirms, sync the newly generated shop
+        await edgeSyncSupplyShop(optimistic.supplyShop, optimistic.lastSupplyReset);
+        return res;
+      },
+      () => setUsingWindShear(false),
+      {
+        rollback: (c) => ({
+          ...c,
+          consumables:       savedConsumables,
+          supplyShop:        savedShop,
+          lastSupplyReset:   savedLastReset,
+          lastWindShearUsed: savedLastUsed,
+        }),
+      }
+    );
+  }
 
   const supplySlots     = state.supplySlots ?? 2;
   const nextSlotUpgrade = getNextSupplySlotUpgrade(supplySlots);
@@ -308,7 +409,26 @@ export function SupplyShop() {
             Fertilizers &amp; gear — restocks every 10 min
           </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Wind Shear — shown only when the player owns one */}
+          {windShearItem && (
+            <button
+              onClick={handleWindShear}
+              disabled={usingWindShear || windShearOnCooldown}
+              title={windShearOnCooldown
+                ? `Wind Shear on cooldown — ${Math.ceil(windShearCooldownRemaining / 60_000)}m left`
+                : "Wind Shear — refresh supply shop instantly"}
+              className={`text-xs px-2 py-1 rounded-lg border transition-colors disabled:opacity-50 ${
+                windShearOnCooldown
+                  ? "border-border text-muted-foreground"
+                  : "border-sky-400/30 text-sky-400 bg-sky-400/5 hover:bg-sky-400/10"
+              }`}
+            >
+              {usingWindShear ? "🌀…" : windShearOnCooldown
+                ? `🌀 ${Math.ceil(windShearCooldownRemaining / 60_000)}m`
+                : `🌀 ×${windShearItem.quantity}`}
+            </button>
+          )}
           <button
             onClick={() => setShowRates(true)}
             className="text-xs text-muted-foreground hover:text-primary transition-colors px-2 py-1 rounded-lg border border-border hover:border-primary/40"
@@ -337,7 +457,7 @@ export function SupplyShop() {
       {slots.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {slots.map((slot) => (
-            <SupplyCard key={slot.speciesId} slot={slot} />
+            <SupplyCard key={slot.speciesId} slot={slot} hasSlotLock={hasSlotLock} />
           ))}
         </div>
       ) : (
