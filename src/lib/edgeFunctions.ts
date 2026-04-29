@@ -339,9 +339,10 @@ export function edgeClaimMail(mailId: string) {
 // ── Alchemy ───────────────────────────────────────────────────────────────────
 
 export interface AlchemySacrificeResult {
-  ok:        true;
-  inventory: GameState["inventory"];
-  essences:  GameState["essences"];
+  ok:              true;
+  inventory:       GameState["inventory"];
+  essences:        GameState["essences"];
+  serverUpdatedAt: string;
 }
 
 export function edgeAlchemySacrifice(
