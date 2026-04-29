@@ -208,11 +208,9 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           ok: true,
-          coins: save.coins as number,
           inventory: save.inventory ?? [],
           discovered: save.discovered ?? [],
           mutation: undefined,
-          bonusCoins: 0,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -263,11 +261,9 @@ Deno.serve(async (req: Request) => {
       return new Response(
         JSON.stringify({
           ok:         true,
-          coins:      save.coins as number,
           inventory:  save.inventory ?? [],
           discovered: save.discovered ?? [],
           mutation:   undefined,
-          bonusCoins: 0,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
