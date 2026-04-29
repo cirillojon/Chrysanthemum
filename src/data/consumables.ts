@@ -16,7 +16,9 @@ export type ConsumableId =
   | "rainbow_vial_1"   | "rainbow_vial_2"   | "rainbow_vial_3"   | "rainbow_vial_4"   | "rainbow_vial_5"
   | "eclipse_tonic_1"  | "eclipse_tonic_2"  | "eclipse_tonic_3"  | "eclipse_tonic_4"  | "eclipse_tonic_5"
   | "wind_shear"
-  | "slot_lock";
+  | "slot_lock"
+  | "seed_pouch_1"     | "seed_pouch_2"     | "seed_pouch_3"     | "seed_pouch_4"     | "seed_pouch_5"
+  | `seed_pouch_${"blaze"|"tide"|"grove"|"frost"|"storm"|"lunar"|"solar"|"fairy"|"shadow"|"arcane"|"stellar"|"zephyr"}_${1|2|3|4|5}`;
 
 export interface ConsumableItem {
   id:       ConsumableId;
@@ -35,7 +37,7 @@ export type InfuserCost =
   | { kind: "essence"; amounts: EssenceCostEntry[] }
   | { kind: "infuser";  tier: 1 | 2 | 3 | 4; quantity: number };
 
-export type ConsumableCategory = "growth" | "mutation_boost" | "utility";
+export type ConsumableCategory = "growth" | "mutation_boost" | "utility" | "seed_pouch";
 
 export interface ConsumableRecipe {
   id:           ConsumableId;
@@ -298,12 +300,65 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   { id: "slot_lock", name: "Slot Lock", emoji: "📌", tier: null, rarity: "rare", category: "utility",
     description: "Locks a supply shop slot so it survives the next refresh without rerolling.",
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }] } },
+
+  // ── Seed Pouch (I–V) — seed_pouch ────────────────────────────────────────
+  { id: "seed_pouch_1", name: "Seed Pouch I",   emoji: "🎁", tier: 1, rarity: "rare",      category: "seed_pouch",
+    description: `Open from your inventory for a random ${r(1)}+ seed.`,
+    cost: { kind: "essence", amounts: [{ type: "universal", amount: 1 }] } },
+  { id: "seed_pouch_2", name: "Seed Pouch II",  emoji: "🎁", tier: 2, rarity: "legendary", category: "seed_pouch",
+    description: `Open from your inventory for a random ${r(2)}+ seed.`,
+    cost: { kind: "consumable", id: "seed_pouch_1", quantity: 2 } },
+  { id: "seed_pouch_3", name: "Seed Pouch III", emoji: "🎁", tier: 3, rarity: "mythic",    category: "seed_pouch",
+    description: `Open from your inventory for a random ${r(3)}+ seed.`,
+    cost: { kind: "consumable", id: "seed_pouch_2", quantity: 2 } },
+  { id: "seed_pouch_4", name: "Seed Pouch IV",  emoji: "🎁", tier: 4, rarity: "exalted",   category: "seed_pouch",
+    description: `Open from your inventory for a random ${r(4)}+ seed.`,
+    cost: { kind: "consumable", id: "seed_pouch_3", quantity: 2 } },
+  { id: "seed_pouch_5", name: "Seed Pouch V",   emoji: "🎁", tier: 5, rarity: "prismatic", category: "seed_pouch",
+    description: `Open from your inventory for a random ${r(5)} seed.`,
+    cost: { kind: "consumable", id: "seed_pouch_4", quantity: 2 } },
 ];
+
+// ── Typed Seed Pouches (per-type I–V) ─────────────────────────────────────
+// 12 element types × 5 tiers = 60 additional recipes, generated programmatically.
+
+const TYPED_POUCH_TYPES = [
+  "blaze", "tide", "grove", "frost", "storm", "lunar",
+  "solar", "fairy", "shadow", "arcane", "stellar", "zephyr",
+] as const;
+
+const TYPE_LABELS: Record<string, string> = {
+  blaze: "Blaze", tide: "Tide", grove: "Grove", frost: "Frost",
+  storm: "Storm", lunar: "Lunar", solar: "Solar", fairy: "Fairy",
+  shadow: "Shadow", arcane: "Arcane", stellar: "Stellar", zephyr: "Zephyr",
+};
+
+for (const t of TYPED_POUCH_TYPES) {
+  const label = TYPE_LABELS[t];
+  for (let _tier = 1; _tier <= 5; _tier++) {
+    const tier = _tier as 1 | 2 | 3 | 4 | 5;
+    const id = `seed_pouch_${t}_${tier}` as ConsumableId;
+    const prevId = tier > 1 ? (`seed_pouch_${t}_${tier - 1}` as ConsumableId) : null;
+    CONSUMABLE_RECIPES.push({
+      id,
+      name: `${label} Seed Pouch ${ROMAN[tier]}`,
+      emoji: "🎁",
+      tier,
+      rarity: TIER_RARITIES[tier],
+      category: "seed_pouch",
+      description: `Open for a random ${r(tier)}+ ${label} seed.`,
+      cost: tier === 1
+        ? { kind: "essence", amounts: [{ type: t as EssenceType, amount: 6 }] }
+        : { kind: "consumable", id: prevId!, quantity: 2 },
+    });
+  }
+}
 
 /** Lookup map: consumable ID → recipe */
 export const CONSUMABLE_RECIPE_MAP = Object.fromEntries(
   CONSUMABLE_RECIPES.map((r) => [r.id, r])
 ) as Record<ConsumableId, ConsumableRecipe>;
+
 
 // ── Affordability helpers ──────────────────────────────────────────────────
 

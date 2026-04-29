@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGame } from "../store/GameContext";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, applyEclipseTonic, type InventoryItem } from "../store/gameStore";
-import { edgeSellAll, edgeUseEclipseTonic } from "../lib/edgeFunctions";
+import { edgeSellAll, edgeUseEclipseTonic, edgeAlchemyCraftSeed } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";
@@ -22,9 +22,12 @@ interface Props {
 }
 
 export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView }: Props) {
-  const { state, perform, getState, awaitHarvests } = useGame();
-  const [tab,          setTab]          = useState<Tab>(0);
-  const [usingEclipse, setUsingEclipse] = useState<string | null>(null);
+  const { state, perform, getState, awaitHarvests, update } = useGame();
+  const [tab,                 setTab]                 = useState<Tab>(0);
+  const [usingEclipse,        setUsingEclipse]        = useState<string | null>(null);
+  const [openingPouch,        setOpeningPouch]        = useState<string | null>(null);
+  const [pouchResult,         setPouchResult]         = useState<{ speciesId: string } | null>(null);
+  const [pouchResultVisible,  setPouchResultVisible]  = useState(false);
 
   const items           = state.inventory.filter((i) => i.quantity > 0);
   const seeds           = items.filter((i) => i.isSeed);
@@ -108,6 +111,32 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
     );
   }
 
+  // Auto-dismiss pouch result toast
+  useEffect(() => {
+    if (!pouchResult) return;
+    const frame = requestAnimationFrame(() => setPouchResultVisible(true));
+    const timer = setTimeout(() => {
+      setPouchResultVisible(false);
+      setTimeout(() => setPouchResult(null), 400);
+    }, 4_000);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [pouchResult]);
+
+  async function handleOpenPouch(consumableId: ConsumableId) {
+    if (openingPouch) return;
+    setOpeningPouch(consumableId);
+    try {
+      const res = await edgeAlchemyCraftSeed(consumableId);
+      const cur = getState();
+      update({ ...cur, inventory: res.inventory, consumables: res.consumables, serverUpdatedAt: res.serverUpdatedAt });
+      setPouchResult({ speciesId: res.outputSpeciesId });
+    } catch {
+      // silent — pouch stays in inventory on failure
+    } finally {
+      setOpeningPouch(null);
+    }
+  }
+
   const isEmpty = items.length === 0 && fertilizers.length === 0 && gearItems.length === 0
                && consumableItems.length === 0;
 
@@ -124,6 +153,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   }
 
   return (
+    <>
     <div className="flex flex-col gap-5">
 
       {/* Header */}
@@ -228,7 +258,9 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
               consumables={consumableItems}
               lastEclipseTonic={state.lastEclipseTonic}
               usingEclipse={usingEclipse}
+              openingPouch={openingPouch}
               onUseEclipse={handleUseEclipseTonic}
+              onOpenPouch={handleOpenPouch}
             />
           ) : (
             <EmptyTab emoji="🧪" message="No consumables" hint="Craft consumables in the Alchemy lab." />
@@ -273,6 +305,32 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       </div>
 
     </div>
+
+    {/* ── Pouch result toast ── */}
+
+    {pouchResult && (() => {
+      const flower = getFlower(pouchResult.speciesId);
+      return (
+        <div
+          className={`
+            fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none
+            transition-all duration-400
+            ${pouchResultVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
+          `}
+        >
+          <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
+            <span className="text-2xl">{flower?.emoji.seed ?? "🎁"}</span>
+            <div>
+              <p className="text-sm font-bold text-primary mb-0.5">Pouch opened!</p>
+              <p className="text-[11px] text-muted-foreground">
+                {flower?.name ?? pouchResult.speciesId} seed
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+    </>
   );
 }
 
@@ -322,6 +380,7 @@ const USAGE_CONTEXT: Record<string, string> = {
   eclipse_tonic:  "Use below — advances all garden plants",
   wind_shear:     "Use in Supply Shop",
   slot_lock:      "Use in Supply Shop",
+  seed_pouch:     "Open below to reveal your mystery seed",
 };
 
 function getConsumablePrefix(id: string): string {
@@ -333,11 +392,13 @@ interface ConsumablesTabProps {
   consumables:      { id: string; quantity: number }[];
   lastEclipseTonic: string | null;
   usingEclipse:     string | null;
+  openingPouch:     string | null;
   onUseEclipse:     (id: ConsumableId) => void;
+  onOpenPouch:      (id: ConsumableId) => void;
 }
 
 function ConsumablesTabContent({
-  consumables, lastEclipseTonic, usingEclipse, onUseEclipse,
+  consumables, lastEclipseTonic, usingEclipse, openingPouch, onUseEclipse, onOpenPouch,
 }: ConsumablesTabProps) {
   const today = new Date().toISOString().slice(0, 10);
   const alreadyUsedToday = lastEclipseTonic === today;
@@ -347,11 +408,13 @@ function ConsumablesTabContent({
       {consumables.map((c) => {
         const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
         if (!recipe) return null;
-        const prefix = getConsumablePrefix(c.id);
-        const context = USAGE_CONTEXT[prefix] ?? "Use contextually";
+        const prefix    = getConsumablePrefix(c.id);
+        const context   = USAGE_CONTEXT[prefix] ?? "Use contextually";
         const isEclipse = c.id.startsWith("eclipse_tonic_");
-        const busy = usingEclipse === c.id;
+        const isPouch   = c.id.startsWith("seed_pouch_");
+        const busy      = usingEclipse === c.id;
         const usedToday = isEclipse && alreadyUsedToday;
+        const opening   = openingPouch === c.id;
 
         return (
           <div
@@ -384,6 +447,20 @@ function ConsumablesTabContent({
                   }`}
                 >
                   {busy ? "Advancing…" : usedToday ? "Used today" : `🌒 Use (${recipe.advanceHours}h advance)`}
+                </button>
+              )}
+
+              {isPouch && (
+                <button
+                  onClick={() => onOpenPouch(c.id as ConsumableId)}
+                  disabled={!!openingPouch}
+                  className={`mt-2 px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                    opening
+                      ? "border-primary/40 bg-primary/20 text-primary"
+                      : "border-primary/50 text-primary hover:bg-primary/10"
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {opening ? "Opening…" : "🎁 Open"}
                 </button>
               )}
             </div>

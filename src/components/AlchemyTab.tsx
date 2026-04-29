@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useGame } from "../store/GameContext";
 import { FLOWER_TYPES, RARITY_CONFIG, getFlower, MUTATIONS } from "../data/flowers";
 import {
@@ -116,6 +116,16 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
 
 // ── CraftView component ───────────────────────────────────────────────────
 
+// ── Typed pouch type labels ────────────────────────────────────────────────
+
+const TYPED_POUCH_TYPES = [
+  "blaze", "tide", "grove", "frost", "storm", "lunar",
+  "solar", "fairy", "shadow", "arcane", "stellar", "zephyr",
+] as const;
+type TypedPouchType = typeof TYPED_POUCH_TYPES[number];
+
+// ── CraftView props ────────────────────────────────────────────────────────
+
 interface CraftViewProps {
   essences:      EssenceItem[];
   consumables:   { id: string; quantity: number }[];
@@ -231,9 +241,19 @@ const CRAFT_CATEGORIES: { id: ConsumableCategory | "infuser"; label: string; emo
   { id: "growth",         label: "Growth",          emoji: "🌱" },
   { id: "mutation_boost", label: "Mutation Boosts",  emoji: "🧪" },
   { id: "utility",        label: "Utility",          emoji: "⚙️" },
+  { id: "seed_pouch",     label: "Seed Pouches",     emoji: "🎁" },
 ];
 
 function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftError, onCraft }: CraftViewProps) {
+  // For the Seed Pouches category: which type sub-filter is selected
+  // null = "generic" (untyped), a string = element type
+  const [pouchType, setPouchType] = useState<"generic" | TypedPouchType>("generic");
+
+  const pouchTypeLabel = useCallback((t: "generic" | TypedPouchType): string => {
+    if (t === "generic") return "Generic";
+    return FLOWER_TYPES[t as FlowerType]?.name ?? t;
+  }, []);
+
   return (
     <div className="flex flex-col gap-5">
       <p className="text-[11px] text-muted-foreground">
@@ -247,11 +267,12 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
       )}
 
       {CRAFT_CATEGORIES.map(({ id: catId, label, emoji: catEmoji }) => {
-        const isInfuser = catId === "infuser";
+        const isInfuser  = catId === "infuser";
+        const isPouchCat = catId === "seed_pouch";
 
         const cards = isInfuser
           ? INFUSER_RECIPES.map((recipe) => {
-              const owned     = infusers.find((i) => i.rarity === recipe.rarity)?.quantity ?? 0;
+              const owned      = infusers.find((i) => i.rarity === recipe.rarity)?.quantity ?? 0;
               const affordable = canCraftInfuser(recipe, essences, infusers);
               return (
                 <RecipeCard
@@ -272,7 +293,13 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
               );
             })
           : CONSUMABLE_RECIPES
-              .filter((r) => r.category === catId)
+              .filter((r) => {
+                if (r.category !== catId) return false;
+                if (!isPouchCat) return true;
+                // Seed Pouch category: filter by selected type
+                if (pouchType === "generic") return /^seed_pouch_[1-5]$/.test(r.id);
+                return r.id.startsWith(`seed_pouch_${pouchType}_`);
+              })
               .map((recipe) => {
                 const owned      = consumables.find((c) => c.id === recipe.id)?.quantity ?? 0;
                 const affordable = canCraftConsumable(recipe, essences, consumables);
@@ -298,6 +325,34 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
         return (
           <div key={catId}>
             <p className="text-xs font-semibold mb-2">{catEmoji} {label}</p>
+
+            {/* Seed Pouch type selector */}
+            {isPouchCat && (
+              <div className="flex flex-wrap gap-1 mb-3">
+                {(["generic", ...TYPED_POUCH_TYPES] as const).map((t) => {
+                  const cfg = t !== "generic" ? FLOWER_TYPES[t as FlowerType] : null;
+                  const isActive = pouchType === t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setPouchType(t)}
+                      className={`
+                        inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all duration-150
+                        ${isActive
+                          ? cfg
+                            ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`
+                            : "border-foreground bg-foreground/10 text-foreground"
+                          : "border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground"
+                        }
+                      `}
+                    >
+                      {cfg ? `${cfg.emoji} ` : "🎁 "}{pouchTypeLabel(t)}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             <div className="grid grid-cols-1 gap-2">
               {cards}
             </div>
