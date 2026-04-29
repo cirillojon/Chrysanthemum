@@ -404,6 +404,44 @@ export function edgeAlchemyCraft(
   return callEdge<AlchemyCraftResult>("alchemy-craft", { craftType, id });
 }
 
+// ── Alchemy infuse ────────────────────────────────────────────────────────────
+
+export interface AlchemyInfuseResult {
+  ok:              true;
+  inventory:       GameState["inventory"];
+  essences:        GameState["essences"];
+  coins:           number;
+  discovered:      GameState["discovered"];
+  mutation:        string;
+  tier:            1 | 2 | 3 | 4;
+  serverUpdatedAt: string;
+}
+
+export interface AlchemyStripResult {
+  ok:              true;
+  inventory:       GameState["inventory"];
+  coins:           number;
+  serverUpdatedAt: string;
+}
+
+/** Infuse an unmutated bloom — spends essence + coins, returns a randomly mutated bloom. */
+export function edgeAlchemyInfuse(
+  speciesId:   string,
+  essenceType: string,
+  quantity:    number,
+) {
+  return callEdge<AlchemyInfuseResult>("alchemy-infuse", {
+    action: "infuse", speciesId, essenceType, quantity,
+  });
+}
+
+/** Strip the mutation off a mutated bloom — spends coins, returns a base bloom. */
+export function edgeAlchemyStrip(speciesId: string, mutation: string) {
+  return callEdge<AlchemyStripResult>("alchemy-infuse", {
+    action: "strip", speciesId, mutation,
+  });
+}
+
 // ── Consumable usage ──────────────────────────────────────────────────────────
 
 export interface UseConsumableResult {
