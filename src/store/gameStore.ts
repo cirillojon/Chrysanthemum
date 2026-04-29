@@ -1393,11 +1393,6 @@ export function harvestPlant(
   const { speciesId } = plot.plant;
   // Use pre-rolled mutation from bloom time; fall back to null if somehow missed
   const mutation = plot.plant.mutation ?? undefined;
-  const species  = getFlower(speciesId)!;
-
-  const bonusCoins = mutation
-    ? Math.floor(species.sellValue * (MUTATIONS[mutation].valueMultiplier - 1))
-    : 0;
 
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) => {
@@ -1434,7 +1429,6 @@ export function harvestPlant(
   return {
     state: {
       ...state,
-      coins:      state.coins + bonusCoins,
       grid:       newGrid,
       inventory:  newInventory,
       discovered: newDiscovered,

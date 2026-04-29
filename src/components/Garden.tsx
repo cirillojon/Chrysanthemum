@@ -91,7 +91,12 @@ export function Garden() {
                   harvestingPlots.current.delete(key);
                 }
               },
-              undefined,
+              () => {
+                // Show harvest popup for bell auto-harvests just like manual ones
+                if (harvestedSpeciesId) {
+                  setHarvestPopup({ speciesId: harvestedSpeciesId, mutation: harvestedMutation });
+                }
+              },
               {
                 serialize: true,
                 rollback: (c) => ({

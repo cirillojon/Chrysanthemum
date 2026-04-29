@@ -287,10 +287,7 @@ Deno.serve(async (req: Request) => {
     // Server-trusted mutation only — never accept client-supplied mutation IDs.
     // Both the client tick (cloud-saved grid) and the server tick-offline-gardens
     // function write to plant.mutation in the DB.
-    const mutation      = (plant.mutation as string | null | undefined) ?? undefined;
-    const sellValue     = FLOWER_SELL_VALUES[speciesId] ?? 0;
-    const mutMultiplier = mutation ? (MUTATION_MULTIPLIERS[mutation] ?? 1) : 1;
-    const bonusCoins    = mutation ? Math.floor(sellValue * (mutMultiplier - 1)) : 0;
+    const mutation = (plant.mutation as string | null | undefined) ?? undefined;
 
     // Clear only the harvested plot — do NOT return the full grid to the client.
     // Mutations on other plants live only in client state; overwriting with the
@@ -318,12 +315,11 @@ Deno.serve(async (req: Request) => {
       if (!newDiscovered.includes(mutKey)) newDiscovered.push(mutKey);
     }
 
-    const newCoins = (save.coins as number) + bonusCoins;
-
     // ── Write to DB ───────────────────────────────────────────────────────────
+    // Coins are NOT updated on harvest — they only change when blooms are sold.
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
-      .update({ coins: newCoins, grid: newGrid, inventory: newInventory, discovered: newDiscovered, updated_at: new Date().toISOString() })
+      .update({ grid: newGrid, inventory: newInventory, discovered: newDiscovered, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .eq("updated_at", priorUpdatedAt)
       .select("updated_at")
@@ -341,16 +337,13 @@ Deno.serve(async (req: Request) => {
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "harvest",
       payload: { row, col, speciesId, mutation },
-      result:  { bonusCoins, newCoins },
+      result:  { ok: true },
     });
 
-    // Return inventory/discovered/bonusCoins only — NOT coins or grid.
-    // Coins are written server-side but not returned: each individual harvest returning
-    // a full authoritative coin total overwrites the optimistic total from concurrent
-    // in-flight harvests, causing a visible "snap back" effect. The client's optimistic
-    // coin delta (bonusCoins) is already correct; we just confirm it succeeded.
+    // Return inventory/discovered only — NOT coins or grid.
+    // Coins never change on harvest (only on sell), so there is nothing to sync back.
     return new Response(
-      JSON.stringify({ ok: true, inventory: newInventory, discovered: newDiscovered, mutation, bonusCoins, serverUpdatedAt: updateData.updated_at }),
+      JSON.stringify({ ok: true, inventory: newInventory, discovered: newDiscovered, mutation, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
