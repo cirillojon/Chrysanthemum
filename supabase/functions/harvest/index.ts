@@ -16,12 +16,6 @@ const FERTILIZER_MULTIPLIERS: Record<string, number> = {
   basic: 1.1, advanced: 1.25, premium: 1.5, elite: 1.75, miracle: 2.0,
 };
 
-// ── Mutation value multipliers (mirrors src/data/flowers.ts) ─────────────────
-const MUTATION_MULTIPLIERS: Record<string, number> = {
-  golden: 4.0, rainbow: 5.0, giant: 2.0, moonlit: 2.5, frozen: 2.0,
-  scorched: 2.0, wet: 1.25, windstruck: 0.7, shocked: 2.5,
-};
-
 // ── Flower growth times in ms (mirrors src/data/flowers.ts) ──────────────────
 const FLOWER_GROWTH_TIMES: Record<string, { seed: number; sprout: number }> = {
   quickgrass: { seed: 40_000, sprout: 80_000 }, dustweed: { seed: 45_000, sprout: 90_000 },
@@ -90,43 +84,6 @@ const FLOWER_GROWTH_TIMES: Record<string, { seed: number; sprout: number }> = {
   dreambloom: { seed: 300_000_000, sprout: 600_000_000 }, fairy_blossom: { seed: 324_000_000, sprout: 648_000_000 },
   lovebind: { seed: 345_600_000, sprout: 691_200_000 }, eternal_heart: { seed: 374_400_000, sprout: 748_800_000 },
   nova_bloom: { seed: 403_200_000, sprout: 806_400_000 }, princess_blossom: { seed: 432_000_000, sprout: 864_000_000 },
-};
-
-// ── Flower sell values (mirrors src/data/flowers.ts) ─────────────────────────
-const FLOWER_SELL_VALUES: Record<string, number> = {
-  quickgrass: 10, dustweed: 10, sprig: 12, dewdrop: 12, pebblebloom: 12,
-  ember_moss: 12, dandelion: 13, clover: 13, violet: 14, lemongrass: 14,
-  daisy: 14, honeywort: 14, buttercup: 14, dawnpetal: 15, poppy: 15,
-  chamomile: 15, marigold: 16, sunflower: 17, coppercup: 17, ivybell: 17,
-  thornberry: 18, saltmoss: 19, ashpetal: 19, snowdrift: 20,
-  swiftbloom: 42, shortcress: 44, thornwhistle: 48, starwort: 50, mintleaf: 50,
-  tulip: 50, inkbloom: 52, hyacinth: 53, snapdragon: 55, beebalm: 57,
-  candleflower: 57, carnation: 59, ribbonweed: 60, hibiscus: 62, wildberry: 64,
-  frostbell: 63, bluebell: 64, cherry_blossom: 66, rose: 67, peacockflower: 69,
-  bamboo_bloom: 70, hummingbloom: 70, water_lily: 71, lanternflower: 73,
-  dovebloom: 76, coral_bells: 78, sundew: 81, bubblebloom: 84,
-  flashpetal: 250, rushwillow: 260, sweetheart_lily: 280, glassbell: 285,
-  stormcaller: 290, lavender: 300, amber_crown: 300, peach_blossom: 300,
-  foxglove: 320, butterbloom: 330, peony: 340, tidebloom: 350, starweave: 350,
-  wisteria: 360, dreamcup: 360, coralbell: 370, foxfire: 375,
-  bird_of_paradise: 380, solarbell: 380, moonpetal: 390, orchid: 400,
-  duskrose: 410, passionflower: 420, glasswing: 435, mirror_orchid: 450,
-  stargazer_lily: 460, prism_lily: 480, dusk_orchid: 500,
-  firstbloom: 3_600, haste_lily: 3_800, verdant_crown: 4_200, ironwood_bloom: 4_300,
-  sundial: 4_400, lotus: 4_500, candy_blossom: 4_700, prismbark: 4_700,
-  dolphinia: 4_800, ghost_orchid: 4_800, nestbloom: 5_000, black_rose: 5_100,
-  pumpkin_blossom: 5_100, starburst_lily: 5_100, sporebloom: 5_300, fire_lily: 5_400,
-  stargazer: 5_600, fullmoon_bloom: 5_700, ice_crown: 5_700, diamond_bloom: 6_000,
-  oracle_eye: 6_300, halfmoon_bloom: 6_600, aurora_bloom: 6_700, mirrorpetal: 6_900,
-  emberspark: 7_200,
-  blink_rose: 50_000, dawnfire: 53_000, moonflower: 58_000, jellybloom: 59_000,
-  celestial_bloom: 63_000, void_blossom: 69_000, seraph_wing: 77_000,
-  solar_rose: 79_000, nebula_drift: 84_000, superbloom: 90_000,
-  wanderbloom: 90_000, chrysanthemum: 100_000,
-  umbral_bloom: 250_000, obsidian_rose: 285_000, duskmantle: 310_000,
-  graveweb: 355_000, nightwing: 430_000, ashenveil: 465_000, voidfire: 500_000,
-  dreambloom: 1_000_000, fairy_blossom: 1_200_000, lovebind: 1_350_000,
-  eternal_heart: 1_550_000, nova_bloom: 1_800_000, princess_blossom: 2_000_000,
 };
 
 // Max weather multiplier (thunderstorm 2×) used as grace factor

@@ -47,21 +47,6 @@ function oldBloom(speciesId: string, mutation?: keyof typeof MUTATIONS): Planted
   };
 }
 
-/** A plant that JUST bloomed — within the 5 s grace period. */
-function freshBloom(speciesId: string): PlantedFlower {
-  const now = Date.now();
-  return {
-    speciesId,
-    timePlanted: now - 10_000_000,
-    fertilizer:  null,
-    bloomedAt:   now - 1_000,   // 1 s ago — bell should skip this
-    sproutedAt:  now - 20_000,
-    growthMs:    9_999_999,
-    lastTickAt:  now - 1_000,
-    mutation:    null,
-  };
-}
-
 const BELL_RARE     = GEAR["harvest_bell_rare"];
 const PLANTER       = GEAR["auto_planter_prismatic"];
 
