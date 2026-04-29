@@ -152,12 +152,14 @@ Deno.serve(async (req: Request) => {
     }
 
     // Return item to save
-    const { error: updateError } = await supabaseAdmin
+    const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
       .update({ inventory, fertilizers, gear_inventory: gearInventory, updated_at: new Date().toISOString() })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .select("updated_at")
+      .single();
 
-    if (updateError) {
+    if (updateError || !updateData) {
       console.error("marketplace-cancel: save update failed after cancel", updateError);
       return new Response(JSON.stringify({ error: "Failed to update save" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -165,7 +167,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, inventory, fertilizers, gearInventory }),
+      JSON.stringify({ ok: true, inventory, fertilizers, gearInventory, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

@@ -201,7 +201,7 @@ Deno.serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ ok: true, coins, marketplaceSlots }),
+        JSON.stringify({ ok: true, coins, marketplaceSlots, serverUpdatedAt: updateData.updated_at }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -303,7 +303,7 @@ Deno.serve(async (req: Request) => {
         }
 
         return new Response(
-          JSON.stringify({ ok: true, coins, fertilizers: newFertilizers, inventory: newInventory, listingId: listing.id }),
+          JSON.stringify({ ok: true, coins, fertilizers: newFertilizers, inventory: newInventory, listingId: listing.id, serverUpdatedAt: updateData.updated_at }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -373,7 +373,7 @@ Deno.serve(async (req: Request) => {
         }
 
         return new Response(
-          JSON.stringify({ ok: true, coins, gearInventory: newGearInventory, inventory: newInventory, listingId: listing.id }),
+          JSON.stringify({ ok: true, coins, gearInventory: newGearInventory, inventory: newInventory, listingId: listing.id, serverUpdatedAt: updateData2.updated_at }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -448,7 +448,7 @@ Deno.serve(async (req: Request) => {
       }
 
       return new Response(
-        JSON.stringify({ ok: true, coins, inventory: newInventory, listingId: listing.id }),
+        JSON.stringify({ ok: true, coins, inventory: newInventory, listingId: listing.id, serverUpdatedAt: updateData3.updated_at }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

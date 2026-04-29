@@ -18,8 +18,8 @@ const FERTILIZER_MULTIPLIERS: Record<string, number> = {
 
 // ── Mutation value multipliers (mirrors src/data/flowers.ts) ─────────────────
 const MUTATION_MULTIPLIERS: Record<string, number> = {
-  golden: 4.0, rainbow: 3.0, giant: 2.0, moonlit: 2.5, frozen: 2.0,
-  scorched: 2.0, wet: 1.5, windstruck: 1.1, shocked: 2.5,
+  golden: 4.0, rainbow: 5.0, giant: 2.0, moonlit: 2.5, frozen: 2.0,
+  scorched: 2.0, wet: 1.25, windstruck: 0.7, shocked: 2.5,
 };
 
 // ── Flower growth times in ms (mirrors src/data/flowers.ts) ──────────────────
@@ -170,10 +170,12 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ── Verify JWT + load save in parallel ────────────────────────────────────
-    const [authResult, saveResult] = await Promise.all([
+    // ── Verify JWT + load save + load authoritative planting time in parallel ──
+    const [authResult, saveResult, timingResult] = await Promise.all([
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin.from("game_saves").select("coins, grid, inventory, discovered, updated_at").eq("user_id", userId).single(),
+      // plant_timings has no client write policy — planted_at cannot be forged
+      supabaseAdmin.from("plant_timings").select("planted_at").eq("user_id", userId).eq("row", row).eq("col", col).maybeSingle(),
     ]);
 
     if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
@@ -231,8 +233,48 @@ Deno.serve(async (req: Request) => {
 
     const totalGrowthMs  = growthTimes.seed + growthTimes.sprout;
     const fertMultiplier = plant.fertilizer ? (FERTILIZER_MULTIPLIERS[plant.fertilizer] ?? 1.0) : 1.0;
-    const masteredBonus  = plant.masteredBonus ?? 1.0;
-    const minBloomTime   = plant.timePlanted + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
+    // Clamp masteredBonus — client-stored value must not exceed the legitimate
+    // max of 1.25, preventing a tampered DB row from making growth instant.
+    const masteredBonus  = Math.min(plant.masteredBonus ?? 1.0, 1.25);
+
+    // Use server-authoritative planted_at from plant_timings.
+    // If no entry exists (plant predates the fix), backfill now() and silently
+    // clear the plot — returning 400 here causes a rollback-retry infinite loop
+    // because the client re-presents the bloomed plant after each rollback.
+    // Instead we return the idempotent 200 (no coins, no inventory change in DB)
+    // so the client keeps its optimistic grid removal and stops retrying.
+    // Approach credit: @cirillojon (PR #134).
+    if (!timingResult?.data) {
+      const clearedGrid = grid.map((r, ri) =>
+        r.map((p, ci) => ri === row && ci === col ? { ...p, plant: null } : p)
+      );
+      void Promise.all([
+        supabaseAdmin.from("plant_timings").upsert({
+          user_id:    userId,
+          row,
+          col,
+          planted_at: new Date().toISOString(),
+        }),
+        supabaseAdmin.from("game_saves")
+          .update({ grid: clearedGrid, updated_at: new Date().toISOString() })
+          .eq("user_id", userId)
+          .eq("updated_at", priorUpdatedAt),
+      ]);
+      return new Response(
+        JSON.stringify({
+          ok:         true,
+          coins:      save.coins as number,
+          inventory:  save.inventory ?? [],
+          discovered: save.discovered ?? [],
+          mutation:   undefined,
+          bonusCoins: 0,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    const authoritativePlantedAt = new Date(timingResult.data.planted_at).getTime();
+    const minBloomTime = authoritativePlantedAt + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
 
     if (Date.now() < minBloomTime) {
       return new Response(JSON.stringify({ error: "Plant is not ready to harvest" }), {
@@ -293,6 +335,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Remove the plant_timings entry now that the plot is clear
+    void supabaseAdmin.from("plant_timings").delete().eq("user_id", userId).eq("row", row).eq("col", col);
+
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "harvest",
       payload: { row, col, speciesId, mutation },
@@ -301,7 +346,7 @@ Deno.serve(async (req: Request) => {
 
     // Return coins/inventory/discovered only — NOT grid (see comment above).
     return new Response(
-      JSON.stringify({ ok: true, coins: newCoins, inventory: newInventory, discovered: newDiscovered, mutation, bonusCoins }),
+      JSON.stringify({ ok: true, coins: newCoins, inventory: newInventory, discovered: newDiscovered, mutation, bonusCoins, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

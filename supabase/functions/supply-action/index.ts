@@ -147,7 +147,7 @@ Deno.serve(async (req: Request) => {
         return err("Slot has invalid type — not fertilizer or gear");
       }
 
-      const { error: ue } = await supabaseAdmin
+      const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
         .update({
           coins,
@@ -156,9 +156,11 @@ Deno.serve(async (req: Request) => {
           gear_inventory: gearInventory,
           updated_at:    new Date().toISOString(),
         })
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .select("updated_at")
+        .single();
 
-      if (ue) return err("Failed to save", 500);
+      if (ue || !ud) return err("Failed to save", 500);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "supply_buy",
@@ -166,7 +168,7 @@ Deno.serve(async (req: Request) => {
         result:  { coins, type: slot.isFertilizer ? "fertilizer" : "gear" },
       });
 
-      return json({ ok: true, coins, supplyShop, fertilizers, gearInventory });
+      return json({ ok: true, coins, supplyShop, fertilizers, gearInventory, serverUpdatedAt: ud.updated_at });
     }
 
     return err("Unhandled action");

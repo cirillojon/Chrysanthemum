@@ -164,7 +164,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return new Response(
-      JSON.stringify({ ok: true, inventory, discovered }),
+      JSON.stringify({ ok: true, inventory, discovered, serverUpdatedAt: updateResult.data.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

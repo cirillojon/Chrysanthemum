@@ -99,6 +99,10 @@ export interface GameState {
   gearInventory:    GearInventoryItem[];
   // Alchemy — essence tokens per flower type
   essences:         EssenceItem[];
+  // Server sync — the updated_at value from the last successful DB read or write.
+  // saveToCloud uses this as a CAS guard so stale sessions can't overwrite
+  // server-authoritative state (inventory, coins, etc.) with stale client data.
+  serverUpdatedAt:  string | null;
 }
 
 export interface OfflineSummary {
@@ -352,6 +356,7 @@ export function defaultState(): GameState {
     lastSupplyReset:      now,
     gearInventory:        [],
     essences:             [],
+    serverUpdatedAt:      null,
   };
 }
 

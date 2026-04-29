@@ -136,12 +136,14 @@ Deno.serve(async (req: Request) => {
       : [...inventory, { speciesId, quantity: 1, isSeed: true }];
 
     // ── Write to DB ───────────────────────────────────────────────────────────
-    const { error: updateError } = await supabaseAdmin
+    const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
       .update({ grid: newGrid, inventory: newInventory, updated_at: new Date().toISOString() })
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .select("updated_at")
+      .single();
 
-    if (updateError) {
+    if (updateError || !updateData) {
       return new Response(JSON.stringify({ error: "Failed to save" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -153,7 +155,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return new Response(
-      JSON.stringify({ ok: true, grid: newGrid, inventory: newInventory }),
+      JSON.stringify({ ok: true, grid: newGrid, inventory: newInventory, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
