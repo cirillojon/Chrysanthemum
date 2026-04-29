@@ -40,6 +40,8 @@ const REQUIRED_EXPORTS = [
   // Gifting
   "edgeSendGift",
   "edgeClaimGift",
+  // Alchemy
+  "edgeAlchemySacrifice",
   // Marketplace + mailbox
   "edgeMarketplaceCreateListing",
   "edgeMarketplaceCreateFertilizerListing",
