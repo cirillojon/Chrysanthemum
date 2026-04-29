@@ -33,9 +33,6 @@ interface CraftEntry {
 
 // ── Rarity style helpers ──────────────────────────────────────────────────────
 
-const RARITY_ORDER: Rarity[] = ["common","uncommon","rare","legendary","mythic","exalted","prismatic"];
-
-function rarityRank(r: Rarity): number { return RARITY_ORDER.indexOf(r); }
 
 const ROMAN = ["I","II","III","IV","V"] as const;
 function toRoman(n: number): string { return ROMAN[n - 1] ?? String(n); }
@@ -112,10 +109,10 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
     }
   }
 
-  // Sort: craftable first, then by rarity descending (high rarity items are goals)
+  // Sort: craftable first, preserve source-array order within each group
   return entries.sort((a, b) => {
     if (a.canCraft !== b.canCraft) return a.canCraft ? -1 : 1;
-    return rarityRank(b.rarity) - rarityRank(a.rarity); // higher rarity first within each group
+    return 0;
   });
 }
 
