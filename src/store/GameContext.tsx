@@ -34,6 +34,9 @@ interface GameContextValue {
   update: (newState: GameState) => void;
   /** Returns the latest state synchronously — safe to call mid-event before React re-renders. */
   getState: () => GameState;
+  /** Re-reads the authoritative save from DB and replaces local state. Use when the client
+   *  detects it's out of sync with the server (e.g. cron planted seeds the client doesn't know about). */
+  reloadFromCloud: () => Promise<void>;
   /** Optimistic action: applies newState immediately, calls serverFn, merges delta on success, rolls back on failure. */
   perform: <T extends Partial<GameState>>(
     optimisticState: GameState,
@@ -231,22 +234,30 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // simply need to reflect the latest tick checkpoints). Without this write,
       // the DB can be out of sync with the client, causing plant-seed / harvest
       // edge functions to see stale occupied / empty plots.
-      const savedAt = await saveToCloud(u.id, ticked);
+      let savedUpdatedAt = await saveToCloud(u.id, ticked);
       if (loadGen.current !== gen) return; // sign-out fired after cloud write — don't re-enable saves
-      if (savedAt) {
-        setState((prev) => ({ ...prev, serverUpdatedAt: savedAt }));
+
+      if (savedUpdatedAt) {
+        // Keep serverUpdatedAt in sync so subsequent CAS writes use the correct stamp.
+        stateRef.current = { ...ticked, serverUpdatedAt: savedUpdatedAt };
+        setState(stateRef.current);
       } else {
-        // CAS miss — another session wrote between our load and our offline-tick save.
-        // Fetch the current updated_at so subsequent saves and edge function calls
-        // aren't permanently blocked by a stale serverUpdatedAt.
-        const { data: freshRow } = await supabase
-          .from("game_saves")
-          .select("updated_at")
-          .eq("user_id", u.id)
-          .single();
+        // CAS failed — the offline cron or another process wrote to DB between our
+        // loadCloudSave and this write-back (e.g. auto-planter planted cells while
+        // we were offline). Re-read the authoritative state so the client has the
+        // correct grid and a fresh serverUpdatedAt, then retry once.
+        const freshCloud = await loadCloudSave(u.id);
         if (loadGen.current !== gen) return;
-        if (freshRow?.updated_at) {
-          setState((prev) => ({ ...prev, serverUpdatedAt: freshRow.updated_at as string }));
+        if (freshCloud) {
+          const { state: reticked } = applyOfflineTick(freshCloud, offlineWeather);
+          stateRef.current = reticked;
+          setState(reticked);
+          savedUpdatedAt = await saveToCloud(u.id, reticked);
+          if (loadGen.current !== gen) return;
+          if (savedUpdatedAt) {
+            stateRef.current = { ...reticked, serverUpdatedAt: savedUpdatedAt };
+            setState(stateRef.current);
+          }
         }
       }
 
@@ -415,6 +426,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const getState = useCallback(() => stateRef.current, []);
 
+  /** Re-reads the authoritative save from DB and replaces local state.
+   *  Called when the client detects the server has changed state it doesn't know about
+   *  (e.g. the offline cron planted seeds while the user was watching). */
+  const reloadFromCloud = useCallback(async () => {
+    if (!user || !saveEnabled.current) return;
+    const fresh = await loadCloudSave(user.id);
+    if (!fresh) return;
+    stateRef.current = fresh;
+    setState(fresh);
+  }, [user]);
+
   // Global queue for harvest server calls — ensures they execute one at a time
   // so concurrent DB reads/writes don't overwrite each other's grid changes.
   const harvestQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -538,7 +560,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <GameContext.Provider value={{
-      state, update, getState, perform, awaitHarvests, queueWork,
+      state, update, getState, perform, awaitHarvests, queueWork, reloadFromCloud,
       offlineSummary, clearSummary: () => setOfflineSummary(EMPTY_SUMMARY),
       shopJustRestocked,   clearShopNotification:   () => setShopJustRestocked(false),
       supplyJustRestocked, clearSupplyNotification: () => setSupplyJustRestocked(false),

@@ -1,3 +1,22 @@
+## [v2.2.4] — 2026-04-29 — Hotfix & Gear Polish
+
+### Fixed
+- **Sell All data loss** — selling all blooms is now a single atomic server write; previously N sequential calls with a shared catch block would roll back all blooms client-side even if some had already landed server-side, leaving players with no flowers and no coins
+- **Harvest coin snap-back** — rapidly harvesting multiple plots no longer causes the coin counter to stutter or revert; the harvest response no longer returns the full server coin total, which was overwriting the client's optimistic running total from concurrent in-flight harvests
+- **Sell All 400 on every call** — `sell_all` was added to the shop-action handler but accidentally omitted from the action allowlist, causing every Sell All request to be rejected before reaching the sell logic
+- **Mutated flowers awarding coins on harvest** — mutations previously awarded `sellValue × (multiplier - 1)` coins at harvest time on both client and server; coins are now only gained by selling blooms
+- **Harvest Bell and Auto-Planter stopping off-tab** — gear actions now keep running when the user navigates away from the Garden tab; Garden is always mounted (CSS-hidden when not active) so bell harvests and auto-plant events fire on any tab
+- **Harvest popup not showing off-tab** — popup is now rendered at App level; bell auto-harvests trigger the notification even when the user is on Inventory, Shop, or Social
+- **Own profile not updating in real-time** — the realtime subscription was skipped for your own profile; it now subscribes for all profiles including your own
+- **Other players' profile not showing live gear effects** — profile page now re-runs `simulateOfflineGarden` every 5 seconds so plant growth and bell harvests are visible between server cron ticks
+- **Auto-Planter spamming server on occupied plot** — when an offline cron tick pre-filled a cell, the auto-planter would retry indefinitely; the cell is now blocked until state resyncs from the server
+- **Supply Shop concurrent buy protection** — the buy handler now reads `updated_at` before writing and performs a CAS check; a conflicting save (e.g. offline tick firing mid-buy) returns a clean 409 rollback instead of silently corrupting coins or inventory
+
+### Changed
+- **Harvest popup redesigned** — bloom emoji with mutation label inline (e.g. `+1 🌹 ✨ Golden`); harvesting the same flower rapidly accumulates into a single `+N` pill instead of duplicating; different species each get their own pill stacked on screen simultaneously
+
+---
+
 ## [v2.2.3] — 2026-04-28 — Security Patch
 
 ### Security

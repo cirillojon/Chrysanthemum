@@ -1532,15 +1532,6 @@ export function harvestPlant(
   const { speciesId } = plot.plant;
   // Use pre-rolled mutation from bloom time; fall back to null if somehow missed
   const mutation = plot.plant.mutation ?? undefined;
-  const species  = getFlower(speciesId)!;
-
-  // timePlanted === 0 is the sentinel for bloom-placed plants (placed via plant-bloom).
-  // No bonus coins for these — awarding them would allow harvest → re-place → harvest
-  // cycles for infinite coin generation.
-  const isBloomPlaced = plot.plant.timePlanted === 0;
-  const bonusCoins = (!isBloomPlaced && mutation)
-    ? Math.floor(species.sellValue * (MUTATIONS[mutation].valueMultiplier - 1))
-    : 0;
 
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) => {
@@ -1577,7 +1568,6 @@ export function harvestPlant(
   return {
     state: {
       ...state,
-      coins:      state.coins + bonusCoins,
       grid:       newGrid,
       inventory:  newInventory,
       discovered: newDiscovered,

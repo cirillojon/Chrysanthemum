@@ -50,6 +50,25 @@ describe("Supabase edge function contract (regression)", () => {
     expect(fns.length).toBeGreaterThan(0);
   });
 
+  // ── harvest-specific contract ──────────────────────────────────────────────
+  describe("harvest — v2.2.4 coin-policy contract", () => {
+    const harvestSrc = readFileSync(join(FUNCTIONS_DIR, "harvest", "index.ts"), "utf8");
+
+    it("does NOT write coins to the DB during harvest (coins come from selling only)", () => {
+      // This assertion fails if someone re-introduces 'coins: newCoins' in the
+      // Supabase update() call inside the harvest function.
+      expect(harvestSrc).not.toMatch(/coins:\s*newCoins/);
+    });
+
+    it("does NOT return bonusCoins in the response payload", () => {
+      expect(harvestSrc).not.toMatch(/bonusCoins/);
+    });
+
+    it("does NOT compute sellValue or mutMultiplier (no server-side coin calculation)", () => {
+      expect(harvestSrc).not.toMatch(/sellValue|mutMultiplier/);
+    });
+  });
+
   for (const name of fns) {
     describe(name, () => {
       const src = readFileSync(join(FUNCTIONS_DIR, name, "index.ts"), "utf8");

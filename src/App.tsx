@@ -33,6 +33,7 @@ import type { MutationType } from "./data/flowers";
 import { useVersionCheck } from "./hooks/useVersionCheck";
 import { usePresence } from "./hooks/usePresence";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { HarvestPopup } from "./components/HarvestPopup";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
 type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
@@ -75,6 +76,24 @@ function AppInner() {
 
   const updateAvailable  = useVersionCheck();
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
+
+  // Harvest popups — keyed by "speciesId:mutation" so duplicates accumulate a count
+  // and different species each get their own pill shown simultaneously.
+  type HarvestEntry = { speciesId: string; mutation?: MutationType; count: number };
+  const [harvestQueue, setHarvestQueue] = useState<Map<string, HarvestEntry>>(new Map());
+
+  function pushHarvestPopup(speciesId: string, mutation?: MutationType) {
+    const key = `${speciesId}:${mutation ?? ""}`;
+    setHarvestQueue((prev) => {
+      const next     = new Map(prev);
+      const existing = next.get(key);
+      next.set(key, existing
+        ? { ...existing, count: existing.count + 1 }
+        : { speciesId, mutation, count: 1 }
+      );
+      return next;
+    });
+  }
 
   const [changelogEntry, setChangelogEntry] = useState<ChangelogEntry | null>(() => {
     const seen = localStorage.getItem("changelogSeenVersion");
@@ -551,12 +570,17 @@ function AppInner() {
         className="flex-1 w-full sm:max-w-2xl sm:mx-auto px-3 sm:px-4 py-6 sm:py-8 overflow-x-hidden"
         {...swipeHandlers}
       >
+        {/* Always-mounted garden — hidden when on another tab so bell/auto-planter keep running */}
+        <div className={tab !== "garden" ? "hidden" : ""}>
+          <Garden onHarvestPopup={pushHarvestPopup} />
+        </div>
+
+        {tab !== "garden" && (
         <div
           key={tab}
           className={tabDir === "left" ? "slide-from-right" : tabDir === "right" ? "slide-from-left" : ""}
         >
         <>
-          {tab === "garden"      && <Garden />}
           {tab === "shop"        && (
             <>
               {/* Shop sub-nav */}
@@ -700,7 +724,29 @@ function AppInner() {
           )}
         </>
         </div>
+        )}
       </main>
+
+      {/* Harvest popups — one pill per unique species+mutation, stacked vertically */}
+      {harvestQueue.size > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-50 flex flex-col items-center justify-end pb-24 gap-2">
+          {[...harvestQueue.entries()].map(([key, entry]) => (
+            <HarvestPopup
+              key={key}
+              speciesId={entry.speciesId}
+              mutation={entry.mutation}
+              count={entry.count}
+              onDone={() =>
+                setHarvestQueue((prev) => {
+                  const next = new Map(prev);
+                  next.delete(key);
+                  return next;
+                })
+              }
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 }
