@@ -155,6 +155,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   }
 
   return (
+    <>
     <div className="flex flex-col gap-5">
 
       {/* Header */}
@@ -308,6 +309,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
     </div>
 
     {/* ── Pouch result toast ── */}
+
     {pouchResult && (() => {
       const flower = getFlower(pouchResult.speciesId);
       return (
@@ -333,6 +335,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
         </div>
       );
     })()}
+    </>
   );
 }
 
