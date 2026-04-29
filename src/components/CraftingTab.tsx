@@ -77,7 +77,7 @@ function cellBgClass(rarity: Rarity): string {
 
 /** Returns text/border/bg class strings for a colored ingredient chip. */
 function rarityChip(rarity: Rarity): { color: string; border: string; bg: string } {
-  if (rarity === "prismatic") return { color: "text-white", border: "rainbow-border", bg: "bg-card/60" };
+  if (rarity === "prismatic") return { color: "rainbow-text", border: "rainbow-border", bg: "bg-card/60" };
   const cfg = RARITY_CONFIG[rarity];
   return {
     color:  cfg.color        || "text-foreground",
@@ -207,9 +207,7 @@ function GearIngredients({
         if (ing.kind === "gear") {
           const def   = GEAR[ing.gearType as GearType];
           const have  = gearInventory.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
-          const tier  = GEAR_TIER_MAP[ing.gearType];
-          const label = tier != null ? `${def?.name ?? ing.gearType} ${toRoman(tier)}` : (def?.name ?? ing.gearType);
-          return <IngredientRow key={i} emoji={def?.emoji ?? "⚙️"} label={label} need={ing.quantity} have={have} enough={have >= ing.quantity} {...rarityChip(def?.rarity ?? "common")} />;
+          return <IngredientRow key={i} emoji={def?.emoji ?? "⚙️"} label={def?.name ?? ing.gearType} need={ing.quantity} have={have} enough={have >= ing.quantity} {...rarityChip(def?.rarity ?? "common")} />;
         }
         const crec = CONSUMABLE_RECIPE_MAP[ing.consumableId as ConsumableId];
         const have = consumables.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
