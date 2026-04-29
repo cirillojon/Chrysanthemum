@@ -89,11 +89,7 @@ function rarityChip(rarity: Rarity): { color: string; border: string; bg: string
 }
 
 function essenceChip(essenceType: string): { color: string; border: string; bg: string } {
-  if (essenceType === "universal") return {
-    color:  UNIVERSAL_ESSENCE_DISPLAY.color,
-    border: UNIVERSAL_ESSENCE_DISPLAY.borderColor,
-    bg:     UNIVERSAL_ESSENCE_DISPLAY.bgColor,
-  };
+  if (essenceType === "universal") return { color: "rainbow-text", border: "rainbow-tile", bg: "" };
   const cfg = FLOWER_TYPES[essenceType as FlowerType];
   return { color: cfg.color, border: cfg.borderColor, bg: cfg.bgColor };
 }
