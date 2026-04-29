@@ -238,20 +238,39 @@ Deno.serve(async (req: Request) => {
     const masteredBonus  = Math.min(plant.masteredBonus ?? 1.0, 1.25);
 
     // Use server-authoritative planted_at from plant_timings.
-    // If no entry exists (plant predates the fix), backfill now() and reject —
-    // the plant will regrow from this moment. This closes the timePlanted exploit
-    // for all existing plants immediately rather than waiting for a full cycle.
+    // If no entry exists (plant predates the fix), backfill now() and silently
+    // clear the plot — returning 400 here causes a rollback-retry infinite loop
+    // because the client re-presents the bloomed plant after each rollback.
+    // Instead we return the idempotent 200 (no coins, no inventory change in DB)
+    // so the client keeps its optimistic grid removal and stops retrying.
     // Approach credit: @cirillojon (PR #134).
     if (!timingResult?.data) {
-      void supabaseAdmin.from("plant_timings").upsert({
-        user_id:    userId,
-        row,
-        col,
-        planted_at: new Date().toISOString(),
-      });
-      return new Response(JSON.stringify({ error: "Plant timing reset — please wait for it to regrow" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      const clearedGrid = grid.map((r, ri) =>
+        r.map((p, ci) => ri === row && ci === col ? { ...p, plant: null } : p)
+      );
+      void Promise.all([
+        supabaseAdmin.from("plant_timings").upsert({
+          user_id:    userId,
+          row,
+          col,
+          planted_at: new Date().toISOString(),
+        }),
+        supabaseAdmin.from("game_saves")
+          .update({ grid: clearedGrid, updated_at: new Date().toISOString() })
+          .eq("user_id", userId)
+          .eq("updated_at", priorUpdatedAt),
+      ]);
+      return new Response(
+        JSON.stringify({
+          ok:         true,
+          coins:      save.coins as number,
+          inventory:  save.inventory ?? [],
+          discovered: save.discovered ?? [],
+          mutation:   undefined,
+          bonusCoins: 0,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
     }
 
     const authoritativePlantedAt = new Date(timingResult.data.planted_at).getTime();
