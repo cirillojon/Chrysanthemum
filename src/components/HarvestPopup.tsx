@@ -12,9 +12,6 @@ export function HarvestPopup({ speciesId, mutation, onDone }: Props) {
   const species = getFlower(speciesId);
   const rarity = species ? RARITY_CONFIG[species.rarity] : null;
   const mut = mutation ? MUTATIONS[mutation] : null;
-  const value = species
-    ? Math.floor(species.sellValue * (mut?.valueMultiplier ?? 1))
-    : 0;
 
   useEffect(() => {
     const timer = setTimeout(
@@ -46,14 +43,12 @@ export function HarvestPopup({ speciesId, mutation, onDone }: Props) {
         </div>
       )}
 
-      {/* Coin popup */}
+      {/* Bloom icon pill */}
       <div
-        className={`flex items-center gap-1.5 bg-card border rounded-full px-3 py-1 shadow-lg ${rarity?.glow}`}
+        className={`flex items-center gap-1 bg-card border rounded-full px-3 py-1 shadow-lg ${rarity?.glow}`}
       >
+        <span className={`text-xs font-bold font-mono ${mut ? mut.color : rarity?.color}`}>+</span>
         <span className="text-base">{species.emoji.bloom}</span>
-        <span className={`text-xs font-bold font-mono ${mut ? mut.color : rarity?.color}`}>
-          +{value} 🟡
-        </span>
       </div>
     </div>
   );
