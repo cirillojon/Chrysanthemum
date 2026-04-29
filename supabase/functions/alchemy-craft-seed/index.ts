@@ -197,12 +197,10 @@ function weightedRandom<T>(items: [T, number][]): T {
   return items[items.length - 1][0];
 }
 
-/** Pick a species at the given rarity — undiscovered base forms first. */
-function selectSpecies(rarity: Rarity, discovered: string[]): string {
-  const pool        = FLOWERS.filter((f) => f.rarity === rarity);
-  const undiscovered = pool.filter((f) => !discovered.includes(f.id));
-  const candidates  = undiscovered.length > 0 ? undiscovered : pool;
-  return candidates[Math.floor(Math.random() * candidates.length)].id;
+/** Pick a species at the given rarity completely at random. */
+function selectSpecies(rarity: Rarity): string {
+  const pool = FLOWERS.filter((f) => f.rarity === rarity);
+  return pool[Math.floor(Math.random() * pool.length)].id;
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -251,7 +249,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("inventory, consumables, discovered, updated_at")
+        .select("inventory, consumables, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -270,9 +268,8 @@ Deno.serve(async (req: Request) => {
     const save = saveResult.data;
     const priorUpdatedAt = save.updated_at as string;
 
-    let inventory    = (save.inventory    ?? []) as { speciesId: string; quantity: number; isSeed?: boolean; mutation?: string }[];
-    let consumables  = (save.consumables  ?? []) as { id: string; quantity: number }[];
-    let discovered   = (save.discovered   ?? []) as string[];
+    let inventory   = (save.inventory   ?? []) as { speciesId: string; quantity: number; isSeed?: boolean; mutation?: string }[];
+    let consumables = (save.consumables ?? []) as { id: string; quantity: number }[];
 
     // ── Validate: player must own ≥1 of this pouch ───────────────────────────
     const pouchIdx = consumables.findIndex((c) => c.id === consumableId);
@@ -284,7 +281,7 @@ Deno.serve(async (req: Request) => {
 
     // ── Roll output ───────────────────────────────────────────────────────────
     const outputRarity    = weightedRandom(POUCH_RARITY_WEIGHTS[consumableId]);
-    const outputSpeciesId = selectSpecies(outputRarity, discovered);
+    const outputSpeciesId = selectSpecies(outputRarity);
 
     // ── Deduct 1 pouch from consumables ───────────────────────────────────────
     consumables = consumables
@@ -303,15 +300,10 @@ Deno.serve(async (req: Request) => {
       inventory = [...inventory, { speciesId: outputSpeciesId, quantity: 1, isSeed: true }];
     }
 
-    // ── Update discovered ─────────────────────────────────────────────────────
-    if (!discovered.includes(outputSpeciesId)) {
-      discovered = [...discovered, outputSpeciesId];
-    }
-
     // ── CAS write ─────────────────────────────────────────────────────────────
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
-      .update({ inventory, consumables, discovered, updated_at: new Date().toISOString() })
+      .update({ inventory, consumables, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .eq("updated_at", priorUpdatedAt)
       .select("updated_at")
@@ -335,7 +327,6 @@ Deno.serve(async (req: Request) => {
         ok: true,
         inventory,
         consumables,
-        discovered,
         outputSpeciesId,
         serverUpdatedAt: updateData.updated_at,
       }),

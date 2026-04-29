@@ -370,7 +370,6 @@ export interface AlchemyCraftSeedResult {
   ok:              true;
   inventory:       GameState["inventory"];
   consumables:     GameState["consumables"];
-  discovered:      GameState["discovered"];
   outputSpeciesId: string;
   serverUpdatedAt: string;
 }

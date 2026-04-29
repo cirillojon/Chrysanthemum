@@ -26,7 +26,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const [tab,                 setTab]                 = useState<Tab>(0);
   const [usingEclipse,        setUsingEclipse]        = useState<string | null>(null);
   const [openingPouch,        setOpeningPouch]        = useState<string | null>(null);
-  const [pouchResult,         setPouchResult]         = useState<{ speciesId: string; isNew: boolean } | null>(null);
+  const [pouchResult,         setPouchResult]         = useState<{ speciesId: string } | null>(null);
   const [pouchResultVisible,  setPouchResultVisible]  = useState(false);
 
   const items           = state.inventory.filter((i) => i.quantity > 0);
@@ -126,12 +126,10 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
     if (openingPouch) return;
     setOpeningPouch(consumableId);
     try {
-      const prevDiscovered = getState().discovered ?? [];
       const res = await edgeAlchemyCraftSeed(consumableId);
       const cur = getState();
-      const isNew = !prevDiscovered.includes(res.outputSpeciesId);
-      update({ ...cur, inventory: res.inventory, consumables: res.consumables, discovered: res.discovered, serverUpdatedAt: res.serverUpdatedAt });
-      setPouchResult({ speciesId: res.outputSpeciesId, isNew });
+      update({ ...cur, inventory: res.inventory, consumables: res.consumables, serverUpdatedAt: res.serverUpdatedAt });
+      setPouchResult({ speciesId: res.outputSpeciesId });
     } catch {
       // silent — pouch stays in inventory on failure
     } finally {
@@ -323,12 +321,9 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
             <span className="text-2xl">{flower?.emoji.seed ?? "🎁"}</span>
             <div>
-              <p className="text-sm font-bold text-primary mb-0.5">
-                Pouch opened!{pouchResult.isNew ? " ✨" : ""}
-              </p>
+              <p className="text-sm font-bold text-primary mb-0.5">Pouch opened!</p>
               <p className="text-[11px] text-muted-foreground">
                 {flower?.name ?? pouchResult.speciesId} seed
-                {pouchResult.isNew && <span className="ml-1 text-primary font-medium">— first discovery!</span>}
               </p>
             </div>
           </div>
