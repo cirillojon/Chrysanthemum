@@ -16,7 +16,8 @@ export type ConsumableId =
   | "rainbow_vial_1"   | "rainbow_vial_2"   | "rainbow_vial_3"   | "rainbow_vial_4"   | "rainbow_vial_5"
   | "eclipse_tonic_1"  | "eclipse_tonic_2"  | "eclipse_tonic_3"  | "eclipse_tonic_4"  | "eclipse_tonic_5"
   | "wind_shear"
-  | "slot_lock";
+  | "slot_lock"
+  | "seed_pouch_1"     | "seed_pouch_2"     | "seed_pouch_3"     | "seed_pouch_4"     | "seed_pouch_5";
 
 export interface ConsumableItem {
   id:       ConsumableId;
@@ -35,7 +36,7 @@ export type InfuserCost =
   | { kind: "essence"; amounts: EssenceCostEntry[] }
   | { kind: "infuser";  tier: 1 | 2 | 3 | 4; quantity: number };
 
-export type ConsumableCategory = "growth" | "mutation_boost" | "utility";
+export type ConsumableCategory = "growth" | "mutation_boost" | "utility" | "seed_pouch";
 
 export interface ConsumableRecipe {
   id:           ConsumableId;
@@ -298,6 +299,23 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   { id: "slot_lock", name: "Slot Lock", emoji: "📌", tier: null, rarity: "rare", category: "utility",
     description: "Locks a supply shop slot so it survives the next refresh without rerolling.",
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }] } },
+
+  // ── Seed Pouch (I–V) — seed_pouch ────────────────────────────────────────
+  { id: "seed_pouch_1", name: "Seed Pouch I",   emoji: "🎁", tier: 1, rarity: "rare",      category: "seed_pouch",
+    description: `Open from your inventory for a mystery ${r(1)}+ seed. Favors species you haven't discovered yet.`,
+    cost: { kind: "essence", amounts: [{ type: "lunar", amount: 4 }, { type: "arcane", amount: 4 }] } },
+  { id: "seed_pouch_2", name: "Seed Pouch II",  emoji: "🎁", tier: 2, rarity: "legendary", category: "seed_pouch",
+    description: `Open from your inventory for a mystery ${r(2)}+ seed. Favors species you haven't discovered yet.`,
+    cost: { kind: "consumable", id: "seed_pouch_1", quantity: 2 } },
+  { id: "seed_pouch_3", name: "Seed Pouch III", emoji: "🎁", tier: 3, rarity: "mythic",    category: "seed_pouch",
+    description: `Open from your inventory for a mystery ${r(3)}+ seed. Favors species you haven't discovered yet.`,
+    cost: { kind: "consumable", id: "seed_pouch_2", quantity: 2 } },
+  { id: "seed_pouch_4", name: "Seed Pouch IV",  emoji: "🎁", tier: 4, rarity: "exalted",   category: "seed_pouch",
+    description: `Open from your inventory for a mystery ${r(4)}+ seed. Favors species you haven't discovered yet.`,
+    cost: { kind: "consumable", id: "seed_pouch_3", quantity: 2 } },
+  { id: "seed_pouch_5", name: "Seed Pouch V",   emoji: "🎁", tier: 5, rarity: "prismatic", category: "seed_pouch",
+    description: `Open from your inventory for a mystery ${r(5)} seed. Favors species you haven't discovered yet.`,
+    cost: { kind: "consumable", id: "seed_pouch_4", quantity: 2 } },
 ];
 
 /** Lookup map: consumable ID → recipe */
@@ -305,32 +323,6 @@ export const CONSUMABLE_RECIPE_MAP = Object.fromEntries(
   CONSUMABLE_RECIPES.map((r) => [r.id, r])
 ) as Record<ConsumableId, ConsumableRecipe>;
 
-// ── Seed Pouch recipes ─────────────────────────────────────────────────────
-
-/** A seed pouch spends a flat amount of any single elemental essence and
- *  instantly yields a mystery seed of the specified rarity or better.
- *  Undiscovered species are preferred when rolling the output. */
-export interface SeedPouchRecipe {
-  id:          string;
-  name:        string;
-  rarity:      Rarity;
-  essenceCost: number;
-  description: string;
-  emoji:       string;
-}
-
-export const SEED_POUCH_RECIPES: SeedPouchRecipe[] = [
-  { id: "pouch_uncommon",  name: "Uncommon Pouch",  rarity: "uncommon",  essenceCost: 6,   emoji: "🎁", description: "Opens to reveal a mystery seed of Uncommon rarity or better." },
-  { id: "pouch_rare",      name: "Rare Pouch",      rarity: "rare",      essenceCost: 12,  emoji: "🎁", description: "Opens to reveal a mystery seed of Rare rarity or better." },
-  { id: "pouch_legendary", name: "Legendary Pouch", rarity: "legendary", essenceCost: 24,  emoji: "🎁", description: "Opens to reveal a mystery seed of Legendary rarity or better." },
-  { id: "pouch_mythic",    name: "Mythic Pouch",    rarity: "mythic",    essenceCost: 48,  emoji: "🎁", description: "Opens to reveal a mystery seed of Mythic rarity or better." },
-  { id: "pouch_exalted",   name: "Exalted Pouch",   rarity: "exalted",   essenceCost: 96,  emoji: "🎁", description: "Opens to reveal a mystery seed of Exalted rarity or better." },
-  { id: "pouch_prismatic", name: "Prismatic Pouch", rarity: "prismatic", essenceCost: 192, emoji: "🎁", description: "Opens to reveal a mystery seed of Prismatic rarity or better." },
-];
-
-export const SEED_POUCH_RECIPE_MAP: Record<string, SeedPouchRecipe> = Object.fromEntries(
-  SEED_POUCH_RECIPES.map((r) => [r.id, r])
-);
 
 // ── Affordability helpers ──────────────────────────────────────────────────
 

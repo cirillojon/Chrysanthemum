@@ -8,14 +8,13 @@ import {
 } from "../data/essences";
 import {
   CONSUMABLE_RECIPES, CONSUMABLE_RECIPE_MAP, INFUSER_RECIPES,
-  SEED_POUCH_RECIPES,
   canCraftConsumable, canCraftInfuser,
   applyCraftConsumable, applyCraftInfuser,
   TIER_RARITIES, ROMAN,
   type ConsumableId, type ConsumableCategory,
 } from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
-import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft, edgeAlchemyCraftSeed } from "../lib/edgeFunctions";
+import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft } from "../lib/edgeFunctions";
 import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
 
@@ -232,6 +231,7 @@ const CRAFT_CATEGORIES: { id: ConsumableCategory | "infuser"; label: string; emo
   { id: "growth",         label: "Growth",          emoji: "🌱" },
   { id: "mutation_boost", label: "Mutation Boosts",  emoji: "🧪" },
   { id: "utility",        label: "Utility",          emoji: "⚙️" },
+  { id: "seed_pouch",     label: "Seed Pouches",     emoji: "🎁" },
 ];
 
 function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftError, onCraft }: CraftViewProps) {
@@ -338,12 +338,6 @@ export function AlchemyTab() {
   const [itemCraftSuccess,      setItemCraftSuccess]      = useState<{ name: string; emoji: string } | null>(null);
   const [itemCraftSuccessVisible, setItemCraftSuccessVisible] = useState(false);
 
-  // Seed pouch craft state
-  const [pouchEssType,            setPouchEssType]            = useState<FlowerType>(ALL_FLOWER_TYPES[0]);
-  const [craftingSeedId,          setCraftingSeedId]          = useState<string | null>(null);
-  const [seedCraftResult,         setSeedCraftResult]         = useState<{ speciesId: string; isNew: boolean } | null>(null);
-  const [seedCraftResultVisible,  setSeedCraftResultVisible]  = useState(false);
-  const [seedCraftError,          setSeedCraftError]          = useState<string | null>(null);
 
   // Auto-dismiss success toast
   useEffect(() => {
@@ -559,35 +553,6 @@ export function AlchemyTab() {
       setItemCraftError(e instanceof Error ? e.message : "Craft failed.");
     } finally {
       setCraftingItemId(null);
-    }
-  }
-
-  // Auto-dismiss seed craft result toast
-  useEffect(() => {
-    if (!seedCraftResult) return;
-    const frame = requestAnimationFrame(() => setSeedCraftResultVisible(true));
-    const timer = setTimeout(() => {
-      setSeedCraftResultVisible(false);
-      setTimeout(() => setSeedCraftResult(null), 400);
-    }, 4_000);
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
-  }, [seedCraftResult]);
-
-  async function handleCraftSeed(pouchId: string) {
-    if (craftingSeedId) return;
-    setCraftingSeedId(pouchId);
-    setSeedCraftError(null);
-    try {
-      const prevDiscovered = getState().discovered ?? [];
-      const res = await edgeAlchemyCraftSeed(pouchId, pouchEssType);
-      const cur = getState();
-      const isNew = !prevDiscovered.includes(res.outputSpeciesId);
-      update({ ...cur, inventory: res.inventory, essences: res.essences, discovered: res.discovered, serverUpdatedAt: res.serverUpdatedAt });
-      setSeedCraftResult({ speciesId: res.outputSpeciesId, isNew });
-    } catch (e: unknown) {
-      setSeedCraftError(e instanceof Error ? e.message : "Failed to open pouch — please try again.");
-    } finally {
-      setCraftingSeedId(null);
     }
   }
 
@@ -1000,123 +965,14 @@ export function AlchemyTab() {
 
       {/* ── CRAFT view ── */}
       {view === "craft" && (
-        <>
-          <CraftView
-            essences={state.essences ?? []}
-            consumables={state.consumables ?? []}
-            infusers={state.infusers ?? []}
-            craftingItemId={craftingItemId}
-            itemCraftError={itemCraftError}
-            onCraft={handleCraftItem}
-          />
-
-          {/* ── Seed Pouches section ── */}
-          <div className="flex flex-col gap-3">
-            <div>
-              <p className="text-xs font-semibold mb-0.5">🎁 Seed Pouches</p>
-              <p className="text-[11px] text-muted-foreground">
-                Spend essence to open a mystery seed pouch. Undiscovered species are preferred when rolling the reward.
-              </p>
-            </div>
-
-            {/* Essence type selector */}
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
-                Essence to spend
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {ALL_FLOWER_TYPES.map((type) => {
-                  const cfg        = FLOWER_TYPES[type];
-                  const isSelected = pouchEssType === type;
-                  const have       = (state.essences ?? []).find((e) => e.type === type)?.amount ?? 0;
-                  return (
-                    <button
-                      key={type}
-                      onClick={() => setPouchEssType(type)}
-                      className={`
-                        inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold transition-all duration-150
-                        ${isSelected
-                          ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`
-                          : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
-                        }
-                      `}
-                    >
-                      {cfg.emoji} {cfg.name}
-                      {have > 0 && (
-                        <span className={`text-[9px] ${isSelected ? "opacity-70" : "opacity-50"}`}>
-                          {have}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Error banner */}
-            {seedCraftError && (
-              <div className="bg-destructive/10 border border-destructive/40 rounded-xl px-3 py-2 text-xs text-destructive">
-                {seedCraftError}
-              </div>
-            )}
-
-            {/* Pouch cards */}
-            <div className="grid grid-cols-1 gap-2">
-              {SEED_POUCH_RECIPES.map((recipe) => {
-                const cfg       = FLOWER_TYPES[pouchEssType];
-                const have      = (state.essences ?? []).find((e) => e.type === pouchEssType)?.amount ?? 0;
-                const canAfford = have >= recipe.essenceCost;
-                const isCrafting = craftingSeedId === recipe.id;
-                const rc        = RARITY_CONFIG[recipe.rarity];
-                return (
-                  <div
-                    key={recipe.id}
-                    className={`rounded-xl border p-3 transition-colors ${canAfford ? "border-border bg-card/60" : "border-border/40 bg-card/20 opacity-60"}`}
-                  >
-                    <div className="flex items-start gap-2.5 mb-2">
-                      <span className="text-xl mt-0.5 shrink-0">{recipe.emoji}</span>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-semibold flex items-center gap-1.5 flex-wrap">
-                          {recipe.name}
-                          <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${rc.color} border-current bg-current/10`}>
-                            {rc.label}
-                          </span>
-                        </p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">
-                          {recipe.description}
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Cost chip */}
-                    <span
-                      className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[10px] font-medium
-                        ${canAfford
-                          ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`
-                          : "bg-border/10 border-border/40 text-muted-foreground/50"
-                        }`}
-                    >
-                      {cfg.emoji} {recipe.essenceCost}
-                      {!canAfford && <span className="text-[9px] opacity-60"> ({have})</span>}
-                    </span>
-
-                    <div className="flex items-center justify-end mt-2.5">
-                      <button
-                        onClick={() => handleCraftSeed(recipe.id)}
-                        disabled={!canAfford || !!craftingSeedId}
-                        className="text-center px-3 py-1 rounded-lg text-[11px] font-semibold border transition-colors
-                          disabled:opacity-40 disabled:cursor-not-allowed
-                          border-primary/50 text-primary hover:bg-primary/10 enabled:hover:scale-[1.02]"
-                      >
-                        {isCrafting ? "Opening…" : "Open"}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </>
+        <CraftView
+          essences={state.essences ?? []}
+          consumables={state.consumables ?? []}
+          infusers={state.infusers ?? []}
+          craftingItemId={craftingItemId}
+          itemCraftError={itemCraftError}
+          onCraft={handleCraftItem}
+        />
       )}
 
       {/* ── Item craft success toast ── */}
@@ -1156,33 +1012,6 @@ export function AlchemyTab() {
           </div>
         </div>
       )}
-
-      {/* ── Seed pouch result toast ── */}
-      {seedCraftResult && (() => {
-        const flower = getFlower(seedCraftResult.speciesId);
-        return (
-          <div
-            className={`
-              fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none
-              transition-all duration-400
-              ${seedCraftResultVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
-            `}
-          >
-            <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
-              <span className="text-2xl">{flower?.emoji.seed ?? "🎁"}</span>
-              <div>
-                <p className="text-sm font-bold text-primary mb-0.5">
-                  Pouch opened!{seedCraftResult.isNew ? " ✨ New!" : ""}
-                </p>
-                <p className="text-[11px] text-muted-foreground">
-                  {flower?.name ?? seedCraftResult.speciesId} seed
-                  {seedCraftResult.isNew && <span className="ml-1 text-primary font-medium">— first discovery!</span>}
-                </p>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ── Success toast (floating, auto-dismiss) ── */}
       {success && (

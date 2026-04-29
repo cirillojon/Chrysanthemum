@@ -369,14 +369,17 @@ export function edgeApplyInfuser(row: number, col: number) {
 export interface AlchemyCraftSeedResult {
   ok:              true;
   inventory:       GameState["inventory"];
-  essences:        GameState["essences"];
+  consumables:     GameState["consumables"];
   discovered:      GameState["discovered"];
   outputSpeciesId: string;
   serverUpdatedAt: string;
 }
 
-export function edgeAlchemyCraftSeed(pouchId: string, essenceType: string) {
-  return callEdge<AlchemyCraftSeedResult>("alchemy-craft-seed", { pouchId, essenceType });
+/** Open a crafted Seed Pouch (seed_pouch_1 … seed_pouch_5) from inventory.
+ *  Deducts 1 pouch, rolls a random species at the appropriate rarity tier,
+ *  and adds the seed to inventory. */
+export function edgeAlchemyCraftSeed(consumableId: string) {
+  return callEdge<AlchemyCraftSeedResult>("alchemy-craft-seed", { consumableId });
 }
 
 // ── Alchemy ───────────────────────────────────────────────────────────────────

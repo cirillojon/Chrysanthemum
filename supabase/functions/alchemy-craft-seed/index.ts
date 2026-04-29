@@ -6,7 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-// base64url → base64 with proper padding for Deno's strict atob()
 function b64url(s: string): string {
   const t = s.replace(/-/g, "+").replace(/_/g, "/");
   return t + "=".repeat((4 - t.length % 4) % 4);
@@ -171,34 +170,20 @@ const FLOWERS: { id: string; rarity: Rarity }[] = [
   { id: "the_first_bloom",   rarity: "prismatic" },
 ];
 
-// ── Pouch recipes ──────────────────────────────────────────────────────────
-
-interface SeedPouchRecipe { id: string; rarity: Rarity; essenceCost: number; }
-
-const SEED_POUCH_RECIPES: SeedPouchRecipe[] = [
-  { id: "pouch_uncommon",  rarity: "uncommon",  essenceCost: 6   },
-  { id: "pouch_rare",      rarity: "rare",      essenceCost: 12  },
-  { id: "pouch_legendary", rarity: "legendary", essenceCost: 24  },
-  { id: "pouch_mythic",    rarity: "mythic",    essenceCost: 48  },
-  { id: "pouch_exalted",   rarity: "exalted",   essenceCost: 96  },
-  { id: "pouch_prismatic", rarity: "prismatic", essenceCost: 192 },
-];
-
-const POUCH_RECIPE_MAP = new Map(SEED_POUCH_RECIPES.map((r) => [r.id, r]));
-
-// ── Rarity output weights ──────────────────────────────────────────────────
-// Each entry: [outputRarity, weight]. Weights within a pouch sum to 100.
+// ── Rarity output weights per pouch tier ──────────────────────────────────
+// Weights within each tier sum to 100.
 
 type RarityWeight = [Rarity, number];
 
 const POUCH_RARITY_WEIGHTS: Record<string, RarityWeight[]> = {
-  pouch_uncommon:  [["uncommon", 85], ["rare", 12], ["legendary", 3]],
-  pouch_rare:      [["rare", 78], ["legendary", 17], ["mythic", 5]],
-  pouch_legendary: [["legendary", 72], ["mythic", 20], ["exalted", 7], ["prismatic", 1]],
-  pouch_mythic:    [["mythic", 68], ["exalted", 24], ["prismatic", 8]],
-  pouch_exalted:   [["exalted", 72], ["prismatic", 28]],
-  pouch_prismatic: [["prismatic", 100]],
+  seed_pouch_1: [["rare",      78], ["legendary", 17], ["mythic",   5]],
+  seed_pouch_2: [["legendary", 72], ["mythic",    20], ["exalted",  7], ["prismatic", 1]],
+  seed_pouch_3: [["mythic",    68], ["exalted",   24], ["prismatic",8]],
+  seed_pouch_4: [["exalted",   72], ["prismatic", 28]],
+  seed_pouch_5: [["prismatic", 100]],
 };
+
+const VALID_POUCH_IDS = new Set(Object.keys(POUCH_RARITY_WEIGHTS));
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -212,19 +197,13 @@ function weightedRandom<T>(items: [T, number][]): T {
   return items[items.length - 1][0];
 }
 
-/** Pick a species at the given rarity, preferring undiscovered base forms. */
+/** Pick a species at the given rarity — undiscovered base forms first. */
 function selectSpecies(rarity: Rarity, discovered: string[]): string {
   const pool        = FLOWERS.filter((f) => f.rarity === rarity);
   const undiscovered = pool.filter((f) => !discovered.includes(f.id));
   const candidates  = undiscovered.length > 0 ? undiscovered : pool;
   return candidates[Math.floor(Math.random() * candidates.length)].id;
 }
-
-// Valid essence types the player may spend (12 elemental + universal)
-const VALID_ESSENCE_TYPES = new Set([
-  "blaze", "tide", "grove", "frost", "storm", "lunar",
-  "solar", "fairy", "shadow", "arcane", "stellar", "zephyr", "universal",
-]);
 
 // ── Handler ────────────────────────────────────────────────────────────────
 
@@ -259,19 +238,10 @@ Deno.serve(async (req: Request) => {
     );
 
     // ── Parse + validate input ────────────────────────────────────────────────
-    const { pouchId, essenceType } = await req.json() as {
-      pouchId: string; essenceType: string;
-    };
+    const { consumableId } = await req.json() as { consumableId: string };
 
-    const recipe = POUCH_RECIPE_MAP.get(pouchId);
-    if (!recipe) {
-      return new Response(JSON.stringify({ error: "Invalid pouchId" }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    if (!VALID_ESSENCE_TYPES.has(essenceType)) {
-      return new Response(JSON.stringify({ error: "Invalid essenceType" }), {
+    if (!VALID_POUCH_IDS.has(consumableId)) {
+      return new Response(JSON.stringify({ error: "Invalid consumableId — must be a seed_pouch_1…5" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -281,7 +251,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("inventory, essences, discovered, updated_at")
+        .select("inventory, consumables, discovered, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -300,27 +270,26 @@ Deno.serve(async (req: Request) => {
     const save = saveResult.data;
     const priorUpdatedAt = save.updated_at as string;
 
-    let inventory  = (save.inventory  ?? []) as { speciesId: string; quantity: number; isSeed?: boolean; mutation?: string }[];
-    let essences   = (save.essences   ?? []) as { type: string; amount: number }[];
-    let discovered = (save.discovered ?? []) as string[];
+    let inventory    = (save.inventory    ?? []) as { speciesId: string; quantity: number; isSeed?: boolean; mutation?: string }[];
+    let consumables  = (save.consumables  ?? []) as { id: string; quantity: number }[];
+    let discovered   = (save.discovered   ?? []) as string[];
 
-    // ── Validate afford ───────────────────────────────────────────────────────
-    const haveEssence = essences.find((e) => e.type === essenceType)?.amount ?? 0;
-    if (haveEssence < recipe.essenceCost) {
-      return new Response(
-        JSON.stringify({ error: `Insufficient ${essenceType} essence (have ${haveEssence}, need ${recipe.essenceCost})` }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // ── Validate: player must own ≥1 of this pouch ───────────────────────────
+    const pouchIdx = consumables.findIndex((c) => c.id === consumableId);
+    if (pouchIdx < 0 || consumables[pouchIdx].quantity < 1) {
+      return new Response(JSON.stringify({ error: "You don't own that pouch" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     // ── Roll output ───────────────────────────────────────────────────────────
-    const outputRarity    = weightedRandom(POUCH_RARITY_WEIGHTS[pouchId]);
+    const outputRarity    = weightedRandom(POUCH_RARITY_WEIGHTS[consumableId]);
     const outputSpeciesId = selectSpecies(outputRarity, discovered);
 
-    // ── Deduct essence ────────────────────────────────────────────────────────
-    essences = essences
-      .map((e) => e.type === essenceType ? { ...e, amount: e.amount - recipe.essenceCost } : e)
-      .filter((e) => e.amount > 0);
+    // ── Deduct 1 pouch from consumables ───────────────────────────────────────
+    consumables = consumables
+      .map((c, i) => i === pouchIdx ? { ...c, quantity: c.quantity - 1 } : c)
+      .filter((c) => c.quantity > 0);
 
     // ── Add seed to inventory ─────────────────────────────────────────────────
     const seedIdx = inventory.findIndex(
@@ -339,10 +308,10 @@ Deno.serve(async (req: Request) => {
       discovered = [...discovered, outputSpeciesId];
     }
 
-    // ── Write to DB (CAS guard on updated_at) ─────────────────────────────────
+    // ── CAS write ─────────────────────────────────────────────────────────────
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
-      .update({ inventory, essences, discovered, updated_at: new Date().toISOString() })
+      .update({ inventory, consumables, discovered, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .eq("updated_at", priorUpdatedAt)
       .select("updated_at")
@@ -356,8 +325,8 @@ Deno.serve(async (req: Request) => {
 
     void supabaseAdmin.from("action_log").insert({
       user_id: userId,
-      action:  "alchemy_craft_seed",
-      payload: { pouchId, essenceType },
+      action:  "open_seed_pouch",
+      payload: { consumableId },
       result:  { outputSpeciesId, outputRarity },
     });
 
@@ -365,7 +334,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         ok: true,
         inventory,
-        essences,
+        consumables,
         discovered,
         outputSpeciesId,
         serverUpdatedAt: updateData.updated_at,
