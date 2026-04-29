@@ -277,6 +277,15 @@ export const CRAFTING_SLOT_UPGRADES = [
   { slots: 6, cost: 700_000 },
 ] as const;
 
+// ── Duration from rarity ──────────────────────────────────────────────────────
+// Used by CraftingTab to compute durationMs for consumable/attunement recipes.
+
+import type { Rarity } from "./flowers";
+
+export function craftDurationFromRarity(rarity: Rarity): number {
+  return (CRAFT_DURATION_MS as Record<string, number>)[rarity] ?? CRAFT_DURATION_MS.rare;
+}
+
 // ── Affordability helper ───────────────────────────────────────────────────
 
 export function canCraftGear(

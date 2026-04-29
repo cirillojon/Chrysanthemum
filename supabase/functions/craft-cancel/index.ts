@@ -11,65 +11,53 @@ function b64url(s: string): string {
   return t + "=".repeat((4 - t.length % 4) % 4);
 }
 
-// ── Mirrored recipe data ──────────────────────────────────────────────────────
-// Edge functions cannot import from src/ — data is hardcoded here.
-// Ingredients are needed to compute refunds on cancel.
+// ── Legacy gear recipe lookup (fallback for pre-Phase-3 queue entries) ────────
+// New queue entries store ingredient costs directly; these recipes are only
+// needed for entries created before the craft-start rewrite.
 
 type GearIngredient =
   | { kind: "essence";    essenceType: string; amount: number }
   | { kind: "gear";       gearType:    string; quantity: number }
   | { kind: "consumable"; consumableId: string; quantity: number };
 
-interface GearRecipe {
-  outputGearType: string;
-  ingredients:    GearIngredient[];
-  coinCost:       number;
-  durationMs:     number;
-}
-
-const DU = 5  * 60_000;
-const DR = 20 * 60_000;
-const DL = 90 * 60_000;
-const DM = 5  * 60 * 60_000;
-const DE = 12 * 60 * 60_000;
-const DP = 24 * 60 * 60_000;
+interface GearRecipe { outputGearType: string; ingredients: GearIngredient[] }
 
 const E = (essenceType: string, amount: number): GearIngredient => ({ kind: "essence", essenceType, amount });
 const G = (gearType: string, quantity = 2): GearIngredient => ({ kind: "gear", gearType, quantity });
 const C = (consumableId: string, quantity: number): GearIngredient => ({ kind: "consumable", consumableId, quantity });
 
 const GEAR_RECIPES: GearRecipe[] = [
-  { outputGearType: "sprinkler_rare",       ingredients: [E("grove", 5), E("zephyr", 5)],                             coinCost: 400,     durationMs: DR },
-  { outputGearType: "sprinkler_legendary",  ingredients: [G("sprinkler_rare")],                                        coinCost: 5_500,   durationMs: DL },
-  { outputGearType: "sprinkler_mythic",     ingredients: [G("sprinkler_legendary")],                                   coinCost: 60_000,  durationMs: DM },
-  { outputGearType: "sprinkler_exalted",    ingredients: [G("sprinkler_mythic")],                                      coinCost: 200_000, durationMs: DE },
-  { outputGearType: "sprinkler_prismatic",  ingredients: [G("sprinkler_exalted")],                                     coinCost: 800_000, durationMs: DP },
-  { outputGearType: "sprinkler_flame",      ingredients: [G("sprinkler_legendary", 1), C("ember_vial_2", 2)],          coinCost: 6_000,   durationMs: DL },
-  { outputGearType: "sprinkler_frost",      ingredients: [G("sprinkler_legendary", 1), C("frost_vial_2", 2)],          coinCost: 6_000,   durationMs: DL },
-  { outputGearType: "sprinkler_lightning",  ingredients: [G("sprinkler_mythic", 1), C("storm_vial_3", 2)],             coinCost: 50_000,  durationMs: DM },
-  { outputGearType: "sprinkler_lunar",      ingredients: [G("sprinkler_mythic", 1), C("moon_vial_3", 2)],              coinCost: 50_000,  durationMs: DM },
-  { outputGearType: "sprinkler_midas",      ingredients: [G("sprinkler_exalted", 1), C("golden_vial_4", 2)],           coinCost: 200_000, durationMs: DE },
-  { outputGearType: "sprinkler_prism",      ingredients: [G("sprinkler_prismatic", 1), C("rainbow_vial_5", 2)],        coinCost: 800_000, durationMs: DP },
-  { outputGearType: "grow_lamp_uncommon",   ingredients: [E("solar", 4), E("grove", 4)],                              coinCost: 200,     durationMs: DU },
-  { outputGearType: "grow_lamp_rare",       ingredients: [G("grow_lamp_uncommon")],                                    coinCost: 1_500,   durationMs: DR },
-  { outputGearType: "scarecrow_rare",       ingredients: [E("arcane", 5), E("storm", 5)],                             coinCost: 500,     durationMs: DR },
-  { outputGearType: "scarecrow_legendary",  ingredients: [G("scarecrow_rare")],                                        coinCost: 7_000,   durationMs: DL },
-  { outputGearType: "scarecrow_mythic",     ingredients: [G("scarecrow_legendary")],                                   coinCost: 65_000,  durationMs: DM },
-  { outputGearType: "composter_uncommon",   ingredients: [E("grove", 4), E("solar", 4)],                              coinCost: 200,     durationMs: DU },
-  { outputGearType: "composter_rare",       ingredients: [G("composter_uncommon")],                                    coinCost: 1_500,   durationMs: DR },
-  { outputGearType: "composter_legendary",  ingredients: [G("composter_rare")],                                        coinCost: 7_000,   durationMs: DL },
-  { outputGearType: "fan_uncommon",         ingredients: [E("zephyr", 4), E("storm", 4)],                             coinCost: 200,     durationMs: DU },
-  { outputGearType: "fan_rare",             ingredients: [G("fan_uncommon")],                                          coinCost: 1_500,   durationMs: DR },
-  { outputGearType: "fan_legendary",        ingredients: [G("fan_rare")],                                              coinCost: 7_000,   durationMs: DL },
-  { outputGearType: "harvest_bell_uncommon",ingredients: [E("stellar", 4), E("fairy", 4)],                            coinCost: 300,     durationMs: DU },
-  { outputGearType: "harvest_bell_rare",    ingredients: [G("harvest_bell_uncommon")],                                 coinCost: 1_500,   durationMs: DR },
-  { outputGearType: "harvest_bell_legendary",ingredients:[G("harvest_bell_rare")],                                     coinCost: 7_000,   durationMs: DL },
-  { outputGearType: "aegis_uncommon",       ingredients: [E("zephyr", 5), E("shadow", 3)],                            coinCost: 500,     durationMs: DU },
-  { outputGearType: "aegis_rare",           ingredients: [G("aegis_uncommon")],                                        coinCost: 2_000,   durationMs: DR },
-  { outputGearType: "aegis_legendary",      ingredients: [G("aegis_rare")],                                            coinCost: 15_000,  durationMs: DL },
-  { outputGearType: "garden_pin",           ingredients: [E("arcane", 3), E("fairy", 3)],                             coinCost: 200,     durationMs: DU },
-  { outputGearType: "cropsticks",           ingredients: [E("arcane", 4), E("stellar", 4), E("grove", 4)],            coinCost: 20_000,  durationMs: DL },
-  { outputGearType: "auto_planter_prismatic",ingredients:[G("sprinkler_prismatic", 1), G("harvest_bell_legendary", 1), E("universal", 10)], coinCost: 500_000, durationMs: DP },
+  { outputGearType: "sprinkler_rare",        ingredients: [E("grove", 5), E("zephyr", 5)] },
+  { outputGearType: "sprinkler_legendary",   ingredients: [G("sprinkler_rare")] },
+  { outputGearType: "sprinkler_mythic",      ingredients: [G("sprinkler_legendary")] },
+  { outputGearType: "sprinkler_exalted",     ingredients: [G("sprinkler_mythic")] },
+  { outputGearType: "sprinkler_prismatic",   ingredients: [G("sprinkler_exalted")] },
+  { outputGearType: "sprinkler_flame",       ingredients: [G("sprinkler_legendary", 1), C("ember_vial_2", 2)] },
+  { outputGearType: "sprinkler_frost",       ingredients: [G("sprinkler_legendary", 1), C("frost_vial_2", 2)] },
+  { outputGearType: "sprinkler_lightning",   ingredients: [G("sprinkler_mythic", 1), C("storm_vial_3", 2)] },
+  { outputGearType: "sprinkler_lunar",       ingredients: [G("sprinkler_mythic", 1), C("moon_vial_3", 2)] },
+  { outputGearType: "sprinkler_midas",       ingredients: [G("sprinkler_exalted", 1), C("golden_vial_4", 2)] },
+  { outputGearType: "sprinkler_prism",       ingredients: [G("sprinkler_prismatic", 1), C("rainbow_vial_5", 2)] },
+  { outputGearType: "grow_lamp_uncommon",    ingredients: [E("solar", 4), E("grove", 4)] },
+  { outputGearType: "grow_lamp_rare",        ingredients: [G("grow_lamp_uncommon")] },
+  { outputGearType: "scarecrow_rare",        ingredients: [E("arcane", 5), E("storm", 5)] },
+  { outputGearType: "scarecrow_legendary",   ingredients: [G("scarecrow_rare")] },
+  { outputGearType: "scarecrow_mythic",      ingredients: [G("scarecrow_legendary")] },
+  { outputGearType: "composter_uncommon",    ingredients: [E("grove", 4), E("solar", 4)] },
+  { outputGearType: "composter_rare",        ingredients: [G("composter_uncommon")] },
+  { outputGearType: "composter_legendary",   ingredients: [G("composter_rare")] },
+  { outputGearType: "fan_uncommon",          ingredients: [E("zephyr", 4), E("storm", 4)] },
+  { outputGearType: "fan_rare",              ingredients: [G("fan_uncommon")] },
+  { outputGearType: "fan_legendary",         ingredients: [G("fan_rare")] },
+  { outputGearType: "harvest_bell_uncommon", ingredients: [E("stellar", 4), E("fairy", 4)] },
+  { outputGearType: "harvest_bell_rare",     ingredients: [G("harvest_bell_uncommon")] },
+  { outputGearType: "harvest_bell_legendary",ingredients: [G("harvest_bell_rare")] },
+  { outputGearType: "aegis_uncommon",        ingredients: [E("zephyr", 5), E("shadow", 3)] },
+  { outputGearType: "aegis_rare",            ingredients: [G("aegis_uncommon")] },
+  { outputGearType: "aegis_legendary",       ingredients: [G("aegis_rare")] },
+  { outputGearType: "garden_pin",            ingredients: [E("arcane", 3), E("fairy", 3)] },
+  { outputGearType: "cropsticks",            ingredients: [E("arcane", 4), E("stellar", 4), E("grove", 4)] },
+  { outputGearType: "auto_planter_prismatic",ingredients: [G("sprinkler_prismatic", 1), G("harvest_bell_legendary", 1), E("universal", 10)] },
 ];
 
 const GEAR_RECIPE_MAP = Object.fromEntries(GEAR_RECIPES.map((r) => [r.outputGearType, r]));
@@ -109,7 +97,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("essences, gear_inventory, consumables, crafting_queue, updated_at")
+        .select("essences, gear_inventory, consumables, infusers, crafting_queue, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -122,41 +110,87 @@ Deno.serve(async (req: Request) => {
     const save           = saveResult.data;
     const priorUpdatedAt = save.updated_at as string;
 
+    // Support both new format (kind + outputId + stored costs) and legacy (gearType)
     const craftingQueue = (save.crafting_queue ?? []) as {
-      id: string; gearType: string; startedAt: string; durationMs: number; coinCost: number;
+      id:               string;
+      kind?:            string;
+      outputId?:        string;
+      gearType?:        string;   // legacy field
+      startedAt:        string;
+      durationMs:       number;
+      essenceCosts?:    { type: string; amount: number }[];
+      gearCosts?:       { gearType: string; quantity: number }[];
+      consumableCosts?: { id: string; quantity: number }[];
+      attunementCosts?: { rarity: string; quantity: number }[];
     }[];
+
     let essences      = (save.essences       ?? []) as { type: string; amount: number }[];
     let gearInventory = (save.gear_inventory ?? []) as { gearType: string; quantity: number }[];
     let consumables   = (save.consumables    ?? []) as { id: string; quantity: number }[];
+    let infusers      = (save.infusers       ?? []) as { rarity: string; quantity: number }[];
 
     // ── Find entry ────────────────────────────────────────────────────────────
     const entry = craftingQueue.find((e) => e.id === craftId);
     if (!entry) return err("Craft not found", 404);
 
-    // ── Look up recipe (needed for ingredient refund) ─────────────────────────
-    const recipe = GEAR_RECIPE_MAP[entry.gearType] as GearRecipe | undefined;
-    if (!recipe) return err(`Unknown gear type in queue: ${entry.gearType}`);
-
     // ── Remove from queue ─────────────────────────────────────────────────────
     const newQueue = craftingQueue.filter((e) => e.id !== craftId);
 
-    // ── Refund ingredients only — coin cost is NOT refunded ───────────────────
-    for (const ing of recipe.ingredients) {
-      if (ing.kind === "essence") {
-        const idx = essences.findIndex((e) => e.type === ing.essenceType);
+    // ── Determine refund source ───────────────────────────────────────────────
+    // New entries: stored ingredient costs → use directly.
+    // Legacy gear entries: no stored costs → fall back to recipe lookup.
+    const hasStoredCosts = entry.essenceCosts || entry.gearCosts || entry.consumableCosts || entry.attunementCosts;
+
+    if (hasStoredCosts) {
+      // ── New-format refund: use stored costs ──────────────────────────────────
+      for (const { type, amount } of (entry.essenceCosts ?? [])) {
+        const idx = essences.findIndex((e) => e.type === type);
         essences = idx >= 0
-          ? essences.map((e, i) => i === idx ? { ...e, amount: e.amount + ing.amount } : e)
-          : [...essences, { type: ing.essenceType, amount: ing.amount }];
-      } else if (ing.kind === "gear") {
-        const idx = gearInventory.findIndex((g) => g.gearType === ing.gearType);
+          ? essences.map((e, i) => i === idx ? { ...e, amount: e.amount + amount } : e)
+          : [...essences, { type, amount }];
+      }
+      for (const { gearType, quantity } of (entry.gearCosts ?? [])) {
+        const idx = gearInventory.findIndex((g) => g.gearType === gearType);
         gearInventory = idx >= 0
-          ? gearInventory.map((g, i) => i === idx ? { ...g, quantity: g.quantity + ing.quantity } : g)
-          : [...gearInventory, { gearType: ing.gearType, quantity: ing.quantity }];
-      } else {
-        const idx = consumables.findIndex((c) => c.id === ing.consumableId);
+          ? gearInventory.map((g, i) => i === idx ? { ...g, quantity: g.quantity + quantity } : g)
+          : [...gearInventory, { gearType, quantity }];
+      }
+      for (const { id, quantity } of (entry.consumableCosts ?? [])) {
+        const idx = consumables.findIndex((c) => c.id === id);
         consumables = idx >= 0
-          ? consumables.map((c, i) => i === idx ? { ...c, quantity: c.quantity + ing.quantity } : c)
-          : [...consumables, { id: ing.consumableId, quantity: ing.quantity }];
+          ? consumables.map((c, i) => i === idx ? { ...c, quantity: c.quantity + quantity } : c)
+          : [...consumables, { id, quantity }];
+      }
+      for (const { rarity, quantity } of (entry.attunementCosts ?? [])) {
+        const idx = infusers.findIndex((inf) => inf.rarity === rarity);
+        infusers = idx >= 0
+          ? infusers.map((inf, i) => i === idx ? { ...inf, quantity: inf.quantity + quantity } : inf)
+          : [...infusers, { rarity, quantity }];
+      }
+
+    } else {
+      // ── Legacy-format refund: look up gear recipe ────────────────────────────
+      const legacyGearType = entry.gearType ?? entry.outputId;
+      const recipe = legacyGearType ? (GEAR_RECIPE_MAP[legacyGearType] as GearRecipe | undefined) : undefined;
+      if (!recipe) return err(`Cannot refund: missing cost data for craft ${craftId}`);
+
+      for (const ing of recipe.ingredients) {
+        if (ing.kind === "essence") {
+          const idx = essences.findIndex((e) => e.type === ing.essenceType);
+          essences = idx >= 0
+            ? essences.map((e, i) => i === idx ? { ...e, amount: e.amount + ing.amount } : e)
+            : [...essences, { type: ing.essenceType, amount: ing.amount }];
+        } else if (ing.kind === "gear") {
+          const idx = gearInventory.findIndex((g) => g.gearType === ing.gearType);
+          gearInventory = idx >= 0
+            ? gearInventory.map((g, i) => i === idx ? { ...g, quantity: g.quantity + ing.quantity } : g)
+            : [...gearInventory, { gearType: ing.gearType, quantity: ing.quantity }];
+        } else {
+          const idx = consumables.findIndex((c) => c.id === ing.consumableId);
+          consumables = idx >= 0
+            ? consumables.map((c, i) => i === idx ? { ...c, quantity: c.quantity + ing.quantity } : c)
+            : [...consumables, { id: ing.consumableId, quantity: ing.quantity }];
+        }
       }
     }
 
@@ -167,6 +201,7 @@ Deno.serve(async (req: Request) => {
         essences,
         gear_inventory: gearInventory,
         consumables,
+        infusers,
         crafting_queue: newQueue,
         updated_at:     new Date().toISOString(),
       })
@@ -182,8 +217,8 @@ Deno.serve(async (req: Request) => {
     void supabaseAdmin.from("action_log").insert({
       user_id: userId,
       action:  "craft_cancel",
-      payload: { craftId, gearType: entry.gearType },
-      result:  { refundedIngredients: recipe.ingredients },
+      payload: { craftId },
+      result:  { refundedFromStoredCosts: hasStoredCosts },
     });
 
     return json({
@@ -192,6 +227,7 @@ Deno.serve(async (req: Request) => {
       essences,
       gearInventory,
       consumables,
+      infusers,
       serverUpdatedAt: updateData.updated_at,
     });
 

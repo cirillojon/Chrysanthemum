@@ -89,12 +89,19 @@ export interface ShopSlot {
 
 // ── Crafting queue ─────────────────────────────────────────────────────────
 
+export type CraftKind = "gear" | "consumable" | "attunement";
+
 export interface CraftingQueueEntry {
-  id:         string;   // server-generated uuid; "pending" for optimistic entries
-  gearType:   GearType;
-  startedAt:  string;   // ISO timestamp
+  id:         string;      // server-generated uuid
+  kind:       CraftKind;
+  outputId:   string;      // gearType | consumableId | rarity string (for attunement)
+  startedAt:  string;      // ISO timestamp
   durationMs: number;
-  coinCost:   number;
+  // Stored ingredient costs — used by craft-cancel for refund without recipe lookup
+  essenceCosts?:    { type: string; amount: number }[];
+  gearCosts?:       { gearType: string; quantity: number }[];
+  consumableCosts?: { id: string; quantity: number }[];
+  attunementCosts?: { rarity: string; quantity: number }[];
 }
 
 export interface GameState {

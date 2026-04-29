@@ -37,7 +37,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { HarvestPopup } from "./components/HarvestPopup";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
-type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany" | "forge";
+type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany" | "craft";
 type ShopView   = "seeds" | "supply";
 type SocialView = "search" | "friends" | "mailbox" | "leaderboard" | "marketplace";
 
@@ -207,7 +207,7 @@ function AppInner() {
   //             inventory(3) → botany(4) → codex(5) →
   //             social:search(6) → friends(7) → mailbox(8) →
   //             marketplace(9) → leaderboard(10) → me(profile)
-  const MAIN_TABS: Tab[] = ["garden", "shop", "inventory", "botany", "forge", "codex", "social"];
+  const MAIN_TABS: Tab[] = ["garden", "shop", "inventory", "botany", "craft", "codex", "social"];
 
   const handleSwipeLeft = useCallback(() => {
     if (profileUsername) return;
@@ -301,7 +301,7 @@ function AppInner() {
     if (t === "shop")      return 1 + SHOP_VIEWS.indexOf(shv);
     if (t === "inventory") return 3;
     if (t === "botany")    return 4;
-    if (t === "forge")     return 5;
+    if (t === "craft")     return 5;
     if (t === "codex")     return 6;
     return 7 + SOCIAL_VIEWS.indexOf(sv); // social
   }
@@ -520,7 +520,7 @@ function AppInner() {
       {/* Tabs */}
       <nav className="bg-card/40 border-b border-border backdrop-blur">
         <div className="w-full sm:max-w-2xl sm:mx-auto flex">
-          {(["garden", "shop", "inventory", "botany", "forge", "codex", "social"] as Tab[]).map((t) => (
+          {(["garden", "shop", "inventory", "botany", "craft", "codex", "social"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => handleTabChange(t)}
@@ -537,7 +537,7 @@ function AppInner() {
                : t === "shop"      ? "🛒"
                : t === "inventory" ? "🎒"
                : t === "botany"    ? "🌿"
-               : t === "forge"     ? "⚒️"
+               : t === "craft"     ? "⚒️"
                : t === "codex"     ? "📖"
                : "🌍"}
               <span className="ml-1 hidden sm:inline capitalize">{t}</span>
@@ -634,7 +634,7 @@ function AppInner() {
             />
           )}
           {tab === "botany"      && <Botany />}
-          {tab === "forge"       && <CraftingTab />}
+          {tab === "craft"       && <CraftingTab />}
           {tab === "codex"       && <Codex />}
           {tab === "social"    && (
             <>

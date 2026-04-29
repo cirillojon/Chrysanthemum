@@ -372,6 +372,7 @@ export interface CraftStartResult {
   essences:        GameState["essences"];
   gearInventory:   GameState["gearInventory"];
   consumables:     GameState["consumables"];
+  infusers:        GameState["infusers"];
   craftingQueue:   GameState["craftingQueue"];
   serverUpdatedAt: string;
 }
@@ -380,6 +381,8 @@ export interface CraftCollectResult {
   ok:              true;
   craftingQueue:   GameState["craftingQueue"];
   gearInventory:   GameState["gearInventory"];
+  consumables:     GameState["consumables"];
+  infusers:        GameState["infusers"];
   serverUpdatedAt: string;
 }
 
@@ -389,6 +392,7 @@ export interface CraftCancelResult {
   essences:        GameState["essences"];
   gearInventory:   GameState["gearInventory"];
   consumables:     GameState["consumables"];
+  infusers:        GameState["infusers"];
   serverUpdatedAt: string;
 }
 
@@ -399,8 +403,17 @@ export interface UpgradeCraftingSlotsResult {
   serverUpdatedAt:     string;
 }
 
-export function edgeCraftStart(gearType: string) {
-  return callEdge<CraftStartResult>("craft-start", { gearType });
+export function edgeCraftStart(
+  kind:        "gear" | "consumable" | "attunement",
+  outputId:    string,
+  durationMs?: number,
+  costs?: {
+    essenceCosts?:    { type: string; amount: number }[];
+    consumableCosts?: { id: string; quantity: number }[];
+    attunementCosts?: { rarity: string; quantity: number }[];
+  },
+) {
+  return callEdge<CraftStartResult>("craft-start", { kind, outputId, durationMs, costs });
 }
 
 export function edgeCraftCollect(craftId: string) {
