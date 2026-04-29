@@ -14,7 +14,7 @@ import {
   type ConsumableId, type ConsumableCategory,
 } from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
-import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft } from "../lib/edgeFunctions";
+import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft, edgeAlchemyInfuse, edgeAlchemyStrip } from "../lib/edgeFunctions";
 import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
 
@@ -310,7 +310,7 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
 
 // ── Main AlchemyTab component ─────────────────────────────────────────────
 
-type AlchemyView = "sacrifice" | "essences" | "craft";
+type AlchemyView = "sacrifice" | "essences" | "craft" | "infuse";
 
 export function AlchemyTab() {
   const { state, perform, getState, update } = useGame();
@@ -337,6 +337,22 @@ export function AlchemyTab() {
   const [itemCraftSuccess,      setItemCraftSuccess]      = useState<{ name: string; emoji: string } | null>(null);
   const [itemCraftSuccessVisible, setItemCraftSuccessVisible] = useState(false);
 
+  // Infuse view state
+  const [infuseSpeciesId,  setInfuseSpeciesId]  = useState<string | null>(null);
+  const [infuseEssType,    setInfuseEssType]    = useState<string | null>(null);
+  const [infuseQty,        setInfuseQty]        = useState(1);
+  const [infusing,         setInfusing]         = useState(false);
+  const [infuseError,      setInfuseError]      = useState<string | null>(null);
+  const [infuseResult,     setInfuseResult]     = useState<{ mutation: string; tier: number } | null>(null);
+  const [infuseResultVisible, setInfuseResultVisible] = useState(false);
+  // Strip state
+  const [stripSpeciesId,   setStripSpeciesId]   = useState<string | null>(null);
+  const [stripMutation,    setStripMutation]    = useState<string | null>(null);
+  const [stripping,        setStripping]        = useState(false);
+  const [stripError,       setStripError]       = useState<string | null>(null);
+  const [stripSuccess,     setStripSuccess]     = useState(false);
+  const [stripSuccessVisible, setStripSuccessVisible] = useState(false);
+
   // Auto-dismiss success toast
   useEffect(() => {
     if (!success) return;
@@ -358,6 +374,28 @@ export function AlchemyTab() {
     }, 3_000);
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
   }, [craftSuccess]);
+
+  // Auto-dismiss infuse result
+  useEffect(() => {
+    if (!infuseResult) return;
+    const frame = requestAnimationFrame(() => setInfuseResultVisible(true));
+    const timer = setTimeout(() => {
+      setInfuseResultVisible(false);
+      setTimeout(() => setInfuseResult(null), 400);
+    }, 4_000);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [infuseResult]);
+
+  // Auto-dismiss strip success
+  useEffect(() => {
+    if (!stripSuccess) return;
+    const frame = requestAnimationFrame(() => setStripSuccessVisible(true));
+    const timer = setTimeout(() => {
+      setStripSuccessVisible(false);
+      setTimeout(() => setStripSuccess(false), 400);
+    }, 3_000);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [stripSuccess]);
 
   // Inventory of harvested (non-seed) flowers grouped by rarity
   const sacrificableByRarity = useMemo(() => {
@@ -581,7 +619,7 @@ export function AlchemyTab() {
 
       {/* Tab switcher: Sacrifice | Essences | Craft */}
       <div className="flex rounded-xl border border-border bg-card/40 p-0.5 gap-0.5">
-        {(["sacrifice", "essences", "craft"] as AlchemyView[]).map((v) => (
+        {(["sacrifice", "essences", "craft", "infuse"] as AlchemyView[]).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -593,7 +631,7 @@ export function AlchemyTab() {
               }
             `}
           >
-            {v === "sacrifice" ? "⚗️ Sacrifice" : v === "essences" ? "✨ Essences" : "🔨 Craft"}
+            {v === "sacrifice" ? "⚗️ Sacrifice" : v === "essences" ? "✨ Essences" : v === "craft" ? "🔨 Craft" : "🌿 Infuse"}
           </button>
         ))}
       </div>
@@ -971,6 +1009,362 @@ export function AlchemyTab() {
           itemCraftError={itemCraftError}
           onCraft={handleCraftItem}
         />
+      )}
+
+      {/* ── INFUSE view ── */}
+      {view === "infuse" && (() => {
+        // ── Derived data ──────────────────────────────────────────────────────
+        const rarityOrder: Rarity[] = ["common","uncommon","rare","legendary","mythic","exalted","prismatic"];
+
+        // Unmutated blooms available to infuse
+        const infusableBlooms = state.inventory.filter(
+          (i) => !i.isSeed && i.quantity > 0 && (i.mutation === undefined || i.mutation === null)
+        );
+
+        // Mutated blooms available to strip
+        const strippableBlooms = state.inventory.filter(
+          (i) => !i.isSeed && i.quantity > 0 && i.mutation
+        );
+
+        // Essences the player owns (excluding universal for infuse — only elemental count)
+        const ownedEssences = (state.essences ?? []).filter(
+          (e) => e.type !== "universal" && e.amount > 0
+        );
+
+        // Selected bloom's species data
+        const infuseSpecies  = infuseSpeciesId ? getFlower(infuseSpeciesId) : null;
+        const infuseRarity   = infuseSpecies?.rarity ?? null;
+
+        // Effective essence and tier preview
+        let effectiveEssence = 0;
+        let tierPreview: 1 | 2 | 3 | 4 = 1;
+        const GOLD_COST_TABLE: Record<string, [number,number,number,number]> = {
+          common:    [     15,      60,      200,       700],
+          uncommon:  [     75,     300,      900,     3_000],
+          rare:      [    300,   1_200,    4_000,    14_000],
+          legendary: [  1_200,   5_000,   16_000,    55_000],
+          mythic:    [  5_000,  20_000,   70_000,   250_000],
+          exalted:   [ 20_000,  80_000,  280_000, 1_000_000],
+          prismatic: [ 80_000, 300_000,1_000_000, 3_500_000],
+        };
+        let goldCostPreview = 0;
+
+        if (infuseSpecies && infuseEssType && infuseQty > 0) {
+          const isMatching = infuseSpecies.types.includes(infuseEssType as never) || infuseEssType === "universal";
+          effectiveEssence = infuseQty * (isMatching ? 2 : 1);
+          tierPreview = effectiveEssence >= 40 ? 4 : effectiveEssence >= 20 ? 3 : effectiveEssence >= 8 ? 2 : 1;
+          const costs = GOLD_COST_TABLE[infuseRarity!];
+          goldCostPreview = costs ? costs[tierPreview - 1] : 0;
+        }
+
+        // Strip cost preview
+        const MUT_MULT: Record<string, number> = {
+          golden: 4, rainbow: 5, giant: 2, moonlit: 2.5,
+          frozen: 2, scorched: 2, wet: 1.25, windstruck: 0.7, shocked: 2.5,
+        };
+        const stripSpecies  = stripSpeciesId ? getFlower(stripSpeciesId) : null;
+        const stripRarity   = stripSpecies?.rarity ?? null;
+        const stripGoldCost = stripSpeciesId && stripMutation && stripRarity
+          ? Math.floor((GOLD_COST_TABLE[stripRarity]?.[0] ?? 0) * (MUT_MULT[stripMutation] ?? 1))
+          : 0;
+
+        const TIER_LABEL = ["", "I — Common", "II — Balanced", "III — Rare-Weighted", "IV — Rare Dominant"];
+        const TIER_COLOR = ["", "text-muted-foreground", "text-blue-400", "text-violet-400", "text-yellow-400"];
+
+        // ── Handlers ──────────────────────────────────────────────────────────
+        async function handleInfuse() {
+          if (infusing || !infuseSpeciesId || !infuseEssType || infuseQty < 1) return;
+          setInfuseError(null);
+          setInfusing(true);
+          try {
+            const res = await edgeAlchemyInfuse(infuseSpeciesId, infuseEssType, infuseQty);
+            const cur = getState();
+            update({
+              ...cur,
+              inventory:  res.inventory,
+              essences:   res.essences,
+              coins:      res.coins,
+              discovered: res.discovered,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+            setInfuseResult({ mutation: res.mutation, tier: res.tier });
+            setInfuseSpeciesId(null);
+            setInfuseEssType(null);
+            setInfuseQty(1);
+          } catch (e) {
+            setInfuseError(e instanceof Error ? e.message : "Infusion failed");
+          } finally {
+            setInfusing(false);
+          }
+        }
+
+        async function handleStrip() {
+          if (stripping || !stripSpeciesId || !stripMutation) return;
+          setStripError(null);
+          setStripping(true);
+          try {
+            const res = await edgeAlchemyStrip(stripSpeciesId, stripMutation);
+            const cur = getState();
+            update({
+              ...cur,
+              inventory:  res.inventory,
+              coins:      res.coins,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+            setStripSuccess(true);
+            setStripSpeciesId(null);
+            setStripMutation(null);
+          } catch (e) {
+            setStripError(e instanceof Error ? e.message : "Strip failed");
+          } finally {
+            setStripping(false);
+          }
+        }
+
+        return (
+          <div className="flex flex-col gap-5">
+            <p className="text-[11px] text-muted-foreground">
+              Transform a base bloom into a mutated one by spending elemental essence and coins.
+              Higher essence (especially matching the flower's type) unlocks rarer mutation pools.
+            </p>
+
+            {/* ── Infuse section ─────────────────────────────────────────── */}
+            <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-4">
+              <p className="text-xs font-semibold">🌿 Infuse a Bloom</p>
+
+              {/* Bloom picker */}
+              <div>
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+                  Pick a base bloom
+                </p>
+                {infusableBlooms.length === 0 ? (
+                  <p className="text-[11px] text-muted-foreground">No unmutated blooms in inventory.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-1.5">
+                    {rarityOrder.flatMap((r) =>
+                      infusableBlooms
+                        .filter((i) => getFlower(i.speciesId)?.rarity === r)
+                        .map((item) => {
+                          const sp      = getFlower(item.speciesId)!;
+                          const rc      = RARITY_CONFIG[sp.rarity];
+                          const isSelected = infuseSpeciesId === item.speciesId;
+                          return (
+                            <button
+                              key={item.speciesId}
+                              onClick={() => {
+                                setInfuseSpeciesId(isSelected ? null : item.speciesId);
+                                setInfuseEssType(null);
+                                setInfuseQty(1);
+                                setInfuseError(null);
+                              }}
+                              className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                                isSelected
+                                  ? `${rc.color} border-current bg-current/10`
+                                  : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                              }`}
+                            >
+                              <span>{sp.emoji.bloom}</span>
+                              <span>{sp.name}</span>
+                              <span className="text-muted-foreground/60">×{item.quantity}</span>
+                            </button>
+                          );
+                        })
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Essence picker — only shown once a bloom is selected */}
+              {infuseSpecies && (
+                <div>
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+                    Choose essence type
+                    <span className="ml-1 normal-case">
+                      (matching: {infuseSpecies.types.join(", ")})
+                    </span>
+                  </p>
+                  {ownedEssences.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">No essence in bank.</p>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5">
+                      {ownedEssences.map(({ type, amount }) => {
+                        const cfg        = FLOWER_TYPES[type as never] as { emoji: string; name: string; color: string; bgColor: string; borderColor: string };
+                        const isMatch    = infuseSpecies.types.includes(type as never);
+                        const isSelected = infuseEssType === type;
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => { setInfuseEssType(type); setInfuseQty(1); }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                              isSelected
+                                ? `${cfg.color} border-current ${cfg.bgColor}`
+                                : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            {cfg.emoji} {cfg.name}
+                            {isMatch && <span className="text-[9px] text-primary ml-0.5">✦ match</span>}
+                            <span className="text-muted-foreground/60 ml-0.5">×{amount}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Quantity stepper + tier preview */}
+              {infuseSpecies && infuseEssType && (() => {
+                const ownedAmt = ownedEssences.find((e) => e.type === infuseEssType)?.amount ?? 0;
+                const canAfford = state.coins >= goldCostPreview;
+                const canInfuse = ownedAmt >= infuseQty && canAfford;
+                return (
+                  <div className="space-y-3">
+                    {/* Qty row */}
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] text-muted-foreground">Quantity</span>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => setInfuseQty((q) => Math.max(1, q - 1))} disabled={infuseQty <= 1}
+                          className="w-6 h-6 rounded-md border border-border text-xs flex items-center justify-center hover:border-primary/50 disabled:opacity-30">−</button>
+                        <span className="w-8 text-center text-sm font-mono">{infuseQty}</span>
+                        <button onClick={() => setInfuseQty((q) => Math.min(ownedAmt, q + 1))} disabled={infuseQty >= ownedAmt}
+                          className="w-6 h-6 rounded-md border border-border text-xs flex items-center justify-center hover:border-primary/50 disabled:opacity-30">+</button>
+                        <button onClick={() => setInfuseQty(ownedAmt)} disabled={infuseQty >= ownedAmt}
+                          className="ml-1 text-[9px] text-primary disabled:opacity-30">Max</button>
+                      </div>
+                    </div>
+
+                    {/* Tier + cost summary */}
+                    <div className="rounded-lg bg-card/60 border border-border px-3 py-2 space-y-1 text-[11px]">
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Effective essence</span>
+                        <span className="font-mono">{effectiveEssence}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Mutation pool</span>
+                        <span className={`font-semibold ${TIER_COLOR[tierPreview]}`}>
+                          Tier {TIER_LABEL[tierPreview]}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Gold cost</span>
+                        <span className={`font-mono ${canAfford ? "" : "text-destructive"}`}>
+                          {goldCostPreview.toLocaleString()} 🟡
+                          {!canAfford && " (insufficient)"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {infuseError && (
+                      <p className="text-xs text-destructive">{infuseError}</p>
+                    )}
+
+                    <button
+                      onClick={handleInfuse}
+                      disabled={infusing || !canInfuse}
+                      className="w-full py-2 rounded-xl bg-primary/20 border border-primary/50 text-primary text-sm font-semibold hover:bg-primary/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-center"
+                    >
+                      {infusing ? "Infusing…" : "🌿 Infuse"}
+                    </button>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* ── Strip section ───────────────────────────────────────────── */}
+            <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-4">
+              <p className="text-xs font-semibold">✂️ Strip Mutation</p>
+              <p className="text-[10px] text-muted-foreground">
+                Remove a mutation from a bloom, returning it to its base form. Costs coins.
+              </p>
+
+              {strippableBlooms.length === 0 ? (
+                <p className="text-[11px] text-muted-foreground">No mutated blooms in inventory.</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {rarityOrder.flatMap((r) =>
+                    strippableBlooms
+                      .filter((i) => getFlower(i.speciesId)?.rarity === r)
+                      .map((item, idx) => {
+                        const sp      = getFlower(item.speciesId)!;
+                        const mut     = item.mutation ? MUTATIONS[item.mutation as MutationType] : null;
+                        const isSelected = stripSpeciesId === item.speciesId && stripMutation === item.mutation;
+                        return (
+                          <button
+                            key={`${item.speciesId}-${item.mutation}-${idx}`}
+                            onClick={() => {
+                              setStripSpeciesId(isSelected ? null : item.speciesId);
+                              setStripMutation(isSelected ? null : (item.mutation ?? null));
+                              setStripError(null);
+                            }}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                              isSelected
+                                ? "border-primary text-primary bg-primary/10"
+                                : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                            }`}
+                          >
+                            <span>{sp.emoji.bloom}</span>
+                            <span>{sp.name}</span>
+                            {mut && <span className={`font-mono ${mut.color}`}>{mut.emoji}</span>}
+                            <span className="text-muted-foreground/60">×{item.quantity}</span>
+                          </button>
+                        );
+                      })
+                  )}
+                </div>
+              )}
+
+              {stripSpeciesId && stripMutation && (
+                <div className="space-y-2">
+                  <div className="rounded-lg bg-card/60 border border-border px-3 py-2 text-[11px] flex justify-between">
+                    <span className="text-muted-foreground">Strip cost</span>
+                    <span className={`font-mono ${state.coins >= stripGoldCost ? "" : "text-destructive"}`}>
+                      {stripGoldCost.toLocaleString()} 🟡
+                    </span>
+                  </div>
+                  {stripError && <p className="text-xs text-destructive">{stripError}</p>}
+                  <button
+                    onClick={handleStrip}
+                    disabled={stripping || state.coins < stripGoldCost}
+                    className="w-full py-2 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm font-semibold hover:bg-destructive/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-center"
+                  >
+                    {stripping ? "Stripping…" : "✂️ Strip Mutation"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Infuse result toast ── */}
+      {infuseResult && (() => {
+        const mut = MUTATIONS[infuseResult.mutation as MutationType];
+        const TIER_COLOR = ["","text-muted-foreground","text-blue-400","text-violet-400","text-yellow-400"];
+        return (
+          <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-400 ${infuseResultVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+            <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
+              <span className="text-2xl">{mut?.emoji ?? "🌿"}</span>
+              <div>
+                <p className="text-sm font-bold text-primary mb-0.5">Infusion complete!</p>
+                <p className={`text-[11px] font-semibold ${mut?.color ?? ""}`}>{mut?.name ?? infuseResult.mutation}</p>
+                <p className={`text-[10px] ${TIER_COLOR[infuseResult.tier]}`}>Tier {infuseResult.tier} pool</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Strip success toast ── */}
+      {stripSuccess && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-400 ${stripSuccessVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+          <div className="flex items-center gap-3 bg-card border border-border rounded-2xl px-5 py-4 shadow-2xl min-w-56">
+            <span className="text-2xl">✂️</span>
+            <div>
+              <p className="text-sm font-bold mb-0.5">Mutation stripped</p>
+              <p className="text-[11px] text-muted-foreground">Bloom returned to base form</p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* ── Item craft success toast ── */}
