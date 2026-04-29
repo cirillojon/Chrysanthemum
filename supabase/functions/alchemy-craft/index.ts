@@ -102,7 +102,7 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "wind_shear", cost: E([{ type: "zephyr", amount: 6 }, { type: "storm", amount: 6 }]) },
   { id: "slot_lock",  cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
   // Generic Seed Pouches (I–V)
-  { id: "seed_pouch_1", cost: E([{ type: "lunar", amount: 4 }, { type: "arcane", amount: 4 }]) },
+  { id: "seed_pouch_1", cost: E([{ type: "universal", amount: 1 }]) },
   { id: "seed_pouch_2", cost: U("seed_pouch_1", 2) },
   { id: "seed_pouch_3", cost: U("seed_pouch_2", 2) },
   { id: "seed_pouch_4", cost: U("seed_pouch_3", 2) },

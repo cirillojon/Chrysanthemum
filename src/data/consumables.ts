@@ -304,7 +304,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Seed Pouch (I–V) — seed_pouch ────────────────────────────────────────
   { id: "seed_pouch_1", name: "Seed Pouch I",   emoji: "🎁", tier: 1, rarity: "rare",      category: "seed_pouch",
     description: `Open from your inventory for a random ${r(1)}+ seed.`,
-    cost: { kind: "essence", amounts: [{ type: "lunar", amount: 4 }, { type: "arcane", amount: 4 }] } },
+    cost: { kind: "essence", amounts: [{ type: "universal", amount: 1 }] } },
   { id: "seed_pouch_2", name: "Seed Pouch II",  emoji: "🎁", tier: 2, rarity: "legendary", category: "seed_pouch",
     description: `Open from your inventory for a random ${r(2)}+ seed.`,
     cost: { kind: "consumable", id: "seed_pouch_1", quantity: 2 } },
