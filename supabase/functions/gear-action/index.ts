@@ -145,7 +145,7 @@ Deno.serve(async (req: Request) => {
         payload: { gearType, row, col }, result: { placedAt },
       });
 
-      return json({ ok: true, grid, gearInventory });
+      return json({ ok: true, grid, gearInventory, serverUpdatedAt: ud.updated_at });
     }
 
     // ── remove ────────────────────────────────────────────────────────────────
@@ -185,7 +185,7 @@ Deno.serve(async (req: Request) => {
         payload: { gearType, row, col }, result: { storedReturned: stored.length, gearDestroyed: true },
       });
 
-      return json({ ok: true, grid, gearInventory, fertilizers });
+      return json({ ok: true, grid, gearInventory, fertilizers, serverUpdatedAt: ud.updated_at });
     }
 
     // ── collect (composter) ───────────────────────────────────────────────────
@@ -226,7 +226,7 @@ Deno.serve(async (req: Request) => {
         payload: { row, col }, result: { collected: stored.length },
       });
 
-      return json({ ok: true, grid, fertilizers });
+      return json({ ok: true, grid, fertilizers, serverUpdatedAt: ud.updated_at });
     }
 
     // ── set_direction (fan) ───────────────────────────────────────────────────
@@ -253,7 +253,7 @@ Deno.serve(async (req: Request) => {
 
       if (ue || !ud) return err("Save was modified by another action", 409);
 
-      return json({ ok: true, grid });
+      return json({ ok: true, grid, serverUpdatedAt: ud.updated_at });
     }
 
     return err("Unhandled action");

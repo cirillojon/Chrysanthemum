@@ -249,7 +249,7 @@ Deno.serve(async (req: Request) => {
     void supabaseAdmin.from("action_log").insert({ user_id: userId, action, payload: body, result: logResult });
 
     return new Response(
-      JSON.stringify({ ok: true, coins, shop: newShop, inventory: newInventory, fertilizers: newFertilizers }),
+      JSON.stringify({ ok: true, coins, shop: newShop, inventory: newInventory, fertilizers: newFertilizers, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {
