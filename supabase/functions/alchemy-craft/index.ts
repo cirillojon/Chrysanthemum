@@ -101,13 +101,25 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   // Wind Shear / Slot Lock (non-tiered)
   { id: "wind_shear", cost: E([{ type: "zephyr", amount: 6 }, { type: "storm", amount: 6 }]) },
   { id: "slot_lock",  cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
-  // Seed Pouches
+  // Generic Seed Pouches (I–V)
   { id: "seed_pouch_1", cost: E([{ type: "lunar", amount: 4 }, { type: "arcane", amount: 4 }]) },
   { id: "seed_pouch_2", cost: U("seed_pouch_1", 2) },
   { id: "seed_pouch_3", cost: U("seed_pouch_2", 2) },
   { id: "seed_pouch_4", cost: U("seed_pouch_3", 2) },
   { id: "seed_pouch_5", cost: U("seed_pouch_4", 2) },
 ];
+
+// Typed Seed Pouches (12 element types × 5 tiers = 60 recipes)
+for (const t of ["blaze","tide","grove","frost","storm","lunar","solar","fairy","shadow","arcane","stellar","zephyr"]) {
+  for (let tier = 1; tier <= 5; tier++) {
+    CONSUMABLE_RECIPES.push({
+      id: `seed_pouch_${t}_${tier}`,
+      cost: tier === 1
+        ? E([{ type: t, amount: 6 }])
+        : U(`seed_pouch_${t}_${tier - 1}`, 2),
+    });
+  }
+}
 
 const CONSUMABLE_RECIPE_MAP = Object.fromEntries(CONSUMABLE_RECIPES.map((r) => [r.id, r]));
 

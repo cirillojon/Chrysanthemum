@@ -15,175 +15,182 @@ function b64url(s: string): string {
 
 type Rarity = "common" | "uncommon" | "rare" | "legendary" | "mythic" | "exalted" | "prismatic";
 
-// ── Flower catalogue (id → rarity) ────────────────────────────────────────
+// ── Flower catalogue (id, rarity, types) ──────────────────────────────────
 
-const FLOWERS: { id: string; rarity: Rarity }[] = [
+const FLOWERS: { id: string; rarity: Rarity; types: string[] }[] = [
   // Common
-  { id: "quickgrass",      rarity: "common" },
-  { id: "dustweed",        rarity: "common" },
-  { id: "sprig",           rarity: "common" },
-  { id: "dewdrop",         rarity: "common" },
-  { id: "pebblebloom",     rarity: "common" },
-  { id: "ember_moss",      rarity: "common" },
-  { id: "dandelion",       rarity: "common" },
-  { id: "clover",          rarity: "common" },
-  { id: "violet",          rarity: "common" },
-  { id: "lemongrass",      rarity: "common" },
-  { id: "daisy",           rarity: "common" },
-  { id: "honeywort",       rarity: "common" },
-  { id: "buttercup",       rarity: "common" },
-  { id: "dawnpetal",       rarity: "common" },
-  { id: "poppy",           rarity: "common" },
-  { id: "chamomile",       rarity: "common" },
-  { id: "marigold",        rarity: "common" },
-  { id: "sunflower",       rarity: "common" },
-  { id: "coppercup",       rarity: "common" },
-  { id: "ivybell",         rarity: "common" },
-  { id: "thornberry",      rarity: "common" },
-  { id: "saltmoss",        rarity: "common" },
-  { id: "ashpetal",        rarity: "common" },
-  { id: "snowdrift",       rarity: "common" },
+  { id: "quickgrass",      rarity: "common",    types: ["grove"] },
+  { id: "dustweed",        rarity: "common",    types: ["zephyr", "shadow"] },
+  { id: "sprig",           rarity: "common",    types: ["grove"] },
+  { id: "dewdrop",         rarity: "common",    types: ["tide"] },
+  { id: "pebblebloom",     rarity: "common",    types: ["grove"] },
+  { id: "ember_moss",      rarity: "common",    types: ["blaze", "grove"] },
+  { id: "dandelion",       rarity: "common",    types: ["grove", "zephyr"] },
+  { id: "clover",          rarity: "common",    types: ["grove", "fairy"] },
+  { id: "violet",          rarity: "common",    types: ["fairy", "arcane"] },
+  { id: "lemongrass",      rarity: "common",    types: ["grove", "solar"] },
+  { id: "daisy",           rarity: "common",    types: ["grove", "fairy"] },
+  { id: "honeywort",       rarity: "common",    types: ["grove", "solar"] },
+  { id: "buttercup",       rarity: "common",    types: ["fairy", "solar"] },
+  { id: "dawnpetal",       rarity: "common",    types: ["lunar", "solar"] },
+  { id: "poppy",           rarity: "common",    types: ["blaze", "grove"] },
+  { id: "chamomile",       rarity: "common",    types: ["grove", "solar"] },
+  { id: "marigold",        rarity: "common",    types: ["solar", "grove"] },
+  { id: "sunflower",       rarity: "common",    types: ["solar"] },
+  { id: "coppercup",       rarity: "common",    types: ["grove"] },
+  { id: "ivybell",         rarity: "common",    types: ["grove", "tide"] },
+  { id: "thornberry",      rarity: "common",    types: ["grove"] },
+  { id: "saltmoss",        rarity: "common",    types: ["tide"] },
+  { id: "ashpetal",        rarity: "common",    types: ["shadow", "zephyr"] },
+  { id: "snowdrift",       rarity: "common",    types: ["frost"] },
   // Uncommon
-  { id: "swiftbloom",      rarity: "uncommon" },
-  { id: "shortcress",      rarity: "uncommon" },
-  { id: "thornwhistle",    rarity: "uncommon" },
-  { id: "starwort",        rarity: "uncommon" },
-  { id: "mintleaf",        rarity: "uncommon" },
-  { id: "tulip",           rarity: "uncommon" },
-  { id: "inkbloom",        rarity: "uncommon" },
-  { id: "hyacinth",        rarity: "uncommon" },
-  { id: "snapdragon",      rarity: "uncommon" },
-  { id: "beebalm",         rarity: "uncommon" },
-  { id: "candleflower",    rarity: "uncommon" },
-  { id: "carnation",       rarity: "uncommon" },
-  { id: "ribbonweed",      rarity: "uncommon" },
-  { id: "hibiscus",        rarity: "uncommon" },
-  { id: "wildberry",       rarity: "uncommon" },
-  { id: "frostbell",       rarity: "uncommon" },
-  { id: "bluebell",        rarity: "uncommon" },
-  { id: "cherry_blossom",  rarity: "uncommon" },
-  { id: "rose",            rarity: "uncommon" },
-  { id: "peacockflower",   rarity: "uncommon" },
-  { id: "bamboo_bloom",    rarity: "uncommon" },
-  { id: "hummingbloom",    rarity: "uncommon" },
-  { id: "water_lily",      rarity: "uncommon" },
-  { id: "lanternflower",   rarity: "uncommon" },
-  { id: "dovebloom",       rarity: "uncommon" },
-  { id: "coral_bells",     rarity: "uncommon" },
-  { id: "sundew",          rarity: "uncommon" },
-  { id: "bubblebloom",     rarity: "uncommon" },
+  { id: "swiftbloom",      rarity: "uncommon",  types: ["zephyr"] },
+  { id: "shortcress",      rarity: "uncommon",  types: ["grove"] },
+  { id: "thornwhistle",    rarity: "uncommon",  types: ["grove", "blaze"] },
+  { id: "starwort",        rarity: "uncommon",  types: ["stellar"] },
+  { id: "mintleaf",        rarity: "uncommon",  types: ["grove", "frost"] },
+  { id: "tulip",           rarity: "uncommon",  types: ["fairy", "grove"] },
+  { id: "inkbloom",        rarity: "uncommon",  types: ["arcane", "shadow"] },
+  { id: "hyacinth",        rarity: "uncommon",  types: ["blaze", "fairy"] },
+  { id: "snapdragon",      rarity: "uncommon",  types: ["blaze", "arcane"] },
+  { id: "beebalm",         rarity: "uncommon",  types: ["grove", "solar"] },
+  { id: "candleflower",    rarity: "uncommon",  types: ["blaze", "arcane"] },
+  { id: "carnation",       rarity: "uncommon",  types: ["fairy"] },
+  { id: "ribbonweed",      rarity: "uncommon",  types: ["fairy"] },
+  { id: "hibiscus",        rarity: "uncommon",  types: ["solar", "blaze"] },
+  { id: "wildberry",       rarity: "uncommon",  types: ["grove"] },
+  { id: "frostbell",       rarity: "uncommon",  types: ["frost"] },
+  { id: "bluebell",        rarity: "uncommon",  types: ["fairy", "tide"] },
+  { id: "cherry_blossom",  rarity: "uncommon",  types: ["fairy", "grove"] },
+  { id: "rose",            rarity: "uncommon",  types: ["fairy"] },
+  { id: "peacockflower",   rarity: "uncommon",  types: ["arcane", "zephyr"] },
+  { id: "bamboo_bloom",    rarity: "uncommon",  types: ["grove", "zephyr"] },
+  { id: "hummingbloom",    rarity: "uncommon",  types: ["zephyr", "fairy"] },
+  { id: "water_lily",      rarity: "uncommon",  types: ["tide"] },
+  { id: "lanternflower",   rarity: "uncommon",  types: ["blaze", "arcane"] },
+  { id: "dovebloom",       rarity: "uncommon",  types: ["zephyr", "fairy"] },
+  { id: "coral_bells",     rarity: "uncommon",  types: ["tide", "fairy"] },
+  { id: "sundew",          rarity: "uncommon",  types: ["grove", "shadow"] },
+  { id: "bubblebloom",     rarity: "uncommon",  types: ["tide", "fairy"] },
   // Rare
-  { id: "flashpetal",        rarity: "rare" },
-  { id: "rushwillow",        rarity: "rare" },
-  { id: "sweetheart_lily",   rarity: "rare" },
-  { id: "glassbell",         rarity: "rare" },
-  { id: "stormcaller",       rarity: "rare" },
-  { id: "lavender",          rarity: "rare" },
-  { id: "amber_crown",       rarity: "rare" },
-  { id: "peach_blossom",     rarity: "rare" },
-  { id: "foxglove",          rarity: "rare" },
-  { id: "butterbloom",       rarity: "rare" },
-  { id: "peony",             rarity: "rare" },
-  { id: "tidebloom",         rarity: "rare" },
-  { id: "starweave",         rarity: "rare" },
-  { id: "wisteria",          rarity: "rare" },
-  { id: "dreamcup",          rarity: "rare" },
-  { id: "coralbell",         rarity: "rare" },
-  { id: "foxfire",           rarity: "rare" },
-  { id: "bird_of_paradise",  rarity: "rare" },
-  { id: "solarbell",         rarity: "rare" },
-  { id: "moonpetal",         rarity: "rare" },
-  { id: "orchid",            rarity: "rare" },
-  { id: "duskrose",          rarity: "rare" },
-  { id: "passionflower",     rarity: "rare" },
-  { id: "glasswing",         rarity: "rare" },
-  { id: "mirror_orchid",     rarity: "rare" },
-  { id: "stargazer_lily",    rarity: "rare" },
-  { id: "prism_lily",        rarity: "rare" },
-  { id: "dusk_orchid",       rarity: "rare" },
+  { id: "flashpetal",      rarity: "rare",      types: ["storm"] },
+  { id: "rushwillow",      rarity: "rare",      types: ["zephyr", "tide"] },
+  { id: "sweetheart_lily", rarity: "rare",      types: ["fairy"] },
+  { id: "glassbell",       rarity: "rare",      types: ["arcane", "stellar"] },
+  { id: "stormcaller",     rarity: "rare",      types: ["storm"] },
+  { id: "lavender",        rarity: "rare",      types: ["fairy", "arcane"] },
+  { id: "amber_crown",     rarity: "rare",      types: ["solar", "blaze"] },
+  { id: "peach_blossom",   rarity: "rare",      types: ["grove", "fairy"] },
+  { id: "foxglove",        rarity: "rare",      types: ["shadow", "arcane"] },
+  { id: "butterbloom",     rarity: "rare",      types: ["fairy", "zephyr"] },
+  { id: "peony",           rarity: "rare",      types: ["fairy"] },
+  { id: "tidebloom",       rarity: "rare",      types: ["tide"] },
+  { id: "starweave",       rarity: "rare",      types: ["stellar", "arcane"] },
+  { id: "wisteria",        rarity: "rare",      types: ["fairy", "arcane"] },
+  { id: "dreamcup",        rarity: "rare",      types: ["fairy", "arcane"] },
+  { id: "coralbell",       rarity: "rare",      types: ["tide"] },
+  { id: "foxfire",         rarity: "rare",      types: ["blaze", "arcane"] },
+  { id: "bird_of_paradise",rarity: "rare",      types: ["zephyr", "solar"] },
+  { id: "solarbell",       rarity: "rare",      types: ["solar"] },
+  { id: "moonpetal",       rarity: "rare",      types: ["lunar"] },
+  { id: "orchid",          rarity: "rare",      types: ["fairy", "arcane"] },
+  { id: "duskrose",        rarity: "rare",      types: ["lunar", "shadow"] },
+  { id: "passionflower",   rarity: "rare",      types: ["arcane", "storm"] },
+  { id: "glasswing",       rarity: "rare",      types: ["arcane"] },
+  { id: "mirror_orchid",   rarity: "rare",      types: ["arcane", "stellar"] },
+  { id: "stargazer_lily",  rarity: "rare",      types: ["stellar"] },
+  { id: "prism_lily",      rarity: "rare",      types: ["arcane", "stellar"] },
+  { id: "dusk_orchid",     rarity: "rare",      types: ["lunar", "solar"] },
   // Legendary
-  { id: "firstbloom",        rarity: "legendary" },
-  { id: "haste_lily",        rarity: "legendary" },
-  { id: "verdant_crown",     rarity: "legendary" },
-  { id: "ironwood_bloom",    rarity: "legendary" },
-  { id: "sundial",           rarity: "legendary" },
-  { id: "lotus",             rarity: "legendary" },
-  { id: "candy_blossom",     rarity: "legendary" },
-  { id: "prismbark",         rarity: "legendary" },
-  { id: "dolphinia",         rarity: "legendary" },
-  { id: "ghost_orchid",      rarity: "legendary" },
-  { id: "nestbloom",         rarity: "legendary" },
-  { id: "black_rose",        rarity: "legendary" },
-  { id: "pumpkin_blossom",   rarity: "legendary" },
-  { id: "starburst_lily",    rarity: "legendary" },
-  { id: "sporebloom",        rarity: "legendary" },
-  { id: "fire_lily",         rarity: "legendary" },
-  { id: "stargazer",         rarity: "legendary" },
-  { id: "fullmoon_bloom",    rarity: "legendary" },
-  { id: "ice_crown",         rarity: "legendary" },
-  { id: "diamond_bloom",     rarity: "legendary" },
-  { id: "oracle_eye",        rarity: "legendary" },
-  { id: "halfmoon_bloom",    rarity: "legendary" },
-  { id: "aurora_bloom",      rarity: "legendary" },
-  { id: "mirrorpetal",       rarity: "legendary" },
-  { id: "emberspark",        rarity: "legendary" },
-  { id: "phoenix_lily",      rarity: "legendary" },
-  { id: "eclipse_bloom",     rarity: "legendary" },
-  { id: "tempest_orchid",    rarity: "legendary" },
-  { id: "blightmantle",      rarity: "legendary" },
-  { id: "cosmosbloom",       rarity: "legendary" },
-  { id: "dreamgust",         rarity: "legendary" },
+  { id: "firstbloom",      rarity: "legendary", types: ["solar", "fairy"] },
+  { id: "haste_lily",      rarity: "legendary", types: ["zephyr", "storm"] },
+  { id: "verdant_crown",   rarity: "legendary", types: ["grove", "fairy"] },
+  { id: "ironwood_bloom",  rarity: "legendary", types: ["grove"] },
+  { id: "sundial",         rarity: "legendary", types: ["solar", "arcane"] },
+  { id: "lotus",           rarity: "legendary", types: ["tide", "arcane"] },
+  { id: "candy_blossom",   rarity: "legendary", types: ["fairy"] },
+  { id: "prismbark",       rarity: "legendary", types: ["grove", "arcane"] },
+  { id: "dolphinia",       rarity: "legendary", types: ["tide"] },
+  { id: "ghost_orchid",    rarity: "legendary", types: ["shadow", "arcane"] },
+  { id: "nestbloom",       rarity: "legendary", types: ["grove", "fairy"] },
+  { id: "black_rose",      rarity: "legendary", types: ["shadow"] },
+  { id: "pumpkin_blossom", rarity: "legendary", types: ["shadow", "grove"] },
+  { id: "starburst_lily",  rarity: "legendary", types: ["stellar", "storm"] },
+  { id: "sporebloom",      rarity: "legendary", types: ["grove", "shadow"] },
+  { id: "fire_lily",       rarity: "legendary", types: ["blaze"] },
+  { id: "stargazer",       rarity: "legendary", types: ["stellar"] },
+  { id: "fullmoon_bloom",  rarity: "legendary", types: ["lunar"] },
+  { id: "ice_crown",       rarity: "legendary", types: ["frost"] },
+  { id: "diamond_bloom",   rarity: "legendary", types: ["frost", "arcane"] },
+  { id: "oracle_eye",      rarity: "legendary", types: ["arcane", "shadow"] },
+  { id: "halfmoon_bloom",  rarity: "legendary", types: ["lunar"] },
+  { id: "aurora_bloom",    rarity: "legendary", types: ["stellar", "arcane"] },
+  { id: "mirrorpetal",     rarity: "legendary", types: ["arcane", "stellar"] },
+  { id: "emberspark",      rarity: "legendary", types: ["blaze", "storm"] },
+  { id: "phoenix_lily",    rarity: "legendary", types: ["blaze", "frost"] },
+  { id: "eclipse_bloom",   rarity: "legendary", types: ["lunar", "solar"] },
+  { id: "tempest_orchid",  rarity: "legendary", types: ["tide", "storm"] },
+  { id: "blightmantle",    rarity: "legendary", types: ["grove", "shadow"] },
+  { id: "cosmosbloom",     rarity: "legendary", types: ["arcane", "stellar"] },
+  { id: "dreamgust",       rarity: "legendary", types: ["fairy", "zephyr"] },
   // Mythic
-  { id: "blink_rose",        rarity: "mythic" },
-  { id: "dawnfire",          rarity: "mythic" },
-  { id: "moonflower",        rarity: "mythic" },
-  { id: "jellybloom",        rarity: "mythic" },
-  { id: "celestial_bloom",   rarity: "mythic" },
-  { id: "void_blossom",      rarity: "mythic" },
-  { id: "seraph_wing",       rarity: "mythic" },
-  { id: "solar_rose",        rarity: "mythic" },
-  { id: "nebula_drift",      rarity: "mythic" },
-  { id: "superbloom",        rarity: "mythic" },
-  { id: "wanderbloom",       rarity: "mythic" },
-  { id: "chrysanthemum",     rarity: "mythic" },
-  { id: "solarburst",        rarity: "mythic" },
-  { id: "tidalune",          rarity: "mythic" },
-  { id: "whisperleaf",       rarity: "mythic" },
-  { id: "crystalmind",       rarity: "mythic" },
+  { id: "blink_rose",      rarity: "mythic",    types: ["arcane", "shadow"] },
+  { id: "dawnfire",        rarity: "mythic",    types: ["solar", "blaze"] },
+  { id: "moonflower",      rarity: "mythic",    types: ["lunar"] },
+  { id: "jellybloom",      rarity: "mythic",    types: ["tide", "arcane"] },
+  { id: "celestial_bloom", rarity: "mythic",    types: ["stellar"] },
+  { id: "void_blossom",    rarity: "mythic",    types: ["shadow", "arcane"] },
+  { id: "seraph_wing",     rarity: "mythic",    types: ["zephyr", "fairy"] },
+  { id: "solar_rose",      rarity: "mythic",    types: ["solar"] },
+  { id: "nebula_drift",    rarity: "mythic",    types: ["stellar", "arcane"] },
+  { id: "superbloom",      rarity: "mythic",    types: ["storm", "stellar"] },
+  { id: "wanderbloom",     rarity: "mythic",    types: ["zephyr", "arcane"] },
+  { id: "chrysanthemum",   rarity: "mythic",    types: ["arcane", "stellar", "fairy"] },
+  { id: "solarburst",      rarity: "mythic",    types: ["blaze", "solar"] },
+  { id: "tidalune",        rarity: "mythic",    types: ["lunar", "tide"] },
+  { id: "whisperleaf",     rarity: "mythic",    types: ["grove", "zephyr"] },
+  { id: "crystalmind",     rarity: "mythic",    types: ["frost", "arcane"] },
   // Exalted
-  { id: "umbral_bloom",      rarity: "exalted" },
-  { id: "obsidian_rose",     rarity: "exalted" },
-  { id: "duskmantle",        rarity: "exalted" },
-  { id: "graveweb",          rarity: "exalted" },
-  { id: "nightwing",         rarity: "exalted" },
-  { id: "ashenveil",         rarity: "exalted" },
-  { id: "voidfire",          rarity: "exalted" },
-  { id: "void_chrysalis",    rarity: "exalted" },
-  { id: "starloom",          rarity: "exalted" },
+  { id: "umbral_bloom",    rarity: "exalted",   types: ["shadow", "lunar"] },
+  { id: "obsidian_rose",   rarity: "exalted",   types: ["shadow"] },
+  { id: "duskmantle",      rarity: "exalted",   types: ["shadow", "lunar"] },
+  { id: "graveweb",        rarity: "exalted",   types: ["shadow"] },
+  { id: "nightwing",       rarity: "exalted",   types: ["shadow", "zephyr"] },
+  { id: "ashenveil",       rarity: "exalted",   types: ["shadow", "blaze"] },
+  { id: "voidfire",        rarity: "exalted",   types: ["shadow", "blaze"] },
+  { id: "void_chrysalis",  rarity: "exalted",   types: ["arcane"] },
+  { id: "starloom",        rarity: "exalted",   types: ["stellar"] },
   // Prismatic
-  { id: "dreambloom",        rarity: "prismatic" },
-  { id: "fairy_blossom",     rarity: "prismatic" },
-  { id: "lovebind",          rarity: "prismatic" },
-  { id: "eternal_heart",     rarity: "prismatic" },
-  { id: "nova_bloom",        rarity: "prismatic" },
-  { id: "princess_blossom",  rarity: "prismatic" },
-  { id: "the_first_bloom",   rarity: "prismatic" },
+  { id: "dreambloom",      rarity: "prismatic", types: ["fairy", "arcane"] },
+  { id: "fairy_blossom",   rarity: "prismatic", types: ["fairy"] },
+  { id: "lovebind",        rarity: "prismatic", types: ["fairy", "arcane"] },
+  { id: "eternal_heart",   rarity: "prismatic", types: ["fairy", "solar"] },
+  { id: "nova_bloom",      rarity: "prismatic", types: ["stellar", "storm", "blaze"] },
+  { id: "princess_blossom",rarity: "prismatic", types: ["fairy", "arcane"] },
+  { id: "the_first_bloom", rarity: "prismatic", types: ["arcane", "stellar"] },
 ];
 
-// ── Rarity output weights per pouch tier ──────────────────────────────────
+// ── Rarity output weights per pouch tier (1-5) ────────────────────────────
 // Weights within each tier sum to 100.
 
 type RarityWeight = [Rarity, number];
 
-const POUCH_RARITY_WEIGHTS: Record<string, RarityWeight[]> = {
-  seed_pouch_1: [["rare",      78], ["legendary", 17], ["mythic",   5]],
-  seed_pouch_2: [["legendary", 72], ["mythic",    20], ["exalted",  7], ["prismatic", 1]],
-  seed_pouch_3: [["mythic",    68], ["exalted",   24], ["prismatic",8]],
-  seed_pouch_4: [["exalted",   72], ["prismatic", 28]],
-  seed_pouch_5: [["prismatic", 100]],
+const POUCH_RARITY_WEIGHTS: Record<number, RarityWeight[]> = {
+  1: [["rare",      78], ["legendary", 17], ["mythic",   5]],
+  2: [["legendary", 72], ["mythic",    20], ["exalted",  7], ["prismatic", 1]],
+  3: [["mythic",    68], ["exalted",   24], ["prismatic", 8]],
+  4: [["exalted",   72], ["prismatic", 28]],
+  5: [["prismatic", 100]],
 };
 
-const VALID_POUCH_IDS = new Set(Object.keys(POUCH_RARITY_WEIGHTS));
+/** Validates generic (`seed_pouch_N`) and typed (`seed_pouch_TYPE_N`) pouch IDs. */
+const VALID_POUCH_REGEX = /^seed_pouch_(?:(blaze|tide|grove|frost|storm|lunar|solar|fairy|shadow|arcane|stellar|zephyr)_)?([1-5])$/;
+
+function parsePouchId(id: string): { tier: number; type: string | null } | null {
+  const m = id.match(VALID_POUCH_REGEX);
+  if (!m) return null;
+  return { type: m[1] ?? null, tier: parseInt(m[2], 10) };
+}
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -197,10 +204,14 @@ function weightedRandom<T>(items: [T, number][]): T {
   return items[items.length - 1][0];
 }
 
-/** Pick a species at the given rarity completely at random. */
-function selectSpecies(rarity: Rarity): string {
-  const pool = FLOWERS.filter((f) => f.rarity === rarity);
-  return pool[Math.floor(Math.random() * pool.length)].id;
+/** Pick a species at the given rarity. If `type` is provided, only species with
+ *  that element type are eligible. Falls back to any species of that rarity if
+ *  the typed pool is somehow empty (shouldn't happen with current catalogue). */
+function selectSpecies(rarity: Rarity, type: string | null): string {
+  const all  = FLOWERS.filter((f) => f.rarity === rarity);
+  const pool = type ? all.filter((f) => f.types.includes(type)) : all;
+  const src  = pool.length > 0 ? pool : all;
+  return src[Math.floor(Math.random() * src.length)].id;
 }
 
 // ── Handler ────────────────────────────────────────────────────────────────
@@ -238,11 +249,13 @@ Deno.serve(async (req: Request) => {
     // ── Parse + validate input ────────────────────────────────────────────────
     const { consumableId } = await req.json() as { consumableId: string };
 
-    if (!VALID_POUCH_IDS.has(consumableId)) {
-      return new Response(JSON.stringify({ error: "Invalid consumableId — must be a seed_pouch_1…5" }), {
+    const pouchInfo = parsePouchId(consumableId);
+    if (!pouchInfo) {
+      return new Response(JSON.stringify({ error: "Invalid consumableId — must be a seed_pouch[_type]_N" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const { tier: pouchTier, type: pouchType } = pouchInfo;
 
     // ── Verify JWT + load save in parallel ────────────────────────────────────
     const [authResult, saveResult] = await Promise.all([
@@ -280,8 +293,8 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Roll output ───────────────────────────────────────────────────────────
-    const outputRarity    = weightedRandom(POUCH_RARITY_WEIGHTS[consumableId]);
-    const outputSpeciesId = selectSpecies(outputRarity);
+    const outputRarity    = weightedRandom(POUCH_RARITY_WEIGHTS[pouchTier]);
+    const outputSpeciesId = selectSpecies(outputRarity, pouchType);
 
     // ── Deduct 1 pouch from consumables ───────────────────────────────────────
     consumables = consumables
