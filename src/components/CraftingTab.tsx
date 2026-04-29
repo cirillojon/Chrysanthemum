@@ -253,6 +253,26 @@ function queueEntryDisplay(entry: CraftingQueueEntry): { emoji: string; name: st
   return { emoji: "🥢", name: `${capitalized} Attunement` };
 }
 
+// ── Collect toast ─────────────────────────────────────────────────────────────
+
+function CollectToast({ emoji, name, onDone }: { emoji: string; name: string; onDone: () => void }) {
+  // Empty deps on purpose — `onDone` is a fresh closure on every parent render
+  // (CraftingTab re-renders every second from setNow), so depending on it would
+  // reset the timeout repeatedly and the toast would never dismiss.
+  useEffect(() => {
+    const id = setTimeout(onDone, 2500);
+    return () => clearTimeout(id);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className="flex items-center gap-2 bg-card/95 border border-green-500/40 text-green-400 rounded-xl px-4 py-2.5 shadow-xl text-sm font-semibold backdrop-blur-sm">
+      <span className="text-xl leading-none">{emoji}</span>
+      <span>{name} collected!</span>
+      <span className="text-green-500 text-base leading-none">✓</span>
+    </div>
+  );
+}
+
 // ── Crafting queue panel ──────────────────────────────────────────────────────
 
 function QueueEntryRow({
@@ -268,7 +288,10 @@ function QueueEntryRow({
   const { emoji, name } = queueEntryDisplay(entry);
   const startedAt = new Date(entry.startedAt).getTime();
   const elapsed   = now - startedAt;
-  const progress  = Math.min(elapsed / entry.durationMs, 1);
+  // Clamp progress to [0, 1]. Without Math.max(0, …) a stale `now` (the 1s-tick
+  // state lags real time by up to a second) makes `elapsed` negative right after
+  // a craft starts → width: -0.3% → browser falls back to width: auto → 100%.
+  const progress  = Math.max(0, Math.min(elapsed / entry.durationMs, 1));
   const isDone    = progress >= 1;
   const remaining = Math.max(entry.durationMs - elapsed, 0);
 
@@ -304,10 +327,11 @@ function QueueEntryRow({
           </button>
         </div>
       </div>
-      {/* Progress bar */}
+      {/* Progress bar — width jumps on the 1s tick (no transition needed at that scale).
+          Only the colour (amber → green) transitions so "done" feels smooth. */}
       <div className="w-full h-1.5 rounded-full bg-card/60 overflow-hidden">
         <div
-          className={`h-full rounded-full transition-all duration-1000 ${isDone ? "bg-green-500" : "bg-amber-500"}`}
+          className={`h-full rounded-full transition-colors duration-500 ${isDone ? "bg-green-500" : "bg-amber-500"}`}
           style={{ width: `${progress * 100}%` }}
         />
       </div>
@@ -554,6 +578,8 @@ export function CraftingTab() {
   const [collectingId, setCollectingId] = useState<string | null>(null);
   const [cancelingId,  setCancelingId]  = useState<string | null>(null);
   const [upgradingSlots, setUpgradingSlots] = useState(false);
+
+  const [collectToasts, setCollectToasts] = useState<{ id: string; emoji: string; name: string }[]>([]);
 
   // Tick once per second to drive queue progress bars + countdowns
   const [now, setNow] = useState(() => Date.now());
@@ -826,6 +852,8 @@ export function CraftingTab() {
         : [...inf, { rarity: outputId as Rarity, quantity: 1 }];
     }
 
+    const { emoji, name } = queueEntryDisplay(entry);
+
     try {
       await perform(
         { ...cur, ...optimistic },
@@ -840,6 +868,9 @@ export function CraftingTab() {
             infusers:        res.infusers,
             serverUpdatedAt: res.serverUpdatedAt,
           });
+          // Show collect notification
+          const toastId = crypto.randomUUID();
+          setCollectToasts((prev) => [...prev, { id: toastId, emoji, name }]);
         },
       );
     } catch (e) {
@@ -1068,6 +1099,20 @@ export function CraftingTab() {
           state={state}
           slotsAvailable={slotsAvailable}
         />
+      )}
+
+      {/* ── Collect toasts ───────────────────────────────────────────────── */}
+      {collectToasts.length > 0 && (
+        <div className="fixed bottom-20 inset-x-0 flex flex-col items-center gap-2 pointer-events-none z-[60]">
+          {collectToasts.map((t) => (
+            <CollectToast
+              key={t.id}
+              emoji={t.emoji}
+              name={t.name}
+              onDone={() => setCollectToasts((prev) => prev.filter((x) => x.id !== t.id))}
+            />
+          ))}
+        </div>
       )}
     </>
   );
