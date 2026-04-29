@@ -103,7 +103,7 @@ Deno.serve(async (req: Request) => {
         supabaseAdmin.auth.getUser(token),
         supabaseAdmin
           .from("game_saves")
-          .select("coins, supply_shop, fertilizers, gear_inventory")
+          .select("coins, supply_shop, fertilizers, gear_inventory, updated_at")
           .eq("user_id", userId)
           .single(),
       ]);
@@ -116,6 +116,7 @@ Deno.serve(async (req: Request) => {
       }
 
       const save = saveResult.data;
+      const priorUpdatedAt = save.updated_at as string;
       let coins         = save.coins as number;
       let supplyShop    = [...(save.supply_shop   ?? []) as ShopSlot[]];
       let fertilizers   = [...(save.fertilizers   ?? []) as FertItem[]];
@@ -157,10 +158,11 @@ Deno.serve(async (req: Request) => {
           updated_at:    new Date().toISOString(),
         })
         .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
         .select("updated_at")
         .single();
 
-      if (ue || !ud) return err("Failed to save", 500);
+      if (ue || !ud) return err("Save was modified by another action", 409);
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "supply_buy",

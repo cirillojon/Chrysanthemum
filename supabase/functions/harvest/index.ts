@@ -344,9 +344,13 @@ Deno.serve(async (req: Request) => {
       result:  { bonusCoins, newCoins },
     });
 
-    // Return coins/inventory/discovered only — NOT grid (see comment above).
+    // Return inventory/discovered/bonusCoins only — NOT coins or grid.
+    // Coins are written server-side but not returned: each individual harvest returning
+    // a full authoritative coin total overwrites the optimistic total from concurrent
+    // in-flight harvests, causing a visible "snap back" effect. The client's optimistic
+    // coin delta (bonusCoins) is already correct; we just confirm it succeeded.
     return new Response(
-      JSON.stringify({ ok: true, coins: newCoins, inventory: newInventory, discovered: newDiscovered, mutation, bonusCoins, serverUpdatedAt: updateData.updated_at }),
+      JSON.stringify({ ok: true, inventory: newInventory, discovered: newDiscovered, mutation, bonusCoins, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

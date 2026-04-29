@@ -29,13 +29,22 @@ async function callEdge<T>(name: string, body: unknown): Promise<T> {
 
 export interface HarvestResult {
   ok:         true;
-  coins:      number;
+  // coins intentionally omitted — returning a full authoritative total per-harvest
+  // overwrites the optimistic sum from concurrent in-flight harvests, causing a
+  // visible "snap back". The server writes the correct value; the client's optimistic
+  // bonusCoins delta is already accurate.
   // grid intentionally omitted — client optimistic state owns the grid.
-  // Mutations are assigned client-side and must not be overwritten by the DB grid.
   inventory:  GameState["inventory"];
   discovered: GameState["discovered"];
   mutation:   string | undefined;
   bonusCoins: number;
+  serverUpdatedAt: string;
+}
+
+export interface SellAllResult {
+  ok:          true;
+  coins:       number;
+  inventory:   GameState["inventory"];
   serverUpdatedAt: string;
 }
 
@@ -134,6 +143,12 @@ export function edgeSellFlower(speciesId: string, mutation: string | undefined, 
     mutation,
     quantity,
   });
+}
+
+/** Sell all blooms in a single atomic server write — avoids the partial-failure
+ *  rollback bug from N sequential edgeSellFlower calls. */
+export function edgeSellAll(items: { speciesId: string; mutation?: string; quantity: number }[]) {
+  return callEdge<SellAllResult>("shop-action", { action: "sell_all", items });
 }
 
 export function edgeApplyFertilizer(row: number, col: number, fertType: string) {

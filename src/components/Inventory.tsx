@@ -5,7 +5,7 @@ import type { MutationType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, type InventoryItem } from "../store/gameStore";
-import { edgeSellFlower } from "../lib/edgeFunctions";
+import { edgeSellFlower, edgeSellAll } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";
@@ -21,7 +21,7 @@ interface Props {
 }
 
 export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView }: Props) {
-  const { state, update, getState, awaitHarvests } = useGame();
+  const { state, perform, getState, awaitHarvests } = useGame();
   const [tab, setTab] = useState<Tab>(0);
 
   const items       = state.inventory.filter((i) => i.quantity > 0);
@@ -48,21 +48,35 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
 
     const current = getState();
     const currentBlooms = current.inventory.filter((i) => i.quantity > 0 && !i.isSeed);
+    if (currentBlooms.length === 0) return;
 
+    // Build a single optimistic state with all blooms sold
     let optimistic = current;
     for (const item of currentBlooms) {
       const next = sellFlower(optimistic, item.speciesId, item.quantity, item.mutation as MutationType | undefined);
       if (next) optimistic = next;
     }
-    const prev = current;
-    update(optimistic);
-    try {
-      for (const item of currentBlooms) {
-        await edgeSellFlower(item.speciesId, item.mutation, item.quantity);
+
+    const items = currentBlooms.map((i) => ({
+      speciesId: i.speciesId,
+      mutation:  i.mutation as string | undefined,
+      quantity:  i.quantity,
+    }));
+
+    // Single atomic server write — one CAS check, no partial-failure rollback risk.
+    // perform() auto-merges the SellAllResult (coins + inventory) on success.
+    await perform(
+      optimistic,
+      () => edgeSellAll(items),
+      undefined,
+      {
+        rollback: (c) => ({
+          ...c,
+          coins:     current.coins,
+          inventory: current.inventory,
+        }),
       }
-    } catch {
-      update(prev);
-    }
+    );
   }
 
   const isEmpty = items.length === 0 && fertilizers.length === 0 && gearItems.length === 0;
