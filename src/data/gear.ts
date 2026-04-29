@@ -25,12 +25,13 @@ export type PassiveGearType =
   | "fan_rare"
   | "harvest_bell_rare"
   | "harvest_bell_legendary"
-  | "auto_planter_prismatic";
+  | "auto_planter_prismatic"
+  | "cropsticks";
 
 export type GearType = SprinklerGearType | PassiveGearType;
 
 export type GearCategory  = "sprinkler_regular" | "sprinkler_mutation" | "passive";
-export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter";
+export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks";
 
 /** Which way a Fan is pointing — set at placement time */
 export type FanDirection = "up" | "down" | "left" | "right";
@@ -438,6 +439,24 @@ export const GEAR: Record<GearType, GearDefinition> = {
     radiusOffsets:  OFFSETS_DIAMOND,
     durationMs:     DURATION_12H,
   },
+
+  // ── Cropsticks ───────────────────────────────────────────────────────────
+  // Placed in an empty cell. Each server tick, scans the 4 adjacent cells for
+  // bloomed flowers marked as infused. If 2+ infused neighbors match a
+  // cross-breed recipe, there's a chance (~0.58%/tick → ~50% over an hour)
+  // to produce a hybrid seed. Permanent — no expiry.
+
+  cropsticks: {
+    id:             "cropsticks",
+    name:           "Cropsticks",
+    description:    "Passively cross-breeds adjacent flowers marked with Infusers. Place next to two infused blooms of compatible types and wait for a hybrid seed to appear. Permanent.",
+    emoji:          "🥢",
+    rarity:         "legendary",
+    shopPrice:      12_000,
+    category:       "passive",
+    passiveSubtype: "cropsticks",
+    radiusOffsets:  OFFSETS_CROSS, // highlights the 4 cells it monitors in the UI
+  },
 };
 
 // ── Utility: check if gear has expired ────────────────────────────────────
@@ -565,6 +584,10 @@ export function isAutoPlanter(def: GearDefinition): boolean {
   return def.passiveSubtype === "auto_planter";
 }
 
+export function isCropsticks(def: GearDefinition): boolean {
+  return def.passiveSubtype === "cropsticks";
+}
+
 // ── Supply shop pools ──────────────────────────────────────────────────────
 
 export type SupplyItem =
@@ -598,6 +621,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear",       gearType: "sprinkler_flame" },
     { kind: "gear",       gearType: "sprinkler_frost" },
     { kind: "gear",       gearType: "harvest_bell_legendary" },
+    { kind: "gear",       gearType: "cropsticks" },
   ],
   mythic: [
     { kind: "fertilizer", fertilizerType: "miracle" },

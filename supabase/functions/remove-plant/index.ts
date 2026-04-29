@@ -149,6 +149,11 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // Clear the authoritative planting time — if a new seed is planted here
+    // immediately after, the stale entry would make harvest think it's too early.
+    void supabaseAdmin.from("plant_timings").delete()
+      .eq("user_id", userId).eq("row", row).eq("col", col);
+
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "remove_plant",
       payload: { row, col, speciesId },

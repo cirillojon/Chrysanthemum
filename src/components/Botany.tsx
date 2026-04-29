@@ -272,9 +272,10 @@ function SelectionScreen({
 export function Botany() {
   const { state, perform } = useGame();
 
-  const [activeTab, setActiveTab] = useState<BotanyTab>(() =>
-    (localStorage.getItem("botany_tab") as BotanyTab | null) ?? "convert"
-  );
+  const [activeTab, setActiveTab] = useState<BotanyTab>(() => {
+    const saved = localStorage.getItem("botany_tab");
+    return saved === "convert" || saved === "alchemy" ? saved : "convert";
+  });
 
   const [activeRarity, setActiveRarity]         = useState<Rarity | null>(null);
   const [resultSpeciesId, setResultSpeciesId]   = useState<string | null>(null);

@@ -45,18 +45,14 @@ type Tab = "weather" | "items" | "broadcast";
 export function DevWeatherPanel() {
   const { state, update, user } = useGame();
 
-  // Dev-only save helper — always fetches the latest updated_at from the DB
-  // before writing so CAS never blocks dev panel actions.
+  // Dev-only save helper — bypasses CAS by forcing the upsert path.
+  // The fetch-then-write approach has a race window: if the auto-save timer
+  // fires between the SELECT and the UPDATE, the UPDATE matches 0 rows and
+  // silently returns false, leaving the change only in client state (never
+  // persisted). Passing serverUpdatedAt: null skips the .eq("updated_at", ...)
+  // filter entirely and uses upsert, which always wins.
   async function devSave(userId: string, newState: GameState): Promise<void> {
-    const { data } = await supabase
-      .from("game_saves")
-      .select("updated_at")
-      .eq("user_id", userId)
-      .single();
-    const freshState = data?.updated_at
-      ? { ...newState, serverUpdatedAt: data.updated_at as string }
-      : newState;
-    const savedAt = await saveToCloud(userId, freshState);
+    const savedAt = await saveToCloud(userId, { ...newState, serverUpdatedAt: null });
     if (savedAt) update({ ...newState, serverUpdatedAt: savedAt });
   }
 

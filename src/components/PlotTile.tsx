@@ -34,7 +34,7 @@ interface Props {
   row:             number;
   col:             number;
   onEmptyClick:    () => void;
-  onHarvest:       (speciesId: string, mutation?: MutationType) => void;
+  onHarvest:       (speciesId: string, mutation?: MutationType, isBloomPlaced?: boolean) => void;
   onHarvestStart?: () => void;
   onHarvestEnd?:   () => void;
   /** Called at click time to check if this plot is already queued by Collect All. */
@@ -126,54 +126,55 @@ export function PlotTile({
     if (!gear) setGearOpen(false);
   }, [gear]);
 
+  function handleHarvest() {
+    if (!plant) return;
+    if (harvestingRef.current) return;
+    if (harvestPending?.()) return;
+    const currentState = getState();
+    const optimistic   = harvestPlant(currentState, row, col, activeWeather);
+    if (optimistic) {
+      const savedCell         = currentState.grid[row][col];
+      const harvestedSpecies  = savedCell.plant?.speciesId;
+      const harvestedMutation = savedCell.plant?.mutation ?? undefined;
+      harvestingRef.current = true;
+      onHarvestStart?.();
+      perform(
+        optimistic.state,
+        async () => {
+          try { return await edgeHarvest(row, col); }
+          finally {
+            harvestingRef.current = false;
+            onHarvestEnd?.();
+          }
+        },
+        () => { onHarvest(plant.speciesId, optimistic.mutation, savedCell.plant?.timePlanted === 0); },
+        {
+          serialize: true,
+          rollback: (cur) => ({
+            ...cur,
+            grid: cur.grid.map((r, ri) =>
+              r.map((p, ci) => ri === row && ci === col ? savedCell : p)
+            ),
+            inventory: harvestedSpecies
+              ? cur.inventory
+                  .map((item) =>
+                    item.speciesId === harvestedSpecies &&
+                    item.mutation  === harvestedMutation &&
+                    !item.isSeed
+                      ? { ...item, quantity: item.quantity - 1 }
+                      : item
+                  )
+                  .filter((item) => item.quantity > 0)
+              : cur.inventory,
+          }),
+        }
+      );
+      setOpen(false);
+    }
+  }
+
   function handleClick() {
     if (!plant) { onEmptyClick(); return; }
-    if (isBloomed) {
-      if (harvestingRef.current) return;
-      if (harvestPending?.()) return;
-      const currentState = getState();
-      const optimistic   = harvestPlant(currentState, row, col, activeWeather);
-      if (optimistic) {
-        const savedCell         = currentState.grid[row][col];
-        const harvestedSpecies  = savedCell.plant?.speciesId;
-        const harvestedMutation = savedCell.plant?.mutation ?? undefined;
-        harvestingRef.current = true;
-        onHarvestStart?.();
-        perform(
-          optimistic.state,
-          async () => {
-            try { return await edgeHarvest(row, col); }
-            finally {
-              harvestingRef.current = false;
-              onHarvestEnd?.();
-            }
-          },
-          () => { onHarvest(plant.speciesId, optimistic.mutation); },
-          {
-            serialize: true,
-            rollback: (cur) => ({
-              ...cur,
-              grid: cur.grid.map((r, ri) =>
-                r.map((p, ci) => ri === row && ci === col ? savedCell : p)
-              ),
-              inventory: harvestedSpecies
-                ? cur.inventory
-                    .map((item) =>
-                      item.speciesId === harvestedSpecies &&
-                      item.mutation  === harvestedMutation &&
-                      !item.isSeed
-                        ? { ...item, quantity: item.quantity - 1 }
-                        : item
-                    )
-                    .filter((item) => item.quantity > 0)
-                : cur.inventory,
-            }),
-          }
-        );
-        setOpen(false);
-      }
-      return;
-    }
     setOpen((v) => !v);
   }
 
@@ -295,12 +296,13 @@ export function PlotTile({
   // ── Plant tile ─────────────────────────────────────────────────────────────
   return (
     <div ref={tileRef} className="relative">
-      {open && !isBloomed && (
+      {open && (
         <PlotTooltip
           plant={plant}
           row={row}
           col={col}
           onClose={() => setOpen(false)}
+          onHarvestRequest={isBloomed ? handleHarvest : undefined}
           gearGrowthMultiplier={gearMult}
           isUnderSprinkler={isUnderSprinkler}
           sprinklerMutations={sprinklerMutations}
@@ -327,11 +329,11 @@ export function PlotTile({
             ? `${rarity?.borderGrowing ?? "border-border/60"} bg-card/80 scale-105`
             : `${rarity?.borderGrowing ?? "border-border/60"} bg-card/60 hover:bg-card/80 cursor-pointer`
           }
-          ${isHighlighted ? "ring-2 ring-primary/40" : ""}
+          ${plant.infused ? "ring-2 ring-emerald-400/60" : isHighlighted ? "ring-2 ring-primary/40" : ""}
         `}
         title={
           isBloomed
-            ? `${species?.name} — Tap to harvest!`
+            ? `${species?.name} — ${plant.infused ? "Infused 🥢 · " : ""}Tap for options`
             : open
             ? "Click to close"
             : `${species?.name} — Click for options`
@@ -421,7 +423,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || plant.infused) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map(({ emoji, label }, i) => (
@@ -432,6 +434,7 @@ export function PlotTile({
             {isUnderGrowLamp && <span className="text-[9px]" title="Under grow lamp">💡</span>}
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
+            {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">🥢</span>}
           </div>
         )}
 

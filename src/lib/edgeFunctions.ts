@@ -102,6 +102,10 @@ export function edgePlantSeed(row: number, col: number, speciesId: string) {
   return callEdge<PlantSeedResult>("plant-seed", { row, col, speciesId });
 }
 
+export function edgePlantBloom(row: number, col: number, speciesId: string, mutation?: string) {
+  return callEdge<PlantSeedResult>("plant-bloom", { row, col, speciesId, mutation });
+}
+
 export interface RemovePlantResult {
   ok:        true;
   grid:      GameState["grid"];
@@ -336,6 +340,19 @@ export function edgeClaimMail(mailId: string) {
   return callEdge<ClaimMailResult>("claim-mail", { mailId });
 }
 
+// ── Infuser ───────────────────────────────────────────────────────────────────
+
+export interface ApplyInfuserResult {
+  ok:              true;
+  grid:            GameState["grid"];
+  infusers:        GameState["infusers"];
+  serverUpdatedAt: string;
+}
+
+export function edgeApplyInfuser(row: number, col: number) {
+  return callEdge<ApplyInfuserResult>("apply-infuser", { row, col });
+}
+
 // ── Alchemy ───────────────────────────────────────────────────────────────────
 
 export interface AlchemySacrificeResult {
@@ -350,3 +367,14 @@ export function edgeAlchemySacrifice(
 ) {
   return callEdge<AlchemySacrificeResult>("alchemy-sacrifice", { sacrifices });
 }
+
+export interface CraftUniversalResult {
+  ok:              true;
+  essences:        GameState["essences"];
+  serverUpdatedAt: string;
+}
+
+export function edgeCraftUniversalEssence(quantity: number) {
+  return callEdge<CraftUniversalResult>("craft-universal-essence", { quantity });
+}
+

@@ -127,6 +127,13 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   { id: "aurora_bloom",     rarity: "legendary", types: ["stellar", "arcane"] },
   { id: "mirrorpetal",      rarity: "legendary", types: ["arcane", "stellar"] },
   { id: "emberspark",       rarity: "legendary", types: ["blaze", "storm"] },
+  // LEGENDARY — Cropsticks recipe outputs (Tier 1)
+  { id: "phoenix_lily",   rarity: "legendary", types: ["blaze", "frost"]    },
+  { id: "eclipse_bloom",  rarity: "legendary", types: ["lunar", "solar"]    },
+  { id: "tempest_orchid", rarity: "legendary", types: ["tide",  "storm"]    },
+  { id: "blightmantle",   rarity: "legendary", types: ["grove", "shadow"]   },
+  { id: "cosmosbloom",    rarity: "legendary", types: ["arcane","stellar"]  },
+  { id: "dreamgust",      rarity: "legendary", types: ["fairy", "zephyr"]   },
   // MYTHIC
   { id: "blink_rose",      rarity: "mythic", types: ["arcane", "shadow"] },
   { id: "dawnfire",        rarity: "mythic", types: ["solar", "blaze"] },
@@ -140,6 +147,11 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   { id: "superbloom",      rarity: "mythic", types: ["storm", "stellar"] },
   { id: "wanderbloom",     rarity: "mythic", types: ["zephyr", "arcane"] },
   { id: "chrysanthemum",   rarity: "mythic", types: ["arcane", "stellar", "fairy"] },
+  // MYTHIC — Cropsticks recipe outputs (Tier 2)
+  { id: "solarburst",  rarity: "mythic", types: ["blaze", "solar"]  },
+  { id: "tidalune",    rarity: "mythic", types: ["lunar", "tide"]   },
+  { id: "whisperleaf", rarity: "mythic", types: ["grove", "zephyr"] },
+  { id: "crystalmind", rarity: "mythic", types: ["frost", "arcane"] },
   // EXALTED
   { id: "umbral_bloom",   rarity: "exalted", types: ["shadow", "lunar"] },
   { id: "obsidian_rose",  rarity: "exalted", types: ["shadow"] },
@@ -148,6 +160,9 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   { id: "nightwing",      rarity: "exalted", types: ["shadow", "zephyr"] },
   { id: "ashenveil",      rarity: "exalted", types: ["shadow", "blaze"] },
   { id: "voidfire",       rarity: "exalted", types: ["shadow", "blaze"] },
+  // EXALTED — Cropsticks recipe outputs (Tier 3)
+  { id: "void_chrysalis", rarity: "exalted", types: ["arcane"]   },
+  { id: "starloom",       rarity: "exalted", types: ["stellar"]  },
   // PRISMATIC
   { id: "dreambloom",        rarity: "prismatic", types: ["fairy", "arcane"] },
   { id: "fairy_blossom",     rarity: "prismatic", types: ["fairy"] },
@@ -155,6 +170,8 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   { id: "eternal_heart",     rarity: "prismatic", types: ["fairy", "solar"] },
   { id: "nova_bloom",        rarity: "prismatic", types: ["stellar", "storm", "blaze"] },
   { id: "princess_blossom",  rarity: "prismatic", types: ["fairy", "arcane"] },
+  // PRISMATIC — Cropsticks recipe output (Tier 4)
+  { id: "the_first_bloom", rarity: "prismatic", types: ["arcane", "stellar"] },
 ];
 
 const FLOWER_MAP = new Map(FLOWERS.map((f) => [f.id, f]));

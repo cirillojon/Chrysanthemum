@@ -3,11 +3,46 @@ import type { Rarity } from "./flowers";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-export type EssenceType = FlowerType;
+/** All 12 elemental types plus the crafted Universal Essence. */
+export type EssenceType = FlowerType | "universal";
 
 export interface EssenceItem {
   type: EssenceType;
   amount: number;
+}
+
+// ── Universal Essence ──────────────────────────────────────────────────────
+
+export const UNIVERSAL_ESSENCE_TYPE = "universal" as const;
+
+/** Ordered list of all 12 flower type essences (same as FLOWER_TYPES key order). */
+export const ALL_FLOWER_TYPES: FlowerType[] = [
+  "blaze", "tide", "grove", "frost", "storm", "lunar",
+  "solar", "fairy", "shadow", "arcane", "stellar", "zephyr",
+];
+
+/** Cost in each flower-type essence per Universal Essence crafted. */
+export const UNIVERSAL_ESSENCE_COST_PER_TYPE = 1;
+
+/** Display config for Universal Essence — used wherever FLOWER_TYPES[type] would be used. */
+export const UNIVERSAL_ESSENCE_DISPLAY = {
+  emoji:       "✦",
+  name:        "Universal",
+  color:       "text-slate-200",
+  bgColor:     "bg-slate-200/10",
+  borderColor: "border-slate-200/25",
+};
+
+/**
+ * How many Universal Essences the player can currently craft.
+ * Equal to the minimum (have / cost) across all 12 elemental types.
+ */
+export function universalEssenceCraftable(essences: EssenceItem[]): number {
+  const perType = ALL_FLOWER_TYPES.map((type) => {
+    const have = essences.find((e) => e.type === type)?.amount ?? 0;
+    return Math.floor(have / UNIVERSAL_ESSENCE_COST_PER_TYPE);
+  });
+  return perType.length === 0 ? 0 : Math.min(...perType);
 }
 
 // ── Yield table ────────────────────────────────────────────────────────────

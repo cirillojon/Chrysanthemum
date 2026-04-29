@@ -37,6 +37,8 @@ export interface PlantedFlower {
   lastTickAt?: number;
   /** 1.25 if this species was fully mastered in the codex at plant time (20% faster growth), otherwise undefined */
   masteredBonus?: number;
+  /** true when a Flower Infuser has been applied to this plant — marks it as an active cross-breed participant */
+  infused?: boolean;
 }
 
 export interface Plot {
@@ -98,11 +100,16 @@ export interface GameState {
   lastSupplyReset:  number;
   gearInventory:    GearInventoryItem[];
   // Alchemy — essence tokens per flower type
-  essences:         EssenceItem[];
+  essences:          EssenceItem[];
+  // Cross-breeding (passive Cropsticks system) — recipe IDs discovered via farm production.
+  discoveredRecipes: string[];
+  // Flower Infusers — consumable items applied to bloomed plants to mark them as cross-breed
+  // participants. Stored by rarity (must match the flower's rarity to apply).
+  infusers: { rarity: Rarity; quantity: number }[];
   // Server sync — the updated_at value from the last successful DB read or write.
   // saveToCloud uses this as a CAS guard so stale sessions can't overwrite
   // server-authoritative state (inventory, coins, etc.) with stale client data.
-  serverUpdatedAt:  string | null;
+  serverUpdatedAt:   string | null;
 }
 
 export interface OfflineSummary {
@@ -356,6 +363,8 @@ export function defaultState(): GameState {
     lastSupplyReset:      now,
     gearInventory:        [],
     essences:             [],
+    discoveredRecipes:    [],
+    infusers:             [],
     serverUpdatedAt:      null,
   };
 }
@@ -436,6 +445,7 @@ export function applyOfflineTick(
     lastSupplyReset:      save.lastSupplyReset       ?? now2,
     gearInventory:        save.gearInventory         ?? [],
     essences:             save.essences              ?? [],
+    discoveredRecipes:    save.discoveredRecipes     ?? [],
   };
 
   let shopRestocked    = false;
@@ -815,6 +825,52 @@ export function plantSeed(
   const newInventory = state.inventory
     .map((i) =>
       i.speciesId === speciesId && i.isSeed
+        ? { ...i, quantity: i.quantity - 1 }
+        : i
+    )
+    .filter((i) => i.quantity > 0);
+
+  return { ...state, grid: newGrid, inventory: newInventory };
+}
+
+/** Optimistically place a bloom from inventory directly onto a plot at bloom stage. */
+export function plantBloom(
+  state: GameState,
+  row: number,
+  col: number,
+  speciesId: string,
+  mutation?: string,
+): GameState | null {
+  const plot = state.grid[row]?.[col];
+  if (!plot || plot.plant || plot.gear) return null;
+
+  const invItem = state.inventory.find(
+    (i) => i.speciesId === speciesId && !i.isSeed && (i.mutation ?? undefined) === mutation
+  );
+  if (!invItem || invItem.quantity < 1) return null;
+
+  const mastered = isSpeciesMastered(state.discovered, speciesId);
+
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) => {
+      if (ri === row && ci === col)
+        return {
+          ...p,
+          plant: {
+            speciesId,
+            timePlanted: 0, // epoch → always past bloom threshold
+            fertilizer: null,
+            ...(mutation ? { mutation } : {}),
+            ...(mastered ? { masteredBonus: 1.25 } : {}),
+          },
+        };
+      return p;
+    })
+  );
+
+  const newInventory = state.inventory
+    .map((i) =>
+      i.speciesId === speciesId && !i.isSeed && (i.mutation ?? undefined) === mutation
         ? { ...i, quantity: i.quantity - 1 }
         : i
     )
@@ -1402,7 +1458,11 @@ export function harvestPlant(
   const mutation = plot.plant.mutation ?? undefined;
   const species  = getFlower(speciesId)!;
 
-  const bonusCoins = mutation
+  // timePlanted === 0 is the sentinel for bloom-placed plants (placed via plant-bloom).
+  // No bonus coins for these — awarding them would allow harvest → re-place → harvest
+  // cycles for infinite coin generation.
+  const isBloomPlaced = plot.plant.timePlanted === 0;
+  const bonusCoins = (!isBloomPlaced && mutation)
     ? Math.floor(species.sellValue * (MUTATIONS[mutation].valueMultiplier - 1))
     : 0;
 
@@ -2091,6 +2151,7 @@ export function sacrificeFlowers(
 
   return { ...state, inventory: newInventory, essences: newEssences };
 }
+
 
 export function upgradeFarm(state: GameState): GameState | null {
   const next = getNextUpgrade(state.farmRows, state.farmSize);

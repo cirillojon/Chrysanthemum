@@ -6,7 +6,7 @@ import {
   applyFertilizer,
   removePlant,
 } from "../store/gameStore";
-import { edgeApplyFertilizer, edgeRemovePlant } from "../lib/edgeFunctions";
+import { edgeApplyFertilizer, edgeRemovePlant, edgeApplyInfuser } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
@@ -17,6 +17,8 @@ interface Props {
   row:                   number;
   col:                   number;
   onClose?:              () => void;
+  /** Called when the user clicks the Harvest button (for bloomed plants). */
+  onHarvestRequest?:     () => void;
   /** Combined sprinkler × grow-lamp growth multiplier for this cell. */
   gearGrowthMultiplier?: number;
   isUnderSprinkler?:     boolean;
@@ -43,15 +45,16 @@ function formatMs(ms: number): string {
 }
 
 export function PlotTooltip({
-  plant, row, col, onClose,
+  plant, row, col, onClose, onHarvestRequest,
   gearGrowthMultiplier = 1.0,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell,
 }: Props) {
-  const { state, getState, perform, activeWeather } = useGame();
+  const { state, getState, perform, update, activeWeather } = useGame();
   const [showFertPicker,  setShowFertPicker]  = useState(false);
   const [confirmRemove,   setConfirmRemove]   = useState(false);
   const [removing,        setRemoving]        = useState(false);
+  const [applyingInfuser, setApplyingInfuser] = useState(false);
   const [nudge,           setNudge]           = useState(0);
   const [flipped,         setFlipped]         = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -90,6 +93,26 @@ export function PlotTooltip({
   const availableFerts = state.fertilizers
     .filter((f) => f.quantity > 0)
     .sort((a, b) => FERTILIZERS[a.type].speedMultiplier - FERTILIZERS[b.type].speedMultiplier);
+
+  // Infuser — find one that matches this flower's rarity
+  const matchingInfuser = (state.infusers ?? []).find(
+    (i) => i.rarity === species.rarity && i.quantity > 0
+  );
+
+  async function handleApplyInfuser() {
+    if (applyingInfuser) return;
+    setApplyingInfuser(true);
+    try {
+      const res = await edgeApplyInfuser(row, col);
+      const cur = getState();
+      update({ ...cur, grid: res.grid, infusers: res.infusers, serverUpdatedAt: res.serverUpdatedAt });
+      onClose?.();
+    } catch {
+      // Server function not yet active or error — silently re-enable button
+    } finally {
+      setApplyingInfuser(false);
+    }
+  }
 
   function handleApplyFertilizer(type: FertilizerType) {
     const optimistic = applyFertilizer(state, row, col, type);
@@ -194,6 +217,37 @@ export function PlotTooltip({
             <p className="text-[10px] text-muted-foreground font-mono">No mutation</p>
           )}
         </div>
+
+        {/* Bloomed actions — Harvest + Infuser */}
+        {isBloomed && (
+          <div className="pt-1 border-t border-border space-y-1.5">
+            {onHarvestRequest && (
+              <button
+                onClick={() => { onHarvestRequest(); onClose?.(); }}
+                className="w-full py-1.5 rounded-lg bg-primary/20 border border-primary/50 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors text-center"
+              >
+                Harvest
+              </button>
+            )}
+
+            {plant.infused ? (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                <span>🥢</span>
+                <span className="text-[10px] text-emerald-400 font-medium">Infused · awaiting Cropsticks</span>
+              </div>
+            ) : matchingInfuser ? (
+              <button
+                onClick={handleApplyInfuser}
+                disabled={applyingInfuser}
+                className="w-full py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+              >
+                {applyingInfuser ? "Applying…" : `🥢 Apply Infuser ×${matchingInfuser.quantity}`}
+              </button>
+            ) : (
+              <p className="text-[10px] text-muted-foreground text-center">No matching Infuser in inventory</p>
+            )}
+          </div>
+        )}
 
         {/* Active gear effects */}
         {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell) && (
