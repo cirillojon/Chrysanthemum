@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.2.4",
+    title:   "Data Loss Hotfix",
+    items: [
+      { type: "fixed", text: "Selling all blooms at once no longer risks losing flowers with no coins received — Sell All is now a single atomic server write instead of N sequential calls that could partially fail and roll back incorrectly" },
+      { type: "fixed", text: "Rapidly harvesting multiple plots no longer causes the coin counter to stutter or snap backward — each harvest's coin bonus now accumulates correctly instead of being overwritten by a stale server total" },
+      { type: "fixed", text: "Buying gear or fertilizer from the Supply Shop is now protected against concurrent saves — a conflicting write returns a clean rollback instead of silently corrupting coins or inventory" },
+    ],
+  },
+  {
     version: "2.2.3",
     title:   "Security Patch",
     items: [

@@ -1,3 +1,13 @@
+## [v2.2.4] — 2026-04-29 — Data Loss Hotfix
+
+### Fixed
+- **Sell All data loss** — selling all blooms is now a single atomic server write; previously N sequential calls with a shared catch block would roll back all blooms client-side even if some had already landed server-side, leaving players with no flowers and no coins
+- **Harvest coin snap-back** — rapidly harvesting multiple plots no longer causes the coin counter to stutter or revert; the harvest response no longer returns the full server coin total, which was overwriting the client's optimistic running total from concurrent in-flight harvests
+- **Sell All 400 on every call** — `sell_all` was added to the shop-action handler but accidentally omitted from the action allowlist, causing every Sell All request to be rejected before reaching the sell logic
+- **Supply Shop concurrent buy protection** — the buy handler now reads `updated_at` before writing and performs a CAS check; a conflicting save (e.g. offline tick firing mid-buy) returns a clean 409 rollback instead of silently corrupting coins or inventory
+
+---
+
 ## [v2.2.3] — 2026-04-28 — Security Patch
 
 ### Security
