@@ -77,8 +77,23 @@ function AppInner() {
   const updateAvailable  = useVersionCheck();
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
 
-  // Harvest popup — lifted to App level so the bell can fire it on any tab
-  const [harvestPopup, setHarvestPopup] = useState<{ speciesId: string; mutation?: MutationType } | null>(null);
+  // Harvest popups — keyed by "speciesId:mutation" so duplicates accumulate a count
+  // and different species each get their own pill shown simultaneously.
+  type HarvestEntry = { speciesId: string; mutation?: MutationType; count: number };
+  const [harvestQueue, setHarvestQueue] = useState<Map<string, HarvestEntry>>(new Map());
+
+  function pushHarvestPopup(speciesId: string, mutation?: MutationType) {
+    const key = `${speciesId}:${mutation ?? ""}`;
+    setHarvestQueue((prev) => {
+      const next     = new Map(prev);
+      const existing = next.get(key);
+      next.set(key, existing
+        ? { ...existing, count: existing.count + 1 }
+        : { speciesId, mutation, count: 1 }
+      );
+      return next;
+    });
+  }
 
   const [changelogEntry, setChangelogEntry] = useState<ChangelogEntry | null>(() => {
     const seen = localStorage.getItem("changelogSeenVersion");
@@ -557,7 +572,7 @@ function AppInner() {
       >
         {/* Always-mounted garden — hidden when on another tab so bell/auto-planter keep running */}
         <div className={tab !== "garden" ? "hidden" : ""}>
-          <Garden onHarvestPopup={(speciesId, mutation) => setHarvestPopup({ speciesId, mutation })} />
+          <Garden onHarvestPopup={pushHarvestPopup} />
         </div>
 
         {tab !== "garden" && (
@@ -712,16 +727,24 @@ function AppInner() {
         )}
       </main>
 
-      {/* Harvest popup — rendered at App level so it shows on any tab */}
-      {harvestPopup && (
-        <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
+      {/* Harvest popups — one pill per unique species+mutation, stacked vertically */}
+      {harvestQueue.size > 0 && (
+        <div className="fixed inset-0 pointer-events-none z-50 flex flex-col items-center justify-end pb-24 gap-2">
+          {[...harvestQueue.entries()].map(([key, entry]) => (
             <HarvestPopup
-              speciesId={harvestPopup.speciesId}
-              mutation={harvestPopup.mutation}
-              onDone={() => setHarvestPopup(null)}
+              key={key}
+              speciesId={entry.speciesId}
+              mutation={entry.mutation}
+              count={entry.count}
+              onDone={() =>
+                setHarvestQueue((prev) => {
+                  const next = new Map(prev);
+                  next.delete(key);
+                  return next;
+                })
+              }
             />
-          </div>
+          ))}
         </div>
       )}
     </div>
