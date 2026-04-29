@@ -391,16 +391,18 @@ const FILTER_LABELS: { id: CraftFilter; label: string; emoji: string }[] = [
 export function CraftingTab() {
   const { state, getState, update, perform } = useGame();
   const [filter,     setFilter]     = useState<CraftFilter>("all");
+  const [search,     setSearch]     = useState("");
   const [selected,   setSelected]   = useState<CraftEntry | null>(null);
   const [crafting,   setCrafting]   = useState(false);
   const [craftError, setCraftError] = useState<string | null>(null);
 
-  const entries = useMemo(
-    () => buildEntries(state, filter),
-    // Re-run whenever inventory-affecting state changes
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [state.essences, state.gearInventory, state.consumables, state.infusers, filter],
-  );
+  const entries = useMemo(() => {
+    const all = buildEntries(state, filter);
+    if (!search.trim()) return all;
+    const q = search.trim().toLowerCase();
+    return all.filter((e) => e.name.toLowerCase().includes(q));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.essences, state.gearInventory, state.consumables, state.infusers, filter, search]);
 
   // Keep selected entry in sync after a craft (owned count, canCraft flag changes)
   const liveSelected = selected
@@ -540,6 +542,28 @@ export function CraftingTab() {
           ))}
         </div>
 
+        {/* Search */}
+        <div className="px-4 pb-2 bg-card/60">
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none">🔍</span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search recipes…"
+              className="w-full pl-7 pr-8 py-1.5 rounded-lg bg-card/60 border border-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-amber-500/50"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs leading-none"
+              >
+                ✕
+              </button>
+            )}
+          </div>
+        </div>
+
         {/* Grid */}
         <div
           className="px-3 pb-4 pt-2 bg-card/40 grid gap-2 justify-items-center"
@@ -550,7 +574,7 @@ export function CraftingTab() {
           ))}
           {entries.length === 0 && (
             <div className="col-span-6 py-10 text-center text-xs text-muted-foreground">
-              No items in this category yet.
+              {search.trim() ? `No recipes matching "${search}"` : "No items in this category yet."}
             </div>
           )}
         </div>
