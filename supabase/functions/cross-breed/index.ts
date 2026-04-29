@@ -17,8 +17,9 @@ function b64url(s: string): string {
 type Rarity     = "common" | "uncommon" | "rare" | "legendary" | "mythic" | "exalted" | "prismatic";
 type FlowerType = "blaze" | "tide" | "grove" | "frost" | "storm" | "lunar" | "solar" | "fairy" | "shadow" | "arcane" | "stellar" | "zephyr";
 
-interface FlowerDef { id: string; rarity: Rarity; types: FlowerType[]; }
+interface FlowerDef    { id: string; rarity: Rarity; types: FlowerType[]; }
 interface InventoryItem { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface EssenceItem  { type: string; amount: number; }
 
 // ── Rarity ordering ───────────────────────────────────────────────────────────
 
@@ -236,6 +237,10 @@ function outputCount(a: FlowerDef, b: FlowerDef, r: Recipe): 1 | 2 {
          rarityIndex(b.rarity) > rarityIndex(r.minRarity) ? 2 : 1;
 }
 
+// ── Essence cost table ────────────────────────────────────────────────────────
+
+const ESSENCE_COST_BY_TIER: Record<number, number> = { 1: 10, 2: 20, 3: 50, 4: 100 };
+
 // ── Inventory helpers ─────────────────────────────────────────────────────────
 
 function removeOne(inv: InventoryItem[], sId: string, mut: string | undefined): InventoryItem[] {
@@ -257,6 +262,18 @@ function addSeed(inv: InventoryItem[], sId: string, qty: number): InventoryItem[
     return inv.map((item, i) => i === idx ? { ...item, quantity: item.quantity + qty } : item);
   }
   return [...inv, { speciesId: sId, quantity: qty, isSeed: true }];
+}
+
+// ── Essence helpers ───────────────────────────────────────────────────────────
+
+function getEssenceAmount(essences: EssenceItem[], type: string): number {
+  return essences.find((e) => e.type === type)?.amount ?? 0;
+}
+
+function deductEssence(essences: EssenceItem[], type: string, amount: number): EssenceItem[] {
+  return essences
+    .map((e) => e.type === type ? { ...e, amount: e.amount - amount } : e)
+    .filter((e) => e.amount > 0);
 }
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -306,7 +323,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("inventory, discovered, discovered_recipes, updated_at")
+        .select("inventory, discovered, discovered_recipes, essences, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -322,11 +339,12 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const save           = saveResult.data;
-    const priorUpdatedAt = save.updated_at as string;
-    const inventory      = (save.inventory          ?? []) as InventoryItem[];
-    const discovered     = (save.discovered          ?? []) as string[];
-    const discoveredRecipes = (save.discovered_recipes ?? []) as string[];
+    const save              = saveResult.data;
+    const priorUpdatedAt    = save.updated_at as string;
+    const inventory         = (save.inventory           ?? []) as InventoryItem[];
+    const discovered        = (save.discovered           ?? []) as string[];
+    const discoveredRecipes = (save.discovered_recipes  ?? []) as string[];
+    const essences          = (save.essences            ?? []) as EssenceItem[];
 
     // ── Validate both flowers are in inventory ────────────────────────────────
 
@@ -377,7 +395,25 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // ── Craft — always consume inputs, always award seeds ─────────────────────
+    // ── Essence cost check ────────────────────────────────────────────────────
+
+    const essenceCost = ESSENCE_COST_BY_TIER[recipe.tier] ?? 10;
+    const haveA = getEssenceAmount(essences, recipe.typeA);
+    const haveB = getEssenceAmount(essences, recipe.typeB);
+    const sameType = recipe.typeA === recipe.typeB;
+
+    const shortA = haveA < essenceCost;
+    const shortB = !sameType && haveB < essenceCost;
+    const shortSame = sameType && haveA < essenceCost * 2;
+
+    if (shortA || shortB || shortSame) {
+      return new Response(
+        JSON.stringify({ error: "Not enough essence", essenceCost, typeA: recipe.typeA, typeB: recipe.typeB }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ── Craft — consume inputs, deduct essences, award seeds ──────────────────
 
     const isFirstDiscovery = !discoveredRecipes.includes(recipe.id);
     const newDiscoveredRecipes = isFirstDiscovery
@@ -395,6 +431,11 @@ Deno.serve(async (req: Request) => {
       ? discovered
       : [...discovered, recipe.outputSpeciesId];
 
+    let newEssences = essences;
+    newEssences = deductEssence(newEssences, recipe.typeA, essenceCost);
+    if (!sameType) newEssences = deductEssence(newEssences, recipe.typeB, essenceCost);
+    else           newEssences = deductEssence(newEssences, recipe.typeA, essenceCost); // double deduct
+
     const newUpdatedAt = new Date().toISOString();
 
     const { data: updateData, error: updateError } = await supabaseAdmin
@@ -403,6 +444,7 @@ Deno.serve(async (req: Request) => {
         inventory:          newInventory,
         discovered:         newDiscovered,
         discovered_recipes: newDiscoveredRecipes,
+        essences:           newEssences,
         updated_at:         newUpdatedAt,
       })
       .eq("user_id", userId)
@@ -418,7 +460,7 @@ Deno.serve(async (req: Request) => {
 
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "cross_breed_craft",
-      payload: { speciesIdA, speciesIdB, recipeId: recipe.id, outputCount: count, firstDiscovery: isFirstDiscovery },
+      payload: { speciesIdA, speciesIdB, recipeId: recipe.id, outputCount: count, firstDiscovery: isFirstDiscovery, essenceCost },
       result:  { outputSpeciesId: recipe.outputSpeciesId },
     });
 
@@ -432,6 +474,7 @@ Deno.serve(async (req: Request) => {
         discoveredRecipes: newDiscoveredRecipes,
         inventory:         newInventory,
         discovered:        newDiscovered,
+        essences:          newEssences,
         serverUpdatedAt:   updateData.updated_at,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

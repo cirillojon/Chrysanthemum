@@ -116,3 +116,30 @@ export function getOutputCount(
   const aboveB = rarityIndex(flowerB.rarity) > rarityIndex(recipe.minRarity);
   return aboveA && aboveB ? 2 : 1;
 }
+
+// ── Essence cost ──────────────────────────────────────────────────────────────
+//
+// Each breed attempt costs N essence of typeA + N essence of typeB.
+// Amount scales with tier — higher-tier recipes require more essence investment.
+
+export const ESSENCE_COST_BY_TIER: Record<1 | 2 | 3 | 4, number> = {
+  1: 10,
+  2: 20,
+  3: 50,
+  4: 100,
+};
+
+export interface EssenceCost {
+  typeA:  FlowerType;
+  typeB:  FlowerType;
+  /** Units required of each type (same for both). */
+  amount: number;
+}
+
+export function getEssenceCost(recipe: CrossBreedRecipe): EssenceCost {
+  return {
+    typeA:  recipe.typeA,
+    typeB:  recipe.typeB,
+    amount: ESSENCE_COST_BY_TIER[recipe.tier],
+  };
+}

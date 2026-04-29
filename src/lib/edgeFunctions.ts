@@ -364,6 +364,7 @@ export type CrossBreedResponse =
       discoveredRecipes: string[];
       inventory:        GameState["inventory"];
       discovered:       GameState["discovered"];
+      essences:         GameState["essences"];
       serverUpdatedAt:  string;
     }
   | {

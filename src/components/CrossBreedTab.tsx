@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useGame } from "../store/GameContext";
 import { RARITY_CONFIG, FLOWER_TYPES, getFlower, type MutationType } from "../data/flowers";
 import { MUTATIONS } from "../data/flowers";
-import { CROSS_BREED_RECIPES, findRecipe } from "../data/recipes";
+import { CROSS_BREED_RECIPES, findRecipe, getEssenceCost, type EssenceCost } from "../data/recipes";
 import { edgeCrossBreed, type CrossBreedResponse } from "../lib/edgeFunctions";
 import type { InventoryItem } from "../store/gameStore";
 
@@ -235,6 +235,27 @@ function DiscoveredRecipesPanel() {
   );
 }
 
+// ── Essence cost pill ─────────────────────────────────────────────────────────
+
+function EssenceCostPill({
+  type, amount, have, enough,
+}: { type: string; amount: number; have: number; enough: boolean }) {
+  const typeInfo = FLOWER_TYPES[type as keyof typeof FLOWER_TYPES];
+  return (
+    <span className={`
+      inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-medium
+      ${enough
+        ? "border-border/60 bg-card/60 text-muted-foreground"
+        : "border-red-500/40 bg-red-500/10 text-red-400"
+      }
+    `}>
+      <span>{typeInfo?.emoji ?? "✦"}</span>
+      <span>{amount}</span>
+      {!enough && <span className="opacity-60">/{have}</span>}
+    </span>
+  );
+}
+
 // ── Main CrossBreedTab ────────────────────────────────────────────────────────
 
 export function CrossBreedTab() {
@@ -249,7 +270,7 @@ export function CrossBreedTab() {
   const spA = slotA ? getFlower(slotA.speciesId) : null;
   const spB = slotB ? getFlower(slotB.speciesId) : null;
 
-  const canBreed = !!slotA && !!slotB && !loading;
+  const canBreed = !!slotA && !!slotB;
 
   // Re-validate slots whenever inventory changes (items might have been spent)
   const validSlotA = slotA && state.inventory.find((i) =>
@@ -281,6 +302,7 @@ export function CrossBreedTab() {
           inventory:         res.inventory,
           discovered:        res.discovered,
           discoveredRecipes: res.discoveredRecipes,
+          essences:          res.essences,
           serverUpdatedAt:   res.serverUpdatedAt,
         });
         setResult({ kind: "crafted", outputSpeciesId: res.outputSpeciesId, outputCount: res.outputCount, firstDiscovery: res.firstDiscovery });
@@ -295,16 +317,28 @@ export function CrossBreedTab() {
     setLoading(false);
   }
 
-  // Hint: show what tier this combo would hit
+  // Hint: show what tier this combo would hit + essence cost
   const hint = spA && spB ? (() => {
     const r = findRecipe(spA, spB);
     if (!r) return null;
     const out = getFlower(r.outputSpeciesId);
     if (!out) return null;
-    const cfg = RARITY_CONFIG[out.rarity];
+    const cfg  = RARITY_CONFIG[out.rarity];
     const known = state.discoveredRecipes.includes(r.id);
-    return { recipe: r, output: out, cfg, known };
+    const cost  = getEssenceCost(r);
+    return { recipe: r, output: out, cfg, known, cost };
   })() : null;
+
+  // Essence affordability check
+  const essenceCost: EssenceCost | null = hint ? hint.cost : null;
+  const haveA  = essenceCost ? (state.essences.find((e) => e.type === essenceCost.typeA)?.amount ?? 0) : 0;
+  const haveB  = essenceCost ? (state.essences.find((e) => e.type === essenceCost.typeB)?.amount ?? 0) : 0;
+  const sameType = essenceCost ? essenceCost.typeA === essenceCost.typeB : false;
+  const enoughA  = essenceCost ? haveA >= essenceCost.amount : true;
+  const enoughB  = essenceCost ? (sameType ? haveA >= essenceCost.amount * 2 : haveB >= essenceCost.amount) : true;
+  const hasEssence = enoughA && enoughB;
+
+  const canBreedFull = canBreed && !!validSlotA && !!validSlotB && hasEssence;
 
   return (
     <div className="flex flex-col gap-5">
@@ -312,7 +346,7 @@ export function CrossBreedTab() {
       {/* Instruction */}
       <div className="text-center space-y-1">
         <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-          Combine two blooms to discover and craft new species. Both flowers are consumed on each attempt.
+          Combine two blooms to discover and craft new species. Both flowers and essence are consumed on each attempt.
         </p>
       </div>
 
@@ -323,33 +357,53 @@ export function CrossBreedTab() {
         <FlowerSlot item={validSlotB} label="Slot B" onClick={() => setPicker("B")} />
       </div>
 
-      {/* Combo hint */}
-      {hint && (
-        <div className={`
-          flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs
-          ${hint.known
-            ? "border-primary/30 bg-primary/5 text-primary"
-            : "border-amber-400/30 bg-amber-400/5 text-amber-400"
-          }
-        `}>
-          <span>{hint.known ? "✅" : "✨"}</span>
-          <span>
-            {hint.known
-              ? `Known recipe → ${hint.output.name} (${hint.cfg.label})`
-              : `New recipe: ${hint.output.name} (${hint.cfg.label})`
+      {/* Combo hint + essence cost */}
+      {hint && essenceCost && (
+        <div className="flex flex-col gap-1.5">
+          <div className={`
+            flex items-center gap-2 rounded-xl border px-3 py-2.5 text-xs
+            ${hint.known
+              ? "border-primary/30 bg-primary/5 text-primary"
+              : "border-amber-400/30 bg-amber-400/5 text-amber-400"
             }
-          </span>
+          `}>
+            <span>{hint.known ? "✅" : "✨"}</span>
+            <span className="flex-1">
+              {hint.known
+                ? `Known recipe → ${hint.output.name} (${hint.cfg.label})`
+                : `New recipe: ${hint.output.name} (${hint.cfg.label})`
+              }
+            </span>
+          </div>
+          {/* Essence cost row */}
+          <div className="flex items-center gap-2 px-1">
+            <span className="text-[10px] text-muted-foreground">Essence cost:</span>
+            <EssenceCostPill
+              type={essenceCost.typeA}
+              amount={essenceCost.amount}
+              have={haveA}
+              enough={enoughA}
+            />
+            {!sameType && (
+              <EssenceCostPill
+                type={essenceCost.typeB}
+                amount={essenceCost.amount}
+                have={haveB}
+                enough={enoughB}
+              />
+            )}
+          </div>
         </div>
       )}
 
       {/* Breed button */}
       <button
         onClick={handleBreed}
-        disabled={!canBreed || !validSlotA || !validSlotB}
+        disabled={!canBreedFull || loading}
         className={`
           w-full py-3 rounded-full text-sm font-semibold border transition-all duration-200
           flex items-center justify-center gap-2
-          ${canBreed && validSlotA && validSlotB
+          ${canBreedFull && !loading
             ? "border-primary text-primary hover:bg-primary/10 hover:scale-[1.02]"
             : "border-border text-muted-foreground opacity-50 cursor-not-allowed"
           }
