@@ -81,6 +81,18 @@ export function ProfilePage({ username }: Props) {
     }
   }, [myProfile]);
 
+  // ── Periodic re-simulation: keep the garden display live ─────────────────
+  // simulateOfflineGarden uses Date.now(), so re-running it on the cached save
+  // advances plant growth and applies gear effects (harvest bell, auto-planter)
+  // without a DB fetch. This fills the gap between 30-second cron ticks.
+  useEffect(() => {
+    if (!save) return;
+    const interval = setInterval(() => {
+      setSave((prev) => (prev ? simulateOfflineGarden(prev) : prev));
+    }, 5_000);
+    return () => clearInterval(interval);
+  }, [!!save]); // only restart when save goes from null → populated
+
   // ── Realtime: refresh the garden when the viewed user saves ───────────────
   // Subscribes for ALL profiles (own and others) so the garden view updates
   // whenever the DB changes — whether from the user's own edge-function actions,
