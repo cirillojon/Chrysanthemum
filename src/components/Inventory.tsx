@@ -5,7 +5,7 @@ import type { MutationType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, type InventoryItem } from "../store/gameStore";
-import { edgeSellFlower, edgeSellAll } from "../lib/edgeFunctions";
+import { edgeSellAll } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";

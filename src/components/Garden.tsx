@@ -28,7 +28,7 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden() {
-  const { state, update, perform, getState, awaitHarvests, queueWork, activeWeather } = useGame();
+  const { state, update, perform, getState, awaitHarvests, queueWork, activeWeather, reloadFromCloud } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -122,7 +122,10 @@ export function Garden() {
     const plantTargets = findAutoPlantTargets(getState());
     const nowPlant = Date.now();
     if (nowPlant - lastPlanterActionRef.current >= GEAR_ACTION_INTERVAL_MS) {
-      const plantTarget = plantTargets.find(({ row, col }) => !plantingPlots.current.has(`plant-${row}-${col}`));
+      const plantTarget = plantTargets.find(({ row, col }) => {
+        const k = `plant-${row}-${col}`;
+        return !plantingPlots.current.has(k) && !autoPlantBlockedRef.current.has(k);
+      });
       if (plantTarget) {
         const { row, col, speciesId } = plantTarget;
         const key = `plant-${row}-${col}`;
@@ -144,6 +147,16 @@ export function Garden() {
                   // would overwrite other in-flight optimistic plants.
                   await edgePlantSeed(row, col, speciesId);
                   return {};
+                } catch (e) {
+                  // If the server says the plot is already occupied, the offline cron planted
+                  // there after our state loaded. Block the cell to stop the spam loop, then
+                  // reload from DB so the client immediately reflects what the server has
+                  // (user sees planted seeds without needing a page refresh).
+                  if ((e as Error).message?.includes("Plot already occupied")) {
+                    autoPlantBlockedRef.current.add(key);
+                    reloadFromCloud();
+                  }
+                  throw e;
                 } finally {
                   plantingPlots.current.delete(key);
                 }
@@ -184,6 +197,10 @@ export function Garden() {
   const harvestingPlots = useRef<Set<string>>(new Set());
   // Track plots with an auto-plant in-flight to avoid duplicate edge calls
   const plantingPlots = useRef<Set<string>>(new Set());
+  // Cells where plant-seed returned "Plot already occupied" — the offline cron planted
+  // there while our client state was stale. Block them from being re-queued so the
+  // auto-planter doesn't spam the same cell until the client state resyncs.
+  const autoPlantBlockedRef = useRef<Set<string>>(new Set());
   // Throttle gear auto-actions to 1 per interval to prevent server race conditions
   const lastBellActionRef    = useRef(0);
   const lastPlanterActionRef = useRef(0);
