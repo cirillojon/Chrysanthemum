@@ -37,6 +37,9 @@ const RARITY_ORDER: Rarity[] = ["common","uncommon","rare","legendary","mythic",
 
 function rarityRank(r: Rarity): number { return RARITY_ORDER.indexOf(r); }
 
+const ROMAN = ["I","II","III","IV","V"] as const;
+function toRoman(n: number): string { return ROMAN[n - 1] ?? String(n); }
+
 function cellBorderClass(rarity: Rarity): string {
   if (rarity === "prismatic") return "rainbow-border";
   const cfg = RARITY_CONFIG[rarity];
@@ -339,7 +342,7 @@ function CraftCell({ entry, onClick }: { entry: CraftEntry; onClick: () => void 
       {/* Tier badge */}
       {entry.tier != null && (
         <span className="absolute top-0.5 right-1 text-[9px] font-bold text-muted-foreground leading-none">
-          {entry.tier}
+          {toRoman(entry.tier)}
         </span>
       )}
       {/* Owned dot */}
