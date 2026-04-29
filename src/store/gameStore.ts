@@ -2102,9 +2102,7 @@ export function sacrificeFlowers(
 
 /**
  * Optimistic state update for a cross-breed attempt.
- *
- * firstDiscovery = true  → inputs are returned; only discoveredRecipes updated.
- * firstDiscovery = false → inputs consumed, output seed(s) added, discovered updated.
+ * Always consumes both inputs and awards the output seed(s).
  */
 export function crossBreedOptimistic(
   state:           GameState,
@@ -2114,18 +2112,12 @@ export function crossBreedOptimistic(
   mutationB:       string | undefined,
   recipeId:        string,
   outputSpeciesId: string,
-  isFirstDiscovery:boolean,
   outputCount:     number,
 ): GameState {
   // Always mark the recipe as discovered
   const discoveredRecipes = state.discoveredRecipes.includes(recipeId)
     ? state.discoveredRecipes
     : [...state.discoveredRecipes, recipeId];
-
-  if (isFirstDiscovery) {
-    // Inputs returned — no inventory change
-    return { ...state, discoveredRecipes };
-  }
 
   // Consume one of flowerA from inventory
   function removeOne(inv: InventoryItem[], sId: string, mut: string | undefined): InventoryItem[] {

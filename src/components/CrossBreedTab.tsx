@@ -131,9 +131,8 @@ function FlowerSlot({
 // ── Result banner ─────────────────────────────────────────────────────────────
 
 type ResultState =
-  | { kind: "discovered"; outputSpeciesId: string }
-  | { kind: "crafted";    outputSpeciesId: string; outputCount: 1 | 2 }
-  | { kind: "no_match";   almostThere: boolean }
+  | { kind: "crafted"; outputSpeciesId: string; outputCount: 1 | 2; firstDiscovery: boolean }
+  | { kind: "no_match"; almostThere: boolean }
   | null;
 
 function ResultBanner({ result, onClose }: { result: ResultState; onClose: () => void }) {
@@ -145,22 +144,13 @@ function ResultBanner({ result, onClose }: { result: ResultState; onClose: () =>
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center pb-10 px-4 pointer-events-none">
       <div className="pointer-events-auto w-full max-w-sm bg-card border border-border rounded-2xl shadow-2xl p-5 flex flex-col items-center gap-3 animate-in fade-in slide-in-from-bottom-4 duration-300">
-        {result.kind === "discovered" && sp && cfg && (
-          <>
-            <p className="text-xs text-muted-foreground uppercase tracking-widest">Recipe Discovered!</p>
-            <div className={`text-5xl ${cfg.glow}`}>{sp.emoji.bloom}</div>
-            <div className="text-center">
-              <p className={`font-semibold text-lg ${cfg.color}`}>{sp.name}</p>
-              <p className={`text-xs ${cfg.color} opacity-70`}>{cfg.label}</p>
-            </div>
-            <p className="text-xs text-muted-foreground text-center">
-              Your flowers were returned. Breed again to craft the seed.
-            </p>
-          </>
-        )}
         {result.kind === "crafted" && sp && cfg && (
           <>
-            <p className="text-xs text-muted-foreground uppercase tracking-widest">Cross-bred!</p>
+            {result.firstDiscovery ? (
+              <p className="text-xs text-amber-400 uppercase tracking-widest">New Discovery!</p>
+            ) : (
+              <p className="text-xs text-muted-foreground uppercase tracking-widest">Cross-bred!</p>
+            )}
             <div className={`text-5xl ${cfg.glow}`}>{sp.emoji.bloom}</div>
             <div className="text-center">
               <p className={`font-semibold text-lg ${cfg.color}`}>{sp.name}</p>
@@ -298,8 +288,7 @@ export function CrossBreedTab() {
       return;
     }
 
-    const isFirstDiscovery = !state.discoveredRecipes.includes(recipe.id);
-    const count = isFirstDiscovery ? 1 : getOutputCount(spA, spB, recipe);
+    const count = getOutputCount(spA, spB, recipe);
 
     const newState = crossBreedOptimistic(
       state,
@@ -307,7 +296,6 @@ export function CrossBreedTab() {
       validSlotB.speciesId, validSlotB.mutation,
       recipe.id,
       recipe.outputSpeciesId,
-      isFirstDiscovery,
       count,
     );
 
@@ -316,14 +304,10 @@ export function CrossBreedTab() {
       () => edgeCrossBreed(validSlotA.speciesId, validSlotA.mutation, validSlotB.speciesId, validSlotB.mutation),
       (res) => {
         if (res.result === "match") {
-          if (res.firstDiscovery) {
-            setResult({ kind: "discovered", outputSpeciesId: res.outputSpeciesId });
-          } else {
-            setResult({ kind: "crafted", outputSpeciesId: res.outputSpeciesId, outputCount: res.outputCount });
-            // Clear slots after a successful craft (inputs are consumed)
-            setSlotA(null);
-            setSlotB(null);
-          }
+          setResult({ kind: "crafted", outputSpeciesId: res.outputSpeciesId, outputCount: res.outputCount, firstDiscovery: res.firstDiscovery });
+          // Clear slots — inputs are always consumed
+          setSlotA(null);
+          setSlotB(null);
         }
       },
     );
@@ -348,7 +332,7 @@ export function CrossBreedTab() {
       {/* Instruction */}
       <div className="text-center space-y-1">
         <p className="text-xs text-muted-foreground max-w-xs mx-auto">
-          Combine two blooms to discover new species. First attempt reveals the recipe and returns your flowers — subsequent crafts consume them.
+          Combine two blooms to discover and craft new species. Both flowers are consumed on each attempt.
         </p>
       </div>
 
@@ -372,7 +356,7 @@ export function CrossBreedTab() {
           <span>
             {hint.known
               ? `Known recipe → ${hint.output.name} (${hint.cfg.label})`
-              : `Recipe discovered: ${hint.output.name} (${hint.cfg.label}) — first craft is free!`
+              : `New recipe: ${hint.output.name} (${hint.cfg.label})`
             }
           </span>
         </div>
@@ -384,6 +368,7 @@ export function CrossBreedTab() {
         disabled={!canBreed || !validSlotA || !validSlotB}
         className={`
           w-full py-3 rounded-full text-sm font-semibold border transition-all duration-200
+          flex items-center justify-center gap-2
           ${canBreed && validSlotA && validSlotB
             ? "border-primary text-primary hover:bg-primary/10 hover:scale-[1.02]"
             : "border-border text-muted-foreground opacity-50 cursor-not-allowed"

@@ -377,46 +377,12 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    // ── First discovery — return inputs, record recipe ────────────────────────
+    // ── Craft — always consume inputs, always award seeds ─────────────────────
 
     const isFirstDiscovery = !discoveredRecipes.includes(recipe.id);
-
-    if (isFirstDiscovery) {
-      const newDiscoveredRecipes = [...discoveredRecipes, recipe.id];
-      const newUpdatedAt = new Date().toISOString();
-
-      const { data: updateData, error: updateError } = await supabaseAdmin
-        .from("game_saves")
-        .update({ discovered_recipes: newDiscoveredRecipes, updated_at: newUpdatedAt })
-        .eq("user_id", userId)
-        .eq("updated_at", priorUpdatedAt)
-        .select("updated_at")
-        .single();
-
-      if (updateError || !updateData) {
-        return new Response(JSON.stringify({ error: "Save conflict — please retry" }), {
-          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      void supabaseAdmin.from("action_log").insert({
-        user_id: userId, action: "cross_breed_discover",
-        payload: { speciesIdA, speciesIdB, recipeId: recipe.id },
-        result:  { outputSpeciesId: recipe.outputSpeciesId },
-      });
-
-      return new Response(
-        JSON.stringify({
-          ok: true, result: "match", firstDiscovery: true,
-          recipeId: recipe.id, outputSpeciesId: recipe.outputSpeciesId, outputCount: 1,
-          discoveredRecipes: newDiscoveredRecipes,
-          serverUpdatedAt: updateData.updated_at,
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ── Subsequent craft — consume inputs, award seeds ────────────────────────
+    const newDiscoveredRecipes = isFirstDiscovery
+      ? [...discoveredRecipes, recipe.id]
+      : discoveredRecipes;
 
     const count = outputCount(speciesA, speciesB, recipe);
 
@@ -436,7 +402,7 @@ Deno.serve(async (req: Request) => {
       .update({
         inventory:          newInventory,
         discovered:         newDiscovered,
-        discovered_recipes: discoveredRecipes, // unchanged on craft
+        discovered_recipes: newDiscoveredRecipes,
         updated_at:         newUpdatedAt,
       })
       .eq("user_id", userId)
@@ -452,18 +418,21 @@ Deno.serve(async (req: Request) => {
 
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "cross_breed_craft",
-      payload: { speciesIdA, speciesIdB, recipeId: recipe.id, outputCount: count },
+      payload: { speciesIdA, speciesIdB, recipeId: recipe.id, outputCount: count, firstDiscovery: isFirstDiscovery },
       result:  { outputSpeciesId: recipe.outputSpeciesId },
     });
 
     return new Response(
       JSON.stringify({
-        ok: true, result: "match", firstDiscovery: false,
-        recipeId: recipe.id, outputSpeciesId: recipe.outputSpeciesId, outputCount: count,
-        discoveredRecipes,
-        inventory:       newInventory,
-        discovered:      newDiscovered,
-        serverUpdatedAt: updateData.updated_at,
+        ok: true, result: "match",
+        firstDiscovery: isFirstDiscovery,
+        recipeId: recipe.id,
+        outputSpeciesId: recipe.outputSpeciesId,
+        outputCount: count,
+        discoveredRecipes: newDiscoveredRecipes,
+        inventory:         newInventory,
+        discovered:        newDiscovered,
+        serverUpdatedAt:   updateData.updated_at,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

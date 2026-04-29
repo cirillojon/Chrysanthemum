@@ -361,11 +361,9 @@ export type CrossBreedResponse =
       recipeId:         string;
       outputSpeciesId:  string;
       outputCount:      1 | 2;
-      /** Present on first discovery and subsequent crafts */
       discoveredRecipes: string[];
-      /** Present only on subsequent crafts (inventory changed) */
-      inventory?:       GameState["inventory"];
-      discovered?:      GameState["discovered"];
+      inventory:        GameState["inventory"];
+      discovered:       GameState["discovered"];
       serverUpdatedAt:  string;
     }
   | {
