@@ -224,7 +224,7 @@ export function PlotTooltip({
             {onHarvestRequest && (
               <button
                 onClick={() => { onHarvestRequest(); onClose?.(); }}
-                className="w-full py-1.5 rounded-lg bg-primary/20 border border-primary/50 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors"
+                className="w-full py-1.5 rounded-lg bg-primary/20 border border-primary/50 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors text-center"
               >
                 Harvest
               </button>
