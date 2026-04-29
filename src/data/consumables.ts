@@ -18,7 +18,11 @@ export type ConsumableId =
   | "wind_shear"
   | "slot_lock"
   | "seed_pouch_1"     | "seed_pouch_2"     | "seed_pouch_3"     | "seed_pouch_4"     | "seed_pouch_5"
-  | `seed_pouch_${"blaze"|"tide"|"grove"|"frost"|"storm"|"lunar"|"solar"|"fairy"|"shadow"|"arcane"|"stellar"|"zephyr"}_${1|2|3|4|5}`;
+  | `seed_pouch_${"blaze"|"tide"|"grove"|"frost"|"storm"|"lunar"|"solar"|"fairy"|"shadow"|"arcane"|"stellar"|"zephyr"}_${1|2|3|4|5}`
+  | "magnifying_glass_1" | "magnifying_glass_2" | "magnifying_glass_3" | "magnifying_glass_4" | "magnifying_glass_5"
+  | "verdant_rush_1"     | "verdant_rush_2"     | "verdant_rush_3"     | "verdant_rush_4"     | "verdant_rush_5"
+  | "forge_haste_1"      | "forge_haste_2"      | "forge_haste_3"      | "forge_haste_4"      | "forge_haste_5"
+  | "resonance_draft_1"  | "resonance_draft_2"  | "resonance_draft_3"  | "resonance_draft_4"  | "resonance_draft_5";
 
 export interface ConsumableItem {
   id:       ConsumableId;
@@ -32,12 +36,12 @@ export type CraftCost =
   | { kind: "essence";    amounts: EssenceCostEntry[] }
   | { kind: "consumable"; id: ConsumableId; quantity: number };
 
-/** Infuser craft cost: spend essence (tier I) OR merge 2× previous tier infuser */
-export type InfuserCost =
-  | { kind: "essence"; amounts: EssenceCostEntry[] }
-  | { kind: "infuser";  tier: 1 | 2 | 3 | 4; quantity: number };
+/** Attunement Crystal craft cost: spend essence (tier I) OR merge 2× previous tier */
+export type AttunementCost =
+  | { kind: "essence";    amounts: EssenceCostEntry[] }
+  | { kind: "attunement"; tier: 1 | 2 | 3 | 4; quantity: number };
 
-export type ConsumableCategory = "growth" | "mutation_boost" | "utility" | "seed_pouch";
+export type ConsumableCategory = "growth" | "mutation_boost" | "utility" | "seed_pouch" | "speed_boost";
 
 export interface ConsumableRecipe {
   id:           ConsumableId;
@@ -51,14 +55,16 @@ export interface ConsumableRecipe {
   cost:         CraftCost;
   /** Eclipse Tonic: hours of simulated garden advancement per use */
   advanceHours?: number;
+  /** Speed boost consumables: duration in ms the boost stays active */
+  boostDurationMs?: number;
 }
 
-export interface InfuserRecipe {
+export interface AttunementRecipe {
   tier:        1 | 2 | 3 | 4 | 5;
   rarity:      Rarity;
   name:        string;
   description: string;
-  cost:        InfuserCost;
+  cost:        AttunementCost;
 }
 
 // ── Tier ↔ rarity mapping ──────────────────────────────────────────────────
@@ -90,14 +96,14 @@ const RARITY_LABEL: Record<Rarity, string> = {
 
 function r(tier: 1 | 2 | 3 | 4 | 5) { return RARITY_LABEL[TIER_RARITIES[tier]]; }
 
-// ── Infuser recipes ────────────────────────────────────────────────────────
+// ── Attunement Crystal recipes ─────────────────────────────────────────────
 
-export const INFUSER_RECIPES: InfuserRecipe[] = [
-  { tier: 1, rarity: "rare",      name: "Infuser I",   description: "Apply to a Rare bloomed flower to mark it as a cross-breeding participant.",      cost: { kind: "essence", amounts: [{ type: "universal", amount: 2 }] } },
-  { tier: 2, rarity: "legendary", name: "Infuser II",  description: "Apply to a Legendary bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "infuser", tier: 1, quantity: 2 } },
-  { tier: 3, rarity: "mythic",    name: "Infuser III", description: "Apply to a Mythic bloomed flower to mark it as a cross-breeding participant.",    cost: { kind: "infuser", tier: 2, quantity: 2 } },
-  { tier: 4, rarity: "exalted",   name: "Infuser IV",  description: "Apply to an Exalted bloomed flower to mark it as a cross-breeding participant.",  cost: { kind: "infuser", tier: 3, quantity: 2 } },
-  { tier: 5, rarity: "prismatic", name: "Infuser V",   description: "Apply to a Prismatic bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "infuser", tier: 4, quantity: 2 } },
+export const ATTUNEMENT_RECIPES: AttunementRecipe[] = [
+  { tier: 1, rarity: "rare",      name: "Attunement I",   description: "Apply to a Rare bloomed flower to mark it as a cross-breeding participant.",      cost: { kind: "essence",    amounts: [{ type: "universal", amount: 2 }] } },
+  { tier: 2, rarity: "legendary", name: "Attunement II",  description: "Apply to a Legendary bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 1, quantity: 2 } },
+  { tier: 3, rarity: "mythic",    name: "Attunement III", description: "Apply to a Mythic bloomed flower to mark it as a cross-breeding participant.",    cost: { kind: "attunement", tier: 2, quantity: 2 } },
+  { tier: 4, rarity: "exalted",   name: "Attunement IV",  description: "Apply to an Exalted bloomed flower to mark it as a cross-breeding participant.",  cost: { kind: "attunement", tier: 3, quantity: 2 } },
+  { tier: 5, rarity: "prismatic", name: "Attunement V",   description: "Apply to a Prismatic bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 4, quantity: 2 } },
 ];
 
 // ── Consumable recipes ─────────────────────────────────────────────────────
@@ -291,6 +297,78 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     description: `Significantly increases the Rainbow mutation chance for a ${r(5)} plant.`,
     cost: { kind: "consumable", id: "rainbow_vial_4", quantity: 2 } },
 
+  // ── Magnifying Glass (I–V) — utility ─────────────────────────────────────
+  // One-time use: reveals hidden plot information (plant species, mutation, growth %).
+  { id: "magnifying_glass_1", name: "Magnifying Glass I",   emoji: "🔍", tier: 1, rarity: "rare",      category: "utility",
+    description: `Reveals all details of a ${r(1)} plot — species, mutation, and exact growth progress.`,
+    cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }] } },
+  { id: "magnifying_glass_2", name: "Magnifying Glass II",  emoji: "🔍", tier: 2, rarity: "legendary", category: "utility",
+    description: `Reveals all details of a ${r(2)} plot — species, mutation, and exact growth progress.`,
+    cost: { kind: "consumable", id: "magnifying_glass_1", quantity: 2 } },
+  { id: "magnifying_glass_3", name: "Magnifying Glass III", emoji: "🔍", tier: 3, rarity: "mythic",    category: "utility",
+    description: `Reveals all details of a ${r(3)} plot — species, mutation, and exact growth progress.`,
+    cost: { kind: "consumable", id: "magnifying_glass_2", quantity: 2 } },
+  { id: "magnifying_glass_4", name: "Magnifying Glass IV",  emoji: "🔍", tier: 4, rarity: "exalted",   category: "utility",
+    description: `Reveals all details of a ${r(4)} plot — species, mutation, and exact growth progress.`,
+    cost: { kind: "consumable", id: "magnifying_glass_3", quantity: 2 } },
+  { id: "magnifying_glass_5", name: "Magnifying Glass V",   emoji: "🔍", tier: 5, rarity: "prismatic", category: "utility",
+    description: `Reveals all details of a ${r(5)} plot — species, mutation, and exact growth progress.`,
+    cost: { kind: "consumable", id: "magnifying_glass_4", quantity: 2 } },
+
+  // ── Verdant Rush (I–V) — speed_boost ─────────────────────────────────────
+  // Doubles growth speed for all garden plots for a limited time.
+  { id: "verdant_rush_1", name: "Verdant Rush I",   emoji: "🌿", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,
+    description: "Doubles growth speed for all plants in your garden for 30 minutes.",
+    cost: { kind: "essence", amounts: [{ type: "grove", amount: 4 }, { type: "zephyr", amount: 4 }] } },
+  { id: "verdant_rush_2", name: "Verdant Rush II",  emoji: "🌿", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,
+    description: "Doubles growth speed for all plants in your garden for 1 hour.",
+    cost: { kind: "consumable", id: "verdant_rush_1", quantity: 2 } },
+  { id: "verdant_rush_3", name: "Verdant Rush III", emoji: "🌿", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,
+    description: "Doubles growth speed for all plants in your garden for 3 hours.",
+    cost: { kind: "consumable", id: "verdant_rush_2", quantity: 2 } },
+  { id: "verdant_rush_4", name: "Verdant Rush IV",  emoji: "🌿", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,
+    description: "Doubles growth speed for all plants in your garden for 8 hours.",
+    cost: { kind: "consumable", id: "verdant_rush_3", quantity: 2 } },
+  { id: "verdant_rush_5", name: "Verdant Rush V",   emoji: "🌿", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000,
+    description: "Doubles growth speed for all plants in your garden for 24 hours.",
+    cost: { kind: "consumable", id: "verdant_rush_4", quantity: 2 } },
+
+  // ── Forge Haste (I–V) — speed_boost ──────────────────────────────────────
+  // Doubles crafting speed for all queued crafts for a limited time.
+  { id: "forge_haste_1", name: "Forge Haste I",   emoji: "⚒️", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,
+    description: "Doubles crafting speed for all queued crafts for 30 minutes.",
+    cost: { kind: "essence", amounts: [{ type: "blaze", amount: 4 }, { type: "storm", amount: 4 }] } },
+  { id: "forge_haste_2", name: "Forge Haste II",  emoji: "⚒️", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,
+    description: "Doubles crafting speed for all queued crafts for 1 hour.",
+    cost: { kind: "consumable", id: "forge_haste_1", quantity: 2 } },
+  { id: "forge_haste_3", name: "Forge Haste III", emoji: "⚒️", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,
+    description: "Doubles crafting speed for all queued crafts for 3 hours.",
+    cost: { kind: "consumable", id: "forge_haste_2", quantity: 2 } },
+  { id: "forge_haste_4", name: "Forge Haste IV",  emoji: "⚒️", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,
+    description: "Doubles crafting speed for all queued crafts for 8 hours.",
+    cost: { kind: "consumable", id: "forge_haste_3", quantity: 2 } },
+  { id: "forge_haste_5", name: "Forge Haste V",   emoji: "⚒️", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000,
+    description: "Doubles crafting speed for all queued crafts for 24 hours.",
+    cost: { kind: "consumable", id: "forge_haste_4", quantity: 2 } },
+
+  // ── Resonance Draft (I–V) — speed_boost ──────────────────────────────────
+  // Doubles attunement speed for all active attunement slots for a limited time.
+  { id: "resonance_draft_1", name: "Resonance Draft I",   emoji: "🌀", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,
+    description: "Doubles attunement speed for all active attunement slots for 30 minutes.",
+    cost: { kind: "essence", amounts: [{ type: "stellar", amount: 4 }, { type: "arcane", amount: 4 }] } },
+  { id: "resonance_draft_2", name: "Resonance Draft II",  emoji: "🌀", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,
+    description: "Doubles attunement speed for all active attunement slots for 1 hour.",
+    cost: { kind: "consumable", id: "resonance_draft_1", quantity: 2 } },
+  { id: "resonance_draft_3", name: "Resonance Draft III", emoji: "🌀", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,
+    description: "Doubles attunement speed for all active attunement slots for 3 hours.",
+    cost: { kind: "consumable", id: "resonance_draft_2", quantity: 2 } },
+  { id: "resonance_draft_4", name: "Resonance Draft IV",  emoji: "🌀", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,
+    description: "Doubles attunement speed for all active attunement slots for 8 hours.",
+    cost: { kind: "consumable", id: "resonance_draft_3", quantity: 2 } },
+  { id: "resonance_draft_5", name: "Resonance Draft V",   emoji: "🌀", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000,
+    description: "Doubles attunement speed for all active attunement slots for 24 hours.",
+    cost: { kind: "consumable", id: "resonance_draft_4", quantity: 2 } },
+
   // ── Wind Shear (non-tiered) — utility ─────────────────────────────────────
   { id: "wind_shear", name: "Wind Shear", emoji: "🌀", tier: null, rarity: "rare", category: "utility",
     description: "Refreshes your supply shop immediately, bypassing the cooldown. 1-hour cooldown between uses.",
@@ -376,10 +454,10 @@ export function canCraftConsumable(
   return (consumables.find((c) => c.id === cost.id)?.quantity ?? 0) >= cost.quantity;
 }
 
-export function canCraftInfuser(
-  recipe:   InfuserRecipe,
-  essences: { type: string; amount: number }[],
-  infusers: { rarity: string; quantity: number }[],
+export function canCraftAttunement(
+  recipe:       AttunementRecipe,
+  essences:     { type: string; amount: number }[],
+  attunements:  { rarity: string; quantity: number }[],
 ): boolean {
   const { cost } = recipe;
   if (cost.kind === "essence") {
@@ -388,7 +466,7 @@ export function canCraftInfuser(
     );
   }
   const prevRarity = TIER_RARITIES[cost.tier];
-  return (infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0) >= cost.quantity;
+  return (attunements.find((i) => i.rarity === prevRarity)?.quantity ?? 0) >= cost.quantity;
 }
 
 // ── Optimistic craft helpers ───────────────────────────────────────────────
@@ -425,16 +503,16 @@ export function applyCraftConsumable(
   return { essences: newEssences, consumables: newConsumables };
 }
 
-/** Deduct costs + award 1 infuser of recipe.rarity. Returns null if can't afford. */
-export function applyCraftInfuser(
-  recipe:   InfuserRecipe,
-  essences: { type: string; amount: number }[],
-  infusers: { rarity: string; quantity: number }[],
-): { essences: { type: string; amount: number }[]; infusers: { rarity: string; quantity: number }[] } | null {
-  if (!canCraftInfuser(recipe, essences, infusers)) return null;
+/** Deduct costs + award 1 attunement crystal of recipe.rarity. Returns null if can't afford. */
+export function applyCraftAttunement(
+  recipe:      AttunementRecipe,
+  essences:    { type: string; amount: number }[],
+  attunements: { rarity: string; quantity: number }[],
+): { essences: { type: string; amount: number }[]; attunements: { rarity: string; quantity: number }[] } | null {
+  if (!canCraftAttunement(recipe, essences, attunements)) return null;
 
-  let newEssences = [...essences];
-  let newInfusers = [...infusers];
+  let newEssences    = [...essences];
+  let newAttunements = [...attunements];
 
   if (recipe.cost.kind === "essence") {
     for (const { type, amount } of recipe.cost.amounts) {
@@ -444,15 +522,15 @@ export function applyCraftInfuser(
     }
   } else {
     const prevRarity = TIER_RARITIES[recipe.cost.tier];
-    newInfusers = newInfusers
+    newAttunements = newAttunements
       .map((i) => i.rarity === prevRarity ? { ...i, quantity: i.quantity - recipe.cost.quantity } : i)
       .filter((i) => i.quantity > 0);
   }
 
-  const existingIdx = newInfusers.findIndex((i) => i.rarity === recipe.rarity);
-  newInfusers = existingIdx >= 0
-    ? newInfusers.map((i, idx) => idx === existingIdx ? { ...i, quantity: i.quantity + 1 } : i)
-    : [...newInfusers, { rarity: recipe.rarity, quantity: 1 }];
+  const existingIdx = newAttunements.findIndex((i) => i.rarity === recipe.rarity);
+  newAttunements = existingIdx >= 0
+    ? newAttunements.map((i, idx) => idx === existingIdx ? { ...i, quantity: i.quantity + 1 } : i)
+    : [...newAttunements, { rarity: recipe.rarity, quantity: 1 }];
 
-  return { essences: newEssences, infusers: newInfusers };
+  return { essences: newEssences, attunements: newAttunements };
 }

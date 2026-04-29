@@ -7,14 +7,14 @@ import {
   universalEssenceCraftable, ALL_FLOWER_TYPES,
 } from "../data/essences";
 import {
-  CONSUMABLE_RECIPES, CONSUMABLE_RECIPE_MAP, INFUSER_RECIPES,
-  canCraftConsumable, canCraftInfuser,
-  applyCraftConsumable, applyCraftInfuser,
+  CONSUMABLE_RECIPES, CONSUMABLE_RECIPE_MAP, ATTUNEMENT_RECIPES,
+  canCraftConsumable, canCraftAttunement,
+  applyCraftConsumable, applyCraftAttunement,
   TIER_RARITIES, ROMAN,
   type ConsumableId, type ConsumableCategory,
 } from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
-import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft, edgeAlchemyInfuse, edgeAlchemyStrip } from "../lib/edgeFunctions";
+import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft, edgeAlchemyAttune, edgeAlchemyStrip } from "../lib/edgeFunctions";
 import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
 
@@ -132,7 +132,7 @@ interface CraftViewProps {
   infusers:      { rarity: string; quantity: number }[];
   craftingItemId: string | null;
   itemCraftError: string | null;
-  onCraft:       (craftType: "consumable" | "infuser", id: string) => void;
+  onCraft:       (craftType: "consumable" | "attunement", id: string) => void;
 }
 
 function CostChips({
@@ -178,13 +178,13 @@ function CostChips({
       </span>
     );
   }
-  if (cost.kind === "infuser" && cost.tier != null) {
+  if (cost.kind === "attunement" && cost.tier != null) {
     const prevRarity = TIER_RARITIES[cost.tier as 1 | 2 | 3 | 4 | 5];
     const have = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
     const ok   = have >= (cost.quantity ?? 2);
     return (
       <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}>
-        🥢 ×{cost.quantity} Infuser {ROMAN[cost.tier as 1 | 2 | 3 | 4 | 5]}
+        🥢 ×{cost.quantity} Attunement {ROMAN[cost.tier as 1 | 2 | 3 | 4 | 5]}
         <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
       </span>
     );
@@ -236,8 +236,8 @@ function RecipeCard({
   );
 }
 
-const CRAFT_CATEGORIES: { id: ConsumableCategory | "infuser"; label: string; emoji: string }[] = [
-  { id: "infuser",        label: "Infusers",        emoji: "🥢" },
+const CRAFT_CATEGORIES: { id: ConsumableCategory | "attunement"; label: string; emoji: string }[] = [
+  { id: "attunement",     label: "Attunements",     emoji: "🥢" },
   { id: "growth",         label: "Growth",          emoji: "🌱" },
   { id: "mutation_boost", label: "Mutation Boosts",  emoji: "🧪" },
   { id: "utility",        label: "Utility",          emoji: "⚙️" },
@@ -257,7 +257,7 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
   return (
     <div className="flex flex-col gap-5">
       <p className="text-[11px] text-muted-foreground">
-        Craft consumable items and infusers from your essence bank. Tier I items cost essence; higher tiers upgrade from 2 of the previous tier.
+        Craft consumable items and attunement crystals from your essence bank. Tier I items cost essence; higher tiers upgrade from 2 of the previous tier.
       </p>
 
       {itemCraftError && (
@@ -267,16 +267,16 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
       )}
 
       {CRAFT_CATEGORIES.map(({ id: catId, label, emoji: catEmoji }) => {
-        const isInfuser  = catId === "infuser";
-        const isPouchCat = catId === "seed_pouch";
+        const isAttunement = catId === "attunement";
+        const isPouchCat   = catId === "seed_pouch";
 
-        const cards = isInfuser
-          ? INFUSER_RECIPES.map((recipe) => {
+        const cards = isAttunement
+          ? ATTUNEMENT_RECIPES.map((recipe) => {
               const owned      = infusers.find((i) => i.rarity === recipe.rarity)?.quantity ?? 0;
-              const affordable = canCraftInfuser(recipe, essences, infusers);
+              const affordable = canCraftAttunement(recipe, essences, infusers);
               return (
                 <RecipeCard
-                  key={`infuser-${recipe.tier}`}
+                  key={`attunement-${recipe.tier}`}
                   emoji="🥢"
                   name={recipe.name}
                   rarity={recipe.rarity}
@@ -288,7 +288,7 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
                   essences={essences}
                   consumables={consumables}
                   infusers={infusers}
-                  onCraft={() => onCraft("infuser", String(recipe.tier))}
+                  onCraft={() => onCraft("attunement", String(recipe.tier))}
                 />
               );
             })
@@ -365,7 +365,7 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
 
 // ── Main AlchemyTab component ─────────────────────────────────────────────
 
-type AlchemyView = "sacrifice" | "essences" | "craft" | "infuse";
+type AlchemyView = "sacrifice" | "essences" | "craft" | "attune";
 
 export function AlchemyTab() {
   const { state, perform, getState, update } = useGame();
@@ -386,20 +386,20 @@ export function AlchemyTab() {
   const [craftSuccess,  setCraftSuccess]  = useState<number | null>(null);
   const [craftSuccessVisible, setCraftSuccessVisible] = useState(false);
 
-  // Consumable / infuser craft state
+  // Consumable / attunement craft state
   const [craftingItemId,        setCraftingItemId]        = useState<string | null>(null);
   const [itemCraftError,        setItemCraftError]        = useState<string | null>(null);
   const [itemCraftSuccess,      setItemCraftSuccess]      = useState<{ name: string; emoji: string } | null>(null);
   const [itemCraftSuccessVisible, setItemCraftSuccessVisible] = useState(false);
 
-  // Infuse view state
-  const [infuseSpeciesId,  setInfuseSpeciesId]  = useState<string | null>(null);
-  const [infuseEssType,    setInfuseEssType]    = useState<string | null>(null);
-  const [infuseQty,        setInfuseQty]        = useState(1);
-  const [infusing,         setInfusing]         = useState(false);
-  const [infuseError,      setInfuseError]      = useState<string | null>(null);
-  const [infuseResult,     setInfuseResult]     = useState<{ mutation: string; tier: number } | null>(null);
-  const [infuseResultVisible, setInfuseResultVisible] = useState(false);
+  // Attune view state
+  const [attuneSpeciesId,  setAttuneSpeciesId]  = useState<string | null>(null);
+  const [attuneEssType,    setAttuneEssType]    = useState<string | null>(null);
+  const [attuneQty,        setAttuneQty]        = useState(1);
+  const [attuning,         setAttuning]         = useState(false);
+  const [attuneError,      setAttuneError]      = useState<string | null>(null);
+  const [attuneResult,     setAttuneResult]     = useState<{ mutation: string; tier: number } | null>(null);
+  const [attuneResultVisible, setAttuneResultVisible] = useState(false);
   // Strip state
   const [stripSpeciesId,   setStripSpeciesId]   = useState<string | null>(null);
   const [stripMutation,    setStripMutation]    = useState<string | null>(null);
@@ -430,16 +430,16 @@ export function AlchemyTab() {
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
   }, [craftSuccess]);
 
-  // Auto-dismiss infuse result
+  // Auto-dismiss attune result
   useEffect(() => {
-    if (!infuseResult) return;
-    const frame = requestAnimationFrame(() => setInfuseResultVisible(true));
+    if (!attuneResult) return;
+    const frame = requestAnimationFrame(() => setAttuneResultVisible(true));
     const timer = setTimeout(() => {
-      setInfuseResultVisible(false);
-      setTimeout(() => setInfuseResult(null), 400);
+      setAttuneResultVisible(false);
+      setTimeout(() => setAttuneResult(null), 400);
     }, 4_000);
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
-  }, [infuseResult]);
+  }, [attuneResult]);
 
   // Auto-dismiss strip success
   useEffect(() => {
@@ -597,7 +597,7 @@ export function AlchemyTab() {
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
   }, [itemCraftSuccess]);
 
-  async function handleCraftItem(craftType: "consumable" | "infuser", id: string) {
+  async function handleCraftItem(craftType: "consumable" | "attunement", id: string) {
     if (craftingItemId) return;
     setCraftingItemId(id);
     setItemCraftError(null);
@@ -621,11 +621,11 @@ export function AlchemyTab() {
       displayEmoji = recipe.emoji;
     } else {
       const tier   = parseInt(id, 10) as 1 | 2 | 3 | 4 | 5;
-      const recipe = INFUSER_RECIPES.find((r) => r.tier === tier);
-      if (!recipe) { setItemCraftError("Unknown infuser tier."); setCraftingItemId(null); return; }
-      const result = applyCraftInfuser(recipe, essences, infusers);
+      const recipe = ATTUNEMENT_RECIPES.find((r) => r.tier === tier);
+      if (!recipe) { setItemCraftError("Unknown attunement tier."); setCraftingItemId(null); return; }
+      const result = applyCraftAttunement(recipe, essences, infusers);
       if (!result) { setItemCraftError("Not enough ingredients."); setCraftingItemId(null); return; }
-      optimistic = { ...cur, essences: result.essences, infusers: result.infusers };
+      optimistic = { ...cur, essences: result.essences, infusers: result.attunements };
       displayName  = recipe.name;
       displayEmoji = "🥢";
     }
@@ -674,7 +674,7 @@ export function AlchemyTab() {
 
       {/* Tab switcher: Sacrifice | Essences | Craft */}
       <div className="flex rounded-xl border border-border bg-card/40 p-0.5 gap-0.5">
-        {(["sacrifice", "essences", "craft", "infuse"] as AlchemyView[]).map((v) => (
+        {(["sacrifice", "essences", "craft", "attune"] as AlchemyView[]).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -686,7 +686,7 @@ export function AlchemyTab() {
               }
             `}
           >
-            {v === "sacrifice" ? "⚗️ Sacrifice" : v === "essences" ? "✨ Essences" : v === "craft" ? "🔨 Craft" : "🌿 Infuse"}
+            {v === "sacrifice" ? "⚗️ Sacrifice" : v === "essences" ? "✨ Essences" : v === "craft" ? "🔨 Craft" : "🌿 Attune"}
           </button>
         ))}
       </div>
@@ -1066,13 +1066,13 @@ export function AlchemyTab() {
         />
       )}
 
-      {/* ── INFUSE view ── */}
-      {view === "infuse" && (() => {
+      {/* ── ATTUNE view ── */}
+      {view === "attune" && (() => {
         // ── Derived data ──────────────────────────────────────────────────────
         const rarityOrder: Rarity[] = ["common","uncommon","rare","legendary","mythic","exalted","prismatic"];
 
         // Unmutated blooms available to infuse
-        const infusableBlooms = state.inventory.filter(
+        const attunableBlooms = state.inventory.filter(
           (i) => !i.isSeed && i.quantity > 0 && (i.mutation === undefined || i.mutation === null)
         );
 
@@ -1087,8 +1087,8 @@ export function AlchemyTab() {
         );
 
         // Selected bloom's species data
-        const infuseSpecies  = infuseSpeciesId ? getFlower(infuseSpeciesId) : null;
-        const infuseRarity   = infuseSpecies?.rarity ?? null;
+        const attuneSpecies  = attuneSpeciesId ? getFlower(attuneSpeciesId) : null;
+        const attuneRarity   = attuneSpecies?.rarity ?? null;
 
         // Effective essence and tier preview
         let effectiveEssence = 0;
@@ -1104,11 +1104,11 @@ export function AlchemyTab() {
         };
         let goldCostPreview = 0;
 
-        if (infuseSpecies && infuseEssType && infuseQty > 0) {
-          const isMatching = infuseSpecies.types.includes(infuseEssType as never) || infuseEssType === "universal";
-          effectiveEssence = infuseQty * (isMatching ? 2 : 1);
+        if (attuneSpecies && attuneEssType && attuneQty > 0) {
+          const isMatching = attuneSpecies.types.includes(attuneEssType as never) || attuneEssType === "universal";
+          effectiveEssence = attuneQty * (isMatching ? 2 : 1);
           tierPreview = effectiveEssence >= 40 ? 4 : effectiveEssence >= 20 ? 3 : effectiveEssence >= 8 ? 2 : 1;
-          const costs = GOLD_COST_TABLE[infuseRarity!];
+          const costs = GOLD_COST_TABLE[attuneRarity!];
           goldCostPreview = costs ? costs[tierPreview - 1] : 0;
         }
 
@@ -1127,12 +1127,12 @@ export function AlchemyTab() {
         const TIER_COLOR = ["", "text-muted-foreground", "text-blue-400", "text-violet-400", "text-yellow-400"];
 
         // ── Handlers ──────────────────────────────────────────────────────────
-        async function handleInfuse() {
-          if (infusing || !infuseSpeciesId || !infuseEssType || infuseQty < 1) return;
-          setInfuseError(null);
-          setInfusing(true);
+        async function handleAttune() {
+          if (attuning || !attuneSpeciesId || !attuneEssType || attuneQty < 1) return;
+          setAttuneError(null);
+          setAttuning(true);
           try {
-            const res = await edgeAlchemyInfuse(infuseSpeciesId, infuseEssType, infuseQty);
+            const res = await edgeAlchemyAttune(attuneSpeciesId, attuneEssType, attuneQty);
             const cur = getState();
             update({
               ...cur,
@@ -1142,14 +1142,14 @@ export function AlchemyTab() {
               discovered: res.discovered,
               serverUpdatedAt: res.serverUpdatedAt,
             });
-            setInfuseResult({ mutation: res.mutation, tier: res.tier });
-            setInfuseSpeciesId(null);
-            setInfuseEssType(null);
-            setInfuseQty(1);
+            setAttuneResult({ mutation: res.mutation, tier: res.tier });
+            setAttuneSpeciesId(null);
+            setAttuneEssType(null);
+            setAttuneQty(1);
           } catch (e) {
-            setInfuseError(e instanceof Error ? e.message : "Infusion failed");
+            setAttuneError(e instanceof Error ? e.message : "Attunement failed");
           } finally {
-            setInfusing(false);
+            setAttuning(false);
           }
         }
 
@@ -1183,34 +1183,34 @@ export function AlchemyTab() {
               Higher essence (especially matching the flower's type) unlocks rarer mutation pools.
             </p>
 
-            {/* ── Infuse section ─────────────────────────────────────────── */}
+            {/* ── Attune section ─────────────────────────────────────────── */}
             <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-4">
-              <p className="text-xs font-semibold">🌿 Infuse a Bloom</p>
+              <p className="text-xs font-semibold">🌿 Attune a Bloom</p>
 
               {/* Bloom picker */}
               <div>
                 <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
                   Pick a base bloom
                 </p>
-                {infusableBlooms.length === 0 ? (
+                {attunableBlooms.length === 0 ? (
                   <p className="text-[11px] text-muted-foreground">No unmutated blooms in inventory.</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {rarityOrder.flatMap((r) =>
-                      infusableBlooms
+                      attunableBlooms
                         .filter((i) => getFlower(i.speciesId)?.rarity === r)
                         .map((item) => {
                           const sp      = getFlower(item.speciesId)!;
                           const rc      = RARITY_CONFIG[sp.rarity];
-                          const isSelected = infuseSpeciesId === item.speciesId;
+                          const isSelected = attuneSpeciesId === item.speciesId;
                           return (
                             <button
                               key={item.speciesId}
                               onClick={() => {
-                                setInfuseSpeciesId(isSelected ? null : item.speciesId);
-                                setInfuseEssType(null);
-                                setInfuseQty(1);
-                                setInfuseError(null);
+                                setAttuneSpeciesId(isSelected ? null : item.speciesId);
+                                setAttuneEssType(null);
+                                setAttuneQty(1);
+                                setAttuneError(null);
                               }}
                               className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
                                 isSelected
@@ -1230,12 +1230,12 @@ export function AlchemyTab() {
               </div>
 
               {/* Essence picker — only shown once a bloom is selected */}
-              {infuseSpecies && (
+              {attuneSpecies && (
                 <div>
                   <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
                     Choose essence type
                     <span className="ml-1 normal-case">
-                      (matching: {infuseSpecies.types.join(", ")})
+                      (matching: {attuneSpecies.types.join(", ")})
                     </span>
                   </p>
                   {ownedEssences.length === 0 ? (
@@ -1244,12 +1244,12 @@ export function AlchemyTab() {
                     <div className="flex flex-wrap gap-1.5">
                       {ownedEssences.map(({ type, amount }) => {
                         const cfg        = FLOWER_TYPES[type as never] as { emoji: string; name: string; color: string; bgColor: string; borderColor: string };
-                        const isMatch    = infuseSpecies.types.includes(type as never);
-                        const isSelected = infuseEssType === type;
+                        const isMatch    = attuneSpecies.types.includes(type as never);
+                        const isSelected = attuneEssType === type;
                         return (
                           <button
                             key={type}
-                            onClick={() => { setInfuseEssType(type); setInfuseQty(1); }}
+                            onClick={() => { setAttuneEssType(type); setAttuneQty(1); }}
                             className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
                               isSelected
                                 ? `${cfg.color} border-current ${cfg.bgColor}`
@@ -1268,22 +1268,22 @@ export function AlchemyTab() {
               )}
 
               {/* Quantity stepper + tier preview */}
-              {infuseSpecies && infuseEssType && (() => {
-                const ownedAmt = ownedEssences.find((e) => e.type === infuseEssType)?.amount ?? 0;
+              {attuneSpecies && attuneEssType && (() => {
+                const ownedAmt = ownedEssences.find((e) => e.type === attuneEssType)?.amount ?? 0;
                 const canAfford = state.coins >= goldCostPreview;
-                const canInfuse = ownedAmt >= infuseQty && canAfford;
+                const canAttune = ownedAmt >= attuneQty && canAfford;
                 return (
                   <div className="space-y-3">
                     {/* Qty row */}
                     <div className="flex items-center gap-3">
                       <span className="text-[11px] text-muted-foreground">Quantity</span>
                       <div className="flex items-center gap-1">
-                        <button onClick={() => setInfuseQty((q) => Math.max(1, q - 1))} disabled={infuseQty <= 1}
+                        <button onClick={() => setAttuneQty((q) => Math.max(1, q - 1))} disabled={attuneQty <= 1}
                           className="w-6 h-6 rounded-md border border-border text-xs flex items-center justify-center hover:border-primary/50 disabled:opacity-30">−</button>
-                        <span className="w-8 text-center text-sm font-mono">{infuseQty}</span>
-                        <button onClick={() => setInfuseQty((q) => Math.min(ownedAmt, q + 1))} disabled={infuseQty >= ownedAmt}
+                        <span className="w-8 text-center text-sm font-mono">{attuneQty}</span>
+                        <button onClick={() => setAttuneQty((q) => Math.min(ownedAmt, q + 1))} disabled={attuneQty >= ownedAmt}
                           className="w-6 h-6 rounded-md border border-border text-xs flex items-center justify-center hover:border-primary/50 disabled:opacity-30">+</button>
-                        <button onClick={() => setInfuseQty(ownedAmt)} disabled={infuseQty >= ownedAmt}
+                        <button onClick={() => setAttuneQty(ownedAmt)} disabled={attuneQty >= ownedAmt}
                           className="ml-1 text-[9px] text-primary disabled:opacity-30">Max</button>
                       </div>
                     </div>
@@ -1309,16 +1309,16 @@ export function AlchemyTab() {
                       </div>
                     </div>
 
-                    {infuseError && (
-                      <p className="text-xs text-destructive">{infuseError}</p>
+                    {attuneError && (
+                      <p className="text-xs text-destructive">{attuneError}</p>
                     )}
 
                     <button
-                      onClick={handleInfuse}
-                      disabled={infusing || !canInfuse}
+                      onClick={handleAttune}
+                      disabled={attuning || !canAttune}
                       className="w-full py-2 rounded-xl bg-primary/20 border border-primary/50 text-primary text-sm font-semibold hover:bg-primary/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-center"
                     >
-                      {infusing ? "Infusing…" : "🌿 Infuse"}
+                      {attuning ? "Attuning…" : "🌿 Attune"}
                     </button>
                   </div>
                 );
@@ -1391,18 +1391,18 @@ export function AlchemyTab() {
         );
       })()}
 
-      {/* ── Infuse result toast ── */}
-      {infuseResult && (() => {
-        const mut = MUTATIONS[infuseResult.mutation as MutationType];
+      {/* ── Attune result toast ── */}
+      {attuneResult && (() => {
+        const mut = MUTATIONS[attuneResult.mutation as MutationType];
         const TIER_COLOR = ["","text-muted-foreground","text-blue-400","text-violet-400","text-yellow-400"];
         return (
-          <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-400 ${infuseResultVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
+          <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-400 ${attuneResultVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
             <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
               <span className="text-2xl">{mut?.emoji ?? "🌿"}</span>
               <div>
-                <p className="text-sm font-bold text-primary mb-0.5">Infusion complete!</p>
-                <p className={`text-[11px] font-semibold ${mut?.color ?? ""}`}>{mut?.name ?? infuseResult.mutation}</p>
-                <p className={`text-[10px] ${TIER_COLOR[infuseResult.tier]}`}>Tier {infuseResult.tier} pool</p>
+                <p className="text-sm font-bold text-primary mb-0.5">Attunement complete!</p>
+                <p className={`text-[11px] font-semibold ${mut?.color ?? ""}`}>{mut?.name ?? attuneResult.mutation}</p>
+                <p className={`text-[10px] ${TIER_COLOR[attuneResult.tier]}`}>Tier {attuneResult.tier} pool</p>
               </div>
             </div>
           </div>

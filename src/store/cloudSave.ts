@@ -142,7 +142,7 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       essences:             (data.essences              as GameState["essences"])       ?? [],
       // Cross-breeding
       discoveredRecipes:    (data.discovered_recipes    as string[])                   ?? [],
-      // Flower Infusers
+      // Attunement Crystals (DB column: "infusers")
       infusers:             (data.infusers              as GameState["infusers"])       ?? [],
     } as GameState;
   } catch {
@@ -181,7 +181,7 @@ export async function saveToCloud(
     essences:               state.essences          ?? [],
     // Cross-breeding
     discovered_recipes:     state.discoveredRecipes ?? [],
-    // Flower Infusers
+    // Attunement Crystals (DB column: "infusers")
     infusers:               state.infusers          ?? [],
     updated_at:             newUpdatedAt,
   };
@@ -271,7 +271,7 @@ export async function getPublicSave(userId: string): Promise<GameState | null> {
     lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
     essences:             (data.essences              as GameState["essences"])  ?? [],
     discoveredRecipes:    (data.discovered_recipes    as string[])              ?? [],
-    infusers:             (data.infusers              as GameState["infusers"]) ?? [],
+    infusers:             (data.infusers              as GameState["infusers"]) ?? [], // Attunement Crystals
   } as GameState;
 }
 
