@@ -3,7 +3,6 @@ import { useGame } from "../store/GameContext";
 import { useGrowthTick } from "../hooks/useGrowthTick";
 import { PlotTile } from "./PlotTile";
 import { SeedPicker } from "./SeedPicker";
-import { HarvestPopup } from "./HarvestPopup";
 import {
   getCurrentStage,
   plantSeed,
@@ -27,7 +26,7 @@ import { MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
-export function Garden() {
+export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType) => void }) {
   const { state, update, perform, getState, awaitHarvests, queueWork, activeWeather, reloadFromCloud } = useGame();
   useGrowthTick(5_000);
 
@@ -94,7 +93,7 @@ export function Garden() {
               () => {
                 // Show harvest popup for bell auto-harvests just like manual ones
                 if (harvestedSpeciesId) {
-                  setHarvestPopup({ speciesId: harvestedSpeciesId, mutation: harvestedMutation });
+                  onHarvestPopup(harvestedSpeciesId, harvestedMutation);
                 }
               },
               {
@@ -191,7 +190,6 @@ export function Garden() {
   });
 
   const [selectedPlot, setSelectedPlot]     = useState<{ row: number; col: number } | null>(null);
-  const [harvestPopup, setHarvestPopup]     = useState<{ speciesId: string; mutation?: MutationType } | null>(null);
   /** Which gear cell has its tooltip open — used to highlight affected cells */
   const [highlightSource, setHighlightSource] = useState<{ row: number; col: number; gearType: GearType } | null>(null);
   /** Pending fan placement — waits for the player to choose a direction */
@@ -501,7 +499,7 @@ export function Garden() {
                 row={row}
                 col={col}
                 onEmptyClick={() => handlePlotClick(row, col)}
-                onHarvest={(speciesId, mutation) => setHarvestPopup({ speciesId, mutation })}
+                onHarvest={(speciesId, mutation) => onHarvestPopup(speciesId, mutation)}
                 onHarvestStart={() => harvestingPlots.current.add(`${row}-${col}`)}
                 onHarvestEnd={() => harvestingPlots.current.delete(`${row}-${col}`)}
                 harvestPending={() => harvestingPlots.current.has(`${row}-${col}`)}
@@ -584,17 +582,6 @@ export function Garden() {
         <p className="text-xs text-yellow-400 font-mono">✦ Max farm size reached</p>
       )}
 
-      {harvestPopup && (
-        <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
-          <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
-            <HarvestPopup
-              speciesId={harvestPopup.speciesId}
-              mutation={harvestPopup.mutation}
-              onDone={() => setHarvestPopup(null)}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

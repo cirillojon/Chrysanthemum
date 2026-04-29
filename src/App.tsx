@@ -33,6 +33,7 @@ import type { MutationType } from "./data/flowers";
 import { useVersionCheck } from "./hooks/useVersionCheck";
 import { usePresence } from "./hooks/usePresence";
 import { UpdateBanner } from "./components/UpdateBanner";
+import { HarvestPopup } from "./components/HarvestPopup";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
 type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
@@ -75,6 +76,9 @@ function AppInner() {
 
   const updateAvailable  = useVersionCheck();
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
+
+  // Harvest popup — lifted to App level so the bell can fire it on any tab
+  const [harvestPopup, setHarvestPopup] = useState<{ speciesId: string; mutation?: MutationType } | null>(null);
 
   const [changelogEntry, setChangelogEntry] = useState<ChangelogEntry | null>(() => {
     const seen = localStorage.getItem("changelogSeenVersion");
@@ -551,12 +555,17 @@ function AppInner() {
         className="flex-1 w-full sm:max-w-2xl sm:mx-auto px-3 sm:px-4 py-6 sm:py-8 overflow-x-hidden"
         {...swipeHandlers}
       >
+        {/* Always-mounted garden — hidden when on another tab so bell/auto-planter keep running */}
+        <div className={tab !== "garden" ? "hidden" : ""}>
+          <Garden onHarvestPopup={(speciesId, mutation) => setHarvestPopup({ speciesId, mutation })} />
+        </div>
+
+        {tab !== "garden" && (
         <div
           key={tab}
           className={tabDir === "left" ? "slide-from-right" : tabDir === "right" ? "slide-from-left" : ""}
         >
         <>
-          {tab === "garden"      && <Garden />}
           {tab === "shop"        && (
             <>
               {/* Shop sub-nav */}
@@ -700,7 +709,21 @@ function AppInner() {
           )}
         </>
         </div>
+        )}
       </main>
+
+      {/* Harvest popup — rendered at App level so it shows on any tab */}
+      {harvestPopup && (
+        <div className="fixed inset-0 pointer-events-none z-50 flex items-center justify-center">
+          <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
+            <HarvestPopup
+              speciesId={harvestPopup.speciesId}
+              mutation={harvestPopup.mutation}
+              onDone={() => setHarvestPopup(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
