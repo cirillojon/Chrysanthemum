@@ -87,6 +87,16 @@ export interface ShopSlot {
   locked?:       boolean;
 }
 
+// ── Crafting queue ─────────────────────────────────────────────────────────
+
+export interface CraftingQueueEntry {
+  id:         string;   // server-generated uuid; "pending" for optimistic entries
+  gearType:   GearType;
+  startedAt:  string;   // ISO timestamp
+  durationMs: number;
+  coinCost:   number;
+}
+
 export interface GameState {
   coins:    number;
   farmSize: number; // column count (max 6)
@@ -123,6 +133,9 @@ export interface GameState {
   lastEclipseTonic: string | null;
   // Unix timestamp of last Wind Shear use — enforces 1-hour cooldown
   lastWindShearUsed: number | null;
+  // Phase 3 — time-gated crafting queue
+  craftingQueue:     CraftingQueueEntry[];
+  craftingSlotCount: number;
   // Server sync — the updated_at value from the last successful DB read or write.
   // saveToCloud uses this as a CAS guard so stale sessions can't overwrite
   // server-authoritative state (inventory, coins, etc.) with stale client data.
@@ -385,6 +398,8 @@ export function defaultState(): GameState {
     consumables:          [],
     lastEclipseTonic:     null,
     lastWindShearUsed:    null,
+    craftingQueue:        [],
+    craftingSlotCount:    1,
     serverUpdatedAt:      null,
   };
 }
