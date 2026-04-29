@@ -37,6 +37,8 @@ export interface PlantedFlower {
   lastTickAt?: number;
   /** 1.25 if this species was fully mastered in the codex at plant time (20% faster growth), otherwise undefined */
   masteredBonus?: number;
+  /** true when a Flower Infuser has been applied to this plant — marks it as an active cross-breed participant */
+  infused?: boolean;
 }
 
 export interface Plot {
@@ -99,10 +101,11 @@ export interface GameState {
   gearInventory:    GearInventoryItem[];
   // Alchemy — essence tokens per flower type
   essences:          EssenceItem[];
-  // Cross-breeding — recipe IDs that have been discovered at least once.
-  // First cross-breed of each recipe is "free" (inputs returned); subsequent
-  // crafts consume both inputs and yield the output seed.
+  // Cross-breeding (passive Cropsticks system) — recipe IDs discovered via farm production.
   discoveredRecipes: string[];
+  // Flower Infusers — consumable items applied to bloomed plants to mark them as cross-breed
+  // participants. Stored by rarity (must match the flower's rarity to apply).
+  infusers: { rarity: Rarity; quantity: number }[];
   // Server sync — the updated_at value from the last successful DB read or write.
   // saveToCloud uses this as a CAS guard so stale sessions can't overwrite
   // server-authoritative state (inventory, coins, etc.) with stale client data.
@@ -361,6 +364,7 @@ export function defaultState(): GameState {
     gearInventory:        [],
     essences:             [],
     discoveredRecipes:    [],
+    infusers:             [],
     serverUpdatedAt:      null,
   };
 }
