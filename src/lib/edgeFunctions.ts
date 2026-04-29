@@ -36,12 +36,14 @@ export interface HarvestResult {
   discovered: GameState["discovered"];
   mutation:   string | undefined;
   bonusCoins: number;
+  serverUpdatedAt: string;
 }
 
 export interface PlantSeedResult {
   ok:        true;
   grid:      GameState["grid"];
   inventory: GameState["inventory"];
+  serverUpdatedAt: string;
 }
 
 export interface ShopActionResult {
@@ -50,12 +52,14 @@ export interface ShopActionResult {
   shop:        GameState["shop"];
   inventory:   GameState["inventory"];
   fertilizers: GameState["fertilizers"];
+  serverUpdatedAt: string;
 }
 
 export interface ApplyFertilizerResult {
   ok:          true;
   grid:        GameState["grid"];
   fertilizers: GameState["fertilizers"];
+  serverUpdatedAt: string;
 }
 
 export interface UpgradeResult {
@@ -68,12 +72,14 @@ export interface UpgradeResult {
   // shop slot upgrade fields
   shop_slots?: number;
   shop?:       GameState["shop"];
+  serverUpdatedAt: string;
 }
 
 export interface BotanyResult {
   ok:              true;
   inventory:       GameState["inventory"];
   outputSpeciesIds: string[];
+  serverUpdatedAt: string;
 }
 
 // ── Typed callers ─────────────────────────────────────────────────────────────
@@ -100,6 +106,7 @@ export interface RemovePlantResult {
   ok:        true;
   grid:      GameState["grid"];
   inventory: GameState["inventory"];
+  serverUpdatedAt: string;
 }
 
 export function edgeRemovePlant(row: number, col: number) {
@@ -152,6 +159,7 @@ export interface GearActionResult {
   grid:          GameState["grid"];
   gearInventory?: GameState["gearInventory"];
   fertilizers?:  GameState["fertilizers"];
+  serverUpdatedAt: string;
 }
 
 export function edgePlaceGear(row: number, col: number, gearType: string, direction?: string) {
@@ -178,6 +186,7 @@ export interface SupplyBuyResult {
   supplyShop:    GameState["supplyShop"];
   fertilizers:   GameState["fertilizers"];
   gearInventory: GameState["gearInventory"];
+  serverUpdatedAt: string;
 }
 
 export function edgeBuyFromSupplyShop(slotId: string) {
@@ -201,12 +210,14 @@ export function edgeBotanyConvertAll(rarity: string) {
 export interface SendGiftResult {
   ok:        true;
   inventory: GameState["inventory"];
+  serverUpdatedAt: string;
 }
 
 export interface ClaimGiftResult {
   ok:         true;
   inventory:  GameState["inventory"];
   discovered: GameState["discovered"];
+  serverUpdatedAt: string;
 }
 
 export function edgeSendGift(
@@ -231,18 +242,21 @@ export interface MarketplaceListResult {
   fertilizers?:   GameState["fertilizers"];
   gearInventory?: GameState["gearInventory"];
   listingId:      string;
+  serverUpdatedAt: string;
 }
 
 export interface MarketplaceUpgradeSlotsResult {
   ok:               true;
   coins:            number;
   marketplaceSlots: number;
+  serverUpdatedAt:  string;
 }
 
 export interface MarketplaceBuyResult {
   ok:    true;
   coins: number;
   // Item is delivered via mailbox — no direct inventory update
+  serverUpdatedAt: string;
 }
 
 export interface ClaimMailResult {
@@ -254,6 +268,7 @@ export interface ClaimMailResult {
   gearInventory:  GameState["gearInventory"];
   discovered:     GameState["discovered"];
   alreadyClaimed?: boolean;
+  serverUpdatedAt: string;
 }
 
 export interface MarketplaceCancelResult {
@@ -261,6 +276,7 @@ export interface MarketplaceCancelResult {
   inventory:      GameState["inventory"];
   fertilizers?:   GameState["fertilizers"];
   gearInventory?: GameState["gearInventory"];
+  serverUpdatedAt: string;
 }
 
 export function edgeMarketplaceCreateListing(

@@ -94,6 +94,10 @@ export interface GameState {
   supplyShop:       ShopSlot[];
   lastSupplyReset:  number;
   gearInventory:    GearInventoryItem[];
+  // Server sync — the updated_at value from the last successful DB read or write.
+  // saveToCloud uses this as a CAS guard so stale sessions can't overwrite
+  // server-authoritative state (inventory, coins, etc.) with stale client data.
+  serverUpdatedAt:  string | null;
 }
 
 export interface OfflineSummary {
@@ -346,6 +350,7 @@ export function defaultState(): GameState {
     supplyShop:           generateSupplyShop(DEFAULT_SUPPLY_SLOTS),
     lastSupplyReset:      now,
     gearInventory:        [],
+    serverUpdatedAt:      null,
   };
 }
 

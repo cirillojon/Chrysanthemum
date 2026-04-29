@@ -346,7 +346,7 @@ Deno.serve(async (req: Request) => {
 
     // Return coins/inventory/discovered only — NOT grid (see comment above).
     return new Response(
-      JSON.stringify({ ok: true, coins: newCoins, inventory: newInventory, discovered: newDiscovered, mutation, bonusCoins }),
+      JSON.stringify({ ok: true, coins: newCoins, inventory: newInventory, discovered: newDiscovered, mutation, bonusCoins, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

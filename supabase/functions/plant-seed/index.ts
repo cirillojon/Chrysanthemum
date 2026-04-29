@@ -169,7 +169,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return new Response(
-      JSON.stringify({ ok: true, grid: newGrid, inventory: newInventory }),
+      JSON.stringify({ ok: true, grid: newGrid, inventory: newInventory, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (err) {

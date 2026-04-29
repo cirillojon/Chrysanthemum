@@ -137,6 +137,7 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       supplyShop:           (data.supply_shop     as GameState["supplyShop"])     ?? [],
       supplySlots:          (data.supply_slots    as number)                      ?? 2,
       lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
+      serverUpdatedAt:      (data.updated_at as string) ?? null,
     } as GameState;
   } catch {
     return null;
@@ -147,32 +148,50 @@ export async function saveToCloud(
   userId: string,
   state: GameState
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from("game_saves")
-    .upsert({
-      user_id:                userId,
-      coins:                  state.coins,
-      farm_size:              state.farmSize,
-      farm_rows:              state.farmRows,
-      shop_slots:             state.shopSlots,
-      grid:                   state.grid,
-      inventory:              state.inventory,
-      fertilizers:            state.fertilizers,
-      shop:                   state.shop,
-      last_shop_reset:        state.lastShopReset,
-      last_saved:             Date.now(),
-      weather_forecast_slots: state.weatherForecastSlots ?? 0,
-      marketplace_slots:      state.marketplaceSlots ?? 0,
-      // Farm Update fields
-      gear_inventory:         state.gearInventory     ?? [],
-      supply_shop:            state.supplyShop        ?? [],
-      supply_slots:           state.supplySlots       ?? 2,
-      last_supply_reset:      state.lastSupplyReset   ?? 0,
-      updated_at:             new Date().toISOString(),
-    });
+  const payload = {
+    user_id:                userId,
+    coins:                  state.coins,
+    farm_size:              state.farmSize,
+    farm_rows:              state.farmRows,
+    shop_slots:             state.shopSlots,
+    grid:                   state.grid,
+    inventory:              state.inventory,
+    fertilizers:            state.fertilizers,
+    shop:                   state.shop,
+    last_shop_reset:        state.lastShopReset,
+    last_saved:             Date.now(),
+    weather_forecast_slots: state.weatherForecastSlots ?? 0,
+    marketplace_slots:      state.marketplaceSlots ?? 0,
+    gear_inventory:         state.gearInventory     ?? [],
+    supply_shop:            state.supplyShop        ?? [],
+    supply_slots:           state.supplySlots       ?? 2,
+    last_supply_reset:      state.lastSupplyReset   ?? 0,
+    updated_at:             new Date().toISOString(),
+  };
 
-  if (error) {
-    console.error("Failed to save to cloud:", error);
+  // ── First save (new account) — no prior DB row exists ────────────────────
+  if (!state.serverUpdatedAt) {
+    const { error } = await supabase.from("game_saves").upsert(payload);
+    if (error) { console.error("Failed to save to cloud:", error); return false; }
+    return true;
+  }
+
+  // ── CAS update — only overwrite if DB updated_at matches last known value ─
+  // If another session (or an edge function) wrote to the DB since we last
+  // synced, updated_at will have changed and this UPDATE will match 0 rows.
+  // We return false so the caller knows to re-fetch rather than clobber
+  // server-authoritative state (inventory, coins, etc.) with stale data.
+  const { data, error } = await supabase
+    .from("game_saves")
+    .update(payload)
+    .eq("user_id", userId)
+    .eq("updated_at", state.serverUpdatedAt)
+    .select("updated_at")
+    .single();
+
+  if (error || !data) {
+    // Either a real DB error or a CAS miss (stale session) — either way, don't overwrite.
+    if (error?.code !== "PGRST116") console.error("Failed to save to cloud:", error);
     return false;
   }
   return true;

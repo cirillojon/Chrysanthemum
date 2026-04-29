@@ -173,7 +173,7 @@ Deno.serve(async (req: Request) => {
         gear_inventory: gearInventory,
         discovered,
         updated_at:     new Date().toISOString(),
-      }).eq("user_id", userId),
+      }).eq("user_id", userId).select("updated_at").single(),
     ]);
 
     if (claimResult.error) {
@@ -182,7 +182,7 @@ Deno.serve(async (req: Request) => {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (updateResult.error) {
+    if (updateResult.error || !updateResult.data) {
       console.error("claim-mail: save update failed", updateResult.error);
       return new Response(JSON.stringify({ error: "Failed to update save" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -195,7 +195,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return new Response(
-      JSON.stringify({ ok: true, kind, coins, inventory, fertilizers, gearInventory, discovered }),
+      JSON.stringify({ ok: true, kind, coins, inventory, fertilizers, gearInventory, discovered, serverUpdatedAt: updateResult.data.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
