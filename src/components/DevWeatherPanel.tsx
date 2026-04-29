@@ -10,6 +10,7 @@ import { GEAR } from "../data/gear";
 import type { GearType } from "../data/gear";
 import { useGame } from "../store/GameContext";
 import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug } from "../store/gameStore";
+import type { GameState } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
 import {
   WEATHER_MUT_CHANCE_PER_TICK,
@@ -43,6 +44,21 @@ type Tab = "weather" | "items" | "broadcast";
 
 export function DevWeatherPanel() {
   const { state, update, user } = useGame();
+
+  // Dev-only save helper — always fetches the latest updated_at from the DB
+  // before writing so CAS never blocks dev panel actions.
+  async function devSave(userId: string, newState: GameState): Promise<void> {
+    const { data } = await supabase
+      .from("game_saves")
+      .select("updated_at")
+      .eq("user_id", userId)
+      .single();
+    const freshState = data?.updated_at
+      ? { ...newState, serverUpdatedAt: data.updated_at as string }
+      : newState;
+    const savedAt = await saveToCloud(userId, freshState);
+    if (savedAt) update({ ...newState, serverUpdatedAt: savedAt });
+  }
 
   // ── Weather tab state ──────────────────────────────────────────────────────
   const [cycling, setCycling]   = useState(false);
@@ -126,7 +142,7 @@ export function DevWeatherPanel() {
 
     const newState = { ...state, inventory: newInventory };
     update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    if (user) await devSave(user.id, newState);
     const flower = FLOWERS.find((f) => f.id === selectedFlower);
     showToast(`+${quantity} ${flower?.name ?? selectedFlower} ${isSeed ? "seed" : mut ? `(${mut})` : "bloom"}`);
   }
@@ -144,7 +160,7 @@ export function DevWeatherPanel() {
 
     const newState = { ...state, discovered: newDiscovered };
     update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    if (user) await devSave(user.id, newState);
     const flower = FLOWERS.find((f) => f.id === selectedFlower);
     showToast(`Codex filled for ${flower?.name ?? selectedFlower}`);
   }
@@ -152,7 +168,7 @@ export function DevWeatherPanel() {
   async function giveCoins() {
     const newState = { ...state, coins: state.coins + coins };
     update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    if (user) await devSave(user.id, newState);
     showToast(`${coins >= 0 ? "+" : ""}${coins.toLocaleString()} coins`);
   }
 
@@ -166,7 +182,7 @@ export function DevWeatherPanel() {
     }
     const newState = { ...state, fertilizers: newFertilizers };
     update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    if (user) await devSave(user.id, newState);
     showToast(`+${fertQty} ${FERTILIZERS[fertType].name}`);
   }
 
@@ -180,7 +196,7 @@ export function DevWeatherPanel() {
     }
     const newState = { ...state, gearInventory: newGearInventory };
     update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    if (user) await devSave(user.id, newState);
     showToast(`+${gearQty} ${GEAR[gearType].name} (${GEAR[gearType].rarity})`);
   }
 

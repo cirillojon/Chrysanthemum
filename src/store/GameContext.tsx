@@ -231,8 +231,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // simply need to reflect the latest tick checkpoints). Without this write,
       // the DB can be out of sync with the client, causing plant-seed / harvest
       // edge functions to see stale occupied / empty plots.
-      await saveToCloud(u.id, ticked);
+      const savedAt = await saveToCloud(u.id, ticked);
       if (loadGen.current !== gen) return; // sign-out fired after cloud write — don't re-enable saves
+      if (savedAt) {
+        setState((prev) => ({ ...prev, serverUpdatedAt: savedAt }));
+      } else {
+        // CAS miss — another session wrote between our load and our offline-tick save.
+        // Fetch the current updated_at so subsequent saves and edge function calls
+        // aren't permanently blocked by a stale serverUpdatedAt.
+        const { data: freshRow } = await supabase
+          .from("game_saves")
+          .select("updated_at")
+          .eq("user_id", u.id)
+          .single();
+        if (loadGen.current !== gen) return;
+        if (freshRow?.updated_at) {
+          setState((prev) => ({ ...prev, serverUpdatedAt: freshRow.updated_at as string }));
+        }
+      }
 
       setTimeout(() => { saveEnabled.current = true; }, 1_000);
 
@@ -495,7 +511,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         setProfile(p);
         const fresh = defaultState();
         setState(fresh);
-        await saveToCloud(user.id, fresh);
+        const freshSavedAt = await saveToCloud(user.id, fresh);
+        if (freshSavedAt) setState((prev) => ({ ...prev, serverUpdatedAt: freshSavedAt }));
         localStorage.removeItem("chrysanthemum_save");
         setTimeout(() => { saveEnabled.current = true; }, 500);
         setAuthLoading(false);

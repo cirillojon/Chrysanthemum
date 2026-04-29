@@ -149,7 +149,7 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
 export async function saveToCloud(
   userId: string,
   state: GameState
-): Promise<boolean> {
+): Promise<string | false> {
   const payload = {
     user_id:                userId,
     coins:                  state.coins,
@@ -177,7 +177,7 @@ export async function saveToCloud(
   if (!state.serverUpdatedAt) {
     const { error } = await supabase.from("game_saves").upsert(payload);
     if (error) { console.error("Failed to save to cloud:", error); return false; }
-    return true;
+    return payload.updated_at;
   }
 
   // ── CAS update — only overwrite if DB updated_at matches last known value ─
@@ -198,7 +198,7 @@ export async function saveToCloud(
     if (error?.code !== "PGRST116") console.error("Failed to save to cloud:", error);
     return false;
   }
-  return true;
+  return data.updated_at as string;
 }
 
 // ── Public profile / save ──────────────────────────────────────────────────

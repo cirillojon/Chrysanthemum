@@ -1,10 +1,10 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useGame } from "../store/GameContext";
 import { FLOWER_TYPES, RARITY_CONFIG, getFlower, MUTATIONS } from "../data/flowers";
 import { ESSENCE_YIELD, calculateEssenceYield, mergeEssences } from "../data/essences";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
 import { edgeAlchemySacrifice } from "../lib/edgeFunctions";
-import type { MutationType, Rarity } from "../data/flowers";
+import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -38,7 +38,7 @@ function EssenceWallet({ essences }: { essences: EssenceItem[] }) {
   });
 
   return (
-    <div className="grid grid-cols-3 gap-1.5">
+    <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5">
       {sorted.map(({ type, amount }) => {
         const cfg = FLOWER_TYPES[type];
         return (
@@ -105,12 +105,25 @@ type AlchemyView = "sacrifice" | "essences";
 export function AlchemyTab() {
   const { state, perform } = useGame();
 
-  const [view, setView]           = useState<AlchemyView>("sacrifice");
+  const [view, setView]             = useState<AlchemyView>("sacrifice");
   const [selections, setSelections] = useState<SacrificeMap>(new Map());
-  const [activeRarity, setActiveRarity] = useState<Rarity | null>(null);
+  const [activeRarities, setActiveRarities] = useState<Rarity[]>([]);
+  const [activeTypes,    setActiveTypes]    = useState<FlowerType[]>([]);
   const [sacrificing, setSacrificing]   = useState(false);
   const [error, setError]               = useState<string | null>(null);
   const [success, setSuccess]           = useState<EssenceItem[] | null>(null);
+  const [successVisible, setSuccessVisible] = useState(false);
+
+  // Auto-dismiss success toast
+  useEffect(() => {
+    if (!success) return;
+    const frame = requestAnimationFrame(() => setSuccessVisible(true));
+    const timer = setTimeout(() => {
+      setSuccessVisible(false);
+      setTimeout(() => setSuccess(null), 400);
+    }, 3_000);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [success]);
 
   // Inventory of harvested (non-seed) flowers grouped by rarity
   const sacrificableByRarity = useMemo(() => {
@@ -128,10 +141,31 @@ export function AlchemyTab() {
 
   const rarityOrder: Rarity[] = ["common", "uncommon", "rare", "legendary", "mythic", "exalted", "prismatic"];
 
+  // Items after rarity filter (before type filter) — used to compute available types
+  const rarityFiltered = useMemo(() => {
+    if (activeRarities.length === 0) return rarityOrder.flatMap((r) => sacrificableByRarity.get(r) ?? []);
+    return activeRarities.flatMap((r) => sacrificableByRarity.get(r) ?? []);
+  }, [activeRarities, sacrificableByRarity]);
+
+  // Which types have at least one item in the current rarity selection
+  const availableTypes = useMemo(() => {
+    const set = new Set<FlowerType>();
+    for (const item of rarityFiltered) {
+      const flower = getFlower(item.speciesId);
+      flower?.types.forEach((t) => set.add(t));
+    }
+    return set;
+  }, [rarityFiltered]);
+
+  const typeOrder = Object.keys(FLOWER_TYPES) as FlowerType[];
+
   const filteredItems = useMemo(() => {
-    if (!activeRarity) return [];
-    return sacrificableByRarity.get(activeRarity) ?? [];
-  }, [activeRarity, sacrificableByRarity]);
+    if (activeTypes.length === 0) return rarityFiltered;
+    return rarityFiltered.filter((item) => {
+      const flower = getFlower(item.speciesId);
+      return flower?.types.some((t) => activeTypes.includes(t)) ?? false;
+    });
+  }, [activeTypes, rarityFiltered]);
 
   const totalSelected = useMemo(() =>
     Array.from(selections.values()).reduce((sum, n) => sum + n, 0),
@@ -175,7 +209,6 @@ export function AlchemyTab() {
     if (sacrificing || totalSelected === 0) return;
     setSacrificing(true);
     setError(null);
-    setSuccess(null);
 
     const sacrifices: SacrificeEntry[] = [];
     for (const [key, quantity] of selections) {
@@ -191,6 +224,9 @@ export function AlchemyTab() {
       return;
     }
 
+    // Snapshot essences before the sacrifice so we can compute the gain delta
+    const prevEssences = state.essences ?? [];
+
     let succeeded = false;
 
     await perform(
@@ -203,13 +239,17 @@ export function AlchemyTab() {
         }))
       ),
       (result) => {
-        setSuccess(result.essences);
+        // Show only what was gained, not the entire bank
+        const gained = result.essences
+          .map((e) => ({
+            type:   e.type,
+            amount: e.amount - (prevEssences.find((p) => p.type === e.type)?.amount ?? 0),
+          }))
+          .filter((e) => e.amount > 0);
+        setSuccess(gained);
         setSelections(new Map());
         succeeded = true;
       },
-      // No serialize — sacrifice is standalone (doesn't race with harvest/plant).
-      // Default (non-serialized) perform awaits the server call before returning,
-      // so we can check `succeeded` right after the await.
     );
 
     if (!succeeded) {
@@ -247,7 +287,7 @@ export function AlchemyTab() {
       {view === "essences" && (
         <div className="flex flex-col gap-4">
           <div>
-            <p className="text-xs font-semibold mb-0.5">Your Essence Bank</p>
+            <p className="text-xs font-semibold mb-0.5">Essence Bank</p>
             <p className="text-[11px] text-muted-foreground">
               Essences are earned by sacrificing flowers. Use them in the Infuse tab to enhance seeds.
             </p>
@@ -281,29 +321,13 @@ export function AlchemyTab() {
             Sacrifice harvested flowers to extract their elemental essence. Higher rarity yields more essence.
           </p>
 
-          {/* Success banner */}
-          {success && (
-            <div className="bg-primary/10 border border-primary/40 rounded-xl px-4 py-3 flex flex-col gap-2">
-              <p className="text-xs font-semibold text-primary">Sacrifice complete!</p>
-              <div className="flex flex-wrap gap-1.5">
-                {success.filter((e) => e.amount > 0).map(({ type, amount }) => {
-                  const cfg = FLOWER_TYPES[type];
-                  return (
-                    <span
-                      key={type}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
-                    >
-                      {cfg.emoji} +{amount}
-                    </span>
-                  );
-                })}
-              </div>
-              <button
-                onClick={() => setSuccess(null)}
-                className="text-[10px] text-primary/70 hover:text-primary self-end"
-              >
-                Dismiss
-              </button>
+          {/* Essence bank — always visible at top */}
+          {(state.essences ?? []).length > 0 && (
+            <div>
+              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+                Essence Bank
+              </p>
+              <EssenceWallet essences={state.essences ?? []} />
             </div>
           )}
 
@@ -320,14 +344,29 @@ export function AlchemyTab() {
               Filter by rarity
             </p>
             <div className="flex flex-wrap gap-1.5">
+              {/* All button */}
+              <button
+                onClick={() => setActiveRarities([])}
+                className={`
+                  px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all duration-150
+                  ${activeRarities.length === 0
+                    ? "border-foreground bg-foreground/10 text-foreground"
+                    : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                  }
+                `}
+              >
+                All
+              </button>
               {rarityOrder.map((rarity) => {
-                const cfg     = RARITY_CONFIG[rarity];
-                const hasAny  = (sacrificableByRarity.get(rarity)?.length ?? 0) > 0;
-                const isActive = activeRarity === rarity;
+                const cfg      = RARITY_CONFIG[rarity];
+                const hasAny   = (sacrificableByRarity.get(rarity)?.length ?? 0) > 0;
+                const isActive = activeRarities.includes(rarity);
                 return (
                   <button
                     key={rarity}
-                    onClick={() => setActiveRarity(isActive ? null : rarity)}
+                    onClick={() => setActiveRarities((prev) =>
+                      isActive ? prev.filter((r) => r !== rarity) : [...prev, rarity]
+                    )}
                     disabled={!hasAny}
                     className={`
                       px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all duration-150
@@ -346,15 +385,57 @@ export function AlchemyTab() {
             </div>
           </div>
 
-          {/* Flower grid for selected rarity */}
-          {activeRarity && (
+          {/* Type filter */}
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+              Filter by type
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {typeOrder.map((type) => {
+                const cfg      = FLOWER_TYPES[type];
+                const hasAny   = availableTypes.has(type);
+                const isActive = activeTypes.includes(type);
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setActiveTypes((prev) =>
+                      isActive ? prev.filter((t) => t !== type) : [...prev, type]
+                    )}
+                    disabled={!hasAny}
+                    className={`
+                      inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold transition-all duration-150
+                      ${isActive
+                        ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`
+                        : hasAny
+                          ? `border-border text-muted-foreground hover:${cfg.bgColor} hover:${cfg.borderColor} hover:${cfg.color}`
+                          : "border-border/30 text-muted-foreground/30 cursor-not-allowed"
+                      }
+                    `}
+                  >
+                    {cfg.emoji} {cfg.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Flower grid */}
+          {filteredItems.length > 0 && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold">
-                  <span className={RARITY_CONFIG[activeRarity].color}>
-                    {RARITY_CONFIG[activeRarity].label}
-                  </span>
-                  {" "}flowers
+                  {activeRarities.length === 0 && activeTypes.length === 0
+                    ? "All flowers"
+                    : <>
+                        {activeRarities.map((r) => (
+                          <span key={r} className={`${RARITY_CONFIG[r].color} mr-1`}>{RARITY_CONFIG[r].label}</span>
+                        ))}
+                        {activeTypes.map((t) => (
+                          <span key={t} className={`${FLOWER_TYPES[t].color} mr-1`}>{FLOWER_TYPES[t].emoji} {FLOWER_TYPES[t].name}</span>
+                        ))}
+                        <span>flowers</span>
+                      </>
+                  }
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -364,10 +445,10 @@ export function AlchemyTab() {
                     Select all
                   </button>
                   <button
-                    onClick={handleClearRarity}
+                    onClick={() => { handleClearRarity(); }}
                     className="text-[10px] text-muted-foreground hover:text-foreground"
                   >
-                    Clear
+                    Clear selection
                   </button>
                 </div>
               </div>
@@ -401,7 +482,8 @@ export function AlchemyTab() {
                             {flower.name}
                           </p>
                           <p className="text-[10px] text-muted-foreground">
-                            {avail} available
+                            <span className={RARITY_CONFIG[flower.rarity].color}>{RARITY_CONFIG[flower.rarity].label}</span>
+                            {" · "}{avail} available
                             {isSelected && ` · ${qty} selected`}
                           </p>
                         </div>
@@ -456,11 +538,11 @@ export function AlchemyTab() {
             </div>
           )}
 
-          {/* No rarity selected nudge */}
-          {!activeRarity && totalSelected === 0 && (
+          {/* Empty state — no flowers in inventory at all */}
+          {filteredItems.length === 0 && (
             <div className="text-center py-6 text-xs text-muted-foreground space-y-1">
               <p className="text-2xl">⚗️</p>
-              <p>Select a rarity above to choose flowers to sacrifice.</p>
+              <p>Harvest some flowers to sacrifice them.</p>
             </div>
           )}
 
@@ -469,7 +551,7 @@ export function AlchemyTab() {
 
           {/* Summary + Sacrifice button */}
           {totalSelected > 0 && (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col items-center gap-2">
               <p className="text-center text-xs text-muted-foreground">
                 {totalSelected} flower{totalSelected !== 1 ? "s" : ""} selected
               </p>
@@ -477,7 +559,7 @@ export function AlchemyTab() {
                 onClick={handleSacrifice}
                 disabled={sacrificing}
                 className={`
-                  w-full py-3 rounded-full text-sm font-semibold border transition-all duration-200
+                  px-10 py-3 rounded-full text-sm font-semibold border transition-all duration-200
                   ${sacrificing
                     ? "border-border text-muted-foreground opacity-50 cursor-not-allowed"
                     : "border-destructive/60 text-destructive hover:bg-destructive/10 hover:scale-[1.02]"
@@ -489,16 +571,37 @@ export function AlchemyTab() {
             </div>
           )}
 
-          {/* Current essence wallet preview */}
-          {(state.essences ?? []).length > 0 && (
-            <div className="pt-2 border-t border-border">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
-                Current essences
-              </p>
-              <EssenceWallet essences={state.essences ?? []} />
-            </div>
-          )}
+        </div>
+      )}
 
+      {/* ── Success toast (floating, auto-dismiss) ── */}
+      {success && (
+        <div
+          className={`
+            fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none
+            transition-all duration-400
+            ${successVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
+          `}
+        >
+          <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
+            <span className="text-2xl">⚗️</span>
+            <div>
+              <p className="text-sm font-bold text-primary mb-1.5">Sacrifice complete!</p>
+              <div className="flex flex-wrap gap-1.5">
+                {success.filter((e) => e.amount > 0).map(({ type, amount }) => {
+                  const cfg = FLOWER_TYPES[type];
+                  return (
+                    <span
+                      key={type}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
+                    >
+                      {cfg.emoji} +{amount}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
