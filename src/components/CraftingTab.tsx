@@ -75,6 +75,27 @@ function cellBgClass(rarity: Rarity): string {
   return RARITY_CONFIG[rarity].bgBloom || "bg-card/60";
 }
 
+/** Returns text/border/bg class strings for a colored ingredient chip. */
+function rarityChip(rarity: Rarity): { color: string; border: string; bg: string } {
+  if (rarity === "prismatic") return { color: "text-white", border: "rainbow-border", bg: "bg-card/60" };
+  const cfg = RARITY_CONFIG[rarity];
+  return {
+    color:  cfg.color        || "text-foreground",
+    border: cfg.borderBloom  || cfg.borderGrowing || "border-border",
+    bg:     cfg.bgBloom      || "bg-card/60",
+  };
+}
+
+function essenceChip(essenceType: string): { color: string; border: string; bg: string } {
+  if (essenceType === "universal") return {
+    color:  UNIVERSAL_ESSENCE_DISPLAY.color,
+    border: UNIVERSAL_ESSENCE_DISPLAY.borderColor,
+    bg:     UNIVERSAL_ESSENCE_DISPLAY.bgColor,
+  };
+  const cfg = FLOWER_TYPES[essenceType as FlowerType];
+  return { color: cfg.color, border: cfg.borderColor, bg: cfg.bgColor };
+}
+
 // ── Build item list from all recipes ─────────────────────────────────────────
 
 function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
@@ -147,18 +168,19 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
 // ── Popup ingredient display ──────────────────────────────────────────────────
 
 function IngredientRow({
-  label, emoji, need, have, enough,
+  label, emoji, need, have, enough, color, border, bg,
 }: {
   label: string; emoji: string; need: number; have: number; enough: boolean;
+  color: string; border: string; bg: string;
 }) {
   return (
-    <div className={`flex items-center justify-between text-xs py-0.5 ${enough ? "text-foreground" : "text-muted-foreground"}`}>
-      <span className="flex items-center gap-1.5">
+    <div className={`flex items-center justify-between text-xs px-2.5 py-1.5 rounded-lg border ${border} ${bg}`}>
+      <span className={`flex items-center gap-1.5 font-medium ${color}`}>
         <span>{emoji}</span>
         <span>{label}</span>
       </span>
-      <span className={`font-mono font-semibold ${enough ? "text-green-400" : "text-red-400"}`}>
-        {have} / {need}
+      <span className={`font-mono font-semibold ml-3 ${enough ? "text-green-400" : "text-red-400"}`}>
+        {have}/{need}
       </span>
     </div>
   );
@@ -173,22 +195,25 @@ function GearIngredients({
   consumables:   { id: string; quantity: number }[];
 }) {
   return (
-    <div className="space-y-0.5">
+    <div className="space-y-1">
       {recipe.ingredients.map((ing, i) => {
         if (ing.kind === "essence") {
           const isUniversal = ing.essenceType === "universal";
-          const cfg = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[ing.essenceType as FlowerType];
-          const have = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
-          return <IngredientRow key={i} emoji={cfg.emoji} label={isUniversal ? "Universal" : cfg.name} need={ing.amount} have={have} enough={have >= ing.amount} />;
+          const cfg   = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[ing.essenceType as FlowerType];
+          const have  = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
+          const label = isUniversal ? "Universal Essence" : `${cfg.name} Essence`;
+          return <IngredientRow key={i} emoji={cfg.emoji} label={label} need={ing.amount} have={have} enough={have >= ing.amount} {...essenceChip(ing.essenceType)} />;
         }
         if (ing.kind === "gear") {
-          const def  = GEAR[ing.gearType as GearType];
-          const have = gearInventory.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
-          return <IngredientRow key={i} emoji={def?.emoji ?? "⚙️"} label={def?.name ?? ing.gearType} need={ing.quantity} have={have} enough={have >= ing.quantity} />;
+          const def   = GEAR[ing.gearType as GearType];
+          const have  = gearInventory.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
+          const tier  = GEAR_TIER_MAP[ing.gearType];
+          const label = tier != null ? `${def?.name ?? ing.gearType} ${toRoman(tier)}` : (def?.name ?? ing.gearType);
+          return <IngredientRow key={i} emoji={def?.emoji ?? "⚙️"} label={label} need={ing.quantity} have={have} enough={have >= ing.quantity} {...rarityChip(def?.rarity ?? "common")} />;
         }
         const crec = CONSUMABLE_RECIPE_MAP[ing.consumableId as ConsumableId];
         const have = consumables.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
-        return <IngredientRow key={i} emoji={crec?.emoji ?? "🧪"} label={crec?.name ?? ing.consumableId} need={ing.quantity} have={have} enough={have >= ing.quantity} />;
+        return <IngredientRow key={i} emoji={crec?.emoji ?? "🧪"} label={crec?.name ?? ing.consumableId} need={ing.quantity} have={have} enough={have >= ing.quantity} {...(crec ? rarityChip(crec.rarity) : { color: "text-muted-foreground", border: "border-border", bg: "bg-card/60" })} />;
       })}
     </div>
   );
@@ -230,21 +255,22 @@ function CraftPopup({
       const cost = recipe.cost;
       if (cost.kind === "essence") {
         ingredientsSection = (
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {cost.amounts.map(({ type, amount }) => {
               const isUniversal = type === "universal";
-              const cfg = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
-              const have = essences.find((e) => e.type === type)?.amount ?? 0;
-              return <IngredientRow key={type} emoji={cfg.emoji} label={isUniversal ? "Universal" : cfg.name} need={amount} have={have} enough={have >= amount} />;
+              const cfg   = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
+              const have  = essences.find((e) => e.type === type)?.amount ?? 0;
+              const label = isUniversal ? "Universal Essence" : `${cfg.name} Essence`;
+              return <IngredientRow key={type} emoji={cfg.emoji} label={label} need={amount} have={have} enough={have >= amount} {...essenceChip(type)} />;
             })}
           </div>
         );
       } else {
-        const src = CONSUMABLE_RECIPE_MAP[cost.id as ConsumableId];
+        const src  = CONSUMABLE_RECIPE_MAP[cost.id as ConsumableId];
         const have = consum.find((c) => c.id === cost.id)?.quantity ?? 0;
         ingredientsSection = (
-          <div className="space-y-0.5">
-            <IngredientRow emoji={src?.emoji ?? "?"} label={src?.name ?? cost.id} need={cost.quantity} have={have} enough={have >= cost.quantity} />
+          <div className="space-y-1">
+            <IngredientRow emoji={src?.emoji ?? "?"} label={src?.name ?? cost.id} need={cost.quantity} have={have} enough={have >= cost.quantity} {...(src ? rarityChip(src.rarity) : { color: "text-muted-foreground", border: "border-border", bg: "bg-card/60" })} />
           </div>
         );
       }
@@ -257,12 +283,13 @@ function CraftPopup({
       const cost = recipe.cost;
       if (cost.kind === "essence") {
         ingredientsSection = (
-          <div className="space-y-0.5">
+          <div className="space-y-1">
             {cost.amounts.map(({ type, amount }) => {
               const isUniversal = type === "universal";
-              const cfg = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
-              const have = essences.find((e) => e.type === type)?.amount ?? 0;
-              return <IngredientRow key={type} emoji={cfg.emoji} label={isUniversal ? "Universal" : cfg.name} need={amount} have={have} enough={have >= amount} />;
+              const cfg   = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
+              const have  = essences.find((e) => e.type === type)?.amount ?? 0;
+              const label = isUniversal ? "Universal Essence" : `${cfg.name} Essence`;
+              return <IngredientRow key={type} emoji={cfg.emoji} label={label} need={amount} have={have} enough={have >= amount} {...essenceChip(type)} />;
             })}
           </div>
         );
@@ -270,8 +297,8 @@ function CraftPopup({
         const prevRarity = TIER_RARITIES[cost.tier as 1|2|3|4|5];
         const have = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
         ingredientsSection = (
-          <div className="space-y-0.5">
-            <IngredientRow emoji="🥢" label={`Attunement ${cost.tier}`} need={cost.quantity} have={have} enough={have >= cost.quantity} />
+          <div className="space-y-1">
+            <IngredientRow emoji="🥢" label={`Attunement ${toRoman(cost.tier)}`} need={cost.quantity} have={have} enough={have >= cost.quantity} {...rarityChip(prevRarity)} />
           </div>
         );
       }
@@ -329,7 +356,7 @@ function CraftPopup({
             onClick={onCraft}
             disabled={!entry.canCraft || isCrafting}
             className={`
-              w-full py-3 rounded-xl font-semibold text-sm transition-all
+              w-full py-3 rounded-xl font-semibold text-sm transition-all text-center
               ${entry.canCraft && !isCrafting
                 ? "bg-primary text-primary-foreground hover:opacity-90 active:scale-[0.98]"
                 : "bg-muted text-muted-foreground cursor-not-allowed opacity-50"
