@@ -107,8 +107,8 @@ export function AlchemyTab() {
 
   const [view, setView]             = useState<AlchemyView>("sacrifice");
   const [selections, setSelections] = useState<SacrificeMap>(new Map());
-  const [activeRarity, setActiveRarity] = useState<Rarity | null>(null);
-  const [activeType,   setActiveType]   = useState<FlowerType | null>(null);
+  const [activeRarities, setActiveRarities] = useState<Rarity[]>([]);
+  const [activeTypes,    setActiveTypes]    = useState<FlowerType[]>([]);
   const [sacrificing, setSacrificing]   = useState(false);
   const [error, setError]               = useState<string | null>(null);
   const [success, setSuccess]           = useState<EssenceItem[] | null>(null);
@@ -143,9 +143,9 @@ export function AlchemyTab() {
 
   // Items after rarity filter (before type filter) — used to compute available types
   const rarityFiltered = useMemo(() => {
-    if (!activeRarity) return rarityOrder.flatMap((r) => sacrificableByRarity.get(r) ?? []);
-    return sacrificableByRarity.get(activeRarity) ?? [];
-  }, [activeRarity, sacrificableByRarity]);
+    if (activeRarities.length === 0) return rarityOrder.flatMap((r) => sacrificableByRarity.get(r) ?? []);
+    return activeRarities.flatMap((r) => sacrificableByRarity.get(r) ?? []);
+  }, [activeRarities, sacrificableByRarity]);
 
   // Which types have at least one item in the current rarity selection
   const availableTypes = useMemo(() => {
@@ -160,12 +160,12 @@ export function AlchemyTab() {
   const typeOrder = Object.keys(FLOWER_TYPES) as FlowerType[];
 
   const filteredItems = useMemo(() => {
-    if (!activeType) return rarityFiltered;
+    if (activeTypes.length === 0) return rarityFiltered;
     return rarityFiltered.filter((item) => {
       const flower = getFlower(item.speciesId);
-      return flower?.types.includes(activeType) ?? false;
+      return flower?.types.some((t) => activeTypes.includes(t)) ?? false;
     });
-  }, [activeType, rarityFiltered]);
+  }, [activeTypes, rarityFiltered]);
 
   const totalSelected = useMemo(() =>
     Array.from(selections.values()).reduce((sum, n) => sum + n, 0),
@@ -346,10 +346,10 @@ export function AlchemyTab() {
             <div className="flex flex-wrap gap-1.5">
               {/* All button */}
               <button
-                onClick={() => setActiveRarity(null)}
+                onClick={() => setActiveRarities([])}
                 className={`
                   px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all duration-150
-                  ${activeRarity === null
+                  ${activeRarities.length === 0
                     ? "border-foreground bg-foreground/10 text-foreground"
                     : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
                   }
@@ -358,13 +358,15 @@ export function AlchemyTab() {
                 All
               </button>
               {rarityOrder.map((rarity) => {
-                const cfg     = RARITY_CONFIG[rarity];
-                const hasAny  = (sacrificableByRarity.get(rarity)?.length ?? 0) > 0;
-                const isActive = activeRarity === rarity;
+                const cfg      = RARITY_CONFIG[rarity];
+                const hasAny   = (sacrificableByRarity.get(rarity)?.length ?? 0) > 0;
+                const isActive = activeRarities.includes(rarity);
                 return (
                   <button
                     key={rarity}
-                    onClick={() => setActiveRarity(isActive ? null : rarity)}
+                    onClick={() => setActiveRarities((prev) =>
+                      isActive ? prev.filter((r) => r !== rarity) : [...prev, rarity]
+                    )}
                     disabled={!hasAny}
                     className={`
                       px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all duration-150
@@ -390,13 +392,15 @@ export function AlchemyTab() {
             </p>
             <div className="flex flex-wrap gap-1.5">
               {typeOrder.map((type) => {
-                const cfg     = FLOWER_TYPES[type];
-                const hasAny  = availableTypes.has(type);
-                const isActive = activeType === type;
+                const cfg      = FLOWER_TYPES[type];
+                const hasAny   = availableTypes.has(type);
+                const isActive = activeTypes.includes(type);
                 return (
                   <button
                     key={type}
-                    onClick={() => setActiveType(isActive ? null : type)}
+                    onClick={() => setActiveTypes((prev) =>
+                      isActive ? prev.filter((t) => t !== type) : [...prev, type]
+                    )}
                     disabled={!hasAny}
                     className={`
                       inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold transition-all duration-150
@@ -420,9 +424,18 @@ export function AlchemyTab() {
             <div className="flex flex-col gap-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs font-semibold">
-                  {activeRarity && <span className={RARITY_CONFIG[activeRarity].color}>{RARITY_CONFIG[activeRarity].label} </span>}
-                  {activeType && <span className={FLOWER_TYPES[activeType].color}>{FLOWER_TYPES[activeType].emoji} {FLOWER_TYPES[activeType].name} </span>}
-                  {!activeRarity && !activeType ? "All flowers" : "flowers"}
+                  {activeRarities.length === 0 && activeTypes.length === 0
+                    ? "All flowers"
+                    : <>
+                        {activeRarities.map((r) => (
+                          <span key={r} className={`${RARITY_CONFIG[r].color} mr-1`}>{RARITY_CONFIG[r].label}</span>
+                        ))}
+                        {activeTypes.map((t) => (
+                          <span key={t} className={`${FLOWER_TYPES[t].color} mr-1`}>{FLOWER_TYPES[t].emoji} {FLOWER_TYPES[t].name}</span>
+                        ))}
+                        <span>flowers</span>
+                      </>
+                  }
                 </p>
                 <div className="flex gap-2">
                   <button
@@ -432,10 +445,10 @@ export function AlchemyTab() {
                     Select all
                   </button>
                   <button
-                    onClick={handleClearRarity}
+                    onClick={() => { handleClearRarity(); }}
                     className="text-[10px] text-muted-foreground hover:text-foreground"
                   >
-                    Clear
+                    Clear selection
                   </button>
                 </div>
               </div>
