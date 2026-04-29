@@ -31,6 +31,33 @@ interface CraftEntry {
   tier?:       number | null;
 }
 
+// ── Gear tier derivation ──────────────────────────────────────────────────────
+// Group gear recipes into upgrade chains by stripping the rarity suffix.
+// e.g. sprinkler_rare/legendary/mythic → family "sprinkler" → tiers I–V
+// Mutation sprinklers (sprinkler_flame) have non-rarity suffixes → unique family → no tier.
+
+const RARITY_SUFFIXES = new Set(["uncommon","rare","legendary","mythic","exalted","prismatic"]);
+
+function gearFamily(gearType: string): string {
+  const parts = gearType.split("_");
+  return RARITY_SUFFIXES.has(parts[parts.length - 1]) ? parts.slice(0, -1).join("_") : gearType;
+}
+
+const GEAR_TIER_MAP = (() => {
+  const counts: Record<string, number> = {};
+  const map:    Record<string, number> = {};
+  for (const r of GEAR_RECIPES) {
+    const fam = gearFamily(r.outputGearType);
+    counts[fam] = (counts[fam] ?? 0) + 1;
+    map[r.outputGearType] = counts[fam];
+  }
+  // Single-item families don't need a tier badge
+  for (const r of GEAR_RECIPES) {
+    if (counts[gearFamily(r.outputGearType)] <= 1) delete map[r.outputGearType];
+  }
+  return map;
+})();
+
 // ── Rarity style helpers ──────────────────────────────────────────────────────
 
 
@@ -71,6 +98,7 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
         description: def.description,
         owned:       gearInv.find((g) => g.gearType === recipe.outputGearType)?.quantity ?? 0,
         canCraft:    canCraftGear(recipe, essences, gearInv, consum),
+        tier:        GEAR_TIER_MAP[recipe.outputGearType] ?? null,
       });
     }
   }
