@@ -18,8 +18,8 @@ const FERTILIZER_MULTIPLIERS: Record<string, number> = {
 
 // ── Mutation value multipliers (mirrors src/data/flowers.ts) ─────────────────
 const MUTATION_MULTIPLIERS: Record<string, number> = {
-  golden: 4.0, rainbow: 3.0, giant: 2.0, moonlit: 2.5, frozen: 2.0,
-  scorched: 2.0, wet: 1.5, windstruck: 1.1, shocked: 2.5,
+  golden: 4.0, rainbow: 5.0, giant: 2.0, moonlit: 2.5, frozen: 2.0,
+  scorched: 2.0, wet: 1.25, windstruck: 0.7, shocked: 2.5,
 };
 
 // ── Flower growth times in ms (mirrors src/data/flowers.ts) ──────────────────
@@ -233,16 +233,28 @@ Deno.serve(async (req: Request) => {
 
     const totalGrowthMs  = growthTimes.seed + growthTimes.sprout;
     const fertMultiplier = plant.fertilizer ? (FERTILIZER_MULTIPLIERS[plant.fertilizer] ?? 1.0) : 1.0;
-    const masteredBonus  = plant.masteredBonus ?? 1.0;
+    // Clamp masteredBonus — client-stored value must not exceed the legitimate
+    // max of 1.25, preventing a tampered DB row from making growth instant.
+    const masteredBonus  = Math.min(plant.masteredBonus ?? 1.0, 1.25);
 
-    // Use server-authoritative planted_at from plant_timings when available.
-    // Falls back to timePlanted for plants that predate this fix — those remain
-    // vulnerable until they are harvested and replanted, at which point plant-seed
-    // will create a plant_timings entry for them.
-    const authoritativePlantedAt = timingResult?.data?.planted_at
-      ? new Date(timingResult.data.planted_at).getTime()
-      : plant.timePlanted;
+    // Use server-authoritative planted_at from plant_timings.
+    // If no entry exists (plant predates the fix), backfill now() and reject —
+    // the plant will regrow from this moment. This closes the timePlanted exploit
+    // for all existing plants immediately rather than waiting for a full cycle.
+    // Approach credit: @cirillojon (PR #134).
+    if (!timingResult?.data) {
+      void supabaseAdmin.from("plant_timings").upsert({
+        user_id:    userId,
+        row,
+        col,
+        planted_at: new Date().toISOString(),
+      });
+      return new Response(JSON.stringify({ error: "Plant timing reset — please wait for it to regrow" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
+    const authoritativePlantedAt = new Date(timingResult.data.planted_at).getTime();
     const minBloomTime = authoritativePlantedAt + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
 
     if (Date.now() < minBloomTime) {
