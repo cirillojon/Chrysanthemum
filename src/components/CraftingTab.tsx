@@ -77,7 +77,9 @@ function cellBgClass(rarity: Rarity): string {
 
 /** Returns text/border/bg class strings for a colored ingredient chip. */
 function rarityChip(rarity: Rarity): { color: string; border: string; bg: string } {
-  if (rarity === "prismatic") return { color: "rainbow-text", border: "rainbow-border", bg: "bg-card/60" };
+  // rainbow-border + rainbow-bg would clobber each other (both set `animation`).
+  // rainbow-tile runs all three keyframes in one declaration — use it for the border slot.
+  if (rarity === "prismatic") return { color: "rainbow-text", border: "rainbow-tile", bg: "" };
   const cfg = RARITY_CONFIG[rarity];
   return {
     color:  cfg.color        || "text-foreground",
