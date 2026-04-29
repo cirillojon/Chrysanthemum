@@ -10,6 +10,7 @@ import { GEAR } from "../data/gear";
 import type { GearType } from "../data/gear";
 import { useGame } from "../store/GameContext";
 import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug } from "../store/gameStore";
+import type { GameState } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
 import {
   WEATHER_MUT_CHANCE_PER_TICK,
@@ -80,6 +81,26 @@ export function DevWeatherPanel() {
   const [bcResult,    setBcResult]    = useState<string | null>(null);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
+
+  /** Dev-only save that bypasses stale-CAS failures by re-reading updated_at first.
+   *  Regular saveToCloud uses the client's serverUpdatedAt as a CAS guard; if any
+   *  edge function or offline tick ran since the last client sync, that stamp is stale
+   *  and the save silently fails (406). This helper fetches the current stamp fresh
+   *  before writing, ensuring dev panel actions always persist. */
+  async function devSave(newState: GameState) {
+    if (!user) return;
+    // Read the latest updated_at from DB so our CAS stamp is always current
+    const { data: row } = await supabase
+      .from("game_saves")
+      .select("updated_at")
+      .eq("user_id", user.id)
+      .single();
+    const freshState = { ...newState, serverUpdatedAt: row?.updated_at ?? null };
+    const newUpdatedAt = await saveToCloud(user.id, freshState);
+    // Keep client serverUpdatedAt in sync so subsequent actions don't CAS-fail
+    if (newUpdatedAt) update({ ...newState, serverUpdatedAt: newUpdatedAt });
+  }
+
   function showToast(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 2000);
@@ -125,8 +146,7 @@ export function DevWeatherPanel() {
     }
 
     const newState = { ...state, inventory: newInventory };
-    update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    await devSave(newState);
     const flower = FLOWERS.find((f) => f.id === selectedFlower);
     showToast(`+${quantity} ${flower?.name ?? selectedFlower} ${isSeed ? "seed" : mut ? `(${mut})` : "bloom"}`);
   }
@@ -143,16 +163,14 @@ export function DevWeatherPanel() {
     }
 
     const newState = { ...state, discovered: newDiscovered };
-    update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    await devSave(newState);
     const flower = FLOWERS.find((f) => f.id === selectedFlower);
     showToast(`Codex filled for ${flower?.name ?? selectedFlower}`);
   }
 
   async function giveCoins() {
     const newState = { ...state, coins: state.coins + coins };
-    update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    await devSave(newState);
     showToast(`${coins >= 0 ? "+" : ""}${coins.toLocaleString()} coins`);
   }
 
@@ -165,8 +183,7 @@ export function DevWeatherPanel() {
       newFertilizers.push({ type: fertType, quantity: fertQty });
     }
     const newState = { ...state, fertilizers: newFertilizers };
-    update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    await devSave(newState);
     showToast(`+${fertQty} ${FERTILIZERS[fertType].name}`);
   }
 
@@ -179,8 +196,7 @@ export function DevWeatherPanel() {
       newGearInventory.push({ gearType, quantity: gearQty });
     }
     const newState = { ...state, gearInventory: newGearInventory };
-    update(newState);
-    if (user) await saveToCloud(user.id, newState);
+    await devSave(newState);
     showToast(`+${gearQty} ${GEAR[gearType].name} (${GEAR[gearType].rarity})`);
   }
 

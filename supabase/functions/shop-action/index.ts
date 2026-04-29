@@ -91,7 +91,7 @@ Deno.serve(async (req: Request) => {
       shop?: ShopSlot[]; lastShopReset?: number;
     };
 
-    if (!["buy", "buy_all", "sell", "sync"].includes(body.action)) {
+    if (!["buy", "buy_all", "sell", "sell_all", "sync"].includes(body.action)) {
       return new Response(JSON.stringify({ error: "Invalid action" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

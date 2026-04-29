@@ -231,8 +231,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       // simply need to reflect the latest tick checkpoints). Without this write,
       // the DB can be out of sync with the client, causing plant-seed / harvest
       // edge functions to see stale occupied / empty plots.
-      await saveToCloud(u.id, ticked);
+      const savedUpdatedAt = await saveToCloud(u.id, ticked);
       if (loadGen.current !== gen) return; // sign-out fired after cloud write — don't re-enable saves
+      // Keep serverUpdatedAt in sync so subsequent CAS writes (dev panel, etc.) use the correct stamp.
+      if (savedUpdatedAt) {
+        stateRef.current = { ...ticked, serverUpdatedAt: savedUpdatedAt };
+        setState(stateRef.current);
+      }
 
       setTimeout(() => { saveEnabled.current = true; }, 1_000);
 
