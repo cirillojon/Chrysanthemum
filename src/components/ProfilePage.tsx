@@ -82,10 +82,11 @@ export function ProfilePage({ username }: Props) {
   }, [myProfile]);
 
   // ── Realtime: refresh the garden when the viewed user saves ───────────────
+  // Subscribes for ALL profiles (own and others) so the garden view updates
+  // whenever the DB changes — whether from the user's own edge-function actions,
+  // another device, or the offline cron tick.
   useEffect(() => {
     if (!profile) return;
-    // Own profile is already live via GameContext — only subscribe for others
-    if (user?.id === profile.id) return;
 
     const channel = supabase
       .channel(`profile-garden:${profile.id}`)
