@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useGame } from "../store/GameContext";
-import { FLOWERS, RARITY_CONFIG, FLOWER_TYPES, getFlower, type MutationType } from "../data/flowers";
+import { RARITY_CONFIG, FLOWER_TYPES, getFlower, type MutationType } from "../data/flowers";
 import { MUTATIONS } from "../data/flowers";
-import { CROSS_BREED_RECIPES, findRecipe, getOutputCount } from "../data/recipes";
-import { crossBreedOptimistic } from "../store/gameStore";
+import { CROSS_BREED_RECIPES, findRecipe } from "../data/recipes";
 import { edgeCrossBreed, type CrossBreedResponse } from "../lib/edgeFunctions";
 import type { InventoryItem } from "../store/gameStore";
 
@@ -239,7 +238,7 @@ function DiscoveredRecipesPanel() {
 // ── Main CrossBreedTab ────────────────────────────────────────────────────────
 
 export function CrossBreedTab() {
-  const { state, perform } = useGame();
+  const { state, update, getState } = useGame();
 
   const [slotA, setSlotA] = useState<InventoryItem | null>(null);
   const [slotB, setSlotB] = useState<InventoryItem | null>(null);
@@ -268,50 +267,31 @@ export function CrossBreedTab() {
     if (!validSlotA || !validSlotB || !spA || !spB) return;
 
     setLoading(true);
+    try {
+      const res = await edgeCrossBreed(
+        validSlotA.speciesId, validSlotA.mutation,
+        validSlotB.speciesId, validSlotB.mutation,
+      ) as CrossBreedResponse;
 
-    const recipe = findRecipe(spA, spB);
-
-    if (!recipe) {
-      // No need to call server for guaranteed no-match — but we do to get almostThere
-      try {
-        const res = await edgeCrossBreed(
-          validSlotA.speciesId, validSlotA.mutation,
-          validSlotB.speciesId, validSlotB.mutation,
-        ) as CrossBreedResponse;
-        if (res.result === "no_match") {
-          setResult({ kind: "no_match", almostThere: res.almostThere });
-        }
-      } catch {
-        setResult({ kind: "no_match", almostThere: false });
+      if (res.result === "match") {
+        // Server confirmed — merge authoritative state (no optimistic guessing)
+        const cur = getState();
+        update({
+          ...cur,
+          inventory:         res.inventory,
+          discovered:        res.discovered,
+          discoveredRecipes: res.discoveredRecipes,
+          serverUpdatedAt:   res.serverUpdatedAt,
+        });
+        setResult({ kind: "crafted", outputSpeciesId: res.outputSpeciesId, outputCount: res.outputCount, firstDiscovery: res.firstDiscovery });
+        setSlotA(null);
+        setSlotB(null);
+      } else {
+        setResult({ kind: "no_match", almostThere: res.almostThere });
       }
-      setLoading(false);
-      return;
+    } catch {
+      setResult({ kind: "no_match", almostThere: false });
     }
-
-    const count = getOutputCount(spA, spB, recipe);
-
-    const newState = crossBreedOptimistic(
-      state,
-      validSlotA.speciesId, validSlotA.mutation,
-      validSlotB.speciesId, validSlotB.mutation,
-      recipe.id,
-      recipe.outputSpeciesId,
-      count,
-    );
-
-    perform(
-      newState,
-      () => edgeCrossBreed(validSlotA.speciesId, validSlotA.mutation, validSlotB.speciesId, validSlotB.mutation),
-      (res) => {
-        if (res.result === "match") {
-          setResult({ kind: "crafted", outputSpeciesId: res.outputSpeciesId, outputCount: res.outputCount, firstDiscovery: res.firstDiscovery });
-          // Clear slots — inputs are always consumed
-          setSlotA(null);
-          setSlotB(null);
-        }
-      },
-    );
-
     setLoading(false);
   }
 
