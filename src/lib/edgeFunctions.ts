@@ -364,6 +364,20 @@ export function edgeApplyAttunement(row: number, col: number) {
   return callEdge<ApplyAttunementResult>("apply-infuser", { row, col });
 }
 
+// ── Gear crafting ─────────────────────────────────────────────────────────
+
+export interface CraftGearResult {
+  ok:            true;
+  essences:      GameState["essences"];
+  gearInventory: GameState["gearInventory"];
+  consumables:   GameState["consumables"];
+  serverUpdatedAt: string;
+}
+
+export function edgeCraftGear(outputGearType: string) {
+  return callEdge<CraftGearResult>("craft-gear", { outputGearType });
+}
+
 // ── Seed pouches ──────────────────────────────────────────────────────────
 
 export interface AlchemyCraftSeedResult {

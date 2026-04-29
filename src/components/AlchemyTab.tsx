@@ -14,7 +14,9 @@ import {
   type ConsumableId, type ConsumableCategory,
 } from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
-import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft, edgeAlchemyAttune, edgeAlchemyStrip } from "../lib/edgeFunctions";
+import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft, edgeAlchemyAttune, edgeAlchemyStrip, edgeCraftGear } from "../lib/edgeFunctions";
+import { GEAR_RECIPES, canCraftGear, type GearIngredient, type GearRecipe } from "../data/gear-recipes";
+import { GEAR, type GearType } from "../data/gear";
 import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
 
@@ -130,9 +132,13 @@ interface CraftViewProps {
   essences:      EssenceItem[];
   consumables:   { id: string; quantity: number }[];
   infusers:      { rarity: string; quantity: number }[];
-  craftingItemId: string | null;
-  itemCraftError: string | null;
+  gearInventory: { gearType: string; quantity: number }[];
+  craftingItemId:   string | null;
+  itemCraftError:   string | null;
+  craftingGearType: string | null;
+  gearCraftError:   string | null;
   onCraft:       (craftType: "consumable" | "attunement", id: string) => void;
+  onCraftGear:   (outputGearType: string) => void;
 }
 
 function CostChips({
@@ -236,18 +242,171 @@ function RecipeCard({
   );
 }
 
-const CRAFT_CATEGORIES: { id: ConsumableCategory | "attunement"; label: string; emoji: string }[] = [
+// ── Gear ingredient chips (multi-ingredient) ──────────────────────────────
+
+function GearIngredientChips({
+  ingredients,
+  essences,
+  gearInventory,
+  consumables,
+}: {
+  ingredients:   GearIngredient[];
+  essences:      { type: string; amount: number }[];
+  gearInventory: { gearType: string; quantity: number }[];
+  consumables:   { id: string; quantity: number }[];
+}) {
+  return (
+    <div className="flex flex-wrap gap-1">
+      {ingredients.map((ing, i) => {
+        if (ing.kind === "essence") {
+          const have = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
+          const ok   = have >= ing.amount;
+          const cfg  = ing.essenceType === "universal"
+            ? UNIVERSAL_ESSENCE_DISPLAY
+            : FLOWER_TYPES[ing.essenceType as FlowerType];
+          return (
+            <span
+              key={i}
+              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[10px] font-medium
+                ${ok ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}` : "bg-border/10 border-border/40 text-muted-foreground/50"}`}
+            >
+              {cfg.emoji} {ing.amount}
+              {!ok && <span className="text-[9px] opacity-60"> ({have})</span>}
+            </span>
+          );
+        }
+        if (ing.kind === "gear") {
+          const def  = GEAR[ing.gearType as GearType];
+          const have = gearInventory.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
+          const ok   = have >= ing.quantity;
+          const rc   = def ? RARITY_CONFIG[def.rarity] : null;
+          return (
+            <span
+              key={i}
+              className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}
+            >
+              <span className={rc ? rc.color : ""}>{def?.emoji ?? "⚙️"}</span>
+              ×{ing.quantity} {def?.name ?? ing.gearType}
+              <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
+            </span>
+          );
+        }
+        // consumable
+        const recipe = CONSUMABLE_RECIPE_MAP[ing.consumableId as ConsumableId];
+        const have   = consumables.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
+        const ok     = have >= ing.quantity;
+        return (
+          <span
+            key={i}
+            className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}
+          >
+            {recipe?.emoji ?? "🧪"} ×{ing.quantity} {recipe?.name ?? ing.consumableId}
+            <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Gear recipe card ──────────────────────────────────────────────────────────
+
+function GearRecipeCard({
+  recipe,
+  essences,
+  gearInventory,
+  consumables,
+  isCrafting,
+  onCraft,
+}: {
+  recipe:        GearRecipe;
+  essences:      { type: string; amount: number }[];
+  gearInventory: { gearType: string; quantity: number }[];
+  consumables:   { id: string; quantity: number }[];
+  isCrafting:    boolean;
+  onCraft:       () => void;
+}) {
+  const def      = GEAR[recipe.outputGearType as GearType];
+  const rc       = RARITY_CONFIG[def.rarity];
+  const affordable = canCraftGear(recipe, essences, gearInventory, consumables);
+  const owned    = gearInventory.find((g) => g.gearType === recipe.outputGearType)?.quantity ?? 0;
+
+  return (
+    <div className={`rounded-xl border p-3 transition-colors ${affordable ? "border-border bg-card/60" : "border-border/40 bg-card/20 opacity-60"}`}>
+      <div className="flex items-start gap-2.5 mb-2">
+        <span className="text-xl mt-0.5 shrink-0">{def.emoji}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-semibold flex items-center gap-1.5 flex-wrap">
+            {def.name}
+            <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${rc.color} border-current bg-current/10`}>
+              {rc.label}
+            </span>
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{def.description}</p>
+        </div>
+      </div>
+
+      <GearIngredientChips
+        ingredients={recipe.ingredients}
+        essences={essences}
+        gearInventory={gearInventory}
+        consumables={consumables}
+      />
+
+      <div className="flex items-center justify-between mt-2.5">
+        <span className="text-[10px] text-muted-foreground">
+          Owned: <span className="text-foreground font-semibold">{owned}</span>
+        </span>
+        <button
+          onClick={onCraft}
+          disabled={!affordable || isCrafting}
+          className="px-3 py-1 rounded-lg text-[11px] font-semibold border transition-colors
+            disabled:opacity-40 disabled:cursor-not-allowed
+            border-primary/50 text-primary hover:bg-primary/10 enabled:hover:scale-[1.02]"
+        >
+          {isCrafting ? "…" : "⚒️ Craft"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Gear sub-categories ───────────────────────────────────────────────────────
+
+type GearSubCat = "sprinkler" | "mutation" | "passive";
+
+const GEAR_SUB_CATS: { id: GearSubCat; label: string; emoji: string }[] = [
+  { id: "sprinkler", label: "Sprinklers", emoji: "🚿" },
+  { id: "mutation",  label: "Mutation",   emoji: "🧪" },
+  { id: "passive",   label: "Passive",    emoji: "⚙️" },
+];
+
+function gearSubCat(gearType: GearType): GearSubCat {
+  const cat = GEAR[gearType].category;
+  if (cat === "sprinkler_regular")  return "sprinkler";
+  if (cat === "sprinkler_mutation") return "mutation";
+  return "passive";
+}
+
+const CRAFT_CATEGORIES: { id: ConsumableCategory | "attunement" | "gear"; label: string; emoji: string }[] = [
   { id: "attunement",     label: "Attunements",     emoji: "🥢" },
+  { id: "gear",           label: "Gear",             emoji: "⚒️" },
   { id: "growth",         label: "Growth",          emoji: "🌱" },
   { id: "mutation_boost", label: "Mutation Boosts",  emoji: "🧪" },
   { id: "utility",        label: "Utility",          emoji: "⚙️" },
   { id: "seed_pouch",     label: "Seed Pouches",     emoji: "🎁" },
 ];
 
-function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftError, onCraft }: CraftViewProps) {
+function CraftView({
+  essences, consumables, infusers, gearInventory,
+  craftingItemId, itemCraftError,
+  craftingGearType, gearCraftError,
+  onCraft, onCraftGear,
+}: CraftViewProps) {
   // For the Seed Pouches category: which type sub-filter is selected
-  // null = "generic" (untyped), a string = element type
   const [pouchType, setPouchType] = useState<"generic" | TypedPouchType>("generic");
+  // For the Gear category: which gear sub-category is selected
+  const [gearCat, setGearCat] = useState<GearSubCat>("sprinkler");
 
   const pouchTypeLabel = useCallback((t: "generic" | TypedPouchType): string => {
     if (t === "generic") return "Generic";
@@ -257,19 +416,64 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
   return (
     <div className="flex flex-col gap-5">
       <p className="text-[11px] text-muted-foreground">
-        Craft consumable items and attunement crystals from your essence bank. Tier I items cost essence; higher tiers upgrade from 2 of the previous tier.
+        Craft consumables, attunements, and gear from your essence bank. Tier I items cost essence; higher tiers upgrade from 2 of the previous tier.
       </p>
 
-      {itemCraftError && (
+      {(itemCraftError || gearCraftError) && (
         <div className="bg-destructive/10 border border-destructive/40 rounded-xl px-3 py-2 text-xs text-destructive">
-          {itemCraftError}
+          {itemCraftError ?? gearCraftError}
         </div>
       )}
 
       {CRAFT_CATEGORIES.map(({ id: catId, label, emoji: catEmoji }) => {
         const isAttunement = catId === "attunement";
         const isPouchCat   = catId === "seed_pouch";
+        const isGearCat    = catId === "gear";
 
+        // ── Gear category ───────────────────────────────────────────────────
+        if (isGearCat) {
+          const gearRecipes = GEAR_RECIPES.filter(
+            (r) => gearSubCat(r.outputGearType as GearType) === gearCat,
+          );
+          return (
+            <div key={catId}>
+              <p className="text-xs font-semibold mb-2">{catEmoji} {label}</p>
+              {/* Gear sub-cat tabs */}
+              <div className="flex gap-1.5 mb-3">
+                {GEAR_SUB_CATS.map((sc) => (
+                  <button
+                    key={sc.id}
+                    onClick={() => setGearCat(sc.id)}
+                    className={`
+                      flex-1 py-1 rounded-lg border text-[10px] font-semibold transition-all
+                      ${gearCat === sc.id
+                        ? "bg-primary/20 border-primary/50 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary/30"
+                      }
+                    `}
+                  >
+                    {sc.emoji} {sc.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grid grid-cols-1 gap-2">
+                {gearRecipes.map((r) => (
+                  <GearRecipeCard
+                    key={r.outputGearType}
+                    recipe={r}
+                    essences={essences}
+                    gearInventory={gearInventory}
+                    consumables={consumables}
+                    isCrafting={craftingGearType === r.outputGearType}
+                    onCraft={() => onCraftGear(r.outputGearType)}
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        }
+
+        // ── Consumable / attunement categories ──────────────────────────────
         const cards = isAttunement
           ? ATTUNEMENT_RECIPES.map((recipe) => {
               const owned      = infusers.find((i) => i.rarity === recipe.rarity)?.quantity ?? 0;
@@ -296,7 +500,6 @@ function CraftView({ essences, consumables, infusers, craftingItemId, itemCraftE
               .filter((r) => {
                 if (r.category !== catId) return false;
                 if (!isPouchCat) return true;
-                // Seed Pouch category: filter by selected type
                 if (pouchType === "generic") return /^seed_pouch_[1-5]$/.test(r.id);
                 return r.id.startsWith(`seed_pouch_${pouchType}_`);
               })
@@ -391,6 +594,10 @@ export function AlchemyTab() {
   const [itemCraftError,        setItemCraftError]        = useState<string | null>(null);
   const [itemCraftSuccess,      setItemCraftSuccess]      = useState<{ name: string; emoji: string } | null>(null);
   const [itemCraftSuccessVisible, setItemCraftSuccessVisible] = useState(false);
+
+  // Gear craft state
+  const [craftingGearType, setCraftingGearType] = useState<string | null>(null);
+  const [gearCraftError,   setGearCraftError]   = useState<string | null>(null);
 
   // Attune view state
   const [attuneSpeciesId,  setAttuneSpeciesId]  = useState<string | null>(null);
@@ -644,6 +851,65 @@ export function AlchemyTab() {
       setItemCraftError(e instanceof Error ? e.message : "Craft failed.");
     } finally {
       setCraftingItemId(null);
+    }
+  }
+
+  async function handleCraftGear(outputGearType: string) {
+    if (craftingGearType) return;
+    setCraftingGearType(outputGearType);
+    setGearCraftError(null);
+
+    const recipe = GEAR_RECIPES.find((r) => r.outputGearType === outputGearType);
+    if (!recipe) { setCraftingGearType(null); return; }
+
+    const cur = getState();
+
+    // Build optimistic state: deduct all ingredients, add crafted gear
+    let essences      = [...(cur.essences      ?? [])];
+    let gearInventory = [...(cur.gearInventory ?? [])];
+    let consumables   = [...(cur.consumables   ?? [])];
+
+    for (const ing of recipe.ingredients) {
+      if (ing.kind === "essence") {
+        essences = essences
+          .map((e) => e.type === ing.essenceType ? { ...e, amount: e.amount - ing.amount } : e)
+          .filter((e) => e.amount > 0);
+      } else if (ing.kind === "gear") {
+        gearInventory = gearInventory
+          .map((g) => g.gearType === ing.gearType ? { ...g, quantity: g.quantity - ing.quantity } : g)
+          .filter((g) => g.quantity > 0);
+      } else {
+        consumables = consumables
+          .map((c) => c.id === ing.consumableId ? { ...c, quantity: c.quantity - ing.quantity } : c)
+          .filter((c) => c.quantity > 0);
+      }
+    }
+    const idx = gearInventory.findIndex((g) => g.gearType === outputGearType);
+    gearInventory = idx >= 0
+      ? gearInventory.map((g, i) => i === idx ? { ...g, quantity: g.quantity + 1 } : g)
+      : [...gearInventory, { gearType: outputGearType as GearType, quantity: 1 }];
+
+    const optimistic = { ...cur, essences, gearInventory, consumables };
+
+    try {
+      await perform(
+        optimistic,
+        () => edgeCraftGear(outputGearType),
+        (result) => {
+          const fresh = getState();
+          update({
+            ...fresh,
+            essences:      result.essences,
+            gearInventory: result.gearInventory,
+            consumables:   result.consumables,
+            serverUpdatedAt: result.serverUpdatedAt,
+          });
+        },
+      );
+    } catch (e: unknown) {
+      setGearCraftError(e instanceof Error ? e.message : "Craft failed — please retry.");
+    } finally {
+      setCraftingGearType(null);
     }
   }
 
@@ -1060,9 +1326,13 @@ export function AlchemyTab() {
           essences={state.essences ?? []}
           consumables={state.consumables ?? []}
           infusers={state.infusers ?? []}
+          gearInventory={state.gearInventory ?? []}
           craftingItemId={craftingItemId}
           itemCraftError={itemCraftError}
+          craftingGearType={craftingGearType}
+          gearCraftError={gearCraftError}
           onCraft={handleCraftItem}
+          onCraftGear={handleCraftGear}
         />
       )}
 
