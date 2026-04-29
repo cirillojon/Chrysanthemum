@@ -305,6 +305,33 @@ export const CONSUMABLE_RECIPE_MAP = Object.fromEntries(
   CONSUMABLE_RECIPES.map((r) => [r.id, r])
 ) as Record<ConsumableId, ConsumableRecipe>;
 
+// ── Seed Pouch recipes ─────────────────────────────────────────────────────
+
+/** A seed pouch spends a flat amount of any single elemental essence and
+ *  instantly yields a mystery seed of the specified rarity or better.
+ *  Undiscovered species are preferred when rolling the output. */
+export interface SeedPouchRecipe {
+  id:          string;
+  name:        string;
+  rarity:      Rarity;
+  essenceCost: number;
+  description: string;
+  emoji:       string;
+}
+
+export const SEED_POUCH_RECIPES: SeedPouchRecipe[] = [
+  { id: "pouch_uncommon",  name: "Uncommon Pouch",  rarity: "uncommon",  essenceCost: 6,   emoji: "🎁", description: "Opens to reveal a mystery seed of Uncommon rarity or better." },
+  { id: "pouch_rare",      name: "Rare Pouch",      rarity: "rare",      essenceCost: 12,  emoji: "🎁", description: "Opens to reveal a mystery seed of Rare rarity or better." },
+  { id: "pouch_legendary", name: "Legendary Pouch", rarity: "legendary", essenceCost: 24,  emoji: "🎁", description: "Opens to reveal a mystery seed of Legendary rarity or better." },
+  { id: "pouch_mythic",    name: "Mythic Pouch",    rarity: "mythic",    essenceCost: 48,  emoji: "🎁", description: "Opens to reveal a mystery seed of Mythic rarity or better." },
+  { id: "pouch_exalted",   name: "Exalted Pouch",   rarity: "exalted",   essenceCost: 96,  emoji: "🎁", description: "Opens to reveal a mystery seed of Exalted rarity or better." },
+  { id: "pouch_prismatic", name: "Prismatic Pouch", rarity: "prismatic", essenceCost: 192, emoji: "🎁", description: "Opens to reveal a mystery seed of Prismatic rarity or better." },
+];
+
+export const SEED_POUCH_RECIPE_MAP: Record<string, SeedPouchRecipe> = Object.fromEntries(
+  SEED_POUCH_RECIPES.map((r) => [r.id, r])
+);
+
 // ── Affordability helpers ──────────────────────────────────────────────────
 
 export function canCraftConsumable(

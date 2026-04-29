@@ -364,6 +364,21 @@ export function edgeApplyInfuser(row: number, col: number) {
   return callEdge<ApplyInfuserResult>("apply-infuser", { row, col });
 }
 
+// ── Seed pouches ──────────────────────────────────────────────────────────
+
+export interface AlchemyCraftSeedResult {
+  ok:              true;
+  inventory:       GameState["inventory"];
+  essences:        GameState["essences"];
+  discovered:      GameState["discovered"];
+  outputSpeciesId: string;
+  serverUpdatedAt: string;
+}
+
+export function edgeAlchemyCraftSeed(pouchId: string, essenceType: string) {
+  return callEdge<AlchemyCraftSeedResult>("alchemy-craft-seed", { pouchId, essenceType });
+}
+
 // ── Alchemy ───────────────────────────────────────────────────────────────────
 
 export interface AlchemySacrificeResult {
