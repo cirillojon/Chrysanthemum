@@ -8,6 +8,7 @@ import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearType } from "../data/gear";
+import { CONSUMABLE_RECIPES, type ConsumableId } from "../data/consumables";
 import { useGame } from "../store/GameContext";
 import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug } from "../store/gameStore";
 import type { GameState } from "../store/gameStore";
@@ -66,6 +67,9 @@ export function DevWeatherPanel() {
   const [fertQty, setFertQty]       = useState(5);
   const [gearType, setGearType]     = useState<GearType>("sprinkler_rare");
   const [gearQty, setGearQty]       = useState(1);
+  const [consumableSearch, setConsumableSearch] = useState("");
+  const [selectedConsumable,    setSelectedConsumable]    = useState<ConsumableId>(CONSUMABLE_RECIPES[0]?.id as ConsumableId);
+  const [consumableQty, setConsumableQty]   = useState(1);
   const [toast, setToast]           = useState<string | null>(null);
 
   // ── Broadcast tab state ───────────────────────────────────────────────────
@@ -200,6 +204,38 @@ export function DevWeatherPanel() {
     showToast(`+${gearQty} ${GEAR[gearType].name} (${GEAR[gearType].rarity})`);
   }
 
+  // Consumables aren't in saveToCloud's payload (production rule: server-authoritative
+  // via use-consumable / alchemy-craft), so dev grants do a direct DB write instead.
+  async function giveConsumable() {
+    if (!user) return;
+    const recipe = CONSUMABLE_RECIPES.find((r) => r.id === selectedConsumable);
+    if (!recipe) return;
+
+    const newConsumables = [...(state.consumables ?? [])];
+    const existing = newConsumables.find((c) => c.id === selectedConsumable);
+    if (existing) {
+      existing.quantity += consumableQty;
+    } else {
+      newConsumables.push({ id: selectedConsumable, quantity: consumableQty });
+    }
+
+    const newUpdatedAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("game_saves")
+      .update({ consumables: newConsumables, updated_at: newUpdatedAt })
+      .eq("user_id", user.id)
+      .select("updated_at")
+      .single();
+
+    if (error || !data) {
+      showToast(`✗ ${error?.message ?? "save failed"}`);
+      return;
+    }
+
+    update({ ...state, consumables: newConsumables, serverUpdatedAt: data.updated_at as string });
+    showToast(`+${consumableQty} ${recipe.name}`);
+  }
+
   // ── Broadcast send ────────────────────────────────────────────────────────
   async function sendBroadcast() {
     if (!bcSubject.trim()) return;
@@ -237,6 +273,13 @@ export function DevWeatherPanel() {
     flowerSearch.trim() === "" ||
     f.name.toLowerCase().includes(flowerSearch.toLowerCase()) ||
     f.id.includes(flowerSearch.toLowerCase())
+  );
+
+  // ── Filtered consumable list ───────────────────────────────────────────────
+  const filteredConsumables = CONSUMABLE_RECIPES.filter((r) =>
+    consumableSearch.trim() === "" ||
+    r.name.toLowerCase().includes(consumableSearch.toLowerCase()) ||
+    r.id.includes(consumableSearch.toLowerCase())
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -698,6 +741,45 @@ export function DevWeatherPanel() {
                 className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
               >
                 Give Gear
+              </button>
+            </div>
+          </div>
+
+          {/* Consumables — vials, tonics, magnifying glass, speed boosts, pouches, etc. */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">Consumables</p>
+            <input
+              type="text"
+              value={consumableSearch}
+              onChange={(e) => setConsumableSearch(e.target.value)}
+              placeholder="Search consumables..."
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs placeholder:text-white/30 focus:outline-none focus:border-yellow-500/50"
+            />
+            <select
+              value={selectedConsumable}
+              onChange={(e) => setSelectedConsumable(e.target.value as ConsumableId)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+              size={5}
+            >
+              {filteredConsumables.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.emoji} {r.name} ({r.rarity})
+                </option>
+              ))}
+            </select>
+            <div className="flex gap-1.5">
+              <input
+                type="number"
+                value={consumableQty}
+                min={1}
+                onChange={(e) => setConsumableQty(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-14 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white font-mono text-xs focus:outline-none focus:border-yellow-500/50"
+              />
+              <button
+                onClick={giveConsumable}
+                className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
+              >
+                Give Consumable
               </button>
             </div>
           </div>
