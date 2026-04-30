@@ -15,8 +15,10 @@ const REQUIRED_EXPORTS = [
   // Core gameplay
   "edgeHarvest",
   "edgePlantSeed",
+  "edgePlantBloom",
   "edgeRemovePlant",
   "edgeApplyFertilizer",
+  "edgeUnpinPlant",
   // Shop
   "edgeBuyFlower",
   "edgeBuyFertilizer",
@@ -26,6 +28,7 @@ const REQUIRED_EXPORTS = [
   "edgeUpgradeFarm",
   "edgeUpgradeShopSlots",
   "edgeUpgradeSupplySlots",
+  "edgeUpgradeCraftingSlots",
   // Gear
   "edgePlaceGear",
   "edgeRemoveGear",
@@ -44,8 +47,25 @@ const REQUIRED_EXPORTS = [
   "edgeClaimGift",
   // Alchemy
   "edgeAlchemySacrifice",
-  // Cross-breeding
-  "edgeCrossBreed",
+  "edgeAlchemyCraft",
+  "edgeAlchemyCraftSeed",
+  "edgeAlchemyAttune",
+  "edgeAlchemyStrip",
+  "edgeCraftUniversalEssence",
+  // Attunement (apply Crystal to a bloom)
+  "edgeApplyAttunement",
+  // Crafting queue (Phase 3 — gear/consumable/attunement queue)
+  "edgeCraftStart",
+  "edgeCraftCollect",
+  "edgeCraftCancel",
+  // Gear crafting — legacy direct-craft path, superseded by craft queue
+  "edgeCraftGear",
+  // Plant-targeting consumables + utility consumables (Phase 5)
+  "edgeApplyPlantConsumable",
+  "edgeUseEclipseTonic",
+  "edgeUseWindShear",
+  "edgeUseSlotLock",
+  "edgeActivateBoost",
   // Marketplace + mailbox
   "edgeMarketplaceCreateListing",
   "edgeMarketplaceCreateFertilizerListing",

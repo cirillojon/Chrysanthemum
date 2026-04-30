@@ -6,8 +6,10 @@ import {
   getAffectedCells,
   getGearAffectingCell,
   getMaxSupplyRarity,
+  isAegis,
   isAutoPlanter,
   isComposter,
+  isCropsticks,
   isFan,
   isGearExpired,
   isGrowLamp,
@@ -103,8 +105,10 @@ describe("GEAR catalog (regression)", () => {
         isFan(def),
         isHarvestBell(def),
         isAutoPlanter(def),
+        isAegis(def),
+        isCropsticks(def),
       ];
-      expect(flags.filter(Boolean).length, `${id} matches multiple predicates`).toBe(1);
+      expect(flags.filter(Boolean).length, `${id} should match exactly one predicate`).toBe(1);
     }
   });
 });
