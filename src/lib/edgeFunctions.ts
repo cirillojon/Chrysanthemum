@@ -122,6 +122,18 @@ export function edgeRemovePlant(row: number, col: number) {
   return callEdge<RemovePlantResult>("remove-plant", { row, col });
 }
 
+export interface UnpinPlantResult {
+  ok:              true;
+  grid:            GameState["grid"];
+  serverUpdatedAt: string;
+}
+
+/** Strip the Garden Pin flag from a plant — required before the bloom can be
+ *  manually harvested. The pin is consumed (no refund). */
+export function edgeUnpinPlant(row: number, col: number) {
+  return callEdge<UnpinPlantResult>("unpin-plant", { row, col });
+}
+
 export function edgeBuyFlower(speciesId: string, buyAll = false) {
   return callEdge<ShopActionResult>("shop-action", {
     action: buyAll ? "buy_all" : "buy",

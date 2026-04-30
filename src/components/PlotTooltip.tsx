@@ -7,7 +7,7 @@ import {
   removePlant,
   applyPlantConsumable,
 } from "../store/gameStore";
-import { edgeApplyFertilizer, edgeRemovePlant, edgeApplyAttunement, edgeApplyPlantConsumable } from "../lib/edgeFunctions";
+import { edgeApplyFertilizer, edgeRemovePlant, edgeApplyAttunement, edgeApplyPlantConsumable, edgeUnpinPlant } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
@@ -58,6 +58,7 @@ export function PlotTooltip({
   const [removing,          setRemoving]          = useState(false);
   const [applyingAttunement, setApplyingAttunement] = useState(false);
   const [applyingConsumable,setApplyingConsumable]= useState<string | null>(null);
+  const [unpinning,         setUnpinning]         = useState(false);
   const [nudge,             setNudge]             = useState(0);
   const [flipped,           setFlipped]           = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -147,6 +148,22 @@ export function PlotTooltip({
       // Server function not yet active or error — silently re-enable button
     } finally {
       setApplyingAttunement(false);
+    }
+  }
+
+  // Garden Pin removal — required before a pinned plant can be manually
+  // harvested. Pin is consumed (no refund of the original consumable).
+  async function handleRemovePin() {
+    if (unpinning) return;
+    setUnpinning(true);
+    try {
+      const res = await edgeUnpinPlant(row, col);
+      const cur = getState();
+      update({ ...cur, grid: res.grid, serverUpdatedAt: res.serverUpdatedAt });
+    } catch {
+      // Silent — server rejected (e.g. CAS miss); pin stays in place
+    } finally {
+      setUnpinning(false);
     }
   }
 
@@ -337,10 +354,22 @@ export function PlotTooltip({
           </div>
         )}
 
-        {/* Bloomed actions — Harvest + Attunement */}
-        {isBloomed && (
+        {/* Bloomed / pinned actions — Harvest + Remove Pin + Attunement.
+            Pinned plants surface "Remove Pin" instead of Harvest; the user must
+            unpin first to actually take the bloom (pin is consumed). Unbloomed
+            pinned plants also get the button so a misplaced pin can be undone. */}
+        {(isBloomed || plant.pinned) && (
           <div className="pt-1 border-t border-border space-y-1.5">
-            {onHarvestRequest && (
+            {plant.pinned ? (
+              <button
+                onClick={handleRemovePin}
+                disabled={unpinning}
+                title="Removes the Garden Pin (consumed). Required before harvesting."
+                className="w-full py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-colors text-center disabled:opacity-50"
+              >
+                {unpinning ? "Removing…" : "📌 Remove Pin"}
+              </button>
+            ) : onHarvestRequest && (
               <button
                 onClick={() => { onHarvestRequest(); onClose?.(); }}
                 className="w-full py-1.5 rounded-lg bg-primary/20 border border-primary/50 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors text-center"
@@ -349,21 +378,24 @@ export function PlotTooltip({
               </button>
             )}
 
-            {plant.infused ? (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                <span>🥢</span>
-                <span className="text-[10px] text-emerald-400 font-medium">Attuned · awaiting Cropsticks</span>
-              </div>
-            ) : matchingAttunement ? (
-              <button
-                onClick={handleApplyAttunement}
-                disabled={applyingAttunement}
-                className="w-full py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
-              >
-                {applyingAttunement ? "Applying…" : `🥢 Attune ×${matchingAttunement.quantity}`}
-              </button>
-            ) : (
-              <p className="text-[10px] text-muted-foreground text-center">No matching Attunement Crystal in inventory</p>
+            {/* Attunement section — only when bloomed (it operates on bloomed plants) */}
+            {isBloomed && (
+              plant.infused ? (
+                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                  <span>🥢</span>
+                  <span className="text-[10px] text-emerald-400 font-medium">Attuned · awaiting Cropsticks</span>
+                </div>
+              ) : matchingAttunement ? (
+                <button
+                  onClick={handleApplyAttunement}
+                  disabled={applyingAttunement}
+                  className="w-full py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                >
+                  {applyingAttunement ? "Applying…" : `🥢 Attune ×${matchingAttunement.quantity}`}
+                </button>
+              ) : (
+                <p className="text-[10px] text-muted-foreground text-center">No matching Attunement Crystal in inventory</p>
+              )
             )}
           </div>
         )}
