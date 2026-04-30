@@ -325,6 +325,14 @@ function AppInner() {
     if (t === "social") setSocialView("search");
     setProfileUsername(null);
 
+    // Scroll to top whenever the user actually navigates to a different tab.
+    // Without this, switching from a deeply-scrolled tab (leaderboard, codex, marketplace)
+    // to another tab leaves you mid-page on the new tab, which feels broken on mobile.
+    // Skipped on same-tab clicks so re-tapping the active tab doesn't punt you out of context.
+    if (t !== tab) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+
     // Clear inventory new-items badges and reset baselines when entering inventory
     if (t === "inventory") {
       setNewSeeds(0);
