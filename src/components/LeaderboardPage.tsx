@@ -9,6 +9,7 @@ import {
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { getTotalCodexEntries } from "../store/gameStore";
+import { formatLastSeen } from "../lib/presence";
 
 interface Props {
   onViewProfile: (username: string) => void;
@@ -17,16 +18,6 @@ interface Props {
 type LeaderboardTab = "global" | "friends";
 type SortBy         = "coins" | "codex";
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const m = Math.floor(diff / 60_000);
-  const h = Math.floor(diff / 3_600_000);
-  const d = Math.floor(diff / 86_400_000);
-  if (m < 1)  return "just now";
-  if (m < 60) return `${m}m ago`;
-  if (h < 24) return `${h}h ago`;
-  return `${d}d ago`;
-}
 
 const RANK_MEDALS: Record<number, string> = { 1: "🥇", 2: "🥈", 3: "🥉" };
 const TOTAL_CODEX = getTotalCodexEntries();
@@ -247,7 +238,7 @@ export function LeaderboardPage({ onViewProfile }: Props) {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    {timeAgo(entry.updated_at)}
+                    {formatLastSeen(entry.updated_at)}
                   </p>
                 </div>
 

@@ -549,12 +549,6 @@ function findBestRecipe(
   return best;
 }
 
-// Yield 2 seeds when both inputs exceed the minimum rarity (mirrors getOutputCount in recipes.ts)
-function getOutputCount(rarityA: string, rarityB: string, minRarity: string): 1 | 2 {
-  return RARITY_IDX[rarityA] > RARITY_IDX[minRarity] &&
-         RARITY_IDX[rarityB] > RARITY_IDX[minRarity] ? 2 : 1;
-}
-
 // Species → { types, rarity } — mirrors ALL_FLOWERS in src/data/flowers.ts
 const SPECIES_DATA: Record<string, { t: string[]; r: string }> = {
   // Common
@@ -789,47 +783,51 @@ function runCropsticks(save: Save, now: number): Save {
       // ── Cycle in progress — wait for completion ─────────────────────────
       if (now - startedAt < CROPSTICKS_BREED_DURATION_MS) continue;
 
-      // ── Complete: deliver seed(s), clear infused, reset progress ────────
+      // ── Complete: 50% success roll — replace cropsticks cell with a seed ──
       const da = SPECIES_DATA[bestA.plant.speciesId]!;
       const db = SPECIES_DATA[bestB.plant.speciesId]!;
-      const outputCount = getOutputCount(da.r, db.r, bestRecipe.minRarity);
-      const outputId    = bestRecipe.outputSpeciesId;
-
-      // Add seed(s) to inventory
-      const existIdx = cur.inventory.findIndex(i => i.isSeed && i.speciesId === outputId && !i.mutation);
-      const newInv: InvItem[] = existIdx >= 0
-        ? cur.inventory.map((i, idx) =>
-            idx === existIdx ? { ...i, quantity: i.quantity + outputCount } : i
-          )
-        : [...cur.inventory, { speciesId: outputId, quantity: outputCount, isSeed: true }];
-
-      // Update discovered
-      const newDiscovered = cur.discovered.includes(outputId)
-        ? cur.discovered
-        : [...cur.discovered, outputId];
-
-      // Update discoveredRecipes
-      const newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
-        ? cur.discoveredRecipes
-        : [...cur.discoveredRecipes, bestRecipe.id];
-
-      // Clear infused from both source plants + reset cropsticks progress
       const aR = bestA.r, aC = bestA.c;
       const bR = bestB.r, bC = bestB.c;
+      const success = Math.random() < 0.5;
+
+      let outputSpeciesId: string;
+      let newDiscovered: string[];
+      let newDiscoveredRecipes: string[];
+
+      if (success) {
+        outputSpeciesId = bestRecipe.outputSpeciesId;
+        newDiscovered = cur.discovered.includes(outputSpeciesId)
+          ? cur.discovered
+          : [...cur.discovered, outputSpeciesId];
+        newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+          ? cur.discoveredRecipes
+          : [...cur.discoveredRecipes, bestRecipe.id];
+      } else {
+        // Fallback: lowest-rarity parent; random when tied
+        const tierA = RARITY_IDX[da.r] ?? 0;
+        const tierB = RARITY_IDX[db.r] ?? 0;
+        if (tierA < tierB)      outputSpeciesId = bestA.plant.speciesId;
+        else if (tierB < tierA) outputSpeciesId = bestB.plant.speciesId;
+        else                    outputSpeciesId = Math.random() < 0.5 ? bestA.plant.speciesId : bestB.plant.speciesId;
+        newDiscovered      = cur.discovered;
+        newDiscoveredRecipes = cur.discoveredRecipes;
+      }
+
+      // Clear infused from source plants + replace cropsticks cell with the seed
       const newGrid = cur.grid.map((row, r) =>
         row.map((plot, c) => {
           if ((r === aR && c === aC) || (r === bR && c === bC)) {
             if (!plot.plant) return plot;
             return { ...plot, plant: { ...plot.plant, infused: false } };
           }
-          if (r === ri && c === ci && plot.gear) {
-            return { ...plot, gear: clearStartedAt(plot.gear) };
+          if (r === ri && c === ci) {
+            return { ...plot, gear: null, plant: { speciesId: outputSpeciesId, timePlanted: now } };
           }
           return plot;
         })
       );
 
-      cur = { ...cur, grid: newGrid, inventory: newInv, discovered: newDiscovered, discoveredRecipes: newDiscoveredRecipes };
+      cur = { ...cur, grid: newGrid, discovered: newDiscovered, discoveredRecipes: newDiscoveredRecipes };
     }
   }
 

@@ -879,16 +879,15 @@ export function AlchemyTab() {
     <div className="flex flex-col gap-5">
 
       {/* Tab switcher: Sacrifice | Craft | Attune */}
-      <div className="flex rounded-xl border border-border bg-card/40 p-0.5 gap-0.5">
+      <div className="flex gap-2">
         {(["sacrifice", "craft", "attune"] as AlchemyView[]).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
-            className={`
-              flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center capitalize transition-all duration-150
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold text-center transition-all duration-150
               ${view === v
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-primary/20 border border-primary/50 text-primary"
+                : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
               }
             `}
           >

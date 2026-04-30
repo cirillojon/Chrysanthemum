@@ -61,6 +61,8 @@ interface Props {
   isUnderHarvestBell?: boolean;
   /** True when this cell is within an auto-planter's radius. */
   isUnderAutoPlanter?: boolean;
+  /** Direction a crossbreed particle should travel (toward the active cropsticks). */
+  crossbreedDirection?: "up" | "down" | "left" | "right";
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -75,6 +77,7 @@ export function PlotTile({
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
   isUnderFan, fanDirection, isUnderHarvestBell, isUnderAutoPlanter,
+  crossbreedDirection,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
   showGrowthDebug = false,
@@ -435,6 +438,25 @@ export function PlotTile({
                 <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.65 - 1.3}s` }}>💨</span>
               ));
             })()}
+          </div>
+        )}
+
+        {/* Crossbreed particle overlay — emerald dots drift toward adjacent cropsticks */}
+        {settings.plotAnimations && !!crossbreedDirection && (
+          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+            {(["0s", "-0.55s", "-1.1s"] as const).map((delay, i) => (
+              <div
+                key={i}
+                className="cross-particle"
+                style={{
+                  animationName: `cross-particle-${crossbreedDirection}`,
+                  animationDuration: "1.4s",
+                  animationDelay: delay,
+                  left: `${20 + i * 22}%`,
+                  top: "42%",
+                }}
+              />
+            ))}
           </div>
         )}
 

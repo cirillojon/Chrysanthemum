@@ -295,6 +295,33 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, autoPlantCoveredCells: autoPlanter };
     }, [state.grid, state.farmRows, state.farmSize]);
 
+  // Plant cells adjacent to active cropsticks, mapped to the direction their
+  // particle should travel (toward the cropsticks).
+  const crossbreedSourceCells = useMemo(() => {
+    const map = new Map<string, "up" | "down" | "left" | "right">();
+    const OFFSETS: [number, number, "up" | "down" | "left" | "right"][] = [
+      [-1, 0, "down"],
+      [ 1, 0, "up"  ],
+      [ 0,-1, "right"],
+      [ 0, 1, "left" ],
+    ];
+    for (let ri = 0; ri < state.grid.length; ri++) {
+      for (let ci = 0; ci < state.grid[ri].length; ci++) {
+        const gear = state.grid[ri][ci].gear;
+        if (!gear || gear.gearType !== "cropsticks") continue;
+        if (gear.crossbreedStartedAt == null) continue;
+        for (const [dr, dc, dir] of OFFSETS) {
+          const nr = ri + dr;
+          const nc = ci + dc;
+          const plant = state.grid[nr]?.[nc]?.plant;
+          if (!plant || !plant.bloomedAt || !plant.infused) continue;
+          map.set(`${nr}-${nc}`, dir);
+        }
+      }
+    }
+    return map;
+  }, [state.grid]);
+
   function handlePlotClick(row: number, col: number) {
     const plot = state.grid[row][col];
     if (plot.plant || harvestingPlots.current.has(`${row}-${col}`)) return;
@@ -596,6 +623,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 fanDirection={fanCoveredCells.get(`${row}-${col}`)}
                 isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
                 isUnderAutoPlanter={autoPlantCoveredCells.has(`${row}-${col}`)}
+                crossbreedDirection={crossbreedSourceCells.get(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}
