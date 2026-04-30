@@ -80,13 +80,6 @@ export interface UpgradeResult {
   serverUpdatedAt: string;
 }
 
-export interface BotanyResult {
-  ok:              true;
-  inventory:       GameState["inventory"];
-  outputSpeciesIds: string[];
-  serverUpdatedAt: string;
-}
-
 // ── Typed callers ─────────────────────────────────────────────────────────────
 
 export async function edgeHarvest(row: number, col: number): Promise<Omit<HarvestResult, "inventory">> {
@@ -222,14 +215,6 @@ export function edgeBuyFromSupplyShop(slotId: string) {
 
 export function edgeSyncSupplyShop(supplyShop: GameState["supplyShop"], lastSupplyReset: number) {
   return callEdge<{ ok: true }>("supply-action", { action: "sync", supplyShop, lastSupplyReset });
-}
-
-export function edgeBotanyConvert(selections: { speciesId: string; mutation?: string }[]) {
-  return callEdge<BotanyResult>("botany-convert", { action: "convert", selections });
-}
-
-export function edgeBotanyConvertAll(rarity: string) {
-  return callEdge<BotanyResult>("botany-convert", { action: "convert_all", rarity });
 }
 
 // ── Gifting ───────────────────────────────────────────────────────────────────

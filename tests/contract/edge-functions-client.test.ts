@@ -39,9 +39,6 @@ const REQUIRED_EXPORTS = [
   "edgeSyncSupplyShop",
   // Bulk sell
   "edgeSellAll",
-  // Botany
-  "edgeBotanyConvert",
-  "edgeBotanyConvertAll",
   // Gifting
   "edgeSendGift",
   "edgeClaimGift",

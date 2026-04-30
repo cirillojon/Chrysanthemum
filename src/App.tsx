@@ -17,7 +17,7 @@ import { LeaderboardPage } from "./components/LeaderboardPage";
 import { FriendRequestNotification } from "./components/FriendRequestNotification";
 import { GiftNotification } from "./components/GiftNotification";
 import { Codex } from "./components/Codex";
-import { Botany } from "./components/Botany";
+import { AlchemyTab } from "./components/AlchemyTab";
 import { CraftingTab } from "./components/CraftingTab";
 import { ActiveBoostsHUD } from "./components/ActiveBoostsHUD";
 import { MarketplaceTab } from "./components/MarketplaceTab";
@@ -40,7 +40,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { HarvestPopup } from "./components/HarvestPopup";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
-type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany" | "craft";
+type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "alchemy" | "craft";
 type ShopView   = "seeds" | "supply";
 type SocialView = "search" | "friends" | "mailbox" | "leaderboard" | "marketplace";
 
@@ -223,10 +223,10 @@ function AppInner() {
 
   // ── Swipe navigation ─────────────────────────────────────────────────────────
   // Flat order: garden(0) → shop:seeds(1) → shop:supply(2) →
-  //             inventory(3) → botany(4) → codex(5) →
+  //             inventory(3) → alchemy(4) → codex(5) →
   //             social:search(6) → friends(7) → mailbox(8) →
   //             marketplace(9) → leaderboard(10) → me(profile)
-  const MAIN_TABS: Tab[] = ["garden", "shop", "inventory", "botany", "craft", "codex", "social"];
+  const MAIN_TABS: Tab[] = ["garden", "shop", "inventory", "alchemy", "craft", "codex", "social"];
 
   const handleSwipeLeft = useCallback(() => {
     if (profileUsername) return;
@@ -310,7 +310,7 @@ function AppInner() {
 
   // Flat index across the entire nav sequence:
   // garden(0) → shop:seeds(1) → shop:supply(2) → inventory(3) →
-  // botany(4) → codex(5) → social:search(6) → friends(7) → mailbox(8) →
+  // alchemy(4) → codex(5) → social:search(6) → friends(7) → mailbox(8) →
   // marketplace(9) → leaderboard(10)
   const SHOP_VIEWS:   ShopView[]   = ["seeds", "supply"];
   const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "mailbox", "marketplace", "leaderboard"];
@@ -319,7 +319,7 @@ function AppInner() {
     if (t === "garden")    return 0;
     if (t === "shop")      return 1 + SHOP_VIEWS.indexOf(shv);
     if (t === "inventory") return 3;
-    if (t === "botany")    return 4;
+    if (t === "alchemy")   return 4;
     if (t === "craft")     return 5;
     if (t === "codex")     return 6;
     return 7 + SOCIAL_VIEWS.indexOf(sv); // social
@@ -576,7 +576,7 @@ function AppInner() {
       {/* Tabs */}
       <nav className="bg-card/40 border-b border-border backdrop-blur">
         <div className="w-full sm:max-w-2xl sm:mx-auto flex">
-          {(["garden", "shop", "inventory", "botany", "craft", "codex", "social"] as Tab[]).map((t) => (
+          {(["garden", "shop", "inventory", "alchemy", "craft", "codex", "social"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => handleTabChange(t)}
@@ -592,7 +592,7 @@ function AppInner() {
               {t === "garden"      ? "🌱"
                : t === "shop"      ? "🛒"
                : t === "inventory" ? "🎒"
-               : t === "botany"    ? "🌿"
+               : t === "alchemy"   ? "⚗️"
                : t === "craft"     ? "⚒️"
                : t === "codex"     ? "📖"
                : "🌍"}
@@ -694,7 +694,7 @@ function AppInner() {
               }}
             />
           )}
-          {tab === "botany"      && <Botany />}
+          {tab === "alchemy"     && <AlchemyTab />}
           {tab === "craft"       && <CraftingTab />}
           {tab === "codex"       && <Codex />}
           {tab === "social"    && (

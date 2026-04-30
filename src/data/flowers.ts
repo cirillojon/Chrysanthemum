@@ -1382,7 +1382,7 @@ export const FLOWERS: FlowerSpecies[] = [
     shopWeight: 1,
   },
 
-  // ── EXALTED — obtainable only via Botany, shopWeight always 0 ───────────
+  // ── EXALTED — obtainable via seed pouches, shopWeight always 0 ───────────
   {
     id: "umbral_bloom",
     name: "Umbral Bloom",
@@ -1461,7 +1461,7 @@ export const FLOWERS: FlowerSpecies[] = [
     shopWeight: 0,
   },
 
-  // ── PRISMATIC — obtainable only via Botany from Exalted, shopWeight always 0 ─
+  // ── PRISMATIC — obtainable via seed pouches, shopWeight always 0 ────────
   {
     id: "dreambloom",
     name: "Dreambloom",

@@ -138,7 +138,7 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       supplySlots:          (data.supply_slots    as number)                      ?? 2,
       lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
       serverUpdatedAt:      (data.updated_at as string) ?? null,
-      // Alchemy & Botany
+      // Alchemy
       essences:             (data.essences              as GameState["essences"])       ?? [],
       // Cross-breeding
       discoveredRecipes:    (data.discovered_recipes    as string[])                   ?? [],
@@ -182,7 +182,7 @@ export async function saveToCloud(
     supply_shop:            state.supplyShop        ?? [],
     supply_slots:           state.supplySlots       ?? 2,
     last_supply_reset:      state.lastSupplyReset   ?? 0,
-    // Alchemy & Botany
+    // Alchemy
     essences:               state.essences          ?? [],
     // Cross-breeding
     discovered_recipes:     state.discoveredRecipes ?? [],
