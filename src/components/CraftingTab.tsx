@@ -203,7 +203,10 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
       kind:        "essence",
       emoji:       UNIVERSAL_ESSENCE_DISPLAY.emoji,
       name:        "Universal Essence",
-      rarity:      "legendary",
+      // Prismatic — drives the rainbow border / cell styling everywhere the
+      // CraftEntry's rarity is used. Matches the prismatic styling we apply
+      // to Universal in the Inventory + EssenceBank.
+      rarity:      "prismatic",
       description: `Combine ${UNIVERSAL_ESSENCE_COST_PER_TYPE} of each elemental essence into a Universal Essence — used in legendary+ cross-breed recipes.`,
       owned:       universalOwned,
       canCraft:    slotsAvail && universalAffordable,
