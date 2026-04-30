@@ -94,6 +94,7 @@ export function PlotTooltip({
   const msLeft        = getMsUntilNextStage(plant, now, activeWeather, gearGrowthMultiplier);
   const rarity        = RARITY_CONFIG[species.rarity];
   const isBloomed     = stage === "bloom";
+  const isNew         = !state.discovered.includes(plant.speciesId);
   const hasFertilizer = !!plant.fertilizer;
   const availableFerts = state.fertilizers
     .filter((f) => f.quantity > 0)
@@ -248,11 +249,11 @@ export function PlotTooltip({
 
         {/* Header */}
         <div className="flex items-center gap-2">
-          <span className="text-xl">{species.emoji[stage]}</span>
+          <span className="text-xl">{isNew ? "❓" : species.emoji[stage]}</span>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold leading-tight">{species.name}</p>
+            <p className="text-xs font-semibold leading-tight">{isNew ? "???" : species.name}</p>
             <p className={`text-[10px] font-mono ${rarity.color}`}>{rarity.label}</p>
-            <FlowerTypeBadges types={species.types} className="mt-1" />
+            {!isNew && <FlowerTypeBadges types={species.types} className="mt-1" />}
           </div>
           {/* Close button */}
           {onClose && (

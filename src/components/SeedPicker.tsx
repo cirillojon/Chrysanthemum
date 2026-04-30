@@ -123,17 +123,18 @@ export function SeedPicker({ onSelect, onBloomSelect, onGearSelect, onClose }: P
               const species = getFlower(item.speciesId);
               if (!species) return null;
               const rarity   = RARITY_CONFIG[species.rarity];
-              const mastered = isSpeciesMastered(state.discovered, item.speciesId);
+              const isNew    = !state.discovered.includes(item.speciesId);
+              const mastered = !isNew && isSpeciesMastered(state.discovered, item.speciesId);
               return (
                 <button
                   key={item.speciesId}
                   onClick={() => onSelect(item.speciesId)}
                   className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-primary/10 border border-transparent hover:border-primary/30 transition-all text-left"
                 >
-                  <span className="text-xl">{species.emoji.seed}</span>
+                  <span className="text-xl">{isNew ? "❓" : species.emoji.seed}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <p className="text-sm font-medium truncate">{species.name}</p>
+                      <p className="text-sm font-medium truncate">{isNew ? "???" : species.name}</p>
                       {mastered && (
                         <span className="text-yellow-400 text-xs leading-none flex-shrink-0" title="Mastered — grows 20% faster">
                           ⚡
@@ -141,7 +142,7 @@ export function SeedPicker({ onSelect, onBloomSelect, onGearSelect, onClose }: P
                       )}
                     </div>
                     <p className={`text-xs ${rarity.color}`}>{rarity.label}</p>
-                    <FlowerTypeBadges types={species.types} className="mt-0.5" />
+                    {!isNew && <FlowerTypeBadges types={species.types} className="mt-0.5" />}
                   </div>
                   <span className="text-xs text-muted-foreground flex-shrink-0">×{item.quantity}</span>
                 </button>

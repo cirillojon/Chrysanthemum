@@ -642,21 +642,26 @@ function ConsumablesTabContent({
 }
 
 function SeedInventoryRow({ item }: { item: InventoryItem }) {
+  const { state } = useGame();
   const species = getFlower(item.speciesId);
   const rarity  = species ? RARITY_CONFIG[species.rarity] : null;
   if (!species) return null;
 
+  const isNew = !state.discovered.includes(item.speciesId);
+
   return (
     <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${rarity?.glow ?? ""} border-border`}>
-      <span className="text-3xl flex-shrink-0">{species.emoji.seed}</span>
+      <span className="text-3xl flex-shrink-0">{isNew ? "❓" : species.emoji.seed}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">{species.name} Seed</h3>
+          <h3 className="font-semibold text-sm">{isNew ? "??? Seed" : `${species.name} Seed`}</h3>
           <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
         </div>
-        <FlowerTypeBadges types={species.types} className="mt-1" />
+        {!isNew && <FlowerTypeBadges types={species.types} className="mt-1" />}
         <p className="text-xs text-muted-foreground mt-0.5">
-          ×{item.quantity} · Plant in your garden to grow
+          {isNew
+            ? `×${item.quantity} · Grow it to reveal the species`
+            : `×${item.quantity} · Plant in your garden to grow`}
         </p>
       </div>
     </div>
