@@ -17,11 +17,27 @@ interface Props {
   // When used in the main game, leave empty and it reads from context
   discoveredOverride?: string[];
   compact?: boolean; // compact mode for profile preview
+  /** Entries the user hasn't acknowledged (i.e., hasn't opened that card yet).
+   *  Drives the red dot on cards. App owns this set; we mutate via markSeen. */
+  unseenEntries?: Set<string>;
+  /** Called when the user expands a card — marks every entry belonging to
+   *  that species (base + mutations) as seen, so the navbar badge ticks down
+   *  and the red dot disappears. */
+  markSeen?: (speciesId: string) => void;
 }
 
-export function Codex({ discoveredOverride, compact = false }: Props) {
+export function Codex({ discoveredOverride, compact = false, unseenEntries, markSeen }: Props) {
   const { state } = useGame();
   const discovered = discoveredOverride ?? state.discovered;
+
+  // Snapshot unseen entries at mount so the "Newly discovered" labels persist
+  // through expanding/collapsing while the user is on the codex tab. The
+  // labels disappear automatically when the user navigates away (component
+  // unmounts) and the next visit takes a fresh snapshot of whatever's still
+  // unseen at that moment.
+  const [freshlyDiscovered] = useState<Set<string>>(
+    () => new Set(unseenEntries ?? [])
+  );
 
   const [filterRarity, setFilterRarity] = useState<FilterRarity>("all");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
@@ -215,18 +231,40 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
           const { found: specFound, total: specTotal } = getSpeciesCompletion(discovered, f.id);
           const rarity     = RARITY_CONFIG[f.rarity];
           const isExpanded = expandedId === f.id;
+          // Card has unseen content if any of this species' discovered entries
+          // (base or mutation combos) are in the unseen set. Drives the red
+          // dot in the top-right of the card.
+          const cardHasUnseen = (unseenEntries?.size ?? 0) > 0 && (
+            unseenEntries!.has(f.id) ||
+            (Object.keys(MUTATIONS) as MutationType[]).some((m) =>
+              unseenEntries!.has(`${f.id}:${m}`)
+            )
+          );
 
           return (
             <div
               key={f.id}
               className={`
-                bg-card/60 border rounded-xl overflow-hidden transition-all
+                relative bg-card/60 border rounded-xl overflow-hidden transition-all
                 ${hasBase ? `border-border hover:border-primary/30 ${rarity.glow}` : "border-border/40 opacity-60"}
               `}
             >
+              {/* Unseen-discovery dot — top-right corner. Cleared when the card
+                  is expanded (markSeen marks every entry of this species). */}
+              {cardHasUnseen && (
+                <span
+                  className="absolute top-2 right-2 z-10 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-card shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                  aria-label="New discovery"
+                />
+              )}
+
               {/* Main row */}
               <button
-                onClick={() => setExpandedId(isExpanded ? null : f.id)}
+                onClick={() => {
+                  setExpandedId(isExpanded ? null : f.id);
+                  // On expand (not collapse), mark this species' entries as seen.
+                  if (!isExpanded) markSeen?.(f.id);
+                }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left"
               >
                 {/* Emoji */}
@@ -282,6 +320,11 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                     <span className="text-xs text-foreground">
                       {hasBase ? f.name : "???"}
                     </span>
+                    {freshlyDiscovered.has(f.id) && (
+                      <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30">
+                        Newly discovered
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground ml-auto">Base</span>
                   </div>
 
@@ -289,6 +332,7 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                   {(Object.keys(MUTATIONS) as MutationType[]).map((mutId) => {
                     const found  = isDiscovered(discovered, f.id, mutId);
                     const mut    = MUTATIONS[mutId];
+                    const isFresh = freshlyDiscovered.has(`${f.id}:${mutId}`);
                     return (
                       <div key={mutId} className="flex items-center gap-2">
                         <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 ${
@@ -301,6 +345,11 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                         <span className={`text-xs ${found ? mut.color : "text-muted-foreground"}`}>
                           {found ? mut.name : "???"}
                         </span>
+                        {isFresh && (
+                          <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30">
+                            Newly discovered
+                          </span>
+                        )}
                         {found && (
                           <span className="text-xs text-muted-foreground ml-auto">
                             ×{mut.valueMultiplier} value

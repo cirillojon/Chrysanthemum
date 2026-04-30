@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useSwipe } from "./hooks/useSwipe";
 import { Garden } from "./components/Garden";
 import { Shop } from "./components/Shop";
@@ -203,6 +203,54 @@ function AppInner() {
 
   const newInvTotal = newSeeds + newBlooms + newSupplies;
 
+  // ── Codex unseen entries (badge + red dot + "newly discovered" labels) ───
+  // Tracks WHICH entries the user has acknowledged by opening the card —
+  // unseen = state.discovered − acknowledged. Initialised at mount with all
+  // existing discoveries marked seen so old players don't see a 50+ badge.
+  // The set persists across tab navigations (badge sticks until user opens
+  // the specific entry's card) and is invalidated on sign-out.
+  const [acknowledgedCodex, setAcknowledgedCodex] = useState<Set<string> | null>(null);
+
+  // First time we see state.discovered, treat everything already there as seen.
+  useEffect(() => {
+    if (acknowledgedCodex === null) {
+      setAcknowledgedCodex(new Set(state.discovered ?? []));
+    }
+  }, [acknowledgedCodex, state.discovered]);
+
+  // Reset on user change (sign-in / sign-out / account swap) so the new user
+  // doesn't inherit the previous account's "seen" state.
+  const codexUserRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (codexUserRef.current !== user?.id) {
+      codexUserRef.current = user?.id ?? null;
+      setAcknowledgedCodex(null);
+    }
+  }, [user?.id]);
+
+  const unseenCodex = useMemo<Set<string>>(() => {
+    if (!acknowledgedCodex) return new Set();
+    const out = new Set<string>();
+    for (const id of state.discovered ?? []) {
+      if (!acknowledgedCodex.has(id)) out.add(id);
+    }
+    return out;
+  }, [state.discovered, acknowledgedCodex]);
+
+  // Codex calls this when the user expands a flower's card — marks every
+  // entry belonging to that species (base + any mutations) as seen.
+  const markCodexSeen = useCallback((speciesId: string) => {
+    setAcknowledgedCodex((prev) => {
+      if (!prev) return prev;
+      const next = new Set(prev);
+      const prefix = `${speciesId}:`;
+      for (const id of state.discovered ?? []) {
+        if (id === speciesId || id.startsWith(prefix)) next.add(id);
+      }
+      return next;
+    });
+  }, [state.discovered]);
+
   // Social tab badge = friend requests + unread mailbox
   // (gifts now arrive via mailbox so mailboxUnreadCount already includes them)
   const socialBadgeCount = pendingCount + mailboxUnreadCount;
@@ -370,6 +418,8 @@ function AppInner() {
       setNewSeedsShopBadge(0);
       setNewSupplyShopBadge(0);
     }
+    // Codex badge intentionally persists across tab visits — cleared per-flower
+    // when the user expands that flower's card (handled inside <Codex/>).
   }
 
   function handleShopViewChange(v: ShopView) {
@@ -618,6 +668,11 @@ function AppInner() {
                   {claimableCraftsCount > 9 ? "9+" : claimableCraftsCount}
                 </span>
               )}
+              {t === "codex" && unseenCodex.size > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
+                  {unseenCodex.size > 9 ? "9+" : unseenCodex.size}
+                </span>
+              )}
               {t === "social" && socialBadgeCount > 0 && (
                 <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-red-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
                   {socialBadgeCount > 9 ? "9+" : socialBadgeCount}
@@ -696,7 +751,7 @@ function AppInner() {
           )}
           {tab === "alchemy"     && <AlchemyTab />}
           {tab === "craft"       && <CraftingTab />}
-          {tab === "codex"       && <Codex />}
+          {tab === "codex"       && <Codex unseenEntries={unseenCodex} markSeen={markCodexSeen} />}
           {tab === "social"    && (
             <>
               {/* Sub-nav — always visible for signed-in users; guests only see Market */}
