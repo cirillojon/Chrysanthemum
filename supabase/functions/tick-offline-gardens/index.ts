@@ -492,10 +492,12 @@ function rollWeatherMutations(
 
 // ── Cropsticks cross-breeding ──────────────────────────────────────────────
 //
-// Probability target: ~50% success per hour with 60-second ticks (60 ticks/hr).
-// p = 1 - 0.5^(1/60) ≈ 0.01154 (1.154% per tick).
+// v2.3: deterministic progress timer — once a cropsticks finds a valid recipe
+// pair of infused neighbors, it stamps `crossbreedStartedAt` and produces a
+// seed exactly 1 hour later. Replaces the old per-tick RNG roll so the UI
+// can render a progress bar with predictable arrival time.
 
-const CROPSTICKS_BREED_CHANCE_PER_TICK = 0.01154; // ~50% chance over 1 hour (1 tick/min)
+const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1000; // 1 hour
 
 const RARITY_IDX: Record<string, number> = {
   common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
@@ -711,7 +713,6 @@ const SPECIES_DATA: Record<string, { t: string[]; r: string }> = {
 };
 
 function runCropsticks(save: Save, now: number): Save {
-  void now; // unused but kept for symmetry with other run* functions
   let cur = save;
   const rows = cur.grid.length;
   const cols = cur.grid[0]?.length ?? 0;
@@ -731,7 +732,6 @@ function runCropsticks(save: Save, now: number): Save {
         if (!plot?.plant || !plot.plant.bloomedAt || !plot.plant.infused) continue;
         infusedNeighbors.push({ r: nr, c: nc, plant: plot.plant });
       }
-      if (infusedNeighbors.length < 2) continue;
 
       // Try all pairs, pick the highest-tier recipe match
       let bestRecipe: Recipe | null = null;
@@ -755,11 +755,41 @@ function runCropsticks(save: Save, now: number): Save {
         }
       }
 
-      // Silent skip — no recipe match or failed probability roll
-      if (!bestRecipe || !bestA || !bestB) continue;
-      if (Math.random() >= CROPSTICKS_BREED_CHANCE_PER_TICK) continue;
+      const startedAt: number | undefined = (gear as PlacedGearWithProgress).crossbreedStartedAt;
 
-      // ── Success ────────────────────────────────────────────────────────────
+      // ── No valid recipe pair → clear in-flight progress, if any ──────────
+      if (!bestRecipe || !bestA || !bestB) {
+        if (startedAt != null) {
+          // Stale cycle — pair became invalid (neighbor harvested / un-infused).
+          const newGrid = cur.grid.map((row, r) =>
+            row.map((plot, c) =>
+              r === ri && c === ci && plot.gear
+                ? { ...plot, gear: clearStartedAt(plot.gear) }
+                : plot
+            )
+          );
+          cur = { ...cur, grid: newGrid };
+        }
+        continue;
+      }
+
+      // ── Valid pair, no cycle yet → start one ─────────────────────────────
+      if (startedAt == null) {
+        const newGrid = cur.grid.map((row, r) =>
+          row.map((plot, c) =>
+            r === ri && c === ci && plot.gear
+              ? { ...plot, gear: { ...plot.gear, crossbreedStartedAt: now } }
+              : plot
+          )
+        );
+        cur = { ...cur, grid: newGrid };
+        continue;
+      }
+
+      // ── Cycle in progress — wait for completion ─────────────────────────
+      if (now - startedAt < CROPSTICKS_BREED_DURATION_MS) continue;
+
+      // ── Complete: deliver seed(s), clear infused, reset progress ────────
       const da = SPECIES_DATA[bestA.plant.speciesId]!;
       const db = SPECIES_DATA[bestB.plant.speciesId]!;
       const outputCount = getOutputCount(da.r, db.r, bestRecipe.minRarity);
@@ -783,7 +813,7 @@ function runCropsticks(save: Save, now: number): Save {
         ? cur.discoveredRecipes
         : [...cur.discoveredRecipes, bestRecipe.id];
 
-      // Clear infused from both source plants (leave them in place — not consumed)
+      // Clear infused from both source plants + reset cropsticks progress
       const aR = bestA.r, aC = bestA.c;
       const bR = bestB.r, bC = bestB.c;
       const newGrid = cur.grid.map((row, r) =>
@@ -791,6 +821,9 @@ function runCropsticks(save: Save, now: number): Save {
           if ((r === aR && c === aC) || (r === bR && c === bC)) {
             if (!plot.plant) return plot;
             return { ...plot, plant: { ...plot.plant, infused: false } };
+          }
+          if (r === ri && c === ci && plot.gear) {
+            return { ...plot, gear: clearStartedAt(plot.gear) };
           }
           return plot;
         })
@@ -801,6 +834,14 @@ function runCropsticks(save: Save, now: number): Save {
   }
 
   return cur;
+}
+
+// Type-helper: PlacedGear may carry `crossbreedStartedAt` on cropsticks.
+type PlacedGearWithProgress = { gearType: string; crossbreedStartedAt?: number };
+function clearStartedAt(gear: PlacedGearWithProgress) {
+  const next = { ...gear };
+  delete next.crossbreedStartedAt;
+  return next;
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────

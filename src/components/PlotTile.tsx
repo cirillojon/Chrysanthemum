@@ -12,7 +12,7 @@ import { getFlower, RARITY_CONFIG, MUTATIONS, type MutationType } from "../data/
 import { FERTILIZERS } from "../data/upgrades";
 import { WEATHER } from "../data/weather";
 import type { WeatherType } from "../data/weather";
-import { GEAR, isGearExpired, type FanDirection } from "../data/gear";
+import { GEAR, isGearExpired, CROPSTICKS_BREED_DURATION_MS, type FanDirection } from "../data/gear";
 import { PlotTooltip } from "./PlotTooltip";
 import { GearTooltip } from "./GearTooltip";
 import { useGame } from "../store/GameContext";
@@ -108,6 +108,17 @@ export function PlotTile({
 
   const [open,     setOpen]     = useState(false);
   const [gearOpen, setGearOpen] = useState(false);
+  // Force a 1s re-render while a cropsticks cycle is active so the progress
+  // bar visually advances even when no other state changes are happening
+  // (a fully-bloomed garden with cropsticks doesn't tick anything else).
+  const [, forceTick] = useState(0);
+  const cropsticksActive =
+    plot.gear?.gearType === "cropsticks" && plot.gear.crossbreedStartedAt != null;
+  useEffect(() => {
+    if (!cropsticksActive) return;
+    const id = setInterval(() => forceTick((n) => (n + 1) & 0xffff), 1_000);
+    return () => clearInterval(id);
+  }, [cropsticksActive]);
   const tileRef       = useRef<HTMLDivElement>(null);
   const harvestingRef = useRef(false);
 
@@ -194,6 +205,14 @@ export function PlotTile({
       ? Math.max(0, (gear.placedAt + def.durationMs - now) / def.durationMs)
       : null;
 
+    // Cropsticks cross-breed progress (0..1) — ticks deterministically from
+    // crossbreedStartedAt over CROPSTICKS_BREED_DURATION_MS. Replaces the old
+    // hourly RNG roll with a visible bar.
+    const cropProgress: number | null =
+      def.passiveSubtype === "cropsticks" && gear.crossbreedStartedAt != null
+        ? Math.min(1, Math.max(0, (now - gear.crossbreedStartedAt) / CROPSTICKS_BREED_DURATION_MS))
+        : null;
+
     // Prismatic uses "rainbow-text" and Exalted uses "text-black" — both need manual mapping
     const gearBarBg = gearRarity.color === "rainbow-text"
       ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
@@ -252,6 +271,19 @@ export function PlotTile({
               <div
                 className={`h-full rounded-full ${gearBarBg}`}
                 style={{ width: `${expiryProgress * 100}%` }}
+              />
+            </div>
+          )}
+
+          {/* Cropsticks cross-breed progress (deterministic — replaces RNG) */}
+          {cropProgress !== null && (
+            <div
+              className="absolute bottom-1 left-2 right-2 h-1 bg-border rounded-full overflow-hidden"
+              title={`Cross-breeding · ${Math.floor(cropProgress * 100)}%`}
+            >
+              <div
+                className="h-full rounded-full bg-emerald-400"
+                style={{ width: `${cropProgress * 100}%`, transition: "width 1s linear" }}
               />
             </div>
           )}

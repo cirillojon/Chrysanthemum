@@ -54,7 +54,16 @@ export interface PlacedGear {
   storedFertilizers?: FertilizerType[];
   /** Which direction the fan / aegis is blowing — fan and aegis gear only */
   direction?: FanDirection;
+  /** Cropsticks only — wall-clock ms when the current cross-breed cycle began.
+   *  Set when the cropsticks first sees a valid recipe pair of infused
+   *  neighbors; cleared on completion or when the pair becomes invalid.
+   *  Drives a deterministic progress bar instead of the old hourly RNG roll. */
+  crossbreedStartedAt?: number;
 }
+
+/** How long a cropsticks cross-breed takes (1 hour). Mirrored in the
+ *  tick-offline-gardens cron. */
+export const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1000;
 
 // ── Player's gear supply inventory ────────────────────────────────────────
 
