@@ -297,9 +297,14 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
 
   function handlePlotClick(row: number, col: number) {
     const plot = state.grid[row][col];
-    if (!plot.plant && !harvestingPlots.current.has(`${row}-${col}`)) {
-      setSelectedPlot({ row, col });
-    }
+    if (plot.plant || harvestingPlots.current.has(`${row}-${col}`)) return;
+
+    // Guest guard — guests have empty inventories, so opening the SeedPicker
+    // would just show "Nothing to place" (#148). Surface the sign-in prompt
+    // instead so the next click can actually do something.
+    if (!user) { requestSignIn("to plant seeds"); return; }
+
+    setSelectedPlot({ row, col });
   }
 
   function handleSeedSelect(speciesId: string) {
