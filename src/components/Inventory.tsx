@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { useGame } from "../store/GameContext";
-import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
-import type { MutationType } from "../data/flowers";
+import { getFlower, RARITY_CONFIG, MUTATIONS, FLOWER_TYPES } from "../data/flowers";
+import type { FlowerType, MutationType } from "../data/flowers";
+import {
+  ALL_FLOWER_TYPES, UNIVERSAL_ESSENCE_DISPLAY, UNIVERSAL_ESSENCE_TYPE,
+} from "../data/essences";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, rollbackSellAll, applyEclipseTonic, type InventoryItem } from "../store/gameStore";
@@ -11,8 +14,8 @@ import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";
 import { CONSUMABLE_RECIPE_MAP, ROMAN, type ConsumableId } from "../data/consumables";
 
-type Tab = 0 | 1 | 2 | 3;
-const TAB_LABELS = ["Seeds", "Blooms", "Supplies", "Consumables"] as const;
+type Tab = 0 | 1 | 2 | 3 | 4;
+const TAB_LABELS = ["Seeds", "Blooms", "Supplies", "Consumables", "Essences"] as const;
 
 interface Props {
   newSeeds?:    number;
@@ -42,6 +45,8 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const supplyCount      = fertilizers.reduce((s, f) => s + f.quantity, 0)
                          + gearItems.reduce((s, g) => s + g.quantity, 0);
   const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0);
+  const essenceItems     = (state.essences ?? []).filter((e) => e.amount > 0);
+  const essenceCount     = essenceItems.reduce((s, e) => s + e.amount, 0);
 
   const totalBloomValue = blooms.reduce((sum, item) => {
     const species = getFlower(item.speciesId);
@@ -204,8 +209,15 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       {/* Tab bar */}
       <div className="flex gap-1 bg-card/40 border border-border rounded-xl p-1">
         {TAB_LABELS.map((label, i) => {
-          const count    = i === 0 ? seedCount : i === 1 ? bloomCount : i === 2 ? supplyCount : consumableCount;
-          const newCount = i === 0 ? newSeeds  : i === 1 ? newBlooms  : i === 2 ? newSupplies : 0;
+          const count    = i === 0 ? seedCount
+                         : i === 1 ? bloomCount
+                         : i === 2 ? supplyCount
+                         : i === 3 ? consumableCount
+                         : essenceCount;
+          const newCount = i === 0 ? newSeeds
+                         : i === 1 ? newBlooms
+                         : i === 2 ? newSupplies
+                         : 0;
           const subKey   = (i === 0 ? "seeds" : i === 1 ? "blooms" : "supplies") as "seeds" | "blooms" | "supplies";
           return (
             <button
@@ -330,6 +342,49 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           )
         )}
 
+        {/* ── Essences ────────────────────────────────────────────────────── */}
+        {tab === 4 && (() => {
+          // Always show all 12 elementals + Universal in the same fixed order
+          // as the EssenceBank widget. Empty rows dim to 40% so the player can
+          // see what's missing — same pattern as the bank tile grid.
+          const amountByType = new Map<string, number>(
+            (state.essences ?? []).map((e) => [e.type, e.amount])
+          );
+          const rows = [
+            ...ALL_FLOWER_TYPES.map((type) => ({
+              type, amount: amountByType.get(type) ?? 0,
+              cfg: FLOWER_TYPES[type as FlowerType],
+              isUniversal: false,
+            })),
+            {
+              type: UNIVERSAL_ESSENCE_TYPE,
+              amount: amountByType.get(UNIVERSAL_ESSENCE_TYPE) ?? 0,
+              cfg: UNIVERSAL_ESSENCE_DISPLAY,
+              isUniversal: true,
+            },
+          ];
+          return (
+            <>
+              <p className="text-[11px] text-muted-foreground px-1 pb-1">
+                Essences are earned by sacrificing flowers in the Alchemy lab. Combine all 12 elementals into a Universal Essence in Craft → Other.
+              </p>
+              {rows.map((r) => (
+                <EssenceInventoryRow
+                  key={r.type}
+                  type={r.type}
+                  amount={r.amount}
+                  emoji={r.cfg.emoji}
+                  name={r.cfg.name}
+                  color={r.cfg.color}
+                  bgColor={r.cfg.bgColor}
+                  borderColor={r.cfg.borderColor}
+                  isUniversal={r.isUniversal}
+                />
+              ))}
+            </>
+          );
+        })()}
+
       </div>
 
     </div>
@@ -368,6 +423,45 @@ function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hi
       <span className="text-4xl">{emoji}</span>
       <p className="font-medium text-muted-foreground text-sm">{message}</p>
       <p className="text-xs text-muted-foreground max-w-xs">{hint}</p>
+    </div>
+  );
+}
+
+function EssenceInventoryRow({
+  type, amount, emoji, name, color, bgColor, borderColor, isUniversal,
+}: {
+  type: string; amount: number; emoji: string; name: string;
+  color: string; bgColor: string; borderColor: string; isUniversal: boolean;
+}) {
+  const empty = amount <= 0;
+  // Universal Essence gets the prismatic rainbow treatment; others use their
+  // flower-type config. Empty rows dim to 40% but stay visible so the player
+  // can see which types they're missing.
+  const card = isUniversal
+    ? "rainbow-tile border"
+    : `bg-card/60 border ${borderColor}`;
+  const bg   = isUniversal ? "" : bgColor; // bgColor would conflict with rainbow-tile's animated bg
+  const accent = isUniversal ? "rainbow-text" : color;
+  return (
+    <div
+      key={type}
+      className={`flex items-center gap-4 rounded-xl px-4 py-3 transition-opacity ${card} ${bg} ${empty ? "opacity-40" : ""}`}
+    >
+      <span className="text-3xl flex-shrink-0">{emoji}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="font-semibold text-sm">{name} Essence</h3>
+          {isUniversal && (
+            <span className="text-xs font-mono rainbow-text">Prismatic</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          ×{amount.toLocaleString()}
+          {isUniversal
+            ? " · Used in legendary+ cross-breed recipes"
+            : " · Sacrifice flowers to earn more"}
+        </p>
+      </div>
     </div>
   );
 }

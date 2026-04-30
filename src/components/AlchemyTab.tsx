@@ -2,9 +2,11 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { useGame } from "../store/GameContext";
 import { FLOWER_TYPES, RARITY_CONFIG, getFlower, MUTATIONS } from "../data/flowers";
 import {
-  ESSENCE_YIELD, calculateEssenceYield, mergeEssences,
+  calculateEssenceYield, mergeEssences,
   UNIVERSAL_ESSENCE_DISPLAY,
 } from "../data/essences";
+import { EssenceBank } from "./EssenceBank";
+import { YieldTableModal } from "./YieldTableModal";
 import {
   CONSUMABLE_RECIPES, CONSUMABLE_RECIPE_MAP, ATTUNEMENT_RECIPES,
   canCraftConsumable, canCraftAttunement,
@@ -32,48 +34,8 @@ function parseKey(key: string): { speciesId: string; mutation?: MutationType } {
   return { speciesId, mutation: (mutStr || undefined) as MutationType | undefined };
 }
 
-// ── Sub-component: Essence wallet ─────────────────────────────────────────
-
-function EssenceWallet({ essences }: { essences: EssenceItem[] }) {
-  if (essences.length === 0) {
-    return (
-      <div className="text-center py-4 text-xs text-muted-foreground">
-        No essences yet — sacrifice flowers to earn them.
-      </div>
-    );
-  }
-
-  const flowerTypeOrder = Object.keys(FLOWER_TYPES);
-
-  // Flower essences first (by FLOWER_TYPES order), then universal last
-  const sorted = [...essences].sort((a, b) => {
-    if (a.type === "universal") return 1;
-    if (b.type === "universal") return -1;
-    return flowerTypeOrder.indexOf(a.type) - flowerTypeOrder.indexOf(b.type);
-  });
-
-  return (
-    <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5">
-      {sorted.map(({ type, amount }) => {
-        const cfg = type === "universal"
-          ? UNIVERSAL_ESSENCE_DISPLAY
-          : FLOWER_TYPES[type as FlowerType];
-        return (
-          <div
-            key={type}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs ${cfg.bgColor} ${cfg.borderColor}`}
-          >
-            <span className="text-sm shrink-0">{cfg.emoji}</span>
-            <div className="min-w-0">
-              <p className={`font-semibold leading-none ${cfg.color}`}>{amount}</p>
-              <p className="text-[10px] text-muted-foreground leading-none mt-0.5 truncate">{cfg.name}</p>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+// EssenceWallet replaced by the shared EssenceBank component (shows all 12
+// + Universal even at 0). See src/components/EssenceBank.tsx.
 
 // ── Sub-component: Sacrifice preview strip ────────────────────────────────
 
@@ -567,7 +529,7 @@ function CraftView({
 
 // ── Main AlchemyTab component ─────────────────────────────────────────────
 
-type AlchemyView = "sacrifice" | "essences" | "craft" | "attune";
+type AlchemyView = "sacrifice" | "craft" | "attune";
 
 export function AlchemyTab() {
   const { state, perform, getState, update } = useGame();
@@ -580,6 +542,9 @@ export function AlchemyTab() {
   const [error,          setError]          = useState<string | null>(null);
   const [success,        setSuccess]        = useState<EssenceItem[] | null>(null);
   const [successVisible, setSuccessVisible] = useState(false);
+  // Yield-rates modal — opened from a button on the Sacrifice view, replaces
+  // the standalone "Essences" view that used to host the yield table inline.
+  const [showYieldModal, setShowYieldModal] = useState(false);
 
   // Consumable / attunement craft state
   const [craftingItemId,        setCraftingItemId]        = useState<string | null>(null);
@@ -899,9 +864,9 @@ export function AlchemyTab() {
   return (
     <div className="flex flex-col gap-5">
 
-      {/* Tab switcher: Sacrifice | Essences | Craft */}
+      {/* Tab switcher: Sacrifice | Craft | Attune */}
       <div className="flex rounded-xl border border-border bg-card/40 p-0.5 gap-0.5">
-        {(["sacrifice", "essences", "craft", "attune"] as AlchemyView[]).map((v) => (
+        {(["sacrifice", "craft", "attune"] as AlchemyView[]).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -913,59 +878,39 @@ export function AlchemyTab() {
               }
             `}
           >
-            {v === "sacrifice" ? "⚗️ Sacrifice" : v === "essences" ? "✨ Essences" : v === "craft" ? "🔨 Craft" : "🌿 Attune"}
+            {v === "sacrifice" ? "⚗️ Sacrifice" : v === "craft" ? "🔨 Craft" : "🌿 Attune"}
           </button>
         ))}
       </div>
 
-      {/* ── ESSENCES view ── */}
-      {view === "essences" && (
-        <div className="flex flex-col gap-4">
-          <div>
-            <p className="text-xs font-semibold mb-0.5">Essence Bank</p>
-            <p className="text-[11px] text-muted-foreground">
-              Essences are earned by sacrificing flowers. Combine all 12 elemental essences into a Universal Essence in the Craft tab → Other.
-            </p>
-          </div>
-          <EssenceWallet essences={state.essences ?? []} />
-
-          <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
-            <p className="text-xs font-semibold mb-2">Essence Yield Table</p>
-            <div className="space-y-1">
-              {rarityOrder.map((rarity) => {
-                const cfg = RARITY_CONFIG[rarity];
-                return (
-                  <div key={rarity} className="flex items-center justify-between text-xs">
-                    <span className={cfg.color}>{cfg.label}</span>
-                    <span className="text-muted-foreground font-mono">
-                      {ESSENCE_YIELD[rarity]} per flower
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Yield-rates modal (opened from Sacrifice header button) ───────── */}
+      {showYieldModal && <YieldTableModal onClose={() => setShowYieldModal(false)} />}
 
       {/* ── SACRIFICE view ── */}
       {view === "sacrifice" && (
         <div className="flex flex-col gap-4">
 
-          {/* Description */}
-          <p className="text-[11px] text-muted-foreground">
-            Sacrifice harvested flowers to extract their elemental essence. Higher rarity yields more essence.
-          </p>
+          {/* Description + yield-rates trigger */}
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[11px] text-muted-foreground flex-1">
+              Sacrifice harvested flowers to extract their elemental essence. Higher rarity yields more essence.
+            </p>
+            <button
+              onClick={() => setShowYieldModal(true)}
+              className="shrink-0 text-[10px] font-semibold px-2 py-1 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+              title="Show essence yield rates by rarity"
+            >
+              📊 Yield rates
+            </button>
+          </div>
 
-          {/* Essence bank — always visible at top */}
-          {(state.essences ?? []).length > 0 && (
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
-                Essence Bank
-              </p>
-              <EssenceWallet essences={state.essences ?? []} />
-            </div>
-          )}
+          {/* Essence bank — always visible at top, shows all 12 + Universal */}
+          <div>
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+              Essence Bank
+            </p>
+            <EssenceBank essences={state.essences ?? []} />
+          </div>
 
           {/* Error banner */}
           {error && (
