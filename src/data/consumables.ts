@@ -97,6 +97,38 @@ const RARITY_LABEL: Record<Rarity, string> = {
 
 function r(tier: 1 | 2 | 3 | 4 | 5) { return RARITY_LABEL[TIER_RARITIES[tier]]; }
 
+// ── Supply shop pricing ────────────────────────────────────────────────────
+// Consumables in the supply shop are priced 2× per rarity tier (matches the
+// "needs 2× previous tier" crafting cost), plus a category multiplier for
+// items whose effects are unusually strong (mutation vials, speed boosts).
+
+const CONSUMABLE_BASE_BY_RARITY: Record<Rarity, number> = {
+  common:    0,
+  uncommon:  0,
+  rare:      2_000,
+  legendary: 8_000,
+  mythic:    40_000,
+  exalted:   200_000,
+  prismatic: 1_000_000,
+};
+
+const CONSUMABLE_CATEGORY_MULT: Record<ConsumableCategory, number> = {
+  growth:         1.0,
+  utility:        1.0,
+  mutation_boost: 1.5,
+  speed_boost:    2.0,
+  seed_pouch:     1.0, // not in supply pool, here for completeness
+};
+
+/** Supply-shop price for a consumable. Crafting is cheaper because the
+ *  ingredient cost (essences / lower-tier consumables) is the only outlay,
+ *  while the supply shop pays in raw coins at this premium. */
+export function consumableShopPrice(recipe: ConsumableRecipe): number {
+  const base = CONSUMABLE_BASE_BY_RARITY[recipe.rarity] ?? 0;
+  const mult = CONSUMABLE_CATEGORY_MULT[recipe.category] ?? 1.0;
+  return Math.round(base * mult);
+}
+
 // ── Attunement Crystal recipes ─────────────────────────────────────────────
 
 export const ATTUNEMENT_RECIPES: AttunementRecipe[] = [

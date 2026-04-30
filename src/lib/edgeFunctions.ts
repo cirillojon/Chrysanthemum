@@ -206,6 +206,7 @@ export interface SupplyBuyResult {
   supplyShop:    GameState["supplyShop"];
   fertilizers:   GameState["fertilizers"];
   gearInventory: GameState["gearInventory"];
+  consumables:   GameState["consumables"];
   serverUpdatedAt: string;
 }
 

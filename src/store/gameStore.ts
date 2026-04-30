@@ -3,7 +3,10 @@ import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplace
 import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
 import { mergeEssences, calculateEssenceYield, type EssenceItem } from "../data/essences";
-import type { ConsumableItem } from "../data/consumables";
+import {
+  CONSUMABLE_RECIPE_MAP, consumableShopPrice,
+  type ConsumableItem, type ConsumableId,
+} from "../data/consumables";
 import {
   WEATHER_MUT_CHANCE_PER_TICK,
   THUNDERSTORM_WET_CHANCE_PER_TICK,
@@ -88,6 +91,9 @@ export interface ShopSlot {
   /** Supply shop: this slot is a gear item */
   isGear?:       boolean;
   gearType?:     GearType;
+  /** Supply shop: this slot is a craftable consumable */
+  isConsumable?: boolean;
+  consumableId?: string;
   /** Pinned by a Slot Lock — survives the next supply shop refresh */
   locked?:       boolean;
 }
@@ -417,7 +423,7 @@ function generateSupplyShop(supplySlots: number = DEFAULT_SUPPLY_SLOTS): ShopSlo
         price:        fert.shopPrice,
         quantity:     Math.floor(Math.random() * 3) + 1,
       });
-    } else {
+    } else if (item.kind === "gear") {
       const gearDef = GEAR[item.gearType];
       chosen.push({
         speciesId: `supply_gear_${item.gearType}_${chosen.length}`,
@@ -425,6 +431,17 @@ function generateSupplyShop(supplySlots: number = DEFAULT_SUPPLY_SLOTS): ShopSlo
         gearType:  item.gearType,
         price:     gearDef.shopPrice,
         quantity:  1,
+      });
+    } else {
+      // consumable — derive price from rarity + category multiplier
+      const recipe = CONSUMABLE_RECIPE_MAP[item.consumableId as ConsumableId];
+      if (!recipe) continue;
+      chosen.push({
+        speciesId:    `supply_cons_${item.consumableId}_${chosen.length}`,
+        isConsumable: true,
+        consumableId: item.consumableId,
+        price:        consumableShopPrice(recipe),
+        quantity:     1,
       });
     }
   }
@@ -583,6 +600,10 @@ export function applyOfflineTick(
       if (slot.isGear && slot.gearType) {
         const gearDef = GEAR[slot.gearType as GearType];
         return gearDef ? { ...slot, price: gearDef.shopPrice } : slot;
+      }
+      if (slot.isConsumable && slot.consumableId) {
+        const recipe = CONSUMABLE_RECIPE_MAP[slot.consumableId as ConsumableId];
+        return recipe ? { ...slot, price: consumableShopPrice(recipe) } : slot;
       }
       return slot;
     }),
@@ -2284,6 +2305,23 @@ export function buyFromSupplyShop(
       coins:        state.coins - slot.price,
       supplyShop:   newSupplyShop,
       gearInventory: newGearInv,
+    };
+  }
+
+  if (slot.isConsumable && slot.consumableId) {
+    const consumables = state.consumables ?? [];
+    const existing    = consumables.find((c) => c.id === slot.consumableId);
+    const newConsumables = existing
+      ? consumables.map((c) =>
+          c.id === slot.consumableId ? { ...c, quantity: c.quantity + 1 } : c
+        )
+      : [...consumables, { id: slot.consumableId, quantity: 1 }];
+
+    return {
+      ...state,
+      coins:       state.coins - slot.price,
+      supplyShop:  newSupplyShop,
+      consumables: newConsumables,
     };
   }
 

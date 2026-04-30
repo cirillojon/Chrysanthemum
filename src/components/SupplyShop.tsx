@@ -21,6 +21,7 @@ import {
 import type { Rarity } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR, getMaxSupplyRarity, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked } from "../data/gear";
+import { CONSUMABLE_RECIPE_MAP, type ConsumableId } from "../data/consumables";
 import {
   getNextSupplySlotUpgrade,
   MAX_SUPPLY_SLOTS,
@@ -128,6 +129,20 @@ function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolea
                     : g
                 )
                 .filter((g) => g.quantity > 0),
+            };
+          }
+          if (slot.isConsumable && slot.consumableId) {
+            return {
+              ...cur,
+              coins: cur.coins + slot.price,
+              supplyShop: restoredShop,
+              consumables: (cur.consumables ?? [])
+                .map((c) =>
+                  c.id === slot.consumableId
+                    ? { ...c, quantity: c.quantity - 1 }
+                    : c
+                )
+                .filter((c) => c.quantity > 0),
             };
           }
           return { ...cur, coins: cur.coins + slot.price, supplyShop: restoredShop };
@@ -241,6 +256,74 @@ function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolea
         {!def.durationMs && (
           <p className="text-xs text-muted-foreground font-mono">Permanent (until removed)</p>
         )}
+
+        <div className="flex items-center justify-between mt-auto pt-1">
+          <span className="text-xs text-muted-foreground">
+            {outOfStock ? "Out of stock" : `${slot.quantity} left`}
+          </span>
+          <div className="flex items-center gap-1.5">
+            {slot.locked ? (
+              <span className="text-[10px] text-amber-400 font-mono">📌 Locked</span>
+            ) : hasSlotLock ? (
+              <button
+                onClick={handleLockSlot}
+                disabled={lockingSlot}
+                title="Slot Lock — keeps this slot through the next restock"
+                className="px-2 py-1 rounded-lg text-[10px] bg-amber-400/10 border border-amber-400/30 text-amber-400 hover:bg-amber-400/20 transition-colors disabled:opacity-50"
+              >
+                {lockingSlot ? "…" : "📌 Lock"}
+              </button>
+            ) : null}
+            <button
+              onClick={handleBuy}
+              disabled={!canAfford || outOfStock}
+              className={`
+                px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150
+                ${justBought
+                  ? "bg-green-500 text-white scale-105"
+                  : canAfford && !outOfStock
+                  ? "bg-primary text-primary-foreground hover:scale-105"
+                  : "bg-secondary text-muted-foreground cursor-not-allowed"
+                }
+              `}
+            >
+              {justBought ? "✓ Bought!" : `${slot.price.toLocaleString()} 🟡`}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Consumable card ────────────────────────────────────────────────────────
+  if (slot.isConsumable && slot.consumableId) {
+    const recipe = CONSUMABLE_RECIPE_MAP[slot.consumableId as ConsumableId];
+    if (!recipe) return null;
+    const rarity = RARITY_CONFIG[recipe.rarity];
+
+    return (
+      <div
+        className={`
+          flex flex-col gap-3 bg-card/60 border rounded-xl p-4 transition-all duration-200
+          ${outOfStock ? "border-border opacity-50"
+            : justBought ? "border-green-400/70 bg-green-400/5"
+            : recipe.rarity === "prismatic" ? "rainbow-border rainbow-glow hover:brightness-110"
+            : `border-border hover:border-primary/40 ${rarity.glow}`}
+        `}
+      >
+        <div className="flex items-start justify-between">
+          <span className="text-3xl">{recipe.emoji}</span>
+          <span className={`text-xs font-mono px-2 py-0.5 rounded-full border ${rarity.color} border-current bg-current/10`}>
+            {rarity.label}
+          </span>
+        </div>
+
+        <div>
+          <p className="text-sm font-semibold">{recipe.name}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{recipe.description}</p>
+        </div>
+
+        <p className="text-xs text-muted-foreground font-mono">Single use</p>
 
         <div className="flex items-center justify-between mt-auto pt-1">
           <span className="text-xs text-muted-foreground">
