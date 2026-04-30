@@ -149,6 +149,13 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       craftingSlotCount:    (data.crafting_slot_count   as number)                      ?? 1,
       // Phase 5a — active speed-boost consumables (pruned of expired entries on offline tick)
       activeBoosts:         (data.active_boosts         as GameState["activeBoosts"])   ?? [],
+      // Crafted consumables (Bloom Burst, vials, Eclipse Tonic, …) — edge functions
+      // (craft-collect, supply-action, alchemy-craft) write the DB column directly,
+      // but loadCloudSave needs to read it back so the client state isn't reset to
+      // [] on every refresh / new build.
+      consumables:          (data.consumables           as GameState["consumables"])    ?? [],
+      lastEclipseTonic:     (data.last_eclipse_tonic    as string | null)               ?? null,
+      lastWindShearUsed:    (data.last_wind_shear_used  as number | null)               ?? null,
     } as GameState;
   } catch {
     return null;
@@ -193,6 +200,11 @@ export async function saveToCloud(
     crafting_slot_count:    state.craftingSlotCount ?? 1,
     // Phase 5a — active speed-boost consumables
     active_boosts:          state.activeBoosts      ?? [],
+    // Crafted consumables — kept in sync so we don't clobber edge-function
+    // writes with a stale empty array on the next saveToCloud roundtrip.
+    consumables:            state.consumables       ?? [],
+    last_eclipse_tonic:     state.lastEclipseTonic  ?? null,
+    last_wind_shear_used:   state.lastWindShearUsed ?? null,
     updated_at:             newUpdatedAt,
   };
 
