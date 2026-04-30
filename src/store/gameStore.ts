@@ -48,6 +48,9 @@ export interface PlantedFlower {
   forcedMutation?: "giant";
   /** Set by mutation-boost vials — multiplies the chance of the specified mutation during harvest */
   mutationBoost?: { mutation: string; multiplier: number };
+  /** Set by Magnifying Glass — locks in whatever mutation state the plant currently has.
+   *  Future weather/sprinkler/fan ticks skip this plant so its mutation can no longer change. */
+  revealed?: boolean;
 }
 
 export interface Plot {
@@ -1200,6 +1203,9 @@ export function tickWeatherMutations(
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
 
+      // Magnifying Glass — once revealed, the plant's mutation state is locked
+      if (plot.plant.revealed) return plot;
+
       // Weather mutations only apply at bloom — the plant must be at peak to be affected
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
@@ -1281,6 +1287,9 @@ export function tickSprinklerMutations(
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
 
+      // Magnifying Glass — once revealed, the plant's mutation state is locked
+      if (plot.plant.revealed) return plot;
+
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
 
@@ -1350,6 +1359,9 @@ export function tickFanMutations(
   const newGrid = state.grid.map((row, ri) =>
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
+
+      // Magnifying Glass — once revealed, fans can no longer strip or apply
+      if (plot.plant.revealed) return plot;
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
@@ -2359,6 +2371,10 @@ export function applyPlantConsumable(
     updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "golden",   multiplier: 5 }, mutationBlocked: undefined };
   } else if (consumableId.startsWith("rainbow_vial_")) {
     updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "rainbow",  multiplier: 5 }, mutationBlocked: undefined };
+  } else if (consumableId.startsWith("magnifying_glass_")) {
+    // Lock in the plant's current mutation state — future ticks skip revealed plants.
+    if (plant.revealed) return null;
+    updatedPlant = { ...updatedPlant, revealed: true };
   }
 
   const newGrid = after.grid.map((r, ri) =>

@@ -231,6 +231,7 @@ type PlantData = {
   mutationBlocked?: boolean;
   forcedMutation?:  string;
   mutationBoost?:   { mutation: string; multiplier: number };
+  revealed?:        boolean;
   [key: string]: unknown;
 };
 type GridCell = { id: string; plant: PlantData | null; gear?: unknown };
@@ -446,6 +447,14 @@ Deno.serve(async (req: Request) => {
           mutationBlocked: undefined,
           mutationBoost:   undefined,
         };
+
+      // ── Magnifying Glass ────────────────────────────────────────────────────
+      // Locks in whatever mutation state the plant currently has — future
+      // weather/sprinkler/fan ticks skip revealed plants. Player decides when
+      // to lock based on what's already rolled.
+      } else if (consumableId.startsWith("magnifying_glass_")) {
+        if (plant.revealed) return err("This plant is already revealed");
+        updatedPlant = { ...updatedPlant, revealed: true };
 
       // ── Mutation-boost vials (Frost, Ember, Storm, Moon, Golden, Rainbow) ───
       } else {
