@@ -401,35 +401,39 @@ Deno.serve(async (req: Request) => {
       let updatedPlant: PlantData = { ...plant };
 
       // ── Bloom Burst ─────────────────────────────────────────────────────────
+      // Skip part of the remaining time in the plant's current stage:
+      //   - Seed   → advance by remaining/2 (half of remaining)
+      //   - Sprout → advance by remaining/4 (quarter, since sprout is 2× as
+      //              long as seed → half as effective per real-time second)
+      // Mirrors the client's applyPlantConsumable exactly.
       if (consumableId.startsWith("bloom_burst_")) {
         if (stage === "bloom") return err("Cannot use Bloom Burst on a fully bloomed plant");
 
         const times = FLOWER_GROWTH_TIMES[plant.speciesId];
         if (!times) return err("Unknown species growth data");
 
-        if (stage === "seed") {
-          // Advance seed → sprout: stamp sproutedAt = now
-          // Also advance growthMs to the seed threshold if the checkpoint system is in use
-          if (plant.growthMs !== undefined) {
-            updatedPlant = {
-              ...updatedPlant,
-              growthMs:   Math.max(plant.growthMs, times.seed),
-              lastTickAt: now,
-            };
-          }
-          updatedPlant = { ...updatedPlant, sproutedAt: now };
+        const seedMs   = times.seed;
+        const sproutMs = times.sprout;
 
+        // Current growthMs (same fallback chain as getStage above)
+        let currentGm: number;
+        if (plant.growthMs !== undefined) {
+          currentGm = plant.growthMs + Math.max(0, now - (plant.lastTickAt ?? now));
+        } else if (plant.sproutedAt != null) {
+          currentGm = seedMs + Math.max(0, now - plant.sproutedAt);
         } else {
-          // Advance sprout → halfway: mirror the client's optimistic logic —
-          // shift sproutedAt backward by half the elapsed sprout time.
-          const sproutedAt = plant.sproutedAt ?? now;
-          const elapsed    = now - sproutedAt;
-          const shift      = Math.floor(elapsed / 2);
-          // Also push the growthMs checkpoint back by shift ms if present
-          if (plant.lastTickAt !== undefined) {
-            updatedPlant = { ...updatedPlant, lastTickAt: plant.lastTickAt - shift };
-          }
-          updatedPlant = { ...updatedPlant, sproutedAt: sproutedAt - shift };
+          currentGm = Math.max(0, now - plant.timePlanted);
+        }
+
+        const stageEnd  = stage === "seed" ? seedMs : seedMs + sproutMs;
+        const divisor   = stage === "seed" ? 2 : 4;
+        const remaining = Math.max(0, stageEnd - currentGm);
+        const newGm     = currentGm + Math.floor(remaining / divisor);
+
+        updatedPlant = { ...updatedPlant, growthMs: newGm, lastTickAt: now };
+        // Also stamp sproutedAt if we crossed the seed → sprout boundary
+        if (newGm >= seedMs && updatedPlant.sproutedAt == null) {
+          updatedPlant = { ...updatedPlant, sproutedAt: now };
         }
 
       // ── Heirloom Charm ──────────────────────────────────────────────────────

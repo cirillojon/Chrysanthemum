@@ -2405,17 +2405,39 @@ export function applyPlantConsumable(
   let updatedPlant: PlantedFlower = { ...plant };
 
   if (consumableId.startsWith("bloom_burst_")) {
-    const now   = Date.now();
-    const stage = getCurrentStage(plant, now);
-    if (stage === "seed") {
-      // Advance seed → sprout: stamp sproutedAt now
-      updatedPlant = { ...updatedPlant, sproutedAt: now };
-    } else if (stage === "sprout") {
-      // Advance halfway through sprout phase
-      const sproutedAt = plant.sproutedAt ?? now;
-      updatedPlant = { ...updatedPlant, sproutedAt: sproutedAt - Math.floor((now - sproutedAt) / 2) };
+    const now     = Date.now();
+    const stage   = getCurrentStage(plant, now);
+    const species = getFlower(plant.speciesId);
+    // Bloom Burst: skip part of the remaining time in the plant's CURRENT stage.
+    //   - Seed stage   → halve remaining seed time   (advance by remaining/2)
+    //   - Sprout stage → quarter remaining sprout time (advance by remaining/4)
+    //                    half as effective because sprout is 2× as long as seed
+    //   - Bloom stage  → no-op (already done)
+    // We write directly to growthMs + lastTickAt so the optimistic update is
+    // independent of growth multipliers. Server mirrors this exact logic.
+    if (species && stage !== "bloom") {
+      const seedMs   = species.growthTime.seed;
+      const sproutMs = species.growthTime.sprout;
+      // Inline current growthMs — same fallback chain as the server's getStage.
+      // Avoid computeGrowthMs() which requires weather/gear context that this
+      // helper doesn't have access to.
+      const currentGm =
+        plant.growthMs !== undefined
+          ? plant.growthMs + Math.max(0, now - (plant.lastTickAt ?? now))
+          : plant.sproutedAt != null
+            ? seedMs + Math.max(0, now - plant.sproutedAt)
+            : Math.max(0, now - plant.timePlanted);
+      const stageEnd = stage === "seed" ? seedMs : seedMs + sproutMs;
+      const divisor  = stage === "seed" ? 2 : 4;
+      const remaining = Math.max(0, stageEnd - currentGm);
+      const newGm     = currentGm + Math.floor(remaining / divisor);
+      updatedPlant = { ...updatedPlant, growthMs: newGm, lastTickAt: now };
+      // Also stamp sproutedAt if we crossed the seed → sprout boundary so
+      // legacy code paths (and the codex/UI fallbacks) stay consistent.
+      if (newGm >= seedMs && !updatedPlant.sproutedAt) {
+        updatedPlant = { ...updatedPlant, sproutedAt: now };
+      }
     }
-    // bloom stage: no-op client-side (server validates)
   } else if (consumableId.startsWith("heirloom_charm_")) {
     updatedPlant = { ...updatedPlant, heirloomActive: true };
   } else if (consumableId.startsWith("purity_vial_")) {
