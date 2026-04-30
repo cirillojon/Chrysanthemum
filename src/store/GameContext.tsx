@@ -104,6 +104,7 @@ const EMPTY_SUMMARY: OfflineSummary = {
   readyToHarvest: 0,
   shopRestocked: false,
   supplyRestocked: false,
+  craftsReady: 0,
 };
 
 // Reject local saves whose lastSaved is more than 1 s in the future.

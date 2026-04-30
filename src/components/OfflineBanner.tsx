@@ -22,9 +22,9 @@ const GREETINGS: Record<string, (name: string) => string> = {
 };
 
 export function OfflineBanner({ summary, onDismiss, changelog, username }: Props) {
-  const { minutesAway, readyToHarvest, shopRestocked, supplyRestocked } = summary;
+  const { minutesAway, readyToHarvest, shopRestocked, supplyRestocked, craftsReady } = summary;
 
-  const hasOfflineContent = minutesAway >= 1 || readyToHarvest || shopRestocked || supplyRestocked;
+  const hasOfflineContent = minutesAway >= 1 || readyToHarvest || shopRestocked || supplyRestocked || craftsReady > 0;
 
   // Nothing to show — skip
   if (!hasOfflineContent && !changelog) return null;
@@ -87,6 +87,19 @@ export function OfflineBanner({ summary, onDismiss, changelog, username }: Props
                   <p className="text-sm font-semibold">Supply shop has restocked</p>
                   <p className="text-xs text-muted-foreground">
                     Fresh gear and fertilizer available
+                  </p>
+                </div>
+              </div>
+            )}
+            {craftsReady > 0 && (
+              <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3">
+                <span className="text-2xl">⚒️</span>
+                <div>
+                  <p className="text-sm font-semibold">
+                    {craftsReady} craft{craftsReady > 1 ? "s" : ""} ready to collect
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Head to the Craft tab to claim them
                   </p>
                 </div>
               </div>

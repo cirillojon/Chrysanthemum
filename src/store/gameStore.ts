@@ -209,6 +209,8 @@ export interface OfflineSummary {
   readyToHarvest: number;
   shopRestocked: boolean;
   supplyRestocked: boolean;
+  /** Crafting queue entries whose duration has elapsed but haven't been collected. */
+  craftsReady: number;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -482,7 +484,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
       const state = defaultState();
-      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false } };
+      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false, craftsReady: 0 } };
     }
     const parsed = JSON.parse(raw) as GameState;
     // Backfill discovered for saves that predate the codex
@@ -491,7 +493,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
   } catch (e) {
     // console.warn("Failed to load save, starting fresh:", e);
     const state = defaultState();
-    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false } };
+    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false, craftsReady: 0 } };
   }
 }
 
@@ -648,9 +650,18 @@ export function applyOfflineTick(
     .flat()
     .filter((p) => p.plant && getCurrentStage(p.plant, now) === "bloom").length;
 
+  // Crafts whose timer has elapsed but haven't been collected yet — surfaced
+  // on the offline banner so users coming back see what's waiting in the queue.
+  // Crafts run on a real-time clock, so this includes both jobs that finished
+  // while offline and any that were already done when the user logged out.
+  const craftsReady = (updated.craftingQueue ?? []).filter((entry) => {
+    const doneAt = new Date(entry.startedAt).getTime() + entry.durationMs;
+    return now >= doneAt;
+  }).length;
+
   return {
     state:   updated,
-    summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked },
+    summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked, craftsReady },
   };
 }
 
