@@ -34,14 +34,13 @@ export type PassiveGearType =
   | "aegis_uncommon"
   | "aegis_rare"
   | "aegis_legendary"
-  | "garden_pin"
   | "auto_planter_prismatic"
   | "cropsticks";
 
 export type GearType = SprinklerGearType | PassiveGearType;
 
 export type GearCategory  = "sprinkler_regular" | "sprinkler_mutation" | "passive";
-export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis" | "garden_pin";
+export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis";
 
 /** Which way a Fan or Aegis is pointing — set at placement time */
 export type FanDirection = "up" | "down" | "left" | "right";
@@ -578,22 +577,6 @@ export const GEAR: Record<GearType, GearDefinition> = {
     fanRange:       4,
   },
 
-  // ── Garden Pin ────────────────────────────────────────────────────────────
-  // Placed in any plot cell. Marks the plot as "pinned" — blocks manual
-  // harvests and all mutations (weather and sprinkler) until removed.
-  // Permanent — no expiry.
-
-  garden_pin: {
-    id:             "garden_pin",
-    name:           "Garden Pin",
-    description:    "Marks this plot. Blocks harvests and mutations until removed. Permanent.",
-    emoji:          "📌",
-    rarity:         "uncommon",
-    shopPrice:      0,
-    category:       "passive",
-    passiveSubtype: "garden_pin",
-  },
-
   // ── Auto-Planter ─────────────────────────────────────────────────────────
   // Automatically plants seeds from the player's inventory into empty cells
   // within a 5×5 area — works even while offline.
@@ -761,10 +744,6 @@ export function isAutoPlanter(def: GearDefinition): boolean {
 
 export function isCropsticks(def: GearDefinition): boolean {
   return def.passiveSubtype === "cropsticks";
-}
-
-export function isGardenPin(def: GearDefinition): boolean {
-  return def.passiveSubtype === "garden_pin";
 }
 
 // ── Supply shop pools ──────────────────────────────────────────────────────

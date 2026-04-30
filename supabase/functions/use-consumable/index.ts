@@ -232,6 +232,7 @@ type PlantData = {
   forcedMutation?:  string;
   mutationBoost?:   { mutation: string; multiplier: number };
   revealed?:        boolean;
+  pinned?:          boolean;
   [key: string]: unknown;
 };
 type GridCell = { id: string; plant: PlantData | null; gear?: unknown };
@@ -380,8 +381,15 @@ Deno.serve(async (req: Request) => {
 
       const requiredRarity = TIER_RARITIES[tier];
       if (!requiredRarity) return err("Unknown consumable tier");
-      if (rarity !== requiredRarity) {
-        return err(`This consumable targets ${requiredRarity} plants; your plant is ${rarity}`);
+
+      // All plant-targeting consumables match DOWNWARD — a higher-tier consumable
+      // works on lower-rarity plants (e.g. Mythic vial → Rare plant). Tier 1
+      // (Rare) is still the floor, so Common/Uncommon plants stay excluded.
+      const RARITY_ORDER: Record<string, number> = {
+        common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+      };
+      if ((RARITY_ORDER[requiredRarity] ?? -1) < (RARITY_ORDER[rarity] ?? 999)) {
+        return err(`This ${requiredRarity} consumable can't reach ${rarity} plants`);
       }
 
       // Deduct consumable
@@ -455,6 +463,13 @@ Deno.serve(async (req: Request) => {
       } else if (consumableId.startsWith("magnifying_glass_")) {
         if (plant.revealed) return err("This plant is already revealed");
         updatedPlant = { ...updatedPlant, revealed: true };
+
+      // ── Garden Pin ──────────────────────────────────────────────────────────
+      // Shields the plot from auto-harvest (Harvest Bell, Auto-Planter).
+      // Manual harvest still works. Permanent for the life of the plant.
+      } else if (consumableId.startsWith("garden_pin_")) {
+        if (plant.pinned) return err("This plant is already pinned");
+        updatedPlant = { ...updatedPlant, pinned: true };
 
       // ── Mutation-boost vials (Frost, Ember, Storm, Moon, Golden, Rainbow) ───
       } else {

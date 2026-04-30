@@ -67,7 +67,6 @@ const GEAR_RECIPES: GearRecipe[] = [
   { outputGearType: "aegis_uncommon",        ingredients: [E("zephyr", 5), E("shadow", 3)],                                                           coinCost: 500,     durationMs: DU },
   { outputGearType: "aegis_rare",            ingredients: [G("aegis_uncommon")],                                                                       coinCost: 2_000,   durationMs: DR },
   { outputGearType: "aegis_legendary",       ingredients: [G("aegis_rare")],                                                                           coinCost: 15_000,  durationMs: DL },
-  { outputGearType: "garden_pin",            ingredients: [E("arcane", 3), E("fairy", 3)],                                                            coinCost: 200,     durationMs: DU },
   { outputGearType: "cropsticks",            ingredients: [E("arcane", 4), E("stellar", 4), E("grove", 4)],                                           coinCost: 20_000,  durationMs: DL },
   { outputGearType: "auto_planter_prismatic",ingredients: [G("sprinkler_prismatic", 1), G("harvest_bell_legendary", 1), E("universal", 10)],          coinCost: 500_000, durationMs: DP },
 ];

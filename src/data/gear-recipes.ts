@@ -232,14 +232,6 @@ export const GEAR_RECIPES: GearRecipe[] = [
     durationMs:     DL,
   },
 
-  // ── Garden Pin ────────────────────────────────────────────────────────────
-  {
-    outputGearType: "garden_pin",
-    ingredients:    [E("arcane", 3), E("fairy", 3)],
-    coinCost:       200,
-    durationMs:     DU,
-  },
-
   // ── Cropsticks (legendary) ────────────────────────────────────────────────
   {
     outputGearType: "cropsticks",
