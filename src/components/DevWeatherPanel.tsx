@@ -70,6 +70,8 @@ export function DevWeatherPanel() {
   const [consumableSearch, setConsumableSearch] = useState("");
   const [selectedConsumable,    setSelectedConsumable]    = useState<ConsumableId>(CONSUMABLE_RECIPES[0]?.id as ConsumableId);
   const [consumableQty, setConsumableQty]   = useState(1);
+  const [infuserRarity, setInfuserRarity]   = useState<"rare" | "legendary" | "mythic" | "exalted" | "prismatic">("rare");
+  const [infuserQty,    setInfuserQty]      = useState(1);
   const [toast, setToast]           = useState<string | null>(null);
 
   // ── Broadcast tab state ───────────────────────────────────────────────────
@@ -234,6 +236,37 @@ export function DevWeatherPanel() {
 
     update({ ...state, consumables: newConsumables, serverUpdatedAt: data.updated_at as string });
     showToast(`+${consumableQty} ${recipe.name}`);
+  }
+
+  // Infusers (cross-breed crystals) — DB column is `infusers`, stored as
+  // { rarity, quantity }[]. Direct DB write so the Alchemy Attune view
+  // doesn't lose them on the next saveToCloud.
+  async function giveInfuser() {
+    if (!user) return;
+    const newInfusers = [...(state.infusers ?? [])];
+    const existing    = newInfusers.find((i) => i.rarity === infuserRarity);
+    if (existing) {
+      existing.quantity += infuserQty;
+    } else {
+      newInfusers.push({ rarity: infuserRarity, quantity: infuserQty });
+    }
+
+    const newUpdatedAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("game_saves")
+      .update({ infusers: newInfusers, updated_at: newUpdatedAt })
+      .eq("user_id", user.id)
+      .select("updated_at")
+      .single();
+
+    if (error || !data) {
+      showToast(`✗ ${error?.message ?? "save failed"}`);
+      return;
+    }
+
+    update({ ...state, infusers: newInfusers, serverUpdatedAt: data.updated_at as string });
+    const tierLabel = infuserRarity[0].toUpperCase() + infuserRarity.slice(1);
+    showToast(`+${infuserQty} Infuser (${tierLabel})`);
   }
 
   // ── Broadcast send ────────────────────────────────────────────────────────
@@ -780,6 +813,37 @@ export function DevWeatherPanel() {
                 className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
               >
                 Give Consumable
+              </button>
+            </div>
+          </div>
+
+          {/* Infusers — cross-breed crystals (Alchemy → Attune) */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">💉 Infusers</p>
+            <select
+              value={infuserRarity}
+              onChange={(e) => setInfuserRarity(e.target.value as typeof infuserRarity)}
+              className="w-full bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white text-xs focus:outline-none focus:border-yellow-500/50"
+            >
+              <option value="rare">Infuser I (Rare)</option>
+              <option value="legendary">Infuser II (Legendary)</option>
+              <option value="mythic">Infuser III (Mythic)</option>
+              <option value="exalted">Infuser IV (Exalted)</option>
+              <option value="prismatic">Infuser V (Prismatic)</option>
+            </select>
+            <div className="flex gap-1.5">
+              <input
+                type="number"
+                value={infuserQty}
+                min={1}
+                onChange={(e) => setInfuserQty(Math.max(1, parseInt(e.target.value) || 1))}
+                className="w-14 bg-black/40 border border-white/10 rounded-lg px-2 py-1 text-white font-mono text-xs focus:outline-none focus:border-yellow-500/50"
+              />
+              <button
+                onClick={giveInfuser}
+                className="flex-1 py-1 bg-yellow-500/20 border border-yellow-500/40 text-yellow-400 rounded-lg font-semibold hover:bg-yellow-500/30 transition-all text-center"
+              >
+                Give Infuser
               </button>
             </div>
           </div>
