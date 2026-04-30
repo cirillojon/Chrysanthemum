@@ -12,6 +12,20 @@ import { useGame } from "../store/GameContext";
 type FilterRarity = Rarity | "all";
 type FilterStatus = "all" | "discovered" | "undiscovered";
 
+/** Format a growth-time millisecond duration for the codex stats panel.
+ *  Mirrors the shop slot card's format so growth times read consistently. */
+function formatDuration(ms: number): string {
+  const totalSec = Math.floor(ms / 1_000);
+  const hours    = Math.floor(totalSec / 3_600);
+  const minutes  = Math.floor((totalSec % 3_600) / 60);
+  const seconds  = totalSec % 60;
+  if (hours > 0 && minutes > 0) return `${hours}hr ${minutes}m`;
+  if (hours > 0)                return `${hours}hr`;
+  if (minutes > 0 && seconds > 0) return `${minutes}m ${seconds}s`;
+  if (minutes > 0)              return `${minutes}m`;
+  return `${seconds}s`;
+}
+
 interface Props {
   // When used on a profile page, pass in a read-only discovered array
   // When used in the main game, leave empty and it reads from context
@@ -311,6 +325,24 @@ export function Codex({ discoveredOverride, compact = false, unseenEntries, mark
               {/* Expanded mutation details */}
               {isExpanded && (
                 <div className="px-4 pb-3 border-t border-border/40 pt-3 space-y-2">
+                  {/* Stats — growth time + sell price (only for discovered species) */}
+                  {hasBase && (
+                    <div className="bg-card/40 border border-border/40 rounded-lg px-3 py-2 mb-1 text-xs font-mono text-muted-foreground space-y-0.5">
+                      <div className="flex items-center justify-between">
+                        <span>Seed → Sprout</span>
+                        <span className="text-foreground">{formatDuration(f.growthTime.seed)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Sprout → Bloom</span>
+                        <span className="text-foreground">{formatDuration(f.growthTime.sprout)}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-0.5 border-t border-border/40 mt-0.5">
+                        <span>Sell value</span>
+                        <span className="text-foreground">{f.sellValue.toLocaleString()} 🟡</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Base entry */}
                   <div className="flex items-center gap-2">
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 ${
