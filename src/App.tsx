@@ -7,6 +7,7 @@ import { OfflineBanner } from "./components/OfflineBanner";
 import { ShopRestockBanner } from "./components/ShopRestockBanner";
 import { GearExpiryBanner } from "./components/GearExpiryBanner";
 import { UsernameModal } from "./components/UsernameModal";
+import { SignInPromptModal } from "./components/SignInPromptModal";
 import { SearchPage } from "./components/SearchPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { FriendsPage } from "./components/FriendsPage";
@@ -57,6 +58,7 @@ function AppInner() {
     signInWithGoogle, signOut,
     needsUsername, completeUsername,
     isStaleTab,
+    signInPromptReason, dismissSignInPrompt,
     activeWeather, weatherMsLeft, weatherIsActive,
   } = useGame();
 
@@ -451,6 +453,18 @@ function AppInner() {
       )}
       {needsUsername && user && (
         <UsernameModal user={user} onComplete={completeUsername} />
+      )}
+      {/* Guest sign-in prompt — opened by requestSignIn() from any component
+          that needs auth (Buy buttons, Upgrade buttons, etc. — see #148). */}
+      {signInPromptReason !== null && (
+        <SignInPromptModal
+          reason={signInPromptReason}
+          onClose={dismissSignInPrompt}
+          onSignIn={async () => {
+            dismissSignInPrompt();
+            await signInWithGoogle();
+          }}
+        />
       )}
 
       {updateAvailable && !dismissedUpdate && (

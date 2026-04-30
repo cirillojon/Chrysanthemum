@@ -72,6 +72,14 @@ interface GameContextValue {
   needsUsername: boolean;
   completeUsername: (username: string) => void;
   isStaleTab: boolean;
+  /** When non-null, App renders the SignInPromptModal. Components call
+   *  `requestSignIn()` instead of `signInWithGoogle()` directly so guests
+   *  see a friendly prompt before being kicked to the OAuth flow. */
+  signInPromptReason: string | null;
+  /** Open the sign-in prompt. Optional `reason` is shown as a contextual
+   *  second line on the modal (e.g. "to buy seeds", "to upgrade your farm"). */
+  requestSignIn: (reason?: string) => void;
+  dismissSignInPrompt: () => void;
   // Weather
   activeWeather: WeatherType;
   weatherMsLeft: number;
@@ -111,6 +119,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile]                   = useState<CloudProfile | null>(null);
   const [authLoading, setAuthLoading]           = useState(true);
   const [needsUsername, setNeedsUsername]       = useState(false);
+  const [signInPromptReason, setSignInPromptReason] = useState<string | null>(null);
 
   const saveEnabled         = useRef(false);
   const isLoading           = useRef(false);
@@ -548,6 +557,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       refreshProfile,
       needsUsername, completeUsername,
       isStaleTab,
+      signInPromptReason,
+      requestSignIn:       (reason?: string) => setSignInPromptReason(reason ?? ""),
+      dismissSignInPrompt: () => setSignInPromptReason(null),
       activeWeather,
       weatherMsLeft,
       weatherMsUntilNext,

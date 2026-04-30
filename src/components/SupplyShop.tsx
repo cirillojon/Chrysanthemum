@@ -49,7 +49,7 @@ function formatDuration(ms: number): string {
 // ── Individual supply slot card ─────────────────────────────────────────────
 
 function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolean }) {
-  const { state, perform, getState, user, signInWithGoogle } = useGame();
+  const { state, perform, getState, user, requestSignIn } = useGame();
   const [justBought,  setJustBought]  = useState(false);
   const [lockingSlot, setLockingSlot] = useState(false);
 
@@ -64,8 +64,7 @@ function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolea
   }
 
   function handleLockSlot() {
-    // Guest guard — Slot Lock spends a consumable, needs auth (#148).
-    if (!user) { signInWithGoogle(); return; }
+    if (!user) { requestSignIn("to use Slot Lock"); return; }
     if (lockingSlot) return;
     const cur = getState();
     const optimistic = applySlotLock(cur, slot.speciesId);
@@ -91,10 +90,7 @@ function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolea
   const outOfStock = slot.quantity < 1;
 
   function handleBuy() {
-    // Guest guard — supply purchase needs auth, otherwise the edge call
-    // throws "Not authenticated" and the optimistic state silently rolls
-    // back leaving the user wondering why nothing happened (#148).
-    if (!user) { signInWithGoogle(); return; }
+    if (!user) { requestSignIn("to buy supplies"); return; }
     const optimistic = buyFromSupplyShop(state, slot.speciesId);
     if (!optimistic) return;
     perform(
@@ -298,7 +294,7 @@ function supplyUnlockSlots(rarity: Rarity): number | null {
 }
 
 export function SupplyShop() {
-  const { state, perform, getState, user, signInWithGoogle } = useGame();
+  const { state, perform, getState, user, requestSignIn } = useGame();
   const [countdown,     setCountdown]     = useState(() => msUntilSupplyReset(state));
   const [showRates,     setShowRates]     = useState(false);
   const [usingWindShear,setUsingWindShear]= useState(false);
@@ -372,8 +368,7 @@ export function SupplyShop() {
   [supplySlots]);
 
   function handleUpgradeSlots() {
-    // Guest guard — slot upgrade is a coin purchase that hits an edge function (#148).
-    if (!user) { signInWithGoogle(); return; }
+    if (!user) { requestSignIn("to upgrade your supply slots"); return; }
     if (!nextSlotUpgrade) return;
     const optimistic = upgradeSupplySlots(state);
     if (!optimistic) return;

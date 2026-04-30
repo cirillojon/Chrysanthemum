@@ -39,7 +39,7 @@ function rarityBadgeClass(rarity: Rarity): string {
 }
 
 export function ShopSlotCard({ slot }: Props) {
-  const { state, getState, perform, user, signInWithGoogle } = useGame();
+  const { state, getState, perform, user, requestSignIn } = useGame();
   const [justBought, setJustBought] = useState(false);
   // Absolute per-card gate: blocks any buy while a server call is in-flight,
   // even if stateRef or queuing somehow lets a second request slip through.
@@ -68,9 +68,9 @@ export function ShopSlotCard({ slot }: Props) {
 
     function handleBuyFert() {
       // Guest guard — guests can browse the shop but Buy needs auth. Prompt
-      // sign-in directly instead of letting the edge call fail with a silent
-      // "Not authenticated" rollback (#148).
-      if (!user) { signInWithGoogle(); return; }
+      // sign-in via the SignInPromptModal instead of letting the edge call
+      // fail with a silent "Not authenticated" rollback (#148).
+      if (!user) { requestSignIn("to buy fertilizer"); return; }
       if (buyingRef.current) return;
       const cur = getState();
       const optimistic = buyFertilizer(cur, slot.fertilizerType!);
@@ -106,10 +106,7 @@ export function ShopSlotCard({ slot }: Props) {
     }
 
     function handleBuyAllFert() {
-      // Guest guard — guests can browse the shop but Buy needs auth. Prompt
-      // sign-in directly instead of letting the edge call fail with a silent
-      // "Not authenticated" rollback (#148).
-      if (!user) { signInWithGoogle(); return; }
+      if (!user) { requestSignIn("to buy fertilizer"); return; }
       if (buyingRef.current) return;
       const cur = getState();
       const optimistic = buyAllFertilizer(cur, slot.fertilizerType!);
@@ -218,8 +215,7 @@ export function ShopSlotCard({ slot }: Props) {
   )?.quantity ?? 0;
 
   function handleBuy() {
-    // Guest guard — see comment in handleBuyFert (#148).
-    if (!user) { signInWithGoogle(); return; }
+    if (!user) { requestSignIn("to buy seeds"); return; }
     if (buyingRef.current) return;
     const cur = getState();
     const optimistic = buyFromShop(cur, slot.speciesId);
@@ -255,8 +251,7 @@ export function ShopSlotCard({ slot }: Props) {
   }
 
   function handleBuyAll() {
-    // Guest guard — see comment in handleBuyFert (#148).
-    if (!user) { signInWithGoogle(); return; }
+    if (!user) { requestSignIn("to buy seeds"); return; }
     if (buyingRef.current) return;
     const cur = getState();
     const optimistic = buyAllFromShop(cur, slot.speciesId);
