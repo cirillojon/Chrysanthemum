@@ -1,7 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import {
   SPECIES_RARITY, SPECIES_TYPES, INFUSE_GOLD_COST,
-  computeTier, rollMutation, attunementDurationMs,
+  computeTier, attunementDurationMs,
   deductOne, type InvItem,
 } from "../_shared/alchemyAttuneData.ts";
 
@@ -23,7 +23,8 @@ const err = (msg: string, status = 400) => json({ error: msg }, status);
 interface AttunementQueueEntry {
   id:           string;
   speciesId:    string;
-  mutation:     string;
+  // Mutation is deliberately NOT stored — it's rolled at collect time so
+  // the player doesn't know the outcome until the attunement finishes.
   tier:         number;
   startedAt:    string;
   durationMs:   number;
@@ -108,8 +109,8 @@ Deno.serve(async (req: Request) => {
     const newInventory = deductOne(inventory, speciesId, undefined);
     if (!newInventory) return err("No unmutated bloom of this species in inventory");
 
-    // ── Roll the outcome NOW (player sees it once attunement starts) ──────
-    const rolledMutation = rollMutation(tier);
+    // Mutation is rolled at collect time, not here — keep the outcome a
+    // surprise until the attunement finishes.
 
     // ── Compute duration with optional Resonance Draft (attunement) boost ──
     type BoostType = "growth" | "craft" | "attunement";
@@ -131,7 +132,6 @@ Deno.serve(async (req: Request) => {
     const newEntry: AttunementQueueEntry = {
       id:          crypto.randomUUID(),
       speciesId,
-      mutation:    rolledMutation,
       tier,
       startedAt:   new Date().toISOString(),
       durationMs,
@@ -160,7 +160,6 @@ Deno.serve(async (req: Request) => {
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "attune_start",
       payload: { speciesId, essenceType, quantity, tier, goldCost, durationMs },
-      result:  { mutation: rolledMutation },
     });
 
     return json({

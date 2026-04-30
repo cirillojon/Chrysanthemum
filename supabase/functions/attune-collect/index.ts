@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { addOrIncrement, type InvItem } from "../_shared/alchemyAttuneData.ts";
+import { addOrIncrement, rollMutation, type InvItem } from "../_shared/alchemyAttuneData.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -19,7 +19,11 @@ const err = (msg: string, status = 400) => json({ error: msg }, status);
 interface AttunementQueueEntry {
   id:           string;
   speciesId:    string;
-  mutation:     string;
+  // Mutation field is intentionally absent — rolled at collect time so the
+  // player doesn't know the outcome until the attunement finishes. Older
+  // entries (created before this change) may carry a `mutation` field; we
+  // honor it as a fallback so in-flight queues at deploy time still resolve.
+  mutation?:    string;
   tier:         number;
   startedAt:    string;
   durationMs:   number;
@@ -79,14 +83,19 @@ Deno.serve(async (req: Request) => {
       return err(`Attunement not finished yet (${Math.ceil(remainingMs / 1000)}s remaining)`);
     }
 
+    // ── Roll the mutation NOW (deferred from start so the outcome stays
+    //    a surprise until the player actually collects). Legacy entries
+    //    may have it pre-rolled — use that to be safe.
+    const mutation = entry.mutation ?? rollMutation(entry.tier as 1 | 2 | 3 | 4);
+
     // ── Deliver mutated bloom(s) ───────────────────────────────────────────
     let newInventory = inventory;
     for (let i = 0; i < entry.flowerCount; i++) {
-      newInventory = addOrIncrement(newInventory, entry.speciesId, entry.mutation);
+      newInventory = addOrIncrement(newInventory, entry.speciesId, mutation);
     }
 
     // ── Update discovered ──────────────────────────────────────────────────
-    const mutKey = `${entry.speciesId}::${entry.mutation}`;
+    const mutKey = `${entry.speciesId}::${mutation}`;
     const newDiscovered = discovered.includes(mutKey)
       ? discovered
       : [...discovered, mutKey];
@@ -112,7 +121,7 @@ Deno.serve(async (req: Request) => {
 
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "attune_collect",
-      payload: { attunementId, speciesId: entry.speciesId, mutation: entry.mutation, flowerCount: entry.flowerCount },
+      payload: { attunementId, speciesId: entry.speciesId, mutation, flowerCount: entry.flowerCount },
     });
 
     return json({
@@ -120,7 +129,7 @@ Deno.serve(async (req: Request) => {
       inventory:        newInventory,
       discovered:       newDiscovered,
       attunementQueue:  newQueue,
-      mutation:         entry.mutation,
+      mutation,
       tier:             entry.tier,
       serverUpdatedAt:  ud.updated_at,
     });

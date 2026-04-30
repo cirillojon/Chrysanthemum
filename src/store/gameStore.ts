@@ -162,13 +162,17 @@ export interface CraftingQueueEntry {
 // ── Alchemy Attunement queue (v2.3) ────────────────────────────────────────
 //
 // One entry per in-flight alchemy attunement. The mutation outcome is rolled
-// at start time so the player can see what they're getting; collect just
-// delivers it. Cancel refunds the source flower(s) but NOT the essence.
+// at COLLECT time (not start) so the player doesn't know what they're getting
+// until the attunement finishes. Cancel refunds the source flower(s) but NOT
+// the essence.
 export interface AttunementQueueEntry {
   id:           string;       // server-generated uuid
   speciesId:    string;       // input flower species
-  mutation:     MutationType; // rolled outcome, applied on collect
-  tier:         number;       // mutation tier 1-4 (drives duration)
+  /** Mutation tier 1-4 (drives duration + which mutation pool will roll). */
+  tier:         number;
+  /** Mutation outcome — only present on legacy entries (pre-v2.3-collect-time-roll).
+   *  Modern entries leave this undefined; collect rolls it server-side. */
+  mutation?:    MutationType;
   startedAt:    string;       // ISO
   durationMs:   number;
   // Stored cost for cancel refund — flowers come back, essence does not.

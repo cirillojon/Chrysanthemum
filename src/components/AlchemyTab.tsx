@@ -1403,7 +1403,7 @@ export function AlchemyTab() {
                   const h = Math.floor(m / 60);
                   return `${h}h ${m % 60}m`;
                 };
-                const mut = MUTATIONS[entry.mutation as MutationType];
+                const tierLabel = ROMAN[entry.tier as 1|2|3|4|5] ?? entry.tier;
                 return (
                   <div key={entry.id} className="rounded-xl border border-border bg-card/40 px-3 py-2 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
@@ -1412,11 +1412,9 @@ export function AlchemyTab() {
                         <div className="min-w-0">
                           <p className="text-xs font-semibold text-foreground truncate">
                             {flower?.name ?? entry.speciesId}
-                            {mut && (
-                              <span className={`ml-1.5 text-[10px] font-mono ${mut.color}`}>
-                                → {mut.emoji} {mut.name}
-                              </span>
-                            )}
+                            <span className="ml-1.5 text-[10px] font-mono text-muted-foreground">
+                              → ❓ Tier {tierLabel}
+                            </span>
                           </p>
                           <p className="text-[10px] text-muted-foreground">
                             {isDone ? <span className="text-green-400 font-semibold">Ready to collect!</span> : fmt(remaining)}
