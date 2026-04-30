@@ -203,6 +203,7 @@ export function SeedPicker({ onSelect, onBloomSelect, onGearSelect, onClose }: P
           gear.length > 0 ? (
             gear.map((item) => {
               const def    = GEAR[item.gearType];
+              if (!def) return null; // orphan from a removed gear type (cleaned up on next applyOfflineTick)
               const rarity = RARITY_CONFIG[def.rarity];
               return (
                 <button

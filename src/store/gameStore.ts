@@ -14,7 +14,7 @@ import {
 import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
-  isScarecrow, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
+  isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
   rollComposterFertilizer,
   SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
   type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
@@ -536,7 +536,10 @@ export function applyOfflineTick(
     supplySlots:          save.supplySlots          ?? DEFAULT_SUPPLY_SLOTS,
     supplyShop:           save.supplyShop           ?? generateSupplyShop(save.supplySlots ?? DEFAULT_SUPPLY_SLOTS),
     lastSupplyReset:      save.lastSupplyReset       ?? now2,
-    gearInventory:        save.gearInventory         ?? [],
+    // Filter out gear types that no longer exist in the GEAR catalog (e.g. orphan
+    // `garden_pin` from before it was migrated to a consumable). Keeps renderers
+    // safe from `GEAR[type].rarity` crashes on unknown ids.
+    gearInventory:        (save.gearInventory ?? []).filter((g) => GEAR[g.gearType] !== undefined),
     essences:             save.essences              ?? [],
     discoveredRecipes:    save.discoveredRecipes     ?? [],
     infusers:             save.infusers              ?? [],
@@ -1216,10 +1219,12 @@ export function tickWeatherMutations(
       // Purity Vial blocks all weather mutations
       if (plot.plant.mutationBlocked) return plot;
 
-      // Scarecrow fully blocks all weather mutations on covered plants
-      const scarecrowSources = getGearAffectingCell(state.grid, ri, ci, now);
-      const hasScarecrow = scarecrowSources.some(({ def }) => isScarecrow(def));
-      if (hasScarecrow) return plot;
+      // Scarecrow OR Aegis fully blocks weather mutation rolls on covered plants.
+      // Both are weather shields; the difference is gear-mutation handling
+      // (Scarecrow blocks gear mutations too, Aegis does not — see tickSprinklerMutations).
+      const shieldSources = getGearAffectingCell(state.grid, ri, ci, now);
+      const hasShield = shieldSources.some(({ def }) => isScarecrow(def) || isAegis(def));
+      if (hasShield) return plot;
 
       const m = _devMutationMultiplier;
       const boostFor = (mt: string): number =>
@@ -1300,6 +1305,11 @@ export function tickSprinklerMutations(
       if (plot.plant.mutationBlocked) return plot;
 
       const sources = getGearAffectingCell(state.grid, ri, ci, now);
+
+      // Scarecrow blocks gear-based mutations too (sprinklers, mutation sprinklers,
+      // generator wet→shocked). Aegis is weather-only and does NOT block here.
+      if (sources.some(({ def }) => isScarecrow(def))) return plot;
+
       const boostFor = (mt: string): number =>
         plot.plant!.mutationBoost?.mutation === mt
           ? (plot.plant!.mutationBoost!.multiplier ?? 1)
@@ -1345,6 +1355,55 @@ export function tickSprinklerMutations(
 
       return plot;
     })
+  );
+
+  return changed ? { ...state, grid: newGrid } : state;
+}
+
+/**
+ * Called every tick. For each bloomed plant covered by an active Scarecrow,
+ * rolls the highest covering Scarecrow's `mutationStripChancePerTick`. On hit,
+ * sets `plant.mutation = null` (matches Fan strip convention — Giant tried-and-failed
+ * marker, weather can no longer assign).
+ *
+ * Skipped when:
+ *   - plant has Magnifying Glass reveal lock
+ *   - plant is not bloomed
+ *   - plant has no string mutation (nothing to strip)
+ *   - plant has no covering Scarecrow
+ */
+export function tickScarecrowStrip(
+  state: GameState,
+  weatherType: WeatherType = "clear",
+): GameState {
+  const now   = Date.now();
+  let changed = false;
+
+  const newGrid = state.grid.map((row, ri) =>
+    row.map((plot, ci) => {
+      if (!plot.plant) return plot;
+      if (plot.plant.revealed) return plot;
+      if (typeof plot.plant.mutation !== "string") return plot;
+
+      const stage = getCurrentStage(plot.plant, now, weatherType);
+      if (stage !== "bloom") return plot;
+
+      // Pick the strongest scarecrow covering this cell (higher-tier scarecrow wins)
+      const sources = getGearAffectingCell(state.grid, ri, ci, now);
+      let bestChance = 0;
+      for (const { def } of sources) {
+        if (!isScarecrow(def)) continue;
+        const c = def.mutationStripChancePerTick ?? 0;
+        if (c > bestChance) bestChance = c;
+      }
+      if (bestChance <= 0) return plot;
+
+      if (Math.random() < Math.min(1, bestChance)) {
+        changed = true;
+        return { ...plot, plant: { ...plot.plant, mutation: null } };
+      }
+      return plot;
+    }),
   );
 
   return changed ? { ...state, grid: newGrid } : state;

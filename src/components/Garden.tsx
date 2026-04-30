@@ -13,6 +13,7 @@ import {
   assignBloomMutations,
   tickWeatherMutations,
   tickSprinklerMutations,
+  tickScarecrowStrip,
   tickFanMutations,
   findHarvestBellTargets,
   findAutoPlantTargets,
@@ -57,6 +58,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     let next = stampStageTransitions(latest, now, weather);
     next = tickWeatherMutations(next, weather);
     next = tickSprinklerMutations(next, weather);
+    next = tickScarecrowStrip(next, weather);
     next = tickFanMutations(next, weather);
     next = assignBloomMutations(next, weather);
     if (next !== latest) update(next);
