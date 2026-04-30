@@ -556,23 +556,32 @@ function ConsumablesTabContent({
           ? activeBoosts.find((b) => b.type === boostType && new Date(b.expiresAt).getTime() > nowMs)
           : null;
 
+        const consRarity   = RARITY_CONFIG[recipe.rarity];
+        const isPrismatic  = recipe.rarity === "prismatic";
+        // Prismatic uses rainbow-tile (animated border + bg + glow in a single
+        // declaration) so the border actually animates — `glow` is empty for
+        // prismatic in RARITY_CONFIG, so without this branch it'd fall back
+        // to the static gray border-border.
         return (
           <div
             key={c.id}
-            className="flex items-start gap-3 bg-card/60 border border-border rounded-xl px-4 py-3"
+            className={`
+              flex items-start gap-4 bg-card/60 border rounded-xl px-4 py-3
+              ${isPrismatic ? "rainbow-tile" : `${consRarity?.glow ?? ""} border-border`}
+            `}
           >
-            <span className="text-2xl flex-shrink-0 mt-0.5">{recipe.emoji}</span>
+            <span className="text-3xl flex-shrink-0">{recipe.emoji}</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-sm">{recipe.name}</h3>
                 {recipe.tier !== null && (
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full border ${RARITY_CONFIG[recipe.rarity]?.color ?? ""} border-current bg-current/10`}>
-                    {RARITY_CONFIG[recipe.rarity]?.label ?? recipe.rarity}
+                  <span className={`text-xs font-mono ${consRarity?.color ?? ""}`}>
+                    {consRarity?.label ?? recipe.rarity}
                   </span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{recipe.description}</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">×{c.quantity} · {context}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">×{c.quantity} · {context}</p>
 
               {isEclipse && (
                 <button
