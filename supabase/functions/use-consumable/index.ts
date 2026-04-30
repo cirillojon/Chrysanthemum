@@ -382,23 +382,14 @@ Deno.serve(async (req: Request) => {
       const requiredRarity = TIER_RARITIES[tier];
       if (!requiredRarity) return err("Unknown consumable tier");
 
-      // Magnifying Glass and Garden Pin can be applied DOWNWARD — a higher-tier
-      // consumable works on lower-rarity plants (e.g. Mythic pin → Rare plant).
-      // Other plant-targeting consumables (vials, Bloom Burst, Heirloom Charm)
-      // remain strictly tier-matched.
+      // All plant-targeting consumables match DOWNWARD — a higher-tier consumable
+      // works on lower-rarity plants (e.g. Mythic vial → Rare plant). Tier 1
+      // (Rare) is still the floor, so Common/Uncommon plants stay excluded.
       const RARITY_ORDER: Record<string, number> = {
         common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
       };
-      const allowDownward = consumableId.startsWith("magnifying_glass_") || consumableId.startsWith("garden_pin_");
-      const tierOk = allowDownward
-        ? (RARITY_ORDER[requiredRarity] ?? -1) >= (RARITY_ORDER[rarity] ?? 999)
-        : rarity === requiredRarity;
-      if (!tierOk) {
-        return err(
-          allowDownward
-            ? `This ${requiredRarity} consumable can't reach ${rarity} plants`
-            : `This consumable targets ${requiredRarity} plants; your plant is ${rarity}`,
-        );
+      if ((RARITY_ORDER[requiredRarity] ?? -1) < (RARITY_ORDER[rarity] ?? 999)) {
+        return err(`This ${requiredRarity} consumable can't reach ${rarity} plants`);
       }
 
       // Deduct consumable

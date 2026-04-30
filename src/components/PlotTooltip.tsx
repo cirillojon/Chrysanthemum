@@ -105,12 +105,10 @@ export function PlotTooltip({
 
   // Consumables applicable to this plant right now.
   //
-  // Tier-vs-rarity rule:
-  //   - Magnifying Glass / Garden Pin allow DOWNWARD match (a higher-rarity
-  //     consumable works on lower-rarity plants — e.g. Mythic pin on a Rare).
-  //     Floor is still tier 1 (Rare), so Common/Uncommon plants stay excluded.
-  //   - All other plant-targeting consumables (vials, Bloom Burst, Heirloom
-  //     Charm) require strict equality.
+  // Tier-vs-rarity rule: ALL plant-targeting consumables match DOWNWARD — a
+  // higher-tier consumable works on lower-rarity plants (e.g. Mythic vial on
+  // a Rare). Floor is still tier 1 (Rare), so Common/Uncommon plants stay
+  // excluded.
   const RARITY_ORDER: Record<string, number> = {
     common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
   };
@@ -119,11 +117,7 @@ export function PlotTooltip({
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
     if (!recipe || recipe.tier === null) return false;
 
-    const allowDownward = c.id.startsWith("magnifying_glass_") || c.id.startsWith("garden_pin_");
-    const tierOk = allowDownward
-      ? (RARITY_ORDER[recipe.rarity] ?? -1) >= (RARITY_ORDER[species.rarity] ?? 999)
-      : recipe.rarity === species.rarity;
-    if (!tierOk) return false;
+    if ((RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
