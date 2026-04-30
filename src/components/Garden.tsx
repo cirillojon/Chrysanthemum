@@ -422,7 +422,14 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             harvestingPlots.current.delete(`${row}-${col}`);
           }
         },
-        undefined,
+        () => {
+          // Fire the harvest popup on success — same pattern as PlotTile's
+          // manual harvest and Garden.tsx's bell auto-harvest. Without this
+          // Collect All silently filled inventory with no visible feedback.
+          if (harvestedSpeciesId) {
+            onHarvestPopup(harvestedSpeciesId, harvestedMutation);
+          }
+        },
         {
           serialize: true,
           rollback: (c) => ({
