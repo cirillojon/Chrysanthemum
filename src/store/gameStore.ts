@@ -243,6 +243,8 @@ export interface OfflineSummary {
   supplyRestocked: boolean;
   /** Crafting queue entries whose duration has elapsed but haven't been collected. */
   craftsReady: number;
+  /** Alchemy attunement queue entries whose duration has elapsed. */
+  attunementsReady: number;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -545,7 +547,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
       const state = defaultState();
-      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false, craftsReady: 0 } };
+      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false, craftsReady: 0, attunementsReady: 0 } };
     }
     const parsed = JSON.parse(raw) as GameState;
     // Backfill discovered for saves that predate the codex
@@ -726,9 +728,15 @@ export function applyOfflineTick(
     return now >= doneAt;
   }).length;
 
+  // Same wall-clock check for the attunement queue.
+  const attunementsReady = (updated.attunementQueue ?? []).filter((entry) => {
+    const doneAt = new Date(entry.startedAt).getTime() + entry.durationMs;
+    return now >= doneAt;
+  }).length;
+
   return {
     state:   updated,
-    summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked, craftsReady },
+    summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked, craftsReady, attunementsReady },
   };
 }
 

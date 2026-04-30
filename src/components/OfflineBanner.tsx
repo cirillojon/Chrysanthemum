@@ -22,9 +22,9 @@ const GREETINGS: Record<string, (name: string) => string> = {
 };
 
 export function OfflineBanner({ summary, onDismiss, changelog, username }: Props) {
-  const { minutesAway, readyToHarvest, shopRestocked, supplyRestocked, craftsReady } = summary;
+  const { minutesAway, readyToHarvest, shopRestocked, supplyRestocked, craftsReady, attunementsReady } = summary;
 
-  const hasOfflineContent = minutesAway >= 1 || readyToHarvest || shopRestocked || supplyRestocked || craftsReady > 0;
+  const hasOfflineContent = minutesAway >= 1 || readyToHarvest || shopRestocked || supplyRestocked || craftsReady > 0 || attunementsReady > 0;
 
   // Nothing to show — skip
   if (!hasOfflineContent && !changelog) return null;
@@ -100,6 +100,19 @@ export function OfflineBanner({ summary, onDismiss, changelog, username }: Props
                   </p>
                   <p className="text-xs text-muted-foreground">
                     Head to the Craft tab to claim them
+                  </p>
+                </div>
+              </div>
+            )}
+            {attunementsReady > 0 && (
+              <div className="flex items-center gap-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl px-4 py-3">
+                <span className="text-2xl">🌿</span>
+                <div>
+                  <p className="text-sm font-semibold">
+                    {attunementsReady} attunement{attunementsReady > 1 ? "s" : ""} ready to collect
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Head to the Alchemy → Attune tab
                   </p>
                 </div>
               </div>

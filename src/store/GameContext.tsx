@@ -30,6 +30,7 @@ import { useTimeOfDay } from "../hooks/useTimeOfDay";
 import type { TimeOfDay } from "../hooks/useTimeOfDay";
 import type { WeatherType } from "../data/weather";
 import { queueEntryDisplay } from "../lib/craftDisplay";
+import { getFlower } from "../data/flowers";
 
 interface GameContextValue {
   state: GameState;
@@ -68,6 +69,9 @@ interface GameContextValue {
    *  during this session. App renders one CraftCompletionBanner per entry. */
   craftCompletions: { id: string; emoji: string; name: string }[];
   dismissCraftCompletion: (id: string) => void;
+  /** Same shape as craftCompletions but for the alchemy attunement queue. */
+  attunementCompletions: { id: string; emoji: string; name: string }[];
+  dismissAttunementCompletion: (id: string) => void;
   user: User | null;
   profile: CloudProfile | null;
   authLoading: boolean;
@@ -105,6 +109,7 @@ const EMPTY_SUMMARY: OfflineSummary = {
   shopRestocked: false,
   supplyRestocked: false,
   craftsReady: 0,
+  attunementsReady: 0,
 };
 
 // Reject local saves whose lastSaved is more than 1 s in the future.
@@ -122,6 +127,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [supplyJustRestocked, setSupplyJustRestocked] = useState(false);
   const [gearExpiry, setGearExpiry]                   = useState<{ gearType: string } | null>(null);
   const [craftCompletions, setCraftCompletions]       = useState<{ id: string; emoji: string; name: string }[]>([]);
+  const [attunementCompletions, setAttunementCompletions] = useState<{ id: string; emoji: string; name: string }[]>([]);
   const [user, setUser]                         = useState<User | null>(null);
   const [profile, setProfile]                   = useState<CloudProfile | null>(null);
   const [authLoading, setAuthLoading]           = useState(true);
@@ -139,6 +145,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // we've already fired a banner for (so each transition fires exactly once).
   const craftSeenInProgress = useRef<Set<string>>(new Set());
   const craftFiredCompleted = useRef<Set<string>>(new Set());
+  // Same machinery for the alchemy attunement queue.
+  const attuneSeenInProgress = useRef<Set<string>>(new Set());
+  const attuneFiredCompleted = useRef<Set<string>>(new Set());
   // Incremented on every sign-out so in-flight loadUserSession calls know to discard their results.
   const loadGen             = useRef(0);
   const [isStaleTab, setIsStaleTab] = useState(false);
@@ -334,6 +343,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           // don't suppress banners after sign-in.
           craftSeenInProgress.current.clear();
           craftFiredCompleted.current.clear();
+          attuneSeenInProgress.current.clear();
+          attuneFiredCompleted.current.clear();
           setCraftCompletions([]);
           setTimeout(() => { saveEnabled.current = true; }, 500);
           setAuthLoading(false);
@@ -460,6 +471,33 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         }
         if (newCompletions.length > 0) {
           setCraftCompletions((prev) => [...prev, ...newCompletions]);
+        }
+
+        // ── Attunement completion detection (mirrors craft logic) ─────────
+        const newAttuneCompletions: { id: string; emoji: string; name: string }[] = [];
+        for (const entry of next.attunementQueue ?? []) {
+          if (attuneFiredCompleted.current.has(entry.id)) continue;
+          const doneAt = new Date(entry.startedAt).getTime() + entry.durationMs;
+          const isDone = tickNow >= doneAt;
+          if (isDone) {
+            if (attuneSeenInProgress.current.has(entry.id)) {
+              // Look up the species emoji + name. We don't reveal the rolled
+              // mutation here (server only rolls on collect) — banner just
+              // says "Attunement ready: <flower>".
+              const flower = getFlower(entry.speciesId);
+              newAttuneCompletions.push({
+                id:    entry.id,
+                emoji: flower?.emoji.bloom ?? "🌸",
+                name:  flower?.name ?? entry.speciesId,
+              });
+            }
+            attuneFiredCompleted.current.add(entry.id);
+          } else {
+            attuneSeenInProgress.current.add(entry.id);
+          }
+        }
+        if (newAttuneCompletions.length > 0) {
+          setAttunementCompletions((prev) => [...prev, ...newAttuneCompletions]);
         }
 
         return next;
@@ -598,6 +636,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       craftCompletions,
       dismissCraftCompletion: (id: string) =>
         setCraftCompletions((prev) => prev.filter((c) => c.id !== id)),
+      attunementCompletions,
+      dismissAttunementCompletion: (id: string) =>
+        setAttunementCompletions((prev) => prev.filter((c) => c.id !== id)),
       user, profile, authLoading,
       signInWithGoogle, signOut,
       refreshProfile,

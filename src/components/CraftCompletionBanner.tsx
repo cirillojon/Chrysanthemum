@@ -3,14 +3,17 @@ import { useEffect, useState } from "react";
 interface Props {
   emoji:     string;
   name:      string;
+  /** Banner title — defaults to "Craft Ready!". Use "Attunement Ready!" etc.
+   *  for non-craft queue completions that share the same banner shape. */
+  title?:    string;
   onDismiss: () => void;
 }
 
-/** Floating banner that fires when a crafting queue entry transitions to
- *  "ready to collect". Auto-dismisses after 4 seconds, mirroring the shop
- *  restock banner. The wrapper that mounts it sets the position + z-index
- *  so multiple banners can stack vertically. */
-export function CraftCompletionBanner({ emoji, name, onDismiss }: Props) {
+/** Floating banner that fires when a queue entry transitions to "ready to
+ *  collect". Auto-dismisses after 4 seconds, mirroring the shop restock
+ *  banner. The wrapper that mounts it sets the position + z-index so multiple
+ *  banners can stack vertically. */
+export function CraftCompletionBanner({ emoji, name, title = "Craft Ready!", onDismiss }: Props) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -43,7 +46,7 @@ export function CraftCompletionBanner({ emoji, name, onDismiss }: Props) {
 
         {/* Text */}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-bold text-foreground">Craft Ready!</p>
+          <p className="text-sm font-bold text-foreground">{title}</p>
           <p className="text-xs text-muted-foreground mt-0.5 truncate">
             {name} is ready to collect.
           </p>

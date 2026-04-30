@@ -56,6 +56,7 @@ function AppInner() {
     supplyJustRestocked, clearSupplyNotification,
     gearExpiry, clearGearExpiry,
     craftCompletions, dismissCraftCompletion,
+    attunementCompletions, dismissAttunementCompletion,
     user, profile, authLoading,
     signInWithGoogle, signOut,
     needsUsername, completeUsername,
@@ -277,6 +278,11 @@ function AppInner() {
     const doneAt = new Date(e.startedAt).getTime() + e.durationMs;
     return craftBadgeNow >= doneAt ? acc + 1 : acc;
   }, 0);
+  // Same logic for the Alchemy attunement queue — drives the ⚗️ tab badge.
+  const claimableAttunementsCount = (state.attunementQueue ?? []).reduce((acc, e) => {
+    const doneAt = new Date(e.startedAt).getTime() + e.durationMs;
+    return craftBadgeNow >= doneAt ? acc + 1 : acc;
+  }, 0);
 
   // ── Swipe navigation ─────────────────────────────────────────────────────────
   // Flat order: garden(0) → shop:seeds(1) → shop:supply(2) →
@@ -491,7 +497,7 @@ function AppInner() {
           vertically when multiple fire instead of rendering on top of each
           other. flex-col-reverse keeps the most recent banner closest to the
           anchor (bottom edge); older banners stack above. */}
-      {(shopJustRestocked || supplyJustRestocked || craftCompletions.length > 0) && (
+      {(shopJustRestocked || supplyJustRestocked || craftCompletions.length > 0 || attunementCompletions.length > 0) && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col-reverse items-center gap-2 pointer-events-none">
           {shopJustRestocked && (
             <ShopRestockBanner onDismiss={clearShopNotification} type="seeds" />
@@ -505,6 +511,15 @@ function AppInner() {
               emoji={c.emoji}
               name={c.name}
               onDismiss={() => dismissCraftCompletion(c.id)}
+            />
+          ))}
+          {attunementCompletions.map((c) => (
+            <CraftCompletionBanner
+              key={c.id}
+              emoji={c.emoji}
+              name={c.name}
+              title="Attunement Ready!"
+              onDismiss={() => dismissAttunementCompletion(c.id)}
             />
           ))}
         </div>
@@ -675,6 +690,11 @@ function AppInner() {
               {t === "craft" && claimableCraftsCount > 0 && (
                 <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-amber-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
                   {claimableCraftsCount > 9 ? "9+" : claimableCraftsCount}
+                </span>
+              )}
+              {t === "alchemy" && claimableAttunementsCount > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-emerald-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                  {claimableAttunementsCount > 9 ? "9+" : claimableAttunementsCount}
                 </span>
               )}
               {t === "codex" && unseenCodex.size > 0 && (
