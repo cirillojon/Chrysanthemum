@@ -9,7 +9,7 @@ import {
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { getTotalCodexEntries } from "../store/gameStore";
-import { formatLastSeen } from "../lib/presence";
+import { formatLastSeen, getPresenceStatus, STATUS_DOT } from "../lib/presence";
 
 interface Props {
   onViewProfile: (username: string) => void;
@@ -78,7 +78,7 @@ export function LeaderboardPage({ onViewProfile }: Props) {
         <div>
           <h2 className="text-lg font-bold">Leaderboard</h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Updated {timeAgo(lastRefresh.toISOString())}
+            Updated {formatLastSeen(lastRefresh.toISOString())}
           </p>
         </div>
         <button
@@ -184,8 +184,9 @@ export function LeaderboardPage({ onViewProfile }: Props) {
             const flower  = getFlower(entry.display_flower);
             const rarity  = flower ? RARITY_CONFIG[flower.rarity] : null;
             const mutObj  = entry.display_mutation ? MUTATIONS[entry.display_mutation as MutationType] : null;
-            const isMe   = entry.id === user?.id;
-            const medal  = RANK_MEDALS[entry.rank];
+            const isMe    = entry.id === user?.id;
+            const medal   = RANK_MEDALS[entry.rank];
+            const status  = getPresenceStatus(entry.last_seen_at);
             const codexPct = TOTAL_CODEX > 0
               ? Math.round(((entry.discovered_count ?? 0) / TOTAL_CODEX) * 100)
               : 0;
@@ -223,6 +224,13 @@ export function LeaderboardPage({ onViewProfile }: Props) {
                   {mutObj && (
                     <span className="absolute -top-1 -right-1 text-sm leading-none">{mutObj.emoji}</span>
                   )}
+                  <span
+                    className={`absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-background ${STATUS_DOT[status]}`}
+                    title={status === "offline"
+                      ? `Last seen ${formatLastSeen(entry.last_seen_at)}`
+                      : status === "away" ? "Away" : "Online"
+                    }
+                  />
                 </div>
 
                 {/* Info */}
@@ -237,8 +245,14 @@ export function LeaderboardPage({ onViewProfile }: Props) {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    {formatLastSeen(entry.updated_at)}
+                  <p className="text-xs mt-0.5 font-mono">
+                    {status === "online" ? (
+                      <span className="text-green-500">Online</span>
+                    ) : status === "away" ? (
+                      <span className="text-yellow-400">Away</span>
+                    ) : (
+                      <span className="text-zinc-500">{formatLastSeen(entry.last_seen_at)}</span>
+                    )}
                   </p>
                 </div>
 

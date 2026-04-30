@@ -595,11 +595,24 @@ export interface LeaderboardEntry {
   username: string;
   display_flower: string;
   display_mutation: string | null;
+  last_seen_at: string | null;
   coins: number;
   farm_size: number;
   discovered_count: number;
   updated_at: string;
   rank: number;
+}
+
+async function mergeLastSeen(entries: LeaderboardEntry[]): Promise<LeaderboardEntry[]> {
+  if (entries.length === 0) return entries;
+  const ids = entries.map((e) => e.id);
+  const { data } = await supabase
+    .from("users")
+    .select("id, last_seen_at")
+    .in("id", ids);
+  if (!data) return entries;
+  const map = new Map(data.map((u: { id: string; last_seen_at: string | null }) => [u.id, u.last_seen_at]));
+  return entries.map((e) => ({ ...e, last_seen_at: map.get(e.id) ?? null }));
 }
 
 export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
@@ -610,7 +623,7 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
     .limit(50);
 
   if (error || !data) return [];
-  return data as LeaderboardEntry[];
+  return mergeLastSeen(data as LeaderboardEntry[]);
 }
 
 export async function getFriendsLeaderboard(
@@ -638,10 +651,11 @@ export async function getFriendsLeaderboard(
 
   if (error || !data) return [];
 
-  return (data as LeaderboardEntry[]).map((entry, i) => ({
+  const ranked = (data as LeaderboardEntry[]).map((entry, i) => ({
     ...entry,
     rank: i + 1,
   }));
+  return mergeLastSeen(ranked);
 }
 
 export async function getMyRank(userId: string): Promise<number | null> {
