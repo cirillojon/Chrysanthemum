@@ -67,10 +67,12 @@ export function Codex({ discoveredOverride, compact = false, unseenEntries, mark
 
       if (search.trim()) {
         const q = search.toLowerCase();
-        // Show mystery entries as ??? so don't filter out by name if undiscovered
+        // Undiscovered flowers never match search — otherwise typing the
+        // internal id (e.g. "void_chrysalis") would leak species the player
+        // hasn't earned yet via the ??? entries.
         const hasBase = isDiscovered(discovered, f.id);
-        if (!hasBase && !f.id.includes(q)) return false;
-        if (hasBase && !f.name.toLowerCase().includes(q) && !f.description.toLowerCase().includes(q)) return false;
+        if (!hasBase) return false;
+        if (!f.name.toLowerCase().includes(q) && !f.description.toLowerCase().includes(q)) return false;
       }
 
       return true;
