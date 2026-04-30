@@ -127,10 +127,10 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "slot_lock",  cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
   // Generic Seed Pouches (I–V)
   { id: "seed_pouch_1", cost: E([{ type: "universal", amount: 1 }]) },
-  { id: "seed_pouch_2", cost: U("seed_pouch_1", 2) },
-  { id: "seed_pouch_3", cost: U("seed_pouch_2", 2) },
-  { id: "seed_pouch_4", cost: U("seed_pouch_3", 2) },
-  { id: "seed_pouch_5", cost: U("seed_pouch_4", 2) },
+  { id: "seed_pouch_2", cost: U("seed_pouch_1", 3) },
+  { id: "seed_pouch_3", cost: U("seed_pouch_2", 3) },
+  { id: "seed_pouch_4", cost: U("seed_pouch_3", 3) },
+  { id: "seed_pouch_5", cost: U("seed_pouch_4", 3) },
 ];
 
 // Typed Seed Pouches (12 element types × 5 tiers = 60 recipes)
@@ -139,8 +139,8 @@ for (const t of ["blaze","tide","grove","frost","storm","lunar","solar","fairy",
     CONSUMABLE_RECIPES.push({
       id: `seed_pouch_${t}_${tier}`,
       cost: tier === 1
-        ? E([{ type: t, amount: 6 }])
-        : U(`seed_pouch_${t}_${tier - 1}`, 2),
+        ? E([{ type: t, amount: 8 }])
+        : U(`seed_pouch_${t}_${tier - 1}`, 3),
     });
   }
 }

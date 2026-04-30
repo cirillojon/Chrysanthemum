@@ -167,10 +167,10 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
     }
   }
 
-  // ── Consumables (excluding typed seed pouches) ────────────────────────────
+  // ── Consumables (seed pouches live in "other") ───────────────────────────
   if (filter === "all" || filter === "consumables") {
     for (const recipe of CONSUMABLE_RECIPES) {
-      if (/^seed_pouch_[a-z]+_\d+$/.test(recipe.id)) continue;
+      if (recipe.category === "seed_pouch") continue;
       entries.push({
         id:          `consumable:${recipe.id}`,
         kind:        "consumable",
@@ -201,7 +201,7 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
     }
   }
 
-  // ── Other (Universal Essence) ─────────────────────────────────────────────
+  // ── Other (Universal Essence + Seed Pouches) ─────────────────────────────
   if (filter === "all" || filter === "other") {
     const universalOwned    = essences.find((e) => e.type === "universal")?.amount ?? 0;
     const universalAffordable = universalEssenceCraftable(essences) > 0;
@@ -210,14 +210,26 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
       kind:        "essence",
       emoji:       UNIVERSAL_ESSENCE_DISPLAY.emoji,
       name:        "Universal Essence",
-      // Prismatic — drives the rainbow border / cell styling everywhere the
-      // CraftEntry's rarity is used. Matches the prismatic styling we apply
-      // to Universal in the Inventory + EssenceBank.
       rarity:      "prismatic",
       description: `Combine ${UNIVERSAL_ESSENCE_COST_PER_TYPE} of each elemental essence into a Universal Essence — used in legendary+ cross-breed recipes.`,
       owned:       universalOwned,
       canCraft:    slotsAvail && universalAffordable,
     });
+    // Seed Pouches (generic + typed, all 65)
+    for (const recipe of CONSUMABLE_RECIPES) {
+      if (recipe.category !== "seed_pouch") continue;
+      entries.push({
+        id:          `consumable:${recipe.id}`,
+        kind:        "consumable",
+        emoji:       recipe.emoji,
+        name:        recipe.name,
+        rarity:      recipe.rarity,
+        description: recipe.description,
+        tier:        recipe.tier,
+        owned:       consum.find((c) => c.id === recipe.id)?.quantity ?? 0,
+        canCraft:    slotsAvail && canCraftConsumable(recipe, essences, consum),
+      });
+    }
   }
 
   return entries.sort((a, b) => {
@@ -812,6 +824,7 @@ export function CraftingTab() {
   const { state, getState, update, perform } = useGame();
   const [filter,       setFilter]       = useState<CraftFilter>("all");
   const [search,       setSearch]       = useState("");
+  const [pouchType,    setPouchType]    = useState<"all" | "generic" | FlowerType>("all");
   const [selected,     setSelected]     = useState<CraftEntry | null>(null);
   const [crafting,     setCrafting]     = useState(false);
   const [craftError,   setCraftError]   = useState<string | null>(null);
@@ -837,12 +850,20 @@ export function CraftingTab() {
 
   const entries = useMemo(() => {
     const all = buildEntries(state, filter);
-    if (!search.trim()) return all;
-    const q = search.trim().toLowerCase();
-    return all.filter((e) => e.name.toLowerCase().includes(q));
+    const searched = !search.trim()
+      ? all
+      : all.filter((e) => e.name.toLowerCase().includes(search.trim().toLowerCase()));
+    // Pouch type sub-filter — only active in "other" view when not searching
+    if (filter !== "other" || search.trim() || pouchType === "all") return searched;
+    return searched.filter((e) => {
+      if (!e.id.startsWith("consumable:seed_pouch_")) return true;
+      const pouchId = e.id.replace("consumable:", "");
+      if (pouchType === "generic") return /^seed_pouch_[1-5]$/.test(pouchId);
+      return pouchId.startsWith(`seed_pouch_${pouchType}_`);
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.essences, state.gearInventory, state.consumables, state.infusers,
-      state.coins, state.craftingQueue, state.craftingSlotCount, filter, search]);
+      state.coins, state.craftingQueue, state.craftingSlotCount, filter, search, pouchType]);
 
   const liveSelected = selected
     ? entries.find((e) => e.id === selected.id) ?? selected
@@ -1373,6 +1394,55 @@ export function CraftingTab() {
             </button>
           ))}
         </div>
+
+        {/* Seed Pouch type sub-filter — only shown in "Other" tab */}
+        {filter === "other" && (
+          <div className="px-4 pb-2 bg-card/60 space-y-1.5">
+            <p className="text-[10px] text-muted-foreground uppercase tracking-widest pt-1">Pouch Type</p>
+            <div className="space-y-1">
+              {/* All + Generic row */}
+              <div className="flex gap-1">
+                <button
+                  onClick={() => setPouchType("all")}
+                  className={`flex-1 py-1 rounded-lg border text-[10px] font-semibold transition-all
+                    ${pouchType === "all"
+                      ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                      : "border-border text-muted-foreground hover:border-amber-800/40"
+                    }`}
+                >✦ All</button>
+                <button
+                  onClick={() => setPouchType("generic")}
+                  className={`flex-1 py-1 rounded-lg border text-[10px] font-semibold transition-all
+                    ${pouchType === "generic"
+                      ? "bg-amber-500/20 border-amber-500/40 text-amber-300"
+                      : "border-border text-muted-foreground hover:border-amber-800/40"
+                    }`}
+                >🎁 Generic</button>
+              </div>
+              {/* 12 element type buttons */}
+              <div className="grid grid-cols-6 gap-1">
+                {(["blaze","tide","grove","frost","storm","lunar","solar","fairy","shadow","arcane","stellar","zephyr"] as FlowerType[]).map((t) => {
+                  const cfg = FLOWER_TYPES[t];
+                  const active = pouchType === t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setPouchType(t)}
+                      title={cfg?.name ?? t}
+                      className={`py-1 rounded-lg border text-xs font-semibold transition-all text-center
+                        ${active
+                          ? `${cfg?.bgColor ?? ""} ${cfg?.borderColor ?? ""} ${cfg?.color ?? ""}`
+                          : "border-border text-muted-foreground hover:border-amber-800/40"
+                        }`}
+                    >
+                      {cfg?.emoji ?? t[0].toUpperCase()}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Search */}
         <div className="px-4 pb-2 bg-card/60">

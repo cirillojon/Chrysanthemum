@@ -441,16 +441,16 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     cost: { kind: "essence", amounts: [{ type: "universal", amount: 1 }] } },
   { id: "seed_pouch_2", name: "Seed Pouch II",  emoji: "🎁", tier: 2, rarity: "legendary", category: "seed_pouch",
     description: `Open from your inventory for a random ${r(2)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_1", quantity: 2 } },
+    cost: { kind: "consumable", id: "seed_pouch_1", quantity: 3 } },
   { id: "seed_pouch_3", name: "Seed Pouch III", emoji: "🎁", tier: 3, rarity: "mythic",    category: "seed_pouch",
     description: `Open from your inventory for a random ${r(3)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_2", quantity: 2 } },
+    cost: { kind: "consumable", id: "seed_pouch_2", quantity: 3 } },
   { id: "seed_pouch_4", name: "Seed Pouch IV",  emoji: "🎁", tier: 4, rarity: "exalted",   category: "seed_pouch",
     description: `Open from your inventory for a random ${r(4)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_3", quantity: 2 } },
+    cost: { kind: "consumable", id: "seed_pouch_3", quantity: 3 } },
   { id: "seed_pouch_5", name: "Seed Pouch V",   emoji: "🎁", tier: 5, rarity: "prismatic", category: "seed_pouch",
     description: `Open from your inventory for a random ${r(5)} seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_4", quantity: 2 } },
+    cost: { kind: "consumable", id: "seed_pouch_4", quantity: 3 } },
 ];
 
 // ── Typed Seed Pouches (per-type I–V) ─────────────────────────────────────
@@ -482,8 +482,8 @@ for (const t of TYPED_POUCH_TYPES) {
       category: "seed_pouch",
       description: `Open for a random ${r(tier)}+ ${label} seed.`,
       cost: tier === 1
-        ? { kind: "essence", amounts: [{ type: t as EssenceType, amount: 6 }] }
-        : { kind: "consumable", id: prevId!, quantity: 2 },
+        ? { kind: "essence", amounts: [{ type: t as EssenceType, amount: 8 }] }
+        : { kind: "consumable", id: prevId!, quantity: 3 },
     });
   }
 }
