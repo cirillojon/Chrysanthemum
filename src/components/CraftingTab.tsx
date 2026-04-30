@@ -1386,19 +1386,25 @@ export function CraftingTab() {
           </div>
         </div>
 
-        {/* Grid */}
-        <div
-          className="px-3 pb-4 pt-2 bg-card/40 grid gap-2 justify-items-center"
-          style={{ gridTemplateColumns: "repeat(auto-fill, 4rem)" }}
-        >
-          {entries.map((entry) => (
-            <CraftCell key={entry.id} entry={entry} onClick={() => openEntry(entry)} />
-          ))}
-          {entries.length === 0 && (
-            <div className="col-span-6 py-10 text-center text-xs text-muted-foreground">
-              {search.trim() ? `No recipes matching "${search}"` : "No items in this category yet."}
-            </div>
-          )}
+        {/* Grid — uses Tailwind 4 container queries so column count adapts
+            to the actual container width (not viewport — the CraftingTab's
+            parent caps at 33rem and gets narrower on phones). The grid is
+            sized to its content via `w-fit` and centered with `mx-auto`,
+            so the cell block centers within the amber window and the last
+            partial row naturally left-aligns within the centered block.
+            Cell+gap math: each col is 4rem + 0.5rem gap.
+              4 cols = 17.5rem · 5 = 22rem · 6 = 26.5rem · 7 = 31rem        */}
+        <div className="@container px-3 pb-4 pt-2 bg-card/40">
+          <div className="grid gap-2 mx-auto w-fit grid-cols-4 @[22rem]:grid-cols-5 @[26.5rem]:grid-cols-6 @[31rem]:grid-cols-7">
+            {entries.map((entry) => (
+              <CraftCell key={entry.id} entry={entry} onClick={() => openEntry(entry)} />
+            ))}
+            {entries.length === 0 && (
+              <div className="col-span-full py-10 text-center text-xs text-muted-foreground">
+                {search.trim() ? `No recipes matching "${search}"` : "No items in this category yet."}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
