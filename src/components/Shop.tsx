@@ -32,7 +32,7 @@ interface ShopProps {
 }
 
 export function Shop({ view }: ShopProps) {
-  const { state, perform } = useGame();
+  const { state, perform, user, signInWithGoogle } = useGame();
   const [countdown,  setCountdown]  = useState(() => msUntilShopReset(state));
   const [showRates,  setShowRates]  = useState(false);
 
@@ -49,6 +49,8 @@ export function Shop({ view }: ShopProps) {
   const atMaxSlots      = state.shopSlots >= MAX_SHOP_SLOTS;
 
   function handleUpgradeShopSlots() {
+    // Guest guard — shop slots upgrade is a coin purchase that hits an edge function (#148).
+    if (!user) { signInWithGoogle(); return; }
     const optimistic = upgradeShopSlots(state);
     if (optimistic) perform(optimistic, () => edgeUpgradeShopSlots());
   }

@@ -30,7 +30,7 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType) => void }) {
-  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud } = useGame();
+  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, user, signInWithGoogle } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -376,6 +376,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   }
 
   function handleUpgrade() {
+    // Guest guard — farm upgrade is a coin purchase that hits an edge function (#148).
+    if (!user) { signInWithGoogle(); return; }
     const optimistic = upgradeFarm(state);
     if (optimistic) perform(optimistic, () => edgeUpgradeFarm());
   }
