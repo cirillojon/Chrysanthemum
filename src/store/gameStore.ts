@@ -1524,6 +1524,57 @@ export function sellFlower(
   return { ...state, coins: state.coins + earned, inventory: newInventory };
 }
 
+// ── Server result merge ──────────────────────────────────────────────────────
+
+/**
+ * Merges the result of an edge function into the current GameState. Used by
+ * `perform()` to apply server responses on success.
+ *
+ * Three behaviors:
+ *
+ * 1. **Plain field merge** — any field on `result` overwrites the corresponding
+ *    field on `cur` (`coins`, `inventory`, `fertilizers`, `serverUpdatedAt`,
+ *    etc.). This is just `{ ...cur, ...result }`.
+ *
+ * 2. **Empty result preserves state** — when `result === {}`, no fields change.
+ *    This is the contract that callers like the auto-planter, `handlePlantAll`,
+ *    and `handleSeedSelect` rely on: returning `{}` from `serverFn` after the
+ *    `await` keeps optimistic state intact, preventing concurrent in-flight
+ *    plants/harvests from clobbering each other's optimistic grid/inventory.
+ *
+ * 3. **Grid replacement preserves client mutations** — when `result.grid` is
+ *    set, the server's grid wins, but client-side mutations (weather/sprinkler/
+ *    fan rolls applied locally and not yet written to the DB) are preserved
+ *    on plants that match by speciesId + timePlanted. Without this, every
+ *    server response would erase locally-rolled mutations until the next
+ *    server tick re-rolled them.
+ */
+export function mergeServerResult<T extends Partial<GameState>>(
+  cur: GameState,
+  result: T,
+): GameState {
+  const merged = { ...cur, ...result, ok: undefined } as GameState;
+  if (result.grid) {
+    // Identify the same plant by speciesId + timePlanted so we never copy a
+    // mutation onto a different plant (e.g. after a harvest + re-plant).
+    merged.grid = result.grid.map((row, ri) =>
+      row.map((plot, ci) => {
+        if (!plot.plant) return plot;
+        const curPlot = cur.grid[ri]?.[ci];
+        if (!curPlot?.plant) return plot;
+        if (
+          plot.plant.speciesId === curPlot.plant.speciesId &&
+          plot.plant.timePlanted === curPlot.plant.timePlanted
+        ) {
+          return { ...plot, plant: { ...plot.plant, mutation: curPlot.plant.mutation } };
+        }
+        return plot;
+      }),
+    );
+  }
+  return merged;
+}
+
 // ── Surgical rollbacks ───────────────────────────────────────────────────────
 // These are pure functions used by perform()'s rollback path to undo only the
 // specific delta a failed action introduced — without clobbering any concurrent
