@@ -536,7 +536,10 @@ export function applyOfflineTick(
     supplySlots:          save.supplySlots          ?? DEFAULT_SUPPLY_SLOTS,
     supplyShop:           save.supplyShop           ?? generateSupplyShop(save.supplySlots ?? DEFAULT_SUPPLY_SLOTS),
     lastSupplyReset:      save.lastSupplyReset       ?? now2,
-    gearInventory:        save.gearInventory         ?? [],
+    // Filter out gear types that no longer exist in the GEAR catalog (e.g. orphan
+    // `garden_pin` from before it was migrated to a consumable). Keeps renderers
+    // safe from `GEAR[type].rarity` crashes on unknown ids.
+    gearInventory:        (save.gearInventory ?? []).filter((g) => GEAR[g.gearType] !== undefined),
     essences:             save.essences              ?? [],
     discoveredRecipes:    save.discoveredRecipes     ?? [],
     infusers:             save.infusers              ?? [],

@@ -372,6 +372,7 @@ function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hi
 
 function GearInventoryRow({ item }: { item: GearInventoryItem }) {
   const def    = GEAR[item.gearType];
+  if (!def) return null; // orphan from a removed gear type (cleaned up on next applyOfflineTick)
   const rarity = RARITY_CONFIG[def.rarity];
   return (
     <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${def.rarity === "prismatic" ? "rainbow-border rainbow-glow" : `${rarity?.glow ?? ""} border-border`}`}>
