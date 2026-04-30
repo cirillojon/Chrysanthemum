@@ -63,6 +63,13 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       quantity:  i.quantity,
     }));
 
+    // Snapshot the deltas this action introduced so the rollback can be
+    // SURGICAL — undoing only the sell, not anything that landed during the
+    // server roundtrip (e.g. a harvest the user did mid-sell). Without this,
+    // a snapshot rollback to `current.inventory` could erase concurrent harvests
+    // and produce the "items disappear, no money" symptom.
+    const earned = optimistic.coins - current.coins;
+
     // Single atomic server write — one CAS check, no partial-failure rollback risk.
     // perform() auto-merges the SellAllResult (coins + inventory) on success.
     await perform(
@@ -70,11 +77,25 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       () => edgeSellAll(items),
       undefined,
       {
-        rollback: (c) => ({
-          ...c,
-          coins:     current.coins,
-          inventory: current.inventory,
-        }),
+        rollback: (c) => {
+          // Add the sold items back to whatever inventory looks like NOW (not the snapshot).
+          // Concurrent harvests during the sell roundtrip stay intact.
+          let inv = c.inventory;
+          for (const sold of items) {
+            const mut = sold.mutation;
+            const idx = inv.findIndex((i) =>
+              i.speciesId === sold.speciesId && i.mutation === mut && !i.isSeed,
+            );
+            if (idx >= 0) {
+              inv = inv.map((i, j) => j === idx
+                ? { ...i, quantity: i.quantity + sold.quantity }
+                : i);
+            } else {
+              inv = [...inv, { speciesId: sold.speciesId, mutation: mut as MutationType | undefined, quantity: sold.quantity, isSeed: false }];
+            }
+          }
+          return { ...c, coins: c.coins - earned, inventory: inv };
+        },
       }
     );
   }

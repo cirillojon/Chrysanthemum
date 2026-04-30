@@ -1,3 +1,11 @@
+## [v2.2.5] — 2026-04-29 — Reliability Hotfix
+
+### Fixed
+- **Sell All eating concurrent harvests** — the rollback path snapshotted `current.inventory` at sell-start, so any flower the user harvested during the sell roundtrip would be wiped if the sell server-call failed. Rollback is now incremental: it only undoes the specific blooms sold (and the specific coin delta), leaving any concurrent harvests / inventory changes intact. Closes the "items disappear, no money" report cluster.
+- **Plant All wiping successful plants on a single failure** — the loop awaited each `edgePlantSeed` and rolled back the *entire* batch with `update(prev)` if any single call failed, even though earlier plants had already written to the DB. `handlePlantAll` now drives **per-plot** `perform()` calls (serialized through `harvestQueue`) with surgical rollbacks that undo only the failing plot, leaving other successful plants and concurrent state changes alone. Closes the "plant all glitchy / planting not working" reports.
+
+---
+
 ## [v2.2.4] — 2026-04-29 — Hotfix & Gear Polish
 
 ### Fixed

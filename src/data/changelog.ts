@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.2.5",
+    title:   "Reliability Hotfix",
+    items: [
+      { type: "fixed", text: "Sell All no longer wipes out flowers harvested during the sell — if the server fails the sale, only the sold blooms are restored, leaving any harvests you did mid-sale intact (was the root cause of 'items disappear, no money' reports)" },
+      { type: "fixed", text: "Plant All no longer wipes out plots that successfully planted when a single seed fails — each plot is now an independent action with its own rollback, so a failed plant never erases the rest of the batch" },
+      { type: "fixed", text: "Plant All no longer clobbers concurrent harvests/sells that land during the planting chain" },
+    ],
+  },
+  {
     version: "2.2.4",
     title:   "Hotfix & Gear Polish",
     items: [

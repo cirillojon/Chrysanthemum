@@ -27,7 +27,7 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType) => void }) {
-  const { state, update, perform, getState, awaitHarvests, queueWork, activeWeather, reloadFromCloud } = useGame();
+  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -414,9 +414,10 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const optimistic = plantAll(currentState);
     if (optimistic === currentState) return;
 
-    const prev = currentState;
-    update(optimistic);
-
+    // Diff what plantAll() decided to place so we can drive per-plot perform() calls.
+    // Each plot is its OWN serialized perform with a per-plot rollback so a single
+    // server failure can't wipe out the rest of the batch (or any concurrent state
+    // changes like harvests that landed during the chain).
     const planted: { row: number; col: number; speciesId: string }[] = [];
     for (let ri = 0; ri < optimistic.grid.length; ri++) {
       for (let ci = 0; ci < optimistic.grid[ri].length; ci++) {
@@ -428,16 +429,37 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       }
     }
 
-    // Add the edge calls to the harvest queue so signOut() waits for them
-    // before invalidating the session — without this, a rapid sign-out would
-    // cancel in-flight calls and the cloud save would be left in a partial state.
-    queueWork(async () => {
-      try {
-        for (const { row, col, speciesId } of planted) await edgePlantSeed(row, col, speciesId);
-      } catch {
-        update(prev);
-      }
-    });
+    // Build each plant's optimistic state from the running state (not the bulk
+    // optimistic) so we don't block on concurrent changes. perform() with
+    // serialize:true chains everything through harvestQueue — same fence
+    // signOut() waits on, so in-flight plants finish before the session ends.
+    for (const { row, col, speciesId } of planted) {
+      const before = getState();
+      const next   = plantSeed(before, row, col, speciesId);
+      if (!next) continue; // someone already filled this plot or seed ran out
+
+      perform(
+        next,
+        () => edgePlantSeed(row, col, speciesId),
+        undefined,
+        {
+          serialize: true,
+          // Surgical rollback: undo ONLY this plot + this one seed. Don't
+          // touch the rest of the grid or any other concurrent inventory changes.
+          rollback: (c) => ({
+            ...c,
+            grid: c.grid.map((r, ri) =>
+              r.map((p, ci) => ri === row && ci === col ? { ...p, plant: null } : p)
+            ),
+            inventory: c.inventory
+              .map((i) => i.speciesId === speciesId && i.isSeed
+                ? { ...i, quantity: i.quantity + 1 }
+                : i,
+              ),
+          }),
+        },
+      );
+    }
   }
 
   const bloomedCount = state.grid
