@@ -521,7 +521,9 @@ export interface AlchemyStripResult {
   serverUpdatedAt: string;
 }
 
-/** Attune an unmutated bloom — spends essence + coins, returns a randomly mutated bloom. */
+/** @deprecated Replaced by edgeAttuneStart — kept as a compatibility shim until
+ *  no client calls it. The new alchemy attunement flow is time-gated through
+ *  the attune-start / attune-collect / attune-cancel edge functions. */
 export function edgeAlchemyAttune(
   speciesId:   string,
   essenceType: string,
@@ -537,6 +539,56 @@ export function edgeAlchemyStrip(speciesId: string, mutation: string) {
   return callEdge<AlchemyStripResult>("alchemy-infuse", {
     action: "strip", speciesId, mutation,
   });
+}
+
+// ── Alchemy attunement queue (v2.3 — time-gated) ─────────────────────────────
+
+export interface AttuneStartResult {
+  ok:              true;
+  coins:           number;
+  inventory:       GameState["inventory"];
+  essences:        GameState["essences"];
+  attunementQueue: GameState["attunementQueue"];
+  serverUpdatedAt: string;
+}
+export interface AttuneCollectResult {
+  ok:              true;
+  inventory:       GameState["inventory"];
+  discovered:      GameState["discovered"];
+  attunementQueue: GameState["attunementQueue"];
+  mutation:        string;
+  tier:            1 | 2 | 3 | 4;
+  serverUpdatedAt: string;
+}
+export interface AttuneCancelResult {
+  ok:              true;
+  inventory:       GameState["inventory"];
+  attunementQueue: GameState["attunementQueue"];
+  serverUpdatedAt: string;
+}
+export interface UpgradeAttunementSlotsResult {
+  ok:                true;
+  coins:             number;
+  attunement_slots:  number;
+  serverUpdatedAt:   string;
+}
+
+/** Start a time-gated attunement on an unmutated bloom. Server rolls the
+ *  mutation outcome at start and stores it on the queue entry. */
+export function edgeAttuneStart(speciesId: string, essenceType: string, quantity: number) {
+  return callEdge<AttuneStartResult>("attune-start", { speciesId, essenceType, quantity });
+}
+/** Collect a finished attunement — applies the rolled mutation to inventory. */
+export function edgeAttuneCollect(attunementId: string) {
+  return callEdge<AttuneCollectResult>("attune-collect", { attunementId });
+}
+/** Cancel an in-flight attunement — refunds the source bloom (essence is forfeit). */
+export function edgeAttuneCancel(attunementId: string) {
+  return callEdge<AttuneCancelResult>("attune-cancel", { attunementId });
+}
+/** Buy the next attunement slot upgrade. */
+export function edgeUpgradeAttunementSlots() {
+  return callEdge<UpgradeAttunementSlotsResult>("upgrade", { action: "attunement_slots" });
 }
 
 // ── Consumable usage ──────────────────────────────────────────────────────────

@@ -269,6 +269,24 @@ export const CRAFTING_SLOT_UPGRADES = [
   { slots: 6, cost: 700_000 },
 ] as const;
 
+// ── Alchemy attunement slot upgrade costs ────────────────────────────────
+// Player starts at 0 slots. Each upgrade unlocks one more concurrent
+// attunement, capped at 4. Cost scales 50k → 700k so endgame players still
+// feel the squeeze on the 4th slot. Mirrored in the upgrade edge function.
+
+export const ATTUNEMENT_SLOT_UPGRADES = [
+  { slots: 1, cost: 50_000  },
+  { slots: 2, cost: 150_000 },
+  { slots: 3, cost: 350_000 },
+  { slots: 4, cost: 700_000 },
+] as const;
+
+export const MAX_ATTUNEMENT_SLOTS = 4;
+
+export function getNextAttunementSlotUpgrade(currentSlots: number) {
+  return ATTUNEMENT_SLOT_UPGRADES.find((u) => u.slots > currentSlots) ?? null;
+}
+
 // ── Duration from rarity ──────────────────────────────────────────────────────
 // Used by CraftingTab to compute durationMs for consumable/attunement recipes.
 
@@ -276,6 +294,34 @@ import type { Rarity } from "./flowers";
 
 export function craftDurationFromRarity(rarity: Rarity): number {
   return (CRAFT_DURATION_MS as Record<string, number>)[rarity] ?? CRAFT_DURATION_MS.rare;
+}
+
+// ── Alchemy attunement duration ──────────────────────────────────────────
+// Attunement (essence-mutation, the Alchemy → Attune view) is time-gated by
+// BOTH the rolled mutation tier and the source flower's rarity. Higher tiers
+// take longer; rarer flowers also take longer. Mirrored in attune-start.
+
+const ATTUNEMENT_TIER_BASE_MS: Record<1 | 2 | 3 | 4, number> = {
+  1: 10  * 60_000, // 10 min
+  2: 30  * 60_000, // 30 min
+  3: 60  * 60_000, // 1 hr
+  4: 180 * 60_000, // 3 hr
+};
+
+const ATTUNEMENT_RARITY_MULT: Record<Rarity, number> = {
+  common:    1.0,
+  uncommon:  1.25,
+  rare:      1.5,
+  legendary: 2.0,
+  mythic:    3.0,
+  exalted:   4.0,
+  prismatic: 5.0,
+};
+
+export function attunementDurationMs(tier: 1 | 2 | 3 | 4, rarity: Rarity): number {
+  const base = ATTUNEMENT_TIER_BASE_MS[tier];
+  const mult = ATTUNEMENT_RARITY_MULT[rarity] ?? 1.0;
+  return Math.round(base * mult);
 }
 
 // ── Affordability helper ───────────────────────────────────────────────────

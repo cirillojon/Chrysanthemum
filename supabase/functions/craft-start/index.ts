@@ -328,9 +328,14 @@ Deno.serve(async (req: Request) => {
     // queueing crafts.
     type BoostType = "growth" | "craft" | "attunement";
     const activeBoosts = (save.active_boosts ?? []) as { type: BoostType; expiresAt: string }[];
+    // v2.3: Forge Haste ("craft" boost) now applies to ALL crafting-queue work
+    // — gear, consumables, infusers, and the universal essence. The "attunement"
+    // boost (Resonance Draft) was always intended for the alchemy attunement
+    // queue (separate system), not infuser crafting.
     const craftBoostType: BoostType | null =
-      kind === "attunement" ? "attunement" :
-      kind === "gear" || kind === "consumable" || kind === "essence" ? "craft" : null;
+      kind === "gear" || kind === "consumable" || kind === "essence" || kind === "attunement"
+        ? "craft"
+        : null;
 
     if (craftBoostType) {
       const nowMs = Date.now();

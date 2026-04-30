@@ -55,6 +55,11 @@ const REQUIRED_EXPORTS = [
   "edgeCraftStart",
   "edgeCraftCollect",
   "edgeCraftCancel",
+  // Alchemy attunement queue (v2.3 — time-gated essence-mutation flow)
+  "edgeAttuneStart",
+  "edgeAttuneCollect",
+  "edgeAttuneCancel",
+  "edgeUpgradeAttunementSlots",
   // Gear crafting — legacy direct-craft path, superseded by craft queue
   "edgeCraftGear",
   // Plant-targeting consumables + utility consumables (Phase 5)

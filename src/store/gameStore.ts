@@ -159,6 +159,23 @@ export interface CraftingQueueEntry {
   attunementCosts?: { rarity: string; quantity: number }[];
 }
 
+// ── Alchemy Attunement queue (v2.3) ────────────────────────────────────────
+//
+// One entry per in-flight alchemy attunement. The mutation outcome is rolled
+// at start time so the player can see what they're getting; collect just
+// delivers it. Cancel refunds the source flower(s) but NOT the essence.
+export interface AttunementQueueEntry {
+  id:           string;       // server-generated uuid
+  speciesId:    string;       // input flower species
+  mutation:     MutationType; // rolled outcome, applied on collect
+  tier:         number;       // mutation tier 1-4 (drives duration)
+  startedAt:    string;       // ISO
+  durationMs:   number;
+  // Stored cost for cancel refund — flowers come back, essence does not.
+  flowerCount:        number;
+  flowerSourceMutation?: MutationType; // mutation of the input bloom (undefined = base)
+}
+
 export interface GameState {
   coins:    number;
   farmSize: number; // column count (max 6)
@@ -198,6 +215,12 @@ export interface GameState {
   // Phase 3 — time-gated crafting queue
   craftingQueue:     CraftingQueueEntry[];
   craftingSlotCount: number;
+  // v2.3 — Alchemy attunement queue (separate from crafting). Player starts
+  // with 0 slots and buys up to 4 via the upgrade edge function. Each queue
+  // entry stores the rolled mutation outcome + the source flower so cancel
+  // can refund the bloom (essence is consumed at start, not refundable).
+  attunementSlots: number;
+  attunementQueue: AttunementQueueEntry[];
   // Phase 5a — active speed-boost consumables (Verdant Rush, Forge Haste, Resonance Draft).
   // Each entry tracks one consumable activation with its expiry. Multiple of the same type
   // are allowed but only the latest expiry matters; getBoostMultiplier returns 2× while any
@@ -496,6 +519,8 @@ export function defaultState(): GameState {
     lastWindShearUsed:    null,
     craftingQueue:        [],
     craftingSlotCount:    1,
+    attunementSlots:      0,
+    attunementQueue:      [],
     activeBoosts:         [],
     serverUpdatedAt:      null,
   };
@@ -585,6 +610,8 @@ export function applyOfflineTick(
     consumables:          save.consumables           ?? [],
     lastEclipseTonic:     save.lastEclipseTonic      ?? null,
     lastWindShearUsed:    save.lastWindShearUsed     ?? null,
+    attunementSlots:      save.attunementSlots       ?? 0,
+    attunementQueue:      save.attunementQueue       ?? [],
     activeBoosts:         pruneActiveBoosts(save.activeBoosts, now),
   };
 

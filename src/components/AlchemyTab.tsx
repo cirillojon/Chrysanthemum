@@ -15,8 +15,15 @@ import {
   type ConsumableId, type ConsumableCategory,
 } from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
-import { edgeAlchemySacrifice, edgeAlchemyCraft, edgeAlchemyAttune, edgeAlchemyStrip, edgeCraftGear } from "../lib/edgeFunctions";
-import { GEAR_RECIPES, canCraftGear, type GearIngredient, type GearRecipe } from "../data/gear-recipes";
+import {
+  edgeAlchemySacrifice, edgeAlchemyCraft, edgeAlchemyStrip, edgeCraftGear,
+  edgeAttuneStart, edgeAttuneCollect, edgeAttuneCancel, edgeUpgradeAttunementSlots,
+} from "../lib/edgeFunctions";
+import {
+  GEAR_RECIPES, canCraftGear,
+  MAX_ATTUNEMENT_SLOTS, getNextAttunementSlotUpgrade, attunementDurationMs,
+  type GearIngredient, type GearRecipe,
+} from "../data/gear-recipes";
 import { GEAR, type GearType } from "../data/gear";
 import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
@@ -571,6 +578,13 @@ export function AlchemyTab() {
   const [stripError,       setStripError]       = useState<string | null>(null);
   const [stripSuccess,     setStripSuccess]     = useState(false);
   const [stripSuccessVisible, setStripSuccessVisible] = useState(false);
+
+  // Tick once a second for the attunement queue progress bars.
+  const [attuneNow, setAttuneNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAttuneNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, []);
 
   // Auto-dismiss success toast
   useEffect(() => {
@@ -1237,17 +1251,18 @@ export function AlchemyTab() {
           setAttuneError(null);
           setAttuning(true);
           try {
-            const res = await edgeAlchemyAttune(attuneSpeciesId, attuneEssType, attuneQty);
+            // v2.3: starts a time-gated queue entry instead of resolving instantly.
+            // Result modal only fires on collect.
+            const res = await edgeAttuneStart(attuneSpeciesId, attuneEssType, attuneQty);
             const cur = getState();
             update({
               ...cur,
-              inventory:  res.inventory,
-              essences:   res.essences,
-              coins:      res.coins,
-              discovered: res.discovered,
+              coins:           res.coins,
+              inventory:       res.inventory,
+              essences:        res.essences,
+              attunementQueue: res.attunementQueue,
               serverUpdatedAt: res.serverUpdatedAt,
             });
-            setAttuneResult({ mutation: res.mutation, tier: res.tier });
             setAttuneSpeciesId(null);
             setAttuneEssType(null);
             setAttuneQty(1);
@@ -1281,12 +1296,185 @@ export function AlchemyTab() {
           }
         }
 
+        // ── Attunement queue handlers (v2.3) ────────────────────────────────
+        async function handleCollectAttune(id: string) {
+          try {
+            const res = await edgeAttuneCollect(id);
+            const cur = getState();
+            update({
+              ...cur,
+              inventory:       res.inventory,
+              discovered:      res.discovered,
+              attunementQueue: res.attunementQueue,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+            setAttuneResult({ mutation: res.mutation, tier: res.tier });
+          } catch (e) {
+            setAttuneError(e instanceof Error ? e.message : "Collect failed");
+          }
+        }
+        async function handleCancelAttune(id: string) {
+          try {
+            const res = await edgeAttuneCancel(id);
+            const cur = getState();
+            update({
+              ...cur,
+              inventory:       res.inventory,
+              attunementQueue: res.attunementQueue,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+          } catch (e) {
+            setAttuneError(e instanceof Error ? e.message : "Cancel failed");
+          }
+        }
+        async function handleUpgradeAttuneSlots() {
+          try {
+            const res = await edgeUpgradeAttunementSlots();
+            const cur = getState();
+            update({
+              ...cur,
+              coins:           res.coins,
+              attunementSlots: res.attunement_slots,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+          } catch (e) {
+            setAttuneError(e instanceof Error ? e.message : "Upgrade failed");
+          }
+        }
+
+        // ── Attunement queue derived state ──────────────────────────────────
+        const attuneSlots    = state.attunementSlots ?? 0;
+        const attuneQueue    = state.attunementQueue ?? [];
+        const slotsAvailable = attuneSlots > 0 && attuneQueue.length < attuneSlots;
+        const nextSlotUpgrade = getNextAttunementSlotUpgrade(attuneSlots);
+        const canAffordSlot   = nextSlotUpgrade ? state.coins >= nextSlotUpgrade.cost : false;
+        const atMaxSlots      = attuneSlots >= MAX_ATTUNEMENT_SLOTS;
+
         return (
           <div className="flex flex-col gap-5">
             <p className="text-[11px] text-muted-foreground">
               Transform a base bloom into a mutated one by spending elemental essence and coins.
               Higher essence (especially matching the flower's type) unlocks rarer mutation pools.
+              Attunements are <span className="text-foreground">time-gated</span> — start one in a slot, wait, then collect the result.
             </p>
+
+            {/* ── Attunement slots + queue ────────────────────────────────── */}
+            <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                  Attunement Slots <span className="text-muted-foreground/60">· {attuneQueue.length}/{attuneSlots}</span>
+                </p>
+                {atMaxSlots && (
+                  <p className="text-[10px] text-amber-400/60 shrink-0">Max slots</p>
+                )}
+              </div>
+
+              {/* Slot rows */}
+              {Array.from({ length: Math.max(attuneSlots, 1) }).map((_, i) => {
+                const entry = attuneQueue[i];
+                if (!entry && attuneSlots === 0 && i === 0) {
+                  return (
+                    <div key={`locked-${i}`} className="rounded-xl border border-dashed border-border/60 bg-card/20 px-3 py-2 min-h-[3rem] flex items-center gap-2">
+                      <span className="text-lg leading-none shrink-0 opacity-30">🔒</span>
+                      <p className="text-xs text-muted-foreground italic">Buy your first attunement slot to start</p>
+                    </div>
+                  );
+                }
+                if (!entry) {
+                  return (
+                    <div key={`empty-${i}`} className="rounded-xl border border-dashed border-border/60 bg-card/20 px-3 py-2 min-h-[3rem] flex items-center gap-2">
+                      <span className="text-lg leading-none shrink-0 opacity-30">🌿</span>
+                      <p className="text-xs text-muted-foreground italic">Empty slot</p>
+                    </div>
+                  );
+                }
+                const flower = getFlower(entry.speciesId);
+                const startedMs = new Date(entry.startedAt).getTime();
+                const elapsed   = attuneNow - startedMs;
+                const progress  = Math.max(0, Math.min(elapsed / entry.durationMs, 1));
+                const isDone    = progress >= 1;
+                const remaining = Math.max(entry.durationMs - elapsed, 0);
+                const fmt = (ms: number) => {
+                  if (ms <= 0) return "Done!";
+                  const s = Math.ceil(ms / 1000);
+                  if (s < 60) return `${s}s`;
+                  const m = Math.floor(s / 60);
+                  if (m < 60) return `${m}m ${s % 60}s`;
+                  const h = Math.floor(m / 60);
+                  return `${h}h ${m % 60}m`;
+                };
+                const mut = MUTATIONS[entry.mutation as MutationType];
+                return (
+                  <div key={entry.id} className="rounded-xl border border-border bg-card/40 px-3 py-2 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg leading-none shrink-0">{flower?.emoji.bloom ?? "🌸"}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            {flower?.name ?? entry.speciesId}
+                            {mut && (
+                              <span className={`ml-1.5 text-[10px] font-mono ${mut.color}`}>
+                                → {mut.emoji} {mut.name}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-[10px] text-muted-foreground">
+                            {isDone ? <span className="text-green-400 font-semibold">Ready to collect!</span> : fmt(remaining)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isDone && (
+                          <button
+                            onClick={() => handleCollectAttune(entry.id)}
+                            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-green-600/20 border border-green-500/40 text-green-400 hover:bg-green-600/30 transition"
+                          >
+                            ✅ Collect
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleCancelAttune(entry.id)}
+                          className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-card/60 border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 transition"
+                          title="Cancel (refunds the bloom, NOT the essence)"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-card/60 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${isDone ? "bg-green-500" : "bg-amber-500"}`}
+                        style={{ width: `${progress * 100}%`, transition: "width 1s linear, background-color 500ms" }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Slot upgrade button */}
+              {!atMaxSlots && nextSlotUpgrade && (
+                <button
+                  onClick={handleUpgradeAttuneSlots}
+                  disabled={!canAffordSlot}
+                  className={`
+                    w-full rounded-xl border border-dashed border-amber-600/40 bg-amber-500/5
+                    hover:bg-amber-500/10 hover:border-amber-400/60
+                    px-3 py-2 min-h-[3rem] flex items-center justify-between gap-2
+                    transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                  `}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg leading-none shrink-0 opacity-70">➕</span>
+                    <p className="text-xs font-semibold text-amber-400">
+                      Unlock attunement slot {nextSlotUpgrade.slots}
+                    </p>
+                  </div>
+                  <span className="text-[11px] font-mono text-amber-400">
+                    {nextSlotUpgrade.cost.toLocaleString()} 🟡
+                  </span>
+                </button>
+              )}
+            </div>
 
             {/* ── Attune section ─────────────────────────────────────────── */}
             <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-4">
@@ -1376,7 +1564,14 @@ export function AlchemyTab() {
               {attuneSpecies && attuneEssType && (() => {
                 const ownedAmt = ownedEssences.find((e) => e.type === attuneEssType)?.amount ?? 0;
                 const canAfford = state.coins >= goldCostPreview;
-                const canAttune = ownedAmt >= attuneQty && canAfford;
+                const canAttune = ownedAmt >= attuneQty && canAfford && slotsAvailable;
+                const previewDurMs = attuneRarity ? attunementDurationMs(tierPreview, attuneRarity) : 0;
+                const fmtDur = (ms: number) => {
+                  const m = Math.round(ms / 60_000);
+                  if (m < 60) return `${m} min`;
+                  const h = Math.floor(m / 60);
+                  return `${h}h ${m % 60}m`;
+                };
                 return (
                   <div className="space-y-3">
                     {/* Qty row */}
@@ -1414,6 +1609,16 @@ export function AlchemyTab() {
                       </div>
                     </div>
 
+                    {/* Duration preview */}
+                    {previewDurMs > 0 && (
+                      <p className="text-[10px] text-muted-foreground text-right">
+                        ⏱ Duration: <span className="text-foreground">{fmtDur(previewDurMs)}</span>
+                        {!slotsAvailable && (
+                          <span className="ml-2 text-amber-400">· no free slot</span>
+                        )}
+                      </p>
+                    )}
+
                     {attuneError && (
                       <p className="text-xs text-destructive">{attuneError}</p>
                     )}
@@ -1423,7 +1628,11 @@ export function AlchemyTab() {
                       disabled={attuning || !canAttune}
                       className="w-full py-2 rounded-xl bg-primary/20 border border-primary/50 text-primary text-sm font-semibold hover:bg-primary/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-center"
                     >
-                      {attuning ? "Attuning…" : "🌿 Attune"}
+                      {attuning
+                        ? "Starting…"
+                        : !slotsAvailable
+                          ? attuneSlots === 0 ? "Buy a slot to start" : "All slots in use"
+                          : "🌿 Start Attune"}
                     </button>
                   </div>
                 );

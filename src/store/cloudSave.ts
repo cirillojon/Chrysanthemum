@@ -156,6 +156,9 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       consumables:          (data.consumables           as GameState["consumables"])    ?? [],
       lastEclipseTonic:     (data.last_eclipse_tonic    as string | null)               ?? null,
       lastWindShearUsed:    (data.last_wind_shear_used  as number | null)               ?? null,
+      // v2.3 Alchemy attunement queue (separate from craft queue — own slot count)
+      attunementSlots:      (data.attunement_slots      as number)                      ?? 0,
+      attunementQueue:      (data.attunement_queue      as GameState["attunementQueue"]) ?? [],
     } as GameState;
   } catch {
     return null;
@@ -205,6 +208,9 @@ export async function saveToCloud(
     consumables:            state.consumables       ?? [],
     last_eclipse_tonic:     state.lastEclipseTonic  ?? null,
     last_wind_shear_used:   state.lastWindShearUsed ?? null,
+    // v2.3 Alchemy attunement queue
+    attunement_slots:       state.attunementSlots   ?? 0,
+    attunement_queue:       state.attunementQueue   ?? [],
     updated_at:             newUpdatedAt,
   };
 
