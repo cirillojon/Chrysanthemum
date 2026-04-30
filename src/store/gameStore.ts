@@ -1524,6 +1524,119 @@ export function sellFlower(
   return { ...state, coins: state.coins + earned, inventory: newInventory };
 }
 
+// ── Server result merge ──────────────────────────────────────────────────────
+
+/**
+ * Merges the result of an edge function into the current GameState. Used by
+ * `perform()` to apply server responses on success.
+ *
+ * Three behaviors:
+ *
+ * 1. **Plain field merge** — any field on `result` overwrites the corresponding
+ *    field on `cur` (`coins`, `inventory`, `fertilizers`, `serverUpdatedAt`,
+ *    etc.). This is just `{ ...cur, ...result }`.
+ *
+ * 2. **Empty result preserves state** — when `result === {}`, no fields change.
+ *    This is the contract that callers like the auto-planter, `handlePlantAll`,
+ *    and `handleSeedSelect` rely on: returning `{}` from `serverFn` after the
+ *    `await` keeps optimistic state intact, preventing concurrent in-flight
+ *    plants/harvests from clobbering each other's optimistic grid/inventory.
+ *
+ * 3. **Grid replacement preserves client mutations** — when `result.grid` is
+ *    set, the server's grid wins, but client-side mutations (weather/sprinkler/
+ *    fan rolls applied locally and not yet written to the DB) are preserved
+ *    on plants that match by speciesId + timePlanted. Without this, every
+ *    server response would erase locally-rolled mutations until the next
+ *    server tick re-rolled them.
+ */
+export function mergeServerResult<T extends Partial<GameState>>(
+  cur: GameState,
+  result: T,
+): GameState {
+  const merged = { ...cur, ...result, ok: undefined } as GameState;
+  if (result.grid) {
+    // Identify the same plant by speciesId + timePlanted so we never copy a
+    // mutation onto a different plant (e.g. after a harvest + re-plant).
+    merged.grid = result.grid.map((row, ri) =>
+      row.map((plot, ci) => {
+        if (!plot.plant) return plot;
+        const curPlot = cur.grid[ri]?.[ci];
+        if (!curPlot?.plant) return plot;
+        if (
+          plot.plant.speciesId === curPlot.plant.speciesId &&
+          plot.plant.timePlanted === curPlot.plant.timePlanted
+        ) {
+          return { ...plot, plant: { ...plot.plant, mutation: curPlot.plant.mutation } };
+        }
+        return plot;
+      }),
+    );
+  }
+  return merged;
+}
+
+// ── Surgical rollbacks ───────────────────────────────────────────────────────
+// These are pure functions used by perform()'s rollback path to undo only the
+// specific delta a failed action introduced — without clobbering any concurrent
+// state changes that landed during the server roundtrip (e.g. a harvest the
+// user did mid-sell). Snapshot rollbacks (capturing `state` at action-start)
+// would erase that concurrent work; these incremental rollbacks don't.
+
+/**
+ * Rollback for a successful Sell-All optimistic update.
+ *
+ * Adds each sold bloom back into `state.inventory` (matching on speciesId +
+ * mutation + isSeed=false) and subtracts `earned` coins. If a sold species
+ * is no longer present in inventory at rollback time (e.g. the optimistic
+ * filter removed it), pushes a new entry so nothing is silently lost.
+ */
+export function rollbackSellAll(
+  state: GameState,
+  soldItems: { speciesId: string; mutation?: string; quantity: number }[],
+  earned: number,
+): GameState {
+  let inv = state.inventory;
+  for (const sold of soldItems) {
+    const mut = sold.mutation as MutationType | undefined;
+    const idx = inv.findIndex(
+      (i) => i.speciesId === sold.speciesId && i.mutation === mut && !i.isSeed,
+    );
+    if (idx >= 0) {
+      inv = inv.map((i, j) => (j === idx ? { ...i, quantity: i.quantity + sold.quantity } : i));
+    } else {
+      inv = [...inv, { speciesId: sold.speciesId, mutation: mut, quantity: sold.quantity, isSeed: false }];
+    }
+  }
+  return { ...state, coins: state.coins - earned, inventory: inv };
+}
+
+/**
+ * Rollback for a single plot's Plant-All optimistic update.
+ *
+ * Clears the plant from `(row, col)` and increments the seed count for
+ * `speciesId` by 1. If the seed entry has been removed from inventory at
+ * rollback time, pushes a new entry so the seed is never lost.
+ */
+export function rollbackPlantOne(
+  state: GameState,
+  row: number,
+  col: number,
+  speciesId: string,
+): GameState {
+  const newGrid = state.grid.map((r, ri) =>
+    r.map((p, ci) => (ri === row && ci === col ? { ...p, plant: null } : p)),
+  );
+
+  const seedIdx = state.inventory.findIndex(
+    (i) => i.speciesId === speciesId && i.isSeed,
+  );
+  const newInventory = seedIdx >= 0
+    ? state.inventory.map((i, j) => (j === seedIdx ? { ...i, quantity: i.quantity + 1 } : i))
+    : [...state.inventory, { speciesId, quantity: 1, isSeed: true }];
+
+  return { ...state, grid: newGrid, inventory: newInventory };
+}
+
 export function buyFromShop(state: GameState, speciesId: string): GameState | null {
   const slot = state.shop.find((s) => s.speciesId === speciesId && !s.isFertilizer);
   if (!slot || slot.quantity < 1) return null;

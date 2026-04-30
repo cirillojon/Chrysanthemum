@@ -1,6 +1,6 @@
 # Manual QA Checklist
 
-Automated checks (lint, typecheck, 261 unit + contract tests, build) run in CI on every push.
+Automated checks (lint, typecheck, 281 unit + contract tests, build) run in CI on every push.
 This checklist covers behaviour that requires a real browser + live Supabase.
 
 Run this before merging any release branch into `main`.
@@ -79,6 +79,46 @@ Run this before merging any release branch into `main`.
 | G1 | `action_log` rows for `harvest` actions | `result` column contains `{ ok: true }`, **no** `bonusCoins` or `newCoins` |
 | G2 | `game_saves.coins` across a full session | Only changes on sell/buy, never on harvest |
 | G3 | Place gear while a cron tick is in flight | Placement succeeds (CAS retry handles the race); gear appears in grid |
+
+---
+
+## H. Rollback Reliability — Sell All / Plant All (v2.2.5)
+
+Throttle to **Slow 4G** (DevTools → Network → Throttling) for these.
+
+### H1. Sell All — concurrent harvest preserved on failure
+
+| # | Action | Expected |
+|---|--------|----------|
+| H1.1 | Have several blooms + a bloomed plant in the garden. Click **Sell All** on the Inventory > Blooms tab. While the `shop-action` POST is in flight, harvest the bloomed plant. Then block the `shop-action` URL (DevTools → Network → right-click → Block request URL) so it fails. | Sold blooms restored; coins back to original; **the freshly-harvested bloom remains in inventory** (was the bug). |
+| H1.2 | Same as H1.1 but use the per-card **Sell** / **Sell All** buttons in `InventoryItemCard` (single bloom row) instead of the global Sell All. | Same outcome — concurrent harvest preserved. |
+
+### H2. Plant All — failed plant doesn't wipe successful ones
+
+| # | Action | Expected |
+|---|--------|----------|
+| H2.1 | Open the app in two tabs (same account). Empty plots in both. In tab 1, click **Plant All**. In tab 2, click **Plant All** within ~1 s. Watch tab 1's Network tab. | Some `plant-seed` calls return 200, some return 409 ("Save was modified by another action"). The plots that returned 200 **stay planted** in tab 1; only 409'd plots roll back. (Pre-fix: any single 409 wiped the entire batch.) |
+| H2.2 | Same setup but harvest a bloomed plant in tab 1 mid-way through Plant All | Harvest is preserved — Plant All rollbacks don't clobber the new bloom. |
+
+### H3. Plant All flicker — instant visual stays in place
+
+| # | Action | Expected |
+|---|--------|----------|
+| H3.1 | Empty grid, ≥4 seeds. Throttle Slow 4G. Click **Plant All**. | All seeds appear in their plots **instantly** and stay there. **No flicker** — no plants disappearing then re-planting one at a time as `plant-seed` responses arrive. |
+| H3.2 | DevTools Network during H3.1 | `plant-seed` POSTs fire one at a time (serialized). UI does not visibly change as each completes. |
+
+### H4. "Plot already occupied" desync recovery
+
+| # | Action | Expected |
+|---|--------|----------|
+| H4.1 | Spam Plant All on Slow 4G several times. If you see a 400 "Plot already occupied" in the console for a tile that *looks* empty, try clicking that tile and selecting a seed. | The tile self-heals via `reloadFromCloud` — a brief 400 in console, then the tile updates to show the real server state (either occupied with the actual plant, or genuinely empty and your seed plants). No stuck "can't plant here forever" state. |
+| H4.2 | Two-tab repro: in tab 1, plant a seed at (0,0) and wait for confirmation. In tab 2 (without refreshing), click on (0,0) — it still looks empty in tab 2. Pick a seed. | Tab 2 logs one 400 in console, then the tile updates to show tab 1's plant. Subsequent clicks on other tiles in tab 2 work normally. |
+
+### H5. Plant All visual + Collect All interaction (intentional behaviour)
+
+| # | Action | Expected |
+|---|--------|----------|
+| H5.1 | Click **Collect All** (Harvest All), then immediately click **Plant All** | Plant All visually waits a moment for harvests to settle before planting. **This is intentional** — it prevents a rare flicker if a harvest fails. Don't file as a bug. |
 
 ---
 
