@@ -23,6 +23,7 @@ import {
 } from "../lib/edgeFunctions";
 import type { GameState, CraftingQueueEntry } from "../store/gameStore";
 import { getBoostMultiplier } from "../store/gameStore";
+import { queueEntryDisplay } from "../lib/craftDisplay";
 
 // ── Forge Haste / Resonance Draft (Phase 5a) ───────────────────────────────────
 // If the relevant boost is active when a craft starts, halve its durationMs.
@@ -271,30 +272,8 @@ function GearIngredients({
   );
 }
 
-// ── Queue row display helper ──────────────────────────────────────────────────
-
-function queueEntryDisplay(entry: CraftingQueueEntry): { emoji: string; name: string } {
-  // Support legacy entries that only have gearType (not kind/outputId)
-  const kind     = entry.kind     ?? "gear";
-  const outputId = entry.outputId ?? (entry as unknown as { gearType?: string }).gearType ?? "";
-
-  if (kind === "gear") {
-    const def = GEAR[outputId as GearType];
-    return { emoji: def?.emoji ?? "⚙️", name: def?.name ?? outputId };
-  }
-  if (kind === "consumable") {
-    const crec = CONSUMABLE_RECIPE_MAP[outputId as ConsumableId];
-    return { emoji: crec?.emoji ?? "🧪", name: crec?.name ?? outputId };
-  }
-  if (kind === "essence") {
-    // outputId is the essence type (currently only "universal")
-    if (outputId === "universal") return { emoji: UNIVERSAL_ESSENCE_DISPLAY.emoji, name: "Universal Essence" };
-    return { emoji: "✨", name: outputId };
-  }
-  // attunement — outputId is the rarity string
-  const capitalized = outputId.charAt(0).toUpperCase() + outputId.slice(1);
-  return { emoji: "🥢", name: `${capitalized} Attunement` };
-}
+// queueEntryDisplay moved to src/lib/craftDisplay.ts so the global craft-completion
+// banner in App.tsx can reuse it.
 
 // ── Collect toast ─────────────────────────────────────────────────────────────
 

@@ -29,6 +29,7 @@ import type { ForecastEntry } from "../hooks/useWeather";
 import { useTimeOfDay } from "../hooks/useTimeOfDay";
 import type { TimeOfDay } from "../hooks/useTimeOfDay";
 import type { WeatherType } from "../data/weather";
+import { queueEntryDisplay } from "../lib/craftDisplay";
 
 interface GameContextValue {
   state: GameState;
@@ -63,6 +64,10 @@ interface GameContextValue {
   clearSupplyNotification: () => void;
   gearExpiry: { gearType: string } | null;
   clearGearExpiry: () => void;
+  /** Stack of craft entries that just transitioned from in-progress → ready
+   *  during this session. App renders one CraftCompletionBanner per entry. */
+  craftCompletions: { id: string; emoji: string; name: string }[];
+  dismissCraftCompletion: (id: string) => void;
   user: User | null;
   profile: CloudProfile | null;
   authLoading: boolean;
@@ -115,6 +120,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [shopJustRestocked,   setShopJustRestocked]   = useState(false);
   const [supplyJustRestocked, setSupplyJustRestocked] = useState(false);
   const [gearExpiry, setGearExpiry]                   = useState<{ gearType: string } | null>(null);
+  const [craftCompletions, setCraftCompletions]       = useState<{ id: string; emoji: string; name: string }[]>([]);
   const [user, setUser]                         = useState<User | null>(null);
   const [profile, setProfile]                   = useState<CloudProfile | null>(null);
   const [authLoading, setAuthLoading]           = useState(true);
@@ -127,6 +133,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const initialSessionFired = useRef(false);
   const stateRef            = useRef(state);
   const tabId               = useRef(crypto.randomUUID());
+  // Craft completion banners — track which queue ids we've observed in-progress
+  // (so already-done entries on initial load don't fire a banner) and which
+  // we've already fired a banner for (so each transition fires exactly once).
+  const craftSeenInProgress = useRef<Set<string>>(new Set());
+  const craftFiredCompleted = useRef<Set<string>>(new Set());
   // Incremented on every sign-out so in-flight loadUserSession calls know to discard their results.
   const loadGen             = useRef(0);
   const [isStaleTab, setIsStaleTab] = useState(false);
@@ -318,6 +329,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem("chrysanthemum_save");
           setState(defaultState());
           setOfflineSummary(EMPTY_SUMMARY);
+          // Reset craft completion tracking so stale ids from the prior session
+          // don't suppress banners after sign-in.
+          craftSeenInProgress.current.clear();
+          craftFiredCompleted.current.clear();
+          setCraftCompletions([]);
           setTimeout(() => { saveEnabled.current = true; }, 500);
           setAuthLoading(false);
           return;
@@ -417,6 +433,32 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (prunedGrid !== next.grid) {
           if (expired.length > 0) setGearExpiry({ gearType: expired[0].gearType });
           next = { ...next, grid: prunedGrid };
+        }
+
+        // ── Craft completion detection ─────────────────────────────────────
+        // Fire a banner once per entry that transitions in-progress → done
+        // during this session. Already-completed entries observed on first
+        // load go straight into "fired" so they don't pop banners on refresh —
+        // the navbar badge (B6) is the right surface for that.
+        const newCompletions: { id: string; emoji: string; name: string }[] = [];
+        for (const entry of next.craftingQueue ?? []) {
+          if (craftFiredCompleted.current.has(entry.id)) continue;
+          const doneAt = new Date(entry.startedAt).getTime() + entry.durationMs;
+          const isDone = tickNow >= doneAt;
+          if (isDone) {
+            if (craftSeenInProgress.current.has(entry.id)) {
+              // Genuine transition — fire banner.
+              const { emoji, name } = queueEntryDisplay(entry);
+              newCompletions.push({ id: entry.id, emoji, name });
+            }
+            // Either way, never fire again for this id.
+            craftFiredCompleted.current.add(entry.id);
+          } else {
+            craftSeenInProgress.current.add(entry.id);
+          }
+        }
+        if (newCompletions.length > 0) {
+          setCraftCompletions((prev) => [...prev, ...newCompletions]);
         }
 
         return next;
@@ -552,6 +594,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       shopJustRestocked,   clearShopNotification:   () => setShopJustRestocked(false),
       supplyJustRestocked, clearSupplyNotification: () => setSupplyJustRestocked(false),
       gearExpiry, clearGearExpiry: () => setGearExpiry(null),
+      craftCompletions,
+      dismissCraftCompletion: (id: string) =>
+        setCraftCompletions((prev) => prev.filter((c) => c.id !== id)),
       user, profile, authLoading,
       signInWithGoogle, signOut,
       refreshProfile,

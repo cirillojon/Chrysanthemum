@@ -5,6 +5,7 @@ import { Shop } from "./components/Shop";
 import { Inventory } from "./components/Inventory";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { ShopRestockBanner } from "./components/ShopRestockBanner";
+import { CraftCompletionBanner } from "./components/CraftCompletionBanner";
 import { GearExpiryBanner } from "./components/GearExpiryBanner";
 import { UsernameModal } from "./components/UsernameModal";
 import { SignInPromptModal } from "./components/SignInPromptModal";
@@ -54,6 +55,7 @@ function AppInner() {
     shopJustRestocked,   clearShopNotification,
     supplyJustRestocked, clearSupplyNotification,
     gearExpiry, clearGearExpiry,
+    craftCompletions, dismissCraftCompletion,
     user, profile, authLoading,
     signInWithGoogle, signOut,
     needsUsername, completeUsername,
@@ -412,11 +414,11 @@ function AppInner() {
           }}
         />
       )}
-      {/* Shop restock banners — wrapped in a single fixed container so they
-          stack vertically when both fire at the same time instead of rendering
-          on top of each other. flex-col-reverse keeps the most recent banner
-          closest to the anchor (bottom edge); older banners stack above. */}
-      {(shopJustRestocked || supplyJustRestocked) && (
+      {/* Floating banners — wrapped in a single fixed container so they stack
+          vertically when multiple fire instead of rendering on top of each
+          other. flex-col-reverse keeps the most recent banner closest to the
+          anchor (bottom edge); older banners stack above. */}
+      {(shopJustRestocked || supplyJustRestocked || craftCompletions.length > 0) && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col-reverse items-center gap-2 pointer-events-none">
           {shopJustRestocked && (
             <ShopRestockBanner onDismiss={clearShopNotification} type="seeds" />
@@ -424,6 +426,14 @@ function AppInner() {
           {supplyJustRestocked && (
             <ShopRestockBanner onDismiss={clearSupplyNotification} type="supply" />
           )}
+          {craftCompletions.map((c) => (
+            <CraftCompletionBanner
+              key={c.id}
+              emoji={c.emoji}
+              name={c.name}
+              onDismiss={() => dismissCraftCompletion(c.id)}
+            />
+          ))}
         </div>
       )}
       {gearExpiry && (
