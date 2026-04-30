@@ -207,6 +207,20 @@ function AppInner() {
   // (gifts now arrive via mailbox so mailboxUnreadCount already includes them)
   const socialBadgeCount = pendingCount + mailboxUnreadCount;
 
+  // ── Craft tab badge — count of claimable (done) crafts in the queue ─────
+  // Drives the badge under the ⚒️ tab. Re-derived every second via the local
+  // `craftBadgeNow` ticker (state.craftingQueue itself doesn't change as a
+  // craft passes its finish time, so we need our own clock for this).
+  const [craftBadgeNow, setCraftBadgeNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setCraftBadgeNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, []);
+  const claimableCraftsCount = (state.craftingQueue ?? []).reduce((acc, e) => {
+    const doneAt = new Date(e.startedAt).getTime() + e.durationMs;
+    return craftBadgeNow >= doneAt ? acc + 1 : acc;
+  }, 0);
+
   // ── Swipe navigation ─────────────────────────────────────────────────────────
   // Flat order: garden(0) → shop:seeds(1) → shop:supply(2) →
   //             inventory(3) → botany(4) → codex(5) →
@@ -597,6 +611,11 @@ function AppInner() {
               {t === "inventory" && newInvTotal > 0 && (
                 <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
                   {newInvTotal > 9 ? "9+" : newInvTotal}
+                </span>
+              )}
+              {t === "craft" && claimableCraftsCount > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-amber-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                  {claimableCraftsCount > 9 ? "9+" : claimableCraftsCount}
                 </span>
               )}
               {t === "social" && socialBadgeCount > 0 && (
