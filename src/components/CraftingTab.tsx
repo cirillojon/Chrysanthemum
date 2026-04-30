@@ -143,7 +143,7 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
   const entries: CraftEntry[] = [];
 
   // ── Gear ──────────────────────────────────────────────────────────────────
-  if (filter !== "consumables") {
+  if (filter === "all" || filter === "gear") {
     for (const recipe of GEAR_RECIPES) {
       const def = GEAR[recipe.outputGearType as GearType];
       entries.push({
@@ -161,7 +161,7 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
   }
 
   // ── Consumables (excluding typed seed pouches) ────────────────────────────
-  if (filter !== "gear") {
+  if (filter === "all" || filter === "consumables") {
     for (const recipe of CONSUMABLE_RECIPES) {
       if (/^seed_pouch_[a-z]+_\d+$/.test(recipe.id)) continue;
       entries.push({
