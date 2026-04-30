@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("gear_inventory, consumables, infusers, crafting_queue, updated_at")
+        .select("essences, gear_inventory, consumables, infusers, crafting_queue, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -68,6 +68,7 @@ Deno.serve(async (req: Request) => {
       quantity?:  number;   // bulk crafting (defaults to 1)
     }[];
 
+    let essences      = (save.essences       ?? []) as { type: string; amount: number }[];
     let gearInventory = (save.gear_inventory ?? []) as { gearType: string; quantity: number }[];
     let consumables   = (save.consumables    ?? []) as { id: string; quantity: number }[];
     let infusers      = (save.infusers       ?? []) as { rarity: string; quantity: number }[];
@@ -116,6 +117,13 @@ Deno.serve(async (req: Request) => {
         ? infusers.map((inf, i) => i === idx ? { ...inf, quantity: inf.quantity + qty } : inf)
         : [...infusers, { rarity: outputId, quantity: qty }];
 
+    } else if (kind === "essence") {
+      // outputId is an essence type (currently only "universal")
+      const idx = essences.findIndex((e) => e.type === outputId);
+      essences = idx >= 0
+        ? essences.map((e, i) => i === idx ? { ...e, amount: e.amount + qty } : e)
+        : [...essences, { type: outputId, amount: qty }];
+
     } else {
       return err(`Unknown craft kind: ${kind}`);
     }
@@ -124,6 +132,7 @@ Deno.serve(async (req: Request) => {
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
       .update({
+        essences,
         gear_inventory: gearInventory,
         consumables,
         infusers,
@@ -149,6 +158,7 @@ Deno.serve(async (req: Request) => {
     return json({
       ok:              true,
       craftingQueue:   newQueue,
+      essences,
       gearInventory,
       consumables,
       infusers,

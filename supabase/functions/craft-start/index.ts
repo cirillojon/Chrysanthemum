@@ -73,6 +73,17 @@ const GEAR_RECIPES: GearRecipe[] = [
 
 const GEAR_RECIPE_MAP = Object.fromEntries(GEAR_RECIPES.map((r) => [r.outputGearType, r]));
 
+// ── Essence crafting (Universal Essence) ─────────────────────────────────────
+// Server-authoritative recipe for the time-gated Universal Essence craft. The
+// only "essence" kind currently is "universal"; one craft consumes 1 of each of
+// the 12 elemental essences and produces 1 Universal Essence after 60s.
+const UNIVERSAL_ESSENCE_ELEMENTALS = [
+  "blaze", "tide", "grove", "frost", "storm", "lunar",
+  "solar", "fairy", "shadow", "arcane", "stellar", "zephyr",
+] as const;
+const UNIVERSAL_ESSENCE_COST_PER_TYPE = 1;
+const UNIVERSAL_ESSENCE_BASE_DURATION_MS = 60_000; // 1 minute per essence
+
 // ── Response helpers ──────────────────────────────────────────────────────────
 
 const json = (body: unknown, status = 200) =>
@@ -97,7 +108,7 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json() as {
-      kind:        "gear" | "consumable" | "attunement";
+      kind:        "gear" | "consumable" | "attunement" | "essence";
       outputId:    string;
       quantity?:   number;
       durationMs?: number;
@@ -110,8 +121,8 @@ Deno.serve(async (req: Request) => {
 
     const { kind, outputId } = body;
     if (!kind || !outputId)                                          return err("kind and outputId are required");
-    if (kind !== "gear" && kind !== "consumable" && kind !== "attunement") {
-      return err("kind must be 'gear', 'consumable', or 'attunement'");
+    if (kind !== "gear" && kind !== "consumable" && kind !== "attunement" && kind !== "essence") {
+      return err("kind must be 'gear', 'consumable', 'attunement', or 'essence'");
     }
 
     // ── Bulk crafting — validate quantity (default 1, cap at 50) ──────────────
@@ -233,6 +244,30 @@ Deno.serve(async (req: Request) => {
       if (gCosts.length) newEntryGearCosts       = gCosts;
       if (cCosts.length) newEntryConsumableCosts = cCosts;
 
+    } else if (kind === "essence") {
+      // ── Server-authoritative essence craft (Universal Essence) ─────────────
+      if (outputId !== "universal") return err(`Unknown essence type: ${outputId}`);
+
+      durationMs = UNIVERSAL_ESSENCE_BASE_DURATION_MS * quantity;
+
+      const need = UNIVERSAL_ESSENCE_COST_PER_TYPE * quantity;
+      for (const type of UNIVERSAL_ESSENCE_ELEMENTALS) {
+        const have = essences.find((e) => e.type === type)?.amount ?? 0;
+        if (have < need) return err(`Not enough ${type} essence (need ${need}, have ${have})`);
+      }
+
+      // Deduct
+      const map = new Map<string, number>(essences.map((e) => [e.type, e.amount]));
+      for (const type of UNIVERSAL_ESSENCE_ELEMENTALS) {
+        map.set(type, (map.get(type) ?? 0) - need);
+      }
+      essences = Array.from(map.entries())
+        .map(([type, amount]) => ({ type, amount }))
+        .filter((e) => e.amount > 0);
+
+      // Store costs for refund (already × quantity)
+      newEntryEssenceCosts = UNIVERSAL_ESSENCE_ELEMENTALS.map((type) => ({ type, amount: need }));
+
     } else {
       // ── Client-declared costs (consumable / attunement) ────────────────────
       // The server trusts the recipe structure from the client but validates
@@ -295,7 +330,7 @@ Deno.serve(async (req: Request) => {
     const activeBoosts = (save.active_boosts ?? []) as { type: BoostType; expiresAt: string }[];
     const craftBoostType: BoostType | null =
       kind === "attunement" ? "attunement" :
-      kind === "gear" || kind === "consumable" ? "craft" : null;
+      kind === "gear" || kind === "consumable" || kind === "essence" ? "craft" : null;
 
     if (craftBoostType) {
       const nowMs = Date.now();

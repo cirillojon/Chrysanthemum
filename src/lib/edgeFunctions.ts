@@ -392,6 +392,7 @@ export interface CraftStartResult {
 export interface CraftCollectResult {
   ok:              true;
   craftingQueue:   GameState["craftingQueue"];
+  essences:        GameState["essences"];
   gearInventory:   GameState["gearInventory"];
   consumables:     GameState["consumables"];
   infusers:        GameState["infusers"];
@@ -417,7 +418,7 @@ export interface UpgradeCraftingSlotsResult {
 }
 
 export function edgeCraftStart(
-  kind:        "gear" | "consumable" | "attunement",
+  kind:        "gear" | "consumable" | "attunement" | "essence",
   outputId:    string,
   durationMs?: number,
   costs?: {

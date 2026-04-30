@@ -13,7 +13,10 @@ import {
 } from "../data/consumables";
 import { RARITY_CONFIG, FLOWER_TYPES, type Rarity } from "../data/flowers";
 import type { FlowerType } from "../data/flowers";
-import { UNIVERSAL_ESSENCE_DISPLAY } from "../data/essences";
+import {
+  UNIVERSAL_ESSENCE_DISPLAY, UNIVERSAL_ESSENCE_COST_PER_TYPE,
+  ALL_FLOWER_TYPES, universalEssenceCraftable,
+} from "../data/essences";
 import {
   edgeCraftStart, edgeCraftCollect, edgeCraftCancel,
   edgeUpgradeCraftingSlots,
@@ -26,7 +29,7 @@ import { getBoostMultiplier } from "../store/gameStore";
 // Mirrors the server-side logic in craft-start/index.ts.
 function applyCraftBoost(
   rawDurationMs: number,
-  kind:          "gear" | "consumable" | "attunement",
+  kind:          "gear" | "consumable" | "attunement" | "essence",
   state:         GameState,
   now:           number,
 ): number {
@@ -37,11 +40,11 @@ function applyCraftBoost(
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type CraftFilter = "all" | "gear" | "consumables";
+type CraftFilter = "all" | "gear" | "consumables" | "other";
 
 interface CraftEntry {
-  id:          string;          // "gear:sprinkler_rare", "consumable:bloom_burst_1", "attunement:1"
-  kind:        "gear" | "consumable" | "attunement";
+  id:          string;          // "gear:sprinkler_rare", "consumable:bloom_burst_1", "attunement:1", "essence:universal"
+  kind:        "gear" | "consumable" | "attunement" | "essence";
   emoji:       string;
   name:        string;
   rarity:      Rarity;
@@ -190,6 +193,22 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
     }
   }
 
+  // ── Other (Universal Essence) ─────────────────────────────────────────────
+  if (filter === "all" || filter === "other") {
+    const universalOwned    = essences.find((e) => e.type === "universal")?.amount ?? 0;
+    const universalAffordable = universalEssenceCraftable(essences) > 0;
+    entries.push({
+      id:          "essence:universal",
+      kind:        "essence",
+      emoji:       UNIVERSAL_ESSENCE_DISPLAY.emoji,
+      name:        "Universal Essence",
+      rarity:      "legendary",
+      description: `Combine ${UNIVERSAL_ESSENCE_COST_PER_TYPE} of each elemental essence into a Universal Essence — used in legendary+ cross-breed recipes.`,
+      owned:       universalOwned,
+      canCraft:    slotsAvail && universalAffordable,
+    });
+  }
+
   return entries.sort((a, b) => {
     if (a.canCraft !== b.canCraft) return a.canCraft ? -1 : 1;
     return 0;
@@ -266,6 +285,11 @@ function queueEntryDisplay(entry: CraftingQueueEntry): { emoji: string; name: st
   if (kind === "consumable") {
     const crec = CONSUMABLE_RECIPE_MAP[outputId as ConsumableId];
     return { emoji: crec?.emoji ?? "🧪", name: crec?.name ?? outputId };
+  }
+  if (kind === "essence") {
+    // outputId is the essence type (currently only "universal")
+    if (outputId === "universal") return { emoji: UNIVERSAL_ESSENCE_DISPLAY.emoji, name: "Universal Essence" };
+    return { emoji: "✨", name: outputId };
   }
   // attunement — outputId is the rarity string
   const capitalized = outputId.charAt(0).toUpperCase() + outputId.slice(1);
@@ -420,6 +444,11 @@ function UpgradeSlotRow({
 // supabase/functions/craft-start/index.ts — keep them in sync.
 const MAX_BULK_QUANTITY = 50;
 
+// ── Universal Essence (kind="essence") ───────────────────────────────────────
+// Base duration per Universal Essence — must mirror
+// UNIVERSAL_ESSENCE_BASE_DURATION_MS in supabase/functions/craft-start/index.ts.
+const UNIVERSAL_ESSENCE_BASE_DURATION_MS = 60_000;
+
 /** How many of `entry` the player can afford right now (capped at MAX_BULK_QUANTITY). */
 function maxCraftableQuantity(entry: CraftEntry, state: GameState): number {
   const essences = state.essences      ?? [];
@@ -471,6 +500,11 @@ function maxCraftableQuantity(entry: CraftEntry, state: GameState): number {
     } else {
       const prevRarity = TIER_RARITIES[cost.tier as 1|2|3|4|5] as string;
       limit(infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0, cost.quantity);
+    }
+  } else if (entry.kind === "essence") {
+    // Universal Essence: 1 of each of the 12 elementals per craft.
+    for (const type of ALL_FLOWER_TYPES) {
+      limit(essences.find((e) => e.type === type)?.amount ?? 0, UNIVERSAL_ESSENCE_COST_PER_TYPE);
     }
   }
 
@@ -531,6 +565,8 @@ function CraftPopup({
     baseDurationMs = craftDurationFromRarity(entry.rarity);
   } else if (entry.kind === "attunement") {
     baseDurationMs = craftDurationFromRarity(entry.rarity);
+  } else if (entry.kind === "essence") {
+    baseDurationMs = UNIVERSAL_ESSENCE_BASE_DURATION_MS;
   }
   const totalDurationMs = baseDurationMs * quantity;
 
@@ -612,6 +648,18 @@ function CraftPopup({
         );
       }
     }
+  } else if (entry.kind === "essence") {
+    // Universal Essence: 1 of each of the 12 elementals per craft. Show all 12.
+    ingredientsSection = (
+      <div className="space-y-1">
+        {ALL_FLOWER_TYPES.map((type) => {
+          const cfg  = FLOWER_TYPES[type];
+          const have = essences.find((e) => e.type === type)?.amount ?? 0;
+          const need = UNIVERSAL_ESSENCE_COST_PER_TYPE * quantity;
+          return <IngredientRow key={type} emoji={cfg.emoji} label={`${cfg.name} Essence`} need={need} have={have} enough={have >= need} {...essenceChip(type)} />;
+        })}
+      </div>
+    );
   }
 
   return (
@@ -760,9 +808,10 @@ function CraftCell({ entry, onClick }: { entry: CraftEntry; onClick: () => void 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 const FILTER_LABELS: { id: CraftFilter; label: string; emoji: string }[] = [
-  { id: "all",         label: "All",         emoji: "✦" },
+  { id: "all",         label: "All",         emoji: "✦"  },
   { id: "gear",        label: "Gear",        emoji: "⚙️" },
   { id: "consumables", label: "Consumables", emoji: "🧪" },
+  { id: "other",       label: "Other",       emoji: "✨" },
 ];
 
 export function CraftingTab() {
@@ -879,6 +928,50 @@ export function CraftingTab() {
             craftingQueue: [...(cur.craftingQueue ?? []), tempEntry],
           },
           () => edgeCraftStart("gear", gearType, undefined, undefined, qty),
+          (res) => {
+            const fresh = getState();
+            update({
+              ...fresh,
+              coins:           res.coins,
+              essences:        res.essences,
+              gearInventory:   res.gearInventory,
+              consumables:     res.consumables,
+              infusers:        res.infusers,
+              craftingQueue:   res.craftingQueue,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+            closePopup();
+          },
+        );
+
+      } else if (liveSelected.kind === "essence") {
+        // ── Universal Essence: server-authoritative, 1m per essence ───────
+        const outputId = liveSelected.id.replace("essence:", ""); // "universal"
+
+        // Optimistic deduction: 1 of each elemental × qty
+        const need = UNIVERSAL_ESSENCE_COST_PER_TYPE * qty;
+        let essences = [...(cur.essences ?? [])];
+        for (const type of ALL_FLOWER_TYPES) {
+          essences = essences.map((e) => e.type === type ? { ...e, amount: e.amount - need } : e).filter((e) => e.amount > 0);
+        }
+
+        // Stored essence costs for cancel refund (already × qty)
+        const essenceCosts = ALL_FLOWER_TYPES.map((type) => ({ type, amount: need }));
+
+        const tempEntry: CraftingQueueEntry = {
+          id:        crypto.randomUUID(),
+          kind:      "essence",
+          outputId,
+          startedAt: new Date().toISOString(),
+          // Boost only adjusts the optimistic display; server halves its own copy.
+          durationMs: applyCraftBoost(UNIVERSAL_ESSENCE_BASE_DURATION_MS * qty, "essence", cur, Date.now()),
+          ...(qty > 1 && { quantity: qty }),
+          essenceCosts,
+        };
+
+        await perform(
+          { ...cur, essences, craftingQueue: [...(cur.craftingQueue ?? []), tempEntry] },
+          () => edgeCraftStart("essence", outputId, undefined, undefined, qty),
           (res) => {
             const fresh = getState();
             update({
@@ -1068,6 +1161,12 @@ export function CraftingTab() {
       optimistic.infusers = idx >= 0
         ? inf.map((i, j) => j === idx ? { ...i, quantity: i.quantity + qty } : i)
         : [...inf, { rarity: outputId as Rarity, quantity: qty }];
+    } else if (kind === "essence") {
+      const ess = cur.essences ?? [];
+      const idx = ess.findIndex((e) => e.type === outputId);
+      optimistic.essences = idx >= 0
+        ? ess.map((e, j) => j === idx ? { ...e, amount: e.amount + qty } : e)
+        : [...ess, { type: outputId, amount: qty }];
     }
 
     const { emoji, name } = queueEntryDisplay(entry);
@@ -1081,6 +1180,7 @@ export function CraftingTab() {
           update({
             ...fresh,
             craftingQueue:   res.craftingQueue,
+            essences:        res.essences,
             gearInventory:   res.gearInventory,
             consumables:     res.consumables,
             infusers:        res.infusers,

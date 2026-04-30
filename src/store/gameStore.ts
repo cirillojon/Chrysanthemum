@@ -95,7 +95,7 @@ export interface ShopSlot {
 
 // ── Crafting queue ─────────────────────────────────────────────────────────
 
-export type CraftKind = "gear" | "consumable" | "attunement";
+export type CraftKind = "gear" | "consumable" | "attunement" | "essence";
 
 // ── Active speed-boost consumables (Phase 5a) ─────────────────────────────────
 // Verdant Rush  → "growth"     → 2× growth speed for all plants

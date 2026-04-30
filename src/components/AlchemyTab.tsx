@@ -3,8 +3,7 @@ import { useGame } from "../store/GameContext";
 import { FLOWER_TYPES, RARITY_CONFIG, getFlower, MUTATIONS } from "../data/flowers";
 import {
   ESSENCE_YIELD, calculateEssenceYield, mergeEssences,
-  UNIVERSAL_ESSENCE_DISPLAY, UNIVERSAL_ESSENCE_COST_PER_TYPE,
-  universalEssenceCraftable, ALL_FLOWER_TYPES,
+  UNIVERSAL_ESSENCE_DISPLAY,
 } from "../data/essences";
 import {
   CONSUMABLE_RECIPES, CONSUMABLE_RECIPE_MAP, ATTUNEMENT_RECIPES,
@@ -14,7 +13,7 @@ import {
   type ConsumableId, type ConsumableCategory,
 } from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
-import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft, edgeAlchemyAttune, edgeAlchemyStrip, edgeCraftGear } from "../lib/edgeFunctions";
+import { edgeAlchemySacrifice, edgeAlchemyCraft, edgeAlchemyAttune, edgeAlchemyStrip, edgeCraftGear } from "../lib/edgeFunctions";
 import { GEAR_RECIPES, canCraftGear, type GearIngredient, type GearRecipe } from "../data/gear-recipes";
 import { GEAR, type GearType } from "../data/gear";
 import type { MutationType, Rarity, FlowerType } from "../data/flowers";
@@ -582,13 +581,6 @@ export function AlchemyTab() {
   const [success,        setSuccess]        = useState<EssenceItem[] | null>(null);
   const [successVisible, setSuccessVisible] = useState(false);
 
-  // Universal Essence craft panel state
-  const [craftQty,      setCraftQty]      = useState(1);
-  const [crafting,      setCrafting]      = useState(false);
-  const [craftError,    setCraftError]    = useState<string | null>(null);
-  const [craftSuccess,  setCraftSuccess]  = useState<number | null>(null);
-  const [craftSuccessVisible, setCraftSuccessVisible] = useState(false);
-
   // Consumable / attunement craft state
   const [craftingItemId,        setCraftingItemId]        = useState<string | null>(null);
   const [itemCraftError,        setItemCraftError]        = useState<string | null>(null);
@@ -625,17 +617,6 @@ export function AlchemyTab() {
     }, 3_000);
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
   }, [success]);
-
-  // Auto-dismiss craft success
-  useEffect(() => {
-    if (!craftSuccess) return;
-    const frame = requestAnimationFrame(() => setCraftSuccessVisible(true));
-    const timer = setTimeout(() => {
-      setCraftSuccessVisible(false);
-      setTimeout(() => setCraftSuccess(null), 400);
-    }, 3_000);
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
-  }, [craftSuccess]);
 
   // Auto-dismiss attune result
   useEffect(() => {
@@ -913,26 +894,6 @@ export function AlchemyTab() {
     }
   }
 
-  // Universal Essence craftable count
-  const universalCraftable = universalEssenceCraftable(state.essences ?? []);
-
-  async function handleCraftUniversal() {
-    if (crafting || craftQty <= 0 || craftQty > universalCraftable) return;
-    setCrafting(true);
-    setCraftError(null);
-    try {
-      const res = await edgeCraftUniversalEssence(craftQty);
-      const cur = getState();
-      update({ ...cur, essences: res.essences, serverUpdatedAt: res.serverUpdatedAt });
-      setCraftSuccess(craftQty);
-      setCraftQty(1);
-    } catch (e: unknown) {
-      setCraftError(e instanceof Error ? e.message : "Craft failed — please try again.");
-    } finally {
-      setCrafting(false);
-    }
-  }
-
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
@@ -963,81 +924,10 @@ export function AlchemyTab() {
           <div>
             <p className="text-xs font-semibold mb-0.5">Essence Bank</p>
             <p className="text-[11px] text-muted-foreground">
-              Essences are earned by sacrificing flowers. Combine all 12 elemental essences into a Universal Essence for cross-breeding recipes.
+              Essences are earned by sacrificing flowers. Combine all 12 elemental essences into a Universal Essence in the Craft tab → Other.
             </p>
           </div>
           <EssenceWallet essences={state.essences ?? []} />
-
-          {/* Universal Essence craft panel */}
-          <div className="rounded-xl border border-slate-200/20 bg-slate-200/5 px-4 py-3 space-y-3">
-            <div>
-              <p className="text-xs font-semibold text-slate-200">✦ Craft Universal Essence</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Costs {UNIVERSAL_ESSENCE_COST_PER_TYPE} of each elemental essence per craft.
-              </p>
-            </div>
-
-            {/* Ingredient chips — all 12 types */}
-            <div className="flex flex-wrap gap-1">
-              {ALL_FLOWER_TYPES.map((type) => {
-                const cfg  = FLOWER_TYPES[type];
-                const have = (state.essences ?? []).find((e) => e.type === type)?.amount ?? 0;
-                const need = UNIVERSAL_ESSENCE_COST_PER_TYPE * craftQty;
-                const ok   = have >= need;
-                return (
-                  <span
-                    key={type}
-                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[10px] font-medium
-                      ${ok ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}` : "bg-border/10 border-border/40 text-muted-foreground/50"}`}
-                  >
-                    {cfg.emoji} {have}/{need}
-                  </span>
-                );
-              })}
-            </div>
-
-            {/* Craftable count + qty selector + button */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">
-                Craftable: <span className="text-slate-200 font-semibold">{universalCraftable}</span>
-              </span>
-              <div className="flex items-center gap-1 ml-auto">
-                <button
-                  onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
-                  disabled={craftQty <= 1}
-                  className="w-6 h-6 rounded-md border border-border text-muted-foreground text-xs flex items-center justify-center hover:border-primary/50 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  −
-                </button>
-                <span className="w-6 text-center text-xs font-mono text-foreground">{craftQty}</span>
-                <button
-                  onClick={() => setCraftQty((q) => Math.min(universalCraftable, q + 1))}
-                  disabled={craftQty >= universalCraftable}
-                  className="w-6 h-6 rounded-md border border-border text-muted-foreground text-xs flex items-center justify-center hover:border-primary/50 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  +
-                </button>
-                <button
-                  onClick={() => setCraftQty(universalCraftable)}
-                  disabled={craftQty >= universalCraftable || universalCraftable === 0}
-                  className="ml-1 text-[9px] text-primary font-semibold disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Max
-                </button>
-              </div>
-              <button
-                onClick={handleCraftUniversal}
-                disabled={crafting || universalCraftable === 0}
-                className="px-3 py-1.5 rounded-lg bg-slate-200/10 border border-slate-200/25 text-slate-200 text-xs font-semibold hover:bg-slate-200/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {crafting ? "Crafting…" : "Craft"}
-              </button>
-            </div>
-
-            {craftError && (
-              <p className="text-[10px] text-destructive">{craftError}</p>
-            )}
-          </div>
 
           <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
             <p className="text-xs font-semibold mb-2">Essence Yield Table</p>
@@ -1706,25 +1596,6 @@ export function AlchemyTab() {
             <div>
               <p className="text-sm font-bold text-primary mb-0.5">Crafted!</p>
               <p className="text-[11px] text-muted-foreground">{itemCraftSuccess.name}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Universal Essence craft success toast ── */}
-      {craftSuccess && (
-        <div
-          className={`
-            fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none
-            transition-all duration-400
-            ${craftSuccessVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
-          `}
-        >
-          <div className="flex items-center gap-3 bg-card border border-slate-200/30 rounded-2xl px-5 py-4 shadow-2xl min-w-64">
-            <span className="text-2xl">✦</span>
-            <div>
-              <p className="text-sm font-bold text-slate-200 mb-0.5">Crafted!</p>
-              <p className="text-[11px] text-muted-foreground">+{craftSuccess} Universal Essence</p>
             </div>
           </div>
         </div>
