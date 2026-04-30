@@ -113,19 +113,19 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
 
   // ── Bloom Burst (I–V) — growth ────────────────────────────────────────────
   { id: "bloom_burst_1", name: "Bloom Burst I",   emoji: "🌱", tier: 1, rarity: "rare",      category: "growth",
-    description: `Advances a ${r(1)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(1)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "essence", amounts: [{ type: "solar", amount: 4 }, { type: "zephyr", amount: 4 }] } },
   { id: "bloom_burst_2", name: "Bloom Burst II",  emoji: "🌱", tier: 2, rarity: "legendary", category: "growth",
-    description: `Advances a ${r(2)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(2)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "consumable", id: "bloom_burst_1", quantity: 2 } },
   { id: "bloom_burst_3", name: "Bloom Burst III", emoji: "🌱", tier: 3, rarity: "mythic",    category: "growth",
-    description: `Advances a ${r(3)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(3)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "consumable", id: "bloom_burst_2", quantity: 2 } },
   { id: "bloom_burst_4", name: "Bloom Burst IV",  emoji: "🌱", tier: 4, rarity: "exalted",   category: "growth",
-    description: `Advances a ${r(4)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(4)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "consumable", id: "bloom_burst_3", quantity: 2 } },
   { id: "bloom_burst_5", name: "Bloom Burst V",   emoji: "🌱", tier: 5, rarity: "prismatic", category: "growth",
-    description: `Advances a ${r(5)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(5)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "consumable", id: "bloom_burst_4", quantity: 2 } },
 
   // ── Heirloom Charm (I–V) — growth ────────────────────────────────────────
