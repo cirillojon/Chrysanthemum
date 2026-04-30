@@ -147,6 +147,8 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       // Phase 3 — time-gated crafting queue
       craftingQueue:        (data.crafting_queue        as GameState["craftingQueue"])  ?? [],
       craftingSlotCount:    (data.crafting_slot_count   as number)                      ?? 1,
+      // Phase 5a — active speed-boost consumables (pruned of expired entries on offline tick)
+      activeBoosts:         (data.active_boosts         as GameState["activeBoosts"])   ?? [],
     } as GameState;
   } catch {
     return null;
@@ -189,6 +191,8 @@ export async function saveToCloud(
     // Phase 3 — time-gated crafting queue
     crafting_queue:         state.craftingQueue     ?? [],
     crafting_slot_count:    state.craftingSlotCount ?? 1,
+    // Phase 5a — active speed-boost consumables
+    active_boosts:          state.activeBoosts      ?? [],
     updated_at:             newUpdatedAt,
   };
 

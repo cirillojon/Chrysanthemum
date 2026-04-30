@@ -5,6 +5,7 @@ import {
   getCurrentStage,
   getStageProgress,
   getPassiveGrowthMultiplier,
+  getBoostMultiplier,
   harvestPlant,
 } from "../store/gameStore";
 import { getFlower, RARITY_CONFIG, MUTATIONS, type MutationType } from "../data/flowers";
@@ -85,7 +86,11 @@ export function PlotTile({
   const gear   = plot.gear;
   const species = plant ? getFlower(plant.speciesId) : null;
 
-  const gearMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
+  // gearMult already folds Verdant Rush in so PlotTooltip downstream gets the
+  // combined multiplier without needing a separate prop for activeBoosts.
+  const passiveMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
+  const boostMult   = plant ? getBoostMultiplier(getState().activeBoosts, "growth", now) : 1.0;
+  const gearMult    = passiveMult * boostMult;
   const stage    = plant ? getCurrentStage(plant, now, activeWeather, gearMult) : null;
   const progress = plant ? getStageProgress(plant, now, activeWeather, gearMult) : 0;
 

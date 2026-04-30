@@ -5,7 +5,7 @@ import type { MutationType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, applyEclipseTonic, type InventoryItem } from "../store/gameStore";
-import { edgeSellAll, edgeUseEclipseTonic, edgeAlchemyCraftSeed } from "../lib/edgeFunctions";
+import { edgeSellAll, edgeUseEclipseTonic, edgeAlchemyCraftSeed, edgeActivateBoost } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";
@@ -26,6 +26,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const [tab,                 setTab]                 = useState<Tab>(0);
   const [usingEclipse,        setUsingEclipse]        = useState<string | null>(null);
   const [openingPouch,        setOpeningPouch]        = useState<string | null>(null);
+  const [activatingBoost,     setActivatingBoost]     = useState<string | null>(null);
   const [pouchResult,         setPouchResult]         = useState<{ speciesId: string } | null>(null);
   const [pouchResultVisible,  setPouchResultVisible]  = useState(false);
 
@@ -134,6 +135,28 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       // silent — pouch stays in inventory on failure
     } finally {
       setOpeningPouch(null);
+    }
+  }
+
+  // Phase 5a — activate a Verdant Rush / Forge Haste / Resonance Draft.
+  // No optimistic state because the duration depends on consumable tier and we
+  // already trust the server response. Roundtrip is one quick edge call.
+  async function handleActivateBoost(consumableId: ConsumableId) {
+    if (activatingBoost) return;
+    setActivatingBoost(consumableId);
+    try {
+      const res = await edgeActivateBoost(consumableId);
+      const cur = getState();
+      update({
+        ...cur,
+        consumables:     res.consumables,
+        activeBoosts:    res.activeBoosts,
+        serverUpdatedAt: res.serverUpdatedAt,
+      });
+    } catch {
+      // silent — server rejected (e.g. CAS miss); the consumable wasn't deducted
+    } finally {
+      setActivatingBoost(null);
     }
   }
 
@@ -259,8 +282,11 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
               lastEclipseTonic={state.lastEclipseTonic}
               usingEclipse={usingEclipse}
               openingPouch={openingPouch}
+              activatingBoost={activatingBoost}
+              activeBoosts={state.activeBoosts ?? []}
               onUseEclipse={handleUseEclipseTonic}
               onOpenPouch={handleOpenPouch}
+              onActivateBoost={handleActivateBoost}
             />
           ) : (
             <EmptyTab emoji="🧪" message="No consumables" hint="Craft consumables in the Alchemy lab." />
@@ -393,12 +419,16 @@ interface ConsumablesTabProps {
   lastEclipseTonic: string | null;
   usingEclipse:     string | null;
   openingPouch:     string | null;
+  activatingBoost:  string | null;
+  activeBoosts:     { type: string; expiresAt: string; consumableId: string }[];
   onUseEclipse:     (id: ConsumableId) => void;
   onOpenPouch:      (id: ConsumableId) => void;
+  onActivateBoost:  (id: ConsumableId) => void;
 }
 
 function ConsumablesTabContent({
-  consumables, lastEclipseTonic, usingEclipse, openingPouch, onUseEclipse, onOpenPouch,
+  consumables, lastEclipseTonic, usingEclipse, openingPouch, activatingBoost, activeBoosts,
+  onUseEclipse, onOpenPouch, onActivateBoost,
 }: ConsumablesTabProps) {
   const today = new Date().toISOString().slice(0, 10);
   const alreadyUsedToday = lastEclipseTonic === today;
@@ -412,9 +442,21 @@ function ConsumablesTabContent({
         const context   = USAGE_CONTEXT[prefix] ?? "Use contextually";
         const isEclipse = c.id.startsWith("eclipse_tonic_");
         const isPouch   = c.id.startsWith("seed_pouch_");
+        const isBoost   = recipe.category === "speed_boost";
         const busy      = usingEclipse === c.id;
         const usedToday = isEclipse && alreadyUsedToday;
         const opening   = openingPouch === c.id;
+        const activating = activatingBoost === c.id;
+
+        // Surface "currently active" if a boost of this type is live
+        const boostType =
+          c.id.startsWith("verdant_rush_")    ? "growth"     :
+          c.id.startsWith("forge_haste_")     ? "craft"      :
+          c.id.startsWith("resonance_draft_") ? "attunement" : null;
+        const nowMs       = Date.now();
+        const liveBoost   = boostType
+          ? activeBoosts.find((b) => b.type === boostType && new Date(b.expiresAt).getTime() > nowMs)
+          : null;
 
         return (
           <div
@@ -462,6 +504,27 @@ function ConsumablesTabContent({
                 >
                   {opening ? "Opening…" : "🎁 Open"}
                 </button>
+              )}
+
+              {isBoost && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => onActivateBoost(c.id as ConsumableId)}
+                    disabled={!!activatingBoost}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                      activating
+                        ? "border-primary/40 bg-primary/20 text-primary"
+                        : "border-primary/50 text-primary hover:bg-primary/10"
+                    } disabled:opacity-40 disabled:cursor-not-allowed`}
+                  >
+                    {activating ? "Activating…" : "✨ Activate"}
+                  </button>
+                  {liveBoost && (
+                    <span className="text-[10px] text-amber-400">
+                      Active until {new Date(liveBoost.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>

@@ -19,6 +19,21 @@ import {
   edgeUpgradeCraftingSlots,
 } from "../lib/edgeFunctions";
 import type { GameState, CraftingQueueEntry } from "../store/gameStore";
+import { getBoostMultiplier } from "../store/gameStore";
+
+// ── Forge Haste / Resonance Draft (Phase 5a) ───────────────────────────────────
+// If the relevant boost is active when a craft starts, halve its durationMs.
+// Mirrors the server-side logic in craft-start/index.ts.
+function applyCraftBoost(
+  rawDurationMs: number,
+  kind:          "gear" | "consumable" | "attunement",
+  state:         GameState,
+  now:           number,
+): number {
+  const boostType = kind === "attunement" ? "attunement" : "craft";
+  const mult      = getBoostMultiplier(state.activeBoosts, boostType, now);
+  return mult > 1 ? Math.max(1, Math.floor(rawDurationMs / mult)) : rawDurationMs;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -658,7 +673,7 @@ export function CraftingTab() {
           kind:            "gear",
           outputId:        gearType,
           startedAt:       new Date().toISOString(),
-          durationMs:      recipe.durationMs,
+          durationMs:      applyCraftBoost(recipe.durationMs, "gear", cur, Date.now()),
           ...(essenceCosts.length    && { essenceCosts }),
           ...(gearCosts.length       && { gearCosts }),
           ...(consumableCosts.length && { consumableCosts }),
@@ -724,7 +739,10 @@ export function CraftingTab() {
           kind:      "consumable",
           outputId:  id,
           startedAt: new Date().toISOString(),
-          durationMs,
+          // Boost only adjusts the optimistic display — server halves its own
+          // copy when it sees an active boost, and we read durationMs back from
+          // res.craftingQueue when the server responds.
+          durationMs: applyCraftBoost(durationMs, "consumable", cur, Date.now()),
           ...(essenceCosts.length    && { essenceCosts }),
           ...(consumableCosts.length && { consumableCosts }),
         };
@@ -785,7 +803,8 @@ export function CraftingTab() {
           kind:      "attunement",
           outputId,
           startedAt: new Date().toISOString(),
-          durationMs,
+          // Boost only adjusts the optimistic display; server halves its own copy.
+          durationMs: applyCraftBoost(durationMs, "attunement", cur, Date.now()),
           ...(essenceCosts.length    && { essenceCosts }),
           ...(attunementCosts.length && { attunementCosts }),
         };

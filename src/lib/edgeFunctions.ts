@@ -571,3 +571,18 @@ export function edgeUseSlotLock(slotId: string) {
   return callEdge<UseConsumableResult>("use-consumable", { action: "slot_lock", consumableId: "slot_lock", slotId });
 }
 
+// ── Active speed-boost consumables (Phase 5a) ─────────────────────────────────
+
+export interface ActivateBoostResult {
+  ok:              true;
+  consumables:     GameState["consumables"];
+  activeBoosts:    GameState["activeBoosts"];
+  serverUpdatedAt: string;
+}
+
+/** Activate a speed_boost consumable (Verdant Rush, Forge Haste, Resonance Draft).
+ *  Server validates the consumable id, deducts one, and records the boost expiry. */
+export function edgeActivateBoost(consumableId: string) {
+  return callEdge<ActivateBoostResult>("use-consumable", { action: "activate_boost", consumableId });
+}
+

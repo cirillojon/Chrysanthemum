@@ -17,6 +17,7 @@ import { GiftNotification } from "./components/GiftNotification";
 import { Codex } from "./components/Codex";
 import { Botany } from "./components/Botany";
 import { CraftingTab } from "./components/CraftingTab";
+import { ActiveBoostsHUD } from "./components/ActiveBoostsHUD";
 import { MarketplaceTab } from "./components/MarketplaceTab";
 import { WeatherOverlay } from "./components/WeatherOverlay";
 import { DevWeatherPanel } from "./components/DevWeatherPanel";
@@ -479,6 +480,7 @@ function AppInner() {
                 period={dayPeriod}
               />
             </button>
+            <ActiveBoostsHUD activeBoosts={state.activeBoosts} />
             <span className="text-sm font-mono">🟡 {state.coins.toLocaleString()}</span>
             {!authLoading && (
               user ? (

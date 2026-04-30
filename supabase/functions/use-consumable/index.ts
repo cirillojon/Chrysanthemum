@@ -34,6 +34,31 @@ const ECLIPSE_ADVANCE_HOURS: Record<string, number> = {
   eclipse_tonic_4: 8, eclipse_tonic_5: 16,
 };
 
+// ── Speed-boost consumables (mirrors src/data/consumables.ts) ────────────────
+// Tier → duration in ms: I=30min, II=1h, III=3h, IV=8h, V=24h
+const BOOST_DURATIONS_MS: Record<number, number> = {
+  1: 30 * 60 * 1_000,
+  2:  1 * 60 * 60 * 1_000,
+  3:  3 * 60 * 60 * 1_000,
+  4:  8 * 60 * 60 * 1_000,
+  5: 24 * 60 * 60 * 1_000,
+};
+
+type BoostType = "growth" | "craft" | "attunement";
+
+function consumableToBoostType(id: string): BoostType | null {
+  if (id.startsWith("verdant_rush_"))    return "growth";
+  if (id.startsWith("forge_haste_"))     return "craft";
+  if (id.startsWith("resonance_draft_")) return "attunement";
+  return null;
+}
+
+interface ActiveBoost {
+  type:         BoostType;
+  expiresAt:    string;  // ISO
+  consumableId: string;
+}
+
 // ── Mutation-boost vials: consumable prefix → mutation type ──────────────────
 
 const VIAL_MUTATION: Record<string, string> = {
@@ -292,7 +317,7 @@ Deno.serve(async (req: Request) => {
     if (!action)       return err("action is required");
     if (!consumableId) return err("consumableId is required");
 
-    const VALID_ACTIONS = ["apply_to_plant", "eclipse_tonic", "wind_shear", "slot_lock"];
+    const VALID_ACTIONS = ["apply_to_plant", "eclipse_tonic", "wind_shear", "slot_lock", "activate_boost"];
     if (!VALID_ACTIONS.includes(action)) return err(`Unknown action: ${action}`);
 
     const supabaseAdmin = createClient(
@@ -307,6 +332,7 @@ Deno.serve(async (req: Request) => {
       eclipse_tonic:  ", grid, last_eclipse_tonic",
       wind_shear:     ", last_wind_shear_used",
       slot_lock:      ", supply_shop",
+      activate_boost: ", active_boosts",
     } as Record<string, string>;
 
     const selectCols = `consumables, updated_at${extraCols[action] ?? ""}`;
@@ -615,6 +641,71 @@ Deno.serve(async (req: Request) => {
         ok: true,
         supplyShop: newSupplyShop,
         consumables: newConsumables,
+        serverUpdatedAt: ud.updated_at,
+      });
+    }
+
+    // ── Action: activate_boost ────────────────────────────────────────────────
+    // Verdant Rush / Forge Haste / Resonance Draft (speed_boost category).
+    // Deducts 1 of the consumable, adds an ActiveBoost entry with expiresAt =
+    // now + tier duration. If a boost of the same type is already active, the
+    // new entry takes precedence — the old one is dropped (no stacking past 2×).
+
+    if (action === "activate_boost") {
+      const boostType = consumableToBoostType(consumableId);
+      if (!boostType) return err(`Not a speed-boost consumable: ${consumableId}`);
+
+      const tier = extractTier(consumableId);
+      if (tier === null) return err("Speed-boost consumable missing tier");
+      const durationMs = BOOST_DURATIONS_MS[tier];
+      if (!durationMs) return err(`Unknown tier ${tier}`);
+
+      const newConsumables = deductConsumable(consumables, consumableId);
+      if (!newConsumables) return err("Not enough consumables");
+
+      const now      = Date.now();
+      const existing = (save.active_boosts ?? []) as ActiveBoost[];
+
+      // Drop expired entries
+      const live = existing.filter((b) => new Date(b.expiresAt).getTime() > now);
+
+      // For same-type entry: extend timer to whichever expiry is later.
+      // (Using a 24h V on top of an active 30min I shouldn't shrink the timer.)
+      const sameType         = live.find((b) => b.type === boostType);
+      const existingExpiryMs = sameType ? new Date(sameType.expiresAt).getTime() : 0;
+      const newExpiryMs      = Math.max(existingExpiryMs, now + durationMs);
+
+      const otherTypes = live.filter((b) => b.type !== boostType);
+      const newBoost: ActiveBoost = {
+        type:         boostType,
+        expiresAt:    new Date(newExpiryMs).toISOString(),
+        consumableId,
+      };
+      const newActiveBoosts = [...otherTypes, newBoost];
+
+      const { data: ud, error: ue } = await supabaseAdmin
+        .from("game_saves")
+        .update({
+          consumables:   newConsumables,
+          active_boosts: newActiveBoosts,
+          updated_at:    new Date().toISOString(),
+        })
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
+
+      if (ue || !ud) return err("Save conflict — please retry", 409);
+
+      void supabaseAdmin.from("action_log").insert({
+        user_id: userId, action: "use_consumable",
+        payload: { action, consumableId, boostType, durationMs },
+      });
+
+      return json({
+        ok:              true,
+        consumables:     newConsumables,
+        activeBoosts:    newActiveBoosts,
         serverUpdatedAt: ud.updated_at,
       });
     }
