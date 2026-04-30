@@ -304,7 +304,11 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
         optimistic,
         async () => {
           try {
-            return await edgePlantSeed(row, col, speciesId);
+            await edgePlantSeed(row, col, speciesId);
+            // Discard the response's grid + inventory — merging would clobber
+            // any concurrent optimistic plants (auto-planter, Plant All) that
+            // are mid-flight. Matches the auto-planter's pattern.
+            return {};
           } catch (e) {
             // "Plot already occupied" = client/server desync (server has a plant
             // here that we don't see). Reload cloud state instead of letting the
@@ -460,7 +464,14 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
         next,
         async () => {
           try {
-            return await edgePlantSeed(row, col, speciesId);
+            await edgePlantSeed(row, col, speciesId);
+            // Discard grid + inventory from the response — perform()'s success-
+            // merge would otherwise replace the client's grid with the server's,
+            // which only contains plants up to THIS call's write moment. Sibling
+            // Plant All entries that were optimistically placed but haven't
+            // hit the server yet would briefly disappear, then reappear as
+            // each later call returns. Matches the auto-planter's pattern.
+            return {};
           } catch (e) {
             // "Plot already occupied" means the server thinks this plot is
             // planted but our client thinks it's empty — a desync, usually from

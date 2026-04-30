@@ -22,6 +22,7 @@ export const CHANGELOGS: ChangelogEntry[] = [
       { type: "fixed", text: "Plant All no longer wipes out plots that successfully planted when a single seed fails — each plot is now an independent action with its own rollback, so a failed plant never erases the rest of the batch" },
       { type: "fixed", text: "Plant All no longer clobbers concurrent harvests/sells that land during the planting chain" },
       { type: "fixed", text: "Stuck 'Plot already occupied' errors on planting (after spamming Plant All on slow connections) — when the server reports a plot we don't see as occupied, the client now reloads cloud state automatically to resolve the desync, instead of leaving the player unable to plant on that tile" },
+      { type: "fixed", text: "Plant All no longer briefly shows all plants then makes them disappear and re-plant one at a time — each plant-seed response no longer overwrites the client's grid with the server's partial view, so optimistic plants from sibling calls stay visible until everything settles" },
     ],
   },
   {
