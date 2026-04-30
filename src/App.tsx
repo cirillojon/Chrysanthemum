@@ -205,28 +205,37 @@ function AppInner() {
 
   // ── Codex unseen entries (badge + red dot + "newly discovered" labels) ───
   // Tracks WHICH entries the user has acknowledged by opening the card —
-  // unseen = state.discovered − acknowledged. Initialised at mount with all
-  // existing discoveries marked seen so old players don't see a 50+ badge.
+  // unseen = state.discovered − acknowledged. Persisted to localStorage so
+  // the "newly discovered" indicators survive page reloads / new builds.
   // The set persists across tab navigations (badge sticks until user opens
   // the specific entry's card) and is invalidated on sign-out.
+  const codexAckKey = useMemo(
+    () => `chrysanthemum_codex_ack_${user?.id ?? "guest"}`,
+    [user?.id],
+  );
   const [acknowledgedCodex, setAcknowledgedCodex] = useState<Set<string> | null>(null);
 
-  // First time we see state.discovered, treat everything already there as seen.
+  // Bootstrap the set: prefer the persisted localStorage copy; fall back to
+  // `state.discovered` (one-time bootstrap so first-time users of this feature
+  // don't see a giant badge on existing discoveries). Re-runs on user change.
   useEffect(() => {
-    if (acknowledgedCodex === null) {
-      setAcknowledgedCodex(new Set(state.discovered ?? []));
-    }
-  }, [acknowledgedCodex, state.discovered]);
+    try {
+      const raw = localStorage.getItem(codexAckKey);
+      if (raw) {
+        setAcknowledgedCodex(new Set(JSON.parse(raw) as string[]));
+        return;
+      }
+    } catch { /* malformed JSON — fall through to bootstrap */ }
+    setAcknowledgedCodex(new Set(state.discovered ?? []));
+  }, [codexAckKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Reset on user change (sign-in / sign-out / account swap) so the new user
-  // doesn't inherit the previous account's "seen" state.
-  const codexUserRef = useRef<string | null | undefined>(undefined);
+  // Persist the set whenever it changes. Skip the initial null state.
   useEffect(() => {
-    if (codexUserRef.current !== user?.id) {
-      codexUserRef.current = user?.id ?? null;
-      setAcknowledgedCodex(null);
-    }
-  }, [user?.id]);
+    if (acknowledgedCodex === null) return;
+    try {
+      localStorage.setItem(codexAckKey, JSON.stringify([...acknowledgedCodex]));
+    } catch { /* storage full — silently ignore, not a critical write */ }
+  }, [acknowledgedCodex, codexAckKey]);
 
   const unseenCodex = useMemo<Set<string>>(() => {
     if (!acknowledgedCodex) return new Set();
