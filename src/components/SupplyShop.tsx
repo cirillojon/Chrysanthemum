@@ -155,7 +155,8 @@ function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolea
 
   // ── Fertilizer card ────────────────────────────────────────────────────────
   if (slot.isFertilizer && slot.fertilizerType) {
-    const fert = FERTILIZERS[slot.fertilizerType];
+    const fert      = FERTILIZERS[slot.fertilizerType];
+    const fertRarity = RARITY_CONFIG[fert.rarity];
     return (
       <div
         className={`
@@ -167,8 +168,8 @@ function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolea
       >
         <div className="flex items-start justify-between">
           <span className="text-3xl">{fert.emoji}</span>
-          <span className={`text-xs font-mono px-2 py-0.5 rounded-full border ${fert.color} border-current bg-current/10`}>
-            Fertilizer
+          <span className={`text-xs font-mono px-2 py-0.5 rounded-full border ${fertRarity.color} border-current bg-current/10`}>
+            {fertRarity.label}
           </span>
         </div>
         <div>

@@ -312,7 +312,8 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           fertilizers.length > 0 || gearItems.length > 0 ? (
             <>
               {fertilizers.map((f) => {
-                const fert = FERTILIZERS[f.type];
+                const fert       = FERTILIZERS[f.type];
+                const fertRarity = RARITY_CONFIG[fert.rarity];
                 return (
                   <div
                     key={f.type}
@@ -322,12 +323,12 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-sm">{fert.name}</h3>
-                        <span className={`text-xs font-mono ${fert.color}`}>
-                          {fert.speedMultiplier}× speed
+                        <span className={`text-xs font-mono ${fertRarity.color}`}>
+                          {fertRarity.label}
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        ×{f.quantity} · Apply to a growing plant in the garden
+                        ×{f.quantity} · Speeds growth by <span className="text-foreground font-semibold">{fert.speedMultiplier}×</span> · Apply to a growing plant
                       </p>
                     </div>
                   </div>
