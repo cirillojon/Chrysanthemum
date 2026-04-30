@@ -133,6 +133,9 @@ interface Plant {
   // Consumable flags — set by use-consumable, consumed at harvest
   mutationBlocked?: boolean;
   mutationBoost?:   { mutation: string; multiplier: number };
+  // Magnifying Glass — once true, this plant's mutation state is locked and
+  // no further weather/sprinkler/fan rolls should change it.
+  revealed?:        boolean;
 }
 interface Gear { gearType: string; placedAt: number; }
 interface Plot { id: string; plant?: Plant | null; gear?: Gear | null; }
@@ -312,6 +315,10 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
 
   const next = grid.map(row => row.map(plot => {
     if (!plot.plant || !plot.plant.bloomedAt) return plot;
+
+    // ── Magnifying Glass guard ───────────────────────────────────────────────
+    // Once revealed, the plant's mutation state is locked across reloads.
+    if (plot.plant.revealed) return plot;
 
     // ── Purity Vial guard ────────────────────────────────────────────────────
     // mutationBlocked plants are shielded from all weather mutations.

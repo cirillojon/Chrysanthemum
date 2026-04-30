@@ -112,6 +112,8 @@ export function PlotTooltip({
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
     // Heirloom Charm only works on bloomed plants
     if (c.id.startsWith("heirloom_charm_") && !isBloomed) return false;
+    // Magnifying Glass: hide once the plant is already revealed
+    if (c.id.startsWith("magnifying_glass_") && plant.revealed) return false;
     return true;
   });
 
@@ -245,16 +247,27 @@ export function PlotTooltip({
           {isBloomed && (
             <p className="text-primary font-semibold">Ready to harvest!</p>
           )}
-          {isBloomed && plant.mutation && (() => {
+          {/* Mutation display — surfaces both bloomed plants and revealed (locked) plants. */}
+          {(isBloomed || plant.revealed) && plant.mutation && (() => {
             const mut = MUTATIONS[plant.mutation];
             return (
               <p className={`text-[10px] font-mono ${mut.color}`}>
-                {mut.emoji} {mut.name} · ×{mut.valueMultiplier} value
+                {plant.revealed && "🔎 "}{mut.emoji} {mut.name} · ×{mut.valueMultiplier} value
+                {plant.revealed && !isBloomed && " (locked)"}
               </p>
             );
           })()}
-          {isBloomed && plant.mutation === null && (
+          {/* Bloomed-only "No mutation" message — preserves original undefined-vs-null distinction. */}
+          {isBloomed && !plant.revealed && plant.mutation === null && (
             <p className="text-[10px] text-muted-foreground font-mono">No mutation</p>
+          )}
+          {/* Revealed-but-not-bloomed: explicit "No mutation (locked)" for null OR undefined. */}
+          {plant.revealed && !isBloomed && plant.mutation == null && (
+            <p className="text-[10px] text-muted-foreground font-mono">🔎 No mutation (locked)</p>
+          )}
+          {/* Revealed AND bloomed with no mutation (== null catches both null and undefined). */}
+          {plant.revealed && isBloomed && plant.mutation == null && (
+            <p className="text-[10px] text-muted-foreground font-mono">🔎 No mutation (locked)</p>
           )}
           {/* Active consumable flags */}
           {plant.heirloomActive && (
