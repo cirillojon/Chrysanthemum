@@ -357,12 +357,17 @@ function QueueEntryRow({
           </button>
         </div>
       </div>
-      {/* Progress bar — width jumps on the 1s tick (no transition needed at that scale).
-          Only the colour (amber → green) transitions so "done" feels smooth. */}
+      {/* Progress bar — `now` ticks every 1s in discrete steps, so without a
+          width transition the bar visibly stutters on short (<5 min) crafts.
+          A 1s linear width transition smooths it out between ticks; the amber
+          → green colour fade keeps its faster 500ms ease. */}
       <div className="w-full h-1.5 rounded-full bg-card/60 overflow-hidden">
         <div
-          className={`h-full rounded-full transition-colors duration-500 ${isDone ? "bg-green-500" : "bg-amber-500"}`}
-          style={{ width: `${progress * 100}%` }}
+          className={`h-full rounded-full ${isDone ? "bg-green-500" : "bg-amber-500"}`}
+          style={{
+            width: `${progress * 100}%`,
+            transition: "width 1s linear, background-color 500ms",
+          }}
         />
       </div>
     </div>
