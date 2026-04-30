@@ -4,7 +4,7 @@ import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
-import { sellFlower, applyEclipseTonic, type InventoryItem } from "../store/gameStore";
+import { sellFlower, rollbackSellAll, applyEclipseTonic, type InventoryItem } from "../store/gameStore";
 import { edgeSellAll, edgeUseEclipseTonic, edgeAlchemyCraftSeed, edgeActivateBoost } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
@@ -71,19 +71,21 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       quantity:  i.quantity,
     }));
 
+    // Snapshot the coin delta so the rollback can subtract exactly what was
+    // optimistically added — without touching coins gained from concurrent
+    // actions (a harvest sell card, a marketplace claim, etc.).
+    const earned = optimistic.coins - current.coins;
+
     // Single atomic server write — one CAS check, no partial-failure rollback risk.
     // perform() auto-merges the SellAllResult (coins + inventory) on success.
+    // On failure, rollbackSellAll undoes only the sold blooms + earnings against
+    // whatever state looks like AT rollback time, leaving concurrent harvests
+    // and other changes intact.
     await perform(
       optimistic,
       () => edgeSellAll(items),
       undefined,
-      {
-        rollback: (c) => ({
-          ...c,
-          coins:     current.coins,
-          inventory: current.inventory,
-        }),
-      }
+      { rollback: (c) => rollbackSellAll(c, items, earned) }
     );
   }
 
