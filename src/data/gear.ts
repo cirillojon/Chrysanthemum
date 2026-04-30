@@ -1,4 +1,4 @@
-import type { Rarity, MutationType } from "./flowers";
+import type { Rarity, FlowerType, MutationType } from "./flowers";
 import type { FertilizerType } from "./upgrades";
 
 // ── Gear type identifiers ──────────────────────────────────────────────────
@@ -64,6 +64,60 @@ export interface PlacedGear {
 /** How long a cropsticks cross-breed takes (1 hour). Mirrored in the
  *  tick-offline-gardens cron. */
 export const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1000;
+
+// ── Cropsticks cross-breed recipes ─────────────────────────────────────────
+// Mirrors the RECIPES array in apply-infuser and tick-offline-gardens edge functions.
+// Used client-side to immediately show the progress bar after infusing a plant.
+
+export type CrossbreedRecipe = {
+  id:        string;
+  tier:      number;
+  typeA:     FlowerType;
+  typeB:     FlowerType;
+  minRarity: Rarity;
+};
+
+const RARITY_TIER_IDX: Record<Rarity, number> = {
+  common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+};
+
+export const CROPSTICKS_RECIPES: CrossbreedRecipe[] = [
+  // Tier 1 (rare minimum)
+  { id: "blaze+frost",    tier: 1, typeA: "blaze",   typeB: "frost",   minRarity: "rare"      },
+  { id: "lunar+solar",    tier: 1, typeA: "lunar",   typeB: "solar",   minRarity: "rare"      },
+  { id: "tide+storm",     tier: 1, typeA: "tide",    typeB: "storm",   minRarity: "rare"      },
+  { id: "grove+shadow",   tier: 1, typeA: "grove",   typeB: "shadow",  minRarity: "rare"      },
+  { id: "arcane+stellar", tier: 1, typeA: "arcane",  typeB: "stellar", minRarity: "rare"      },
+  { id: "fairy+zephyr",   tier: 1, typeA: "fairy",   typeB: "zephyr",  minRarity: "rare"      },
+  // Tier 2 (legendary minimum)
+  { id: "blaze+solar",    tier: 2, typeA: "blaze",   typeB: "solar",   minRarity: "legendary" },
+  { id: "lunar+tide",     tier: 2, typeA: "lunar",   typeB: "tide",    minRarity: "legendary" },
+  { id: "grove+zephyr",   tier: 2, typeA: "grove",   typeB: "zephyr",  minRarity: "legendary" },
+  { id: "frost+arcane",   tier: 2, typeA: "frost",   typeB: "arcane",  minRarity: "legendary" },
+  // Tier 3 (mythic minimum)
+  { id: "arcane+shadow",  tier: 3, typeA: "arcane",  typeB: "shadow",  minRarity: "mythic"    },
+  { id: "stellar+zephyr", tier: 3, typeA: "stellar", typeB: "zephyr",  minRarity: "mythic"    },
+  // Tier 4 (exalted minimum)
+  { id: "arcane+stellar", tier: 4, typeA: "arcane",  typeB: "stellar", minRarity: "exalted"   },
+];
+
+/** Returns the highest-tier matching recipe for two flower type/rarity combos,
+ *  or null if no valid recipe exists. Mirrors findBestRecipe in the edge functions. */
+export function findCrossbreedRecipe(
+  typesA: FlowerType[], rarityA: Rarity,
+  typesB: FlowerType[], rarityB: Rarity,
+): CrossbreedRecipe | null {
+  let best: CrossbreedRecipe | null = null;
+  for (const r of CROPSTICKS_RECIPES) {
+    if ((RARITY_TIER_IDX[rarityA] ?? -1) < RARITY_TIER_IDX[r.minRarity]) continue;
+    if ((RARITY_TIER_IDX[rarityB] ?? -1) < RARITY_TIER_IDX[r.minRarity]) continue;
+    const fwd = typesA.includes(r.typeA) && typesB.includes(r.typeB);
+    const rev = typesA.includes(r.typeB) && typesB.includes(r.typeA);
+    if (!fwd && !rev) continue;
+    if (!best || r.tier > best.tier) best = r;
+  }
+  return best;
+}
 
 // ── Player's gear supply inventory ────────────────────────────────────────
 

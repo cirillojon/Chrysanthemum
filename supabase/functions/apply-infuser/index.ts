@@ -22,9 +22,9 @@ const json = (body: unknown, status = 200) =>
 
 const err = (msg: string, status = 400) => json({ error: msg }, status);
 
-// ── Species → rarity lookup ───────────────────────────────────────────────────
-// Mirrors src/data/flowers.ts + the recipe-only species in cross-breed/index.ts.
-// Only rarity matters here — types are not needed for infuser matching.
+// ── Species data ─────────────────────────────────────────────────────────────
+// Mirrors src/data/flowers.ts + recipe-only species.
+// Rarity used for infuser matching; types used for cropsticks pair detection.
 
 const SPECIES_RARITY: Record<string, string> = {
   // Common
@@ -89,6 +89,165 @@ const SPECIES_RARITY: Record<string, string> = {
   eternal_heart: "prismatic",nova_bloom: "prismatic",   princess_blossom: "prismatic",
   the_first_bloom: "prismatic",
 };
+
+// ── Species → types (rare+ only — the species that can hold an infuser) ───────
+
+const SPECIES_TYPES: Record<string, string[]> = {
+  // Rare
+  flashpetal:      ["storm"],              rushwillow:      ["zephyr","tide"],
+  sweetheart_lily: ["fairy"],              glassbell:       ["arcane","stellar"],
+  stormcaller:     ["storm"],              lavender:        ["fairy","arcane"],
+  amber_crown:     ["solar","blaze"],      peach_blossom:   ["grove","fairy"],
+  foxglove:        ["shadow","arcane"],    butterbloom:     ["fairy","zephyr"],
+  peony:           ["fairy"],              tidebloom:       ["tide"],
+  starweave:       ["stellar","arcane"],   wisteria:        ["fairy","arcane"],
+  dreamcup:        ["fairy","arcane"],     coralbell:       ["tide"],
+  foxfire:         ["blaze","arcane"],     bird_of_paradise:["zephyr","solar"],
+  solarbell:       ["solar"],              moonpetal:       ["lunar"],
+  orchid:          ["fairy","arcane"],     duskrose:        ["lunar","shadow"],
+  passionflower:   ["arcane","storm"],     glasswing:       ["arcane"],
+  mirror_orchid:   ["arcane","stellar"],   stargazer_lily:  ["stellar"],
+  prism_lily:      ["arcane","stellar"],   dusk_orchid:     ["lunar","solar"],
+  // Legendary
+  firstbloom:      ["solar","fairy"],      haste_lily:      ["zephyr","storm"],
+  verdant_crown:   ["grove","fairy"],      ironwood_bloom:  ["grove"],
+  sundial:         ["solar","arcane"],     lotus:           ["tide","arcane"],
+  candy_blossom:   ["fairy"],              prismbark:       ["grove","arcane"],
+  dolphinia:       ["tide"],               ghost_orchid:    ["shadow","arcane"],
+  nestbloom:       ["grove","fairy"],      black_rose:      ["shadow"],
+  pumpkin_blossom: ["shadow","grove"],     starburst_lily:  ["stellar","storm"],
+  sporebloom:      ["grove","shadow"],     fire_lily:       ["blaze"],
+  stargazer:       ["stellar"],            fullmoon_bloom:  ["lunar"],
+  ice_crown:       ["frost"],              diamond_bloom:   ["frost","arcane"],
+  oracle_eye:      ["arcane","shadow"],    halfmoon_bloom:  ["lunar"],
+  aurora_bloom:    ["stellar","arcane"],   mirrorpetal:     ["arcane","stellar"],
+  emberspark:      ["blaze","storm"],
+  // Legendary recipe-only (Tier 1 outputs — can be Tier 2 inputs)
+  phoenix_lily:    ["blaze","frost"],      eclipse_bloom:   ["lunar","solar"],
+  tempest_orchid:  ["tide","storm"],       blightmantle:    ["grove","shadow"],
+  cosmosbloom:     ["arcane","stellar"],   dreamgust:       ["fairy","zephyr"],
+  // Mythic
+  blink_rose:      ["arcane","shadow"],    dawnfire:        ["solar","blaze"],
+  moonflower:      ["lunar"],              jellybloom:      ["tide","arcane"],
+  celestial_bloom: ["stellar"],            void_blossom:    ["shadow","arcane"],
+  seraph_wing:     ["zephyr","fairy"],     solar_rose:      ["solar"],
+  nebula_drift:    ["stellar","arcane"],   superbloom:      ["storm","stellar"],
+  wanderbloom:     ["zephyr","arcane"],    chrysanthemum:   ["arcane","stellar","fairy"],
+  // Mythic recipe-only (Tier 2 outputs — can be Tier 3 inputs)
+  solarburst:      ["blaze","solar"],      tidalune:        ["lunar","tide"],
+  whisperleaf:     ["grove","zephyr"],     crystalmind:     ["frost","arcane"],
+  // Exalted
+  umbral_bloom:    ["shadow","lunar"],     obsidian_rose:   ["shadow"],
+  duskmantle:      ["shadow","lunar"],     graveweb:        ["shadow"],
+  nightwing:       ["shadow","zephyr"],    ashenveil:       ["shadow","blaze"],
+  voidfire:        ["shadow","blaze"],
+  // Exalted recipe-only (Tier 3 outputs — can be Tier 4 inputs)
+  void_chrysalis:  ["arcane"],             starloom:        ["stellar"],
+  // Prismatic
+  dreambloom:      ["fairy","arcane"],     fairy_blossom:   ["fairy"],
+  lovebind:        ["fairy","arcane"],     eternal_heart:   ["fairy","solar"],
+  nova_bloom:      ["stellar","storm","blaze"],
+  princess_blossom:["fairy","arcane"],     the_first_bloom: ["arcane","stellar"],
+};
+
+// ── Cross-breed recipes + matching (mirrors tick-offline-gardens) ─────────────
+
+const RARITY_IDX: Record<string, number> = {
+  common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+};
+
+type Recipe = { id: string; tier: number; typeA: string; typeB: string; minRarity: string };
+const RECIPES: Recipe[] = [
+  { id: "blaze+frost",       tier: 1, typeA: "blaze",   typeB: "frost",   minRarity: "rare"      },
+  { id: "lunar+solar",       tier: 1, typeA: "lunar",   typeB: "solar",   minRarity: "rare"      },
+  { id: "tide+storm",        tier: 1, typeA: "tide",    typeB: "storm",   minRarity: "rare"      },
+  { id: "grove+shadow",      tier: 1, typeA: "grove",   typeB: "shadow",  minRarity: "rare"      },
+  { id: "arcane+stellar",    tier: 1, typeA: "arcane",  typeB: "stellar", minRarity: "rare"      },
+  { id: "fairy+zephyr",      tier: 1, typeA: "fairy",   typeB: "zephyr",  minRarity: "rare"      },
+  { id: "blaze+solar",       tier: 2, typeA: "blaze",   typeB: "solar",   minRarity: "legendary" },
+  { id: "lunar+tide",        tier: 2, typeA: "lunar",   typeB: "tide",    minRarity: "legendary" },
+  { id: "grove+zephyr",      tier: 2, typeA: "grove",   typeB: "zephyr",  minRarity: "legendary" },
+  { id: "frost+arcane",      tier: 2, typeA: "frost",   typeB: "arcane",  minRarity: "legendary" },
+  { id: "arcane+shadow-t3",  tier: 3, typeA: "arcane",  typeB: "shadow",  minRarity: "mythic"    },
+  { id: "stellar+zephyr-t3", tier: 3, typeA: "stellar", typeB: "zephyr",  minRarity: "mythic"    },
+  { id: "arcane+stellar-t4", tier: 4, typeA: "arcane",  typeB: "stellar", minRarity: "exalted"   },
+];
+
+function findBestRecipe(
+  typesA: string[], rarityA: string,
+  typesB: string[], rarityB: string,
+): Recipe | null {
+  let best: Recipe | null = null;
+  for (const recipe of RECIPES) {
+    if ((RARITY_IDX[rarityA] ?? -1) < RARITY_IDX[recipe.minRarity]) continue;
+    if ((RARITY_IDX[rarityB] ?? -1) < RARITY_IDX[recipe.minRarity]) continue;
+    const fwd = typesA.includes(recipe.typeA) && typesB.includes(recipe.typeB);
+    const rev = typesA.includes(recipe.typeB) && typesB.includes(recipe.typeA);
+    if (!fwd && !rev) continue;
+    if (!best || recipe.tier > best.tier) best = recipe;
+  }
+  return best;
+}
+
+const OFFSETS_CROSS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+/** After infusing (row, col), scan its 4 neighbours for cropsticks gear.
+ *  For each idle cropsticks, check all its cardinal neighbours for a valid
+ *  infused+bloomed pair. If found, stamp crossbreedStartedAt immediately so
+ *  the client sees the progress bar without waiting for the offline cron. */
+function tryStartCropsticksCycles(
+  workingGrid: GridCell[][],
+  plantRow: number,
+  plantCol: number,
+  now: number,
+): GridCell[][] {
+  let g = workingGrid;
+  for (const [dr, dc] of OFFSETS_CROSS) {
+    const cr = plantRow + dr;
+    const cc = plantCol + dc;
+    const cropCell = g[cr]?.[cc];
+    if (!cropCell?.gear) continue;
+    const gear = cropCell.gear as { gearType: string; crossbreedStartedAt?: number };
+    if (gear.gearType !== "cropsticks") continue;
+    if (gear.crossbreedStartedAt != null) continue; // already running
+
+    // Collect this cropsticks' infused+bloomed neighbours
+    type N = { types: string[]; rarity: string };
+    const nbrs: N[] = [];
+    for (const [or, oc] of OFFSETS_CROSS) {
+      const nr = cr + or;
+      const nc = cc + oc;
+      const nCell = g[nr]?.[nc];
+      if (!nCell?.plant || !nCell.plant.bloomedAt || !nCell.plant.infused) continue;
+      const nRarity = SPECIES_RARITY[nCell.plant.speciesId];
+      const nTypes  = SPECIES_TYPES[nCell.plant.speciesId];
+      if (!nRarity || !nTypes) continue;
+      nbrs.push({ types: nTypes, rarity: nRarity });
+    }
+
+    // Check all pairs for a valid recipe
+    let found = false;
+    outer: for (let i = 0; i < nbrs.length; i++) {
+      for (let j = i + 1; j < nbrs.length; j++) {
+        if (findBestRecipe(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity)) {
+          found = true;
+          break outer;
+        }
+      }
+    }
+    if (!found) continue;
+
+    // Stamp crossbreedStartedAt on this cropsticks
+    g = g.map((r, ri) =>
+      r.map((p, ci) =>
+        ri === cr && ci === cc && p.gear
+          ? { ...p, gear: { ...p.gear, crossbreedStartedAt: now } }
+          : p
+      )
+    );
+  }
+  return g;
+}
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -197,11 +356,15 @@ Deno.serve(async (req: Request) => {
       .map((i) => i.rarity === usedRarity ? { ...i, quantity: i.quantity - 1 } : i)
       .filter((i) => i.quantity > 0);
 
+    // Immediately start any adjacent cropsticks that now have a valid infused pair,
+    // so the client sees the progress bar right away without waiting for the cron.
+    const activeGrid = tryStartCropsticksCycles(newGrid, row, col, Date.now());
+
     // ── CAS write ─────────────────────────────────────────────────────────────
 
     const { data: ud, error: ue } = await supabaseAdmin
       .from("game_saves")
-      .update({ grid: newGrid, infusers: newInfusers, updated_at: new Date().toISOString() })
+      .update({ grid: activeGrid, infusers: newInfusers, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .eq("updated_at", priorUpdatedAt)
       .select("updated_at")
@@ -215,7 +378,7 @@ Deno.serve(async (req: Request) => {
       result:  { remainingInfusers: infuserItem.quantity - 1 },
     });
 
-    return json({ ok: true, grid: newGrid, infusers: newInfusers, serverUpdatedAt: ud.updated_at });
+    return json({ ok: true, grid: activeGrid, infusers: newInfusers, serverUpdatedAt: ud.updated_at });
 
   } catch (e) {
     console.error("apply-infuser error:", e);

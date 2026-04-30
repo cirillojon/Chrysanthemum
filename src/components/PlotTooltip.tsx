@@ -6,6 +6,7 @@ import {
   applyFertilizer,
   removePlant,
   applyPlantConsumable,
+  stampCropsticksCycles,
 } from "../store/gameStore";
 import { edgeApplyFertilizer, edgeRemovePlant, edgeApplyAttunement, edgeApplyPlantConsumable, edgeUnpinPlant } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
@@ -140,7 +141,11 @@ export function PlotTooltip({
     try {
       const res = await edgeApplyAttunement(row, col);
       const cur = getState();
-      update({ ...cur, grid: res.grid, infusers: res.infusers, serverUpdatedAt: res.serverUpdatedAt });
+      // Client-side fallback: stamp crossbreedStartedAt on adjacent cropsticks that
+      // now have a valid infused pair, in case the edge function didn't (e.g. older
+      // deployment or network quirk). Skips cells already stamped by the server.
+      const activeGrid = stampCropsticksCycles(res.grid, row, col, Date.now());
+      update({ ...cur, grid: activeGrid, infusers: res.infusers, serverUpdatedAt: res.serverUpdatedAt });
       onClose?.();
     } catch {
       // Server function not yet active or error — silently re-enable button

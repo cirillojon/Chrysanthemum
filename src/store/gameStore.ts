@@ -1,4 +1,4 @@
-import { FLOWERS, MUTATIONS, getFlower, type GrowthStage, type MutationType, type Rarity } from "../data/flowers";
+import { FLOWERS, MUTATIONS, getFlower, type FlowerType, type GrowthStage, type MutationType, type Rarity } from "../data/flowers";
 import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplaceSlotUpgrade, getNextSupplySlotUpgrade, DEFAULT_SHOP_SLOTS, DEFAULT_SUPPLY_SLOTS, type FertilizerType } from "../data/upgrades";
 import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
@@ -17,7 +17,7 @@ import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
   isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
-  rollComposterFertilizer,
+  rollComposterFertilizer, findCrossbreedRecipe,
   SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
   type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
 } from "../data/gear";
@@ -869,6 +869,69 @@ export function pruneExpiredGear(grid: Plot[][], now: number): Plot[][] {
     })
   );
   return changed ? newGrid : grid;
+}
+
+/** Client-side mirror of tryStartCropsticksCycles in the apply-infuser edge function.
+ *
+ * After infusing the plant at (row, col), scans its 4 cardinal neighbours for idle
+ * cropsticks gear.  For each idle cropsticks whose cardinal neighbours now include
+ * at least two infused+bloomed plants with a valid cross-breed recipe, stamps
+ * crossbreedStartedAt = now so the progress bar appears immediately without waiting
+ * for the offline cron.
+ *
+ * Cells that already have crossbreedStartedAt set are skipped (no double-start). */
+export function stampCropsticksCycles(
+  grid: Plot[][],
+  row:  number,
+  col:  number,
+  now:  number,
+): Plot[][] {
+  const OFFSETS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  let g = grid;
+
+  for (const [dr, dc] of OFFSETS) {
+    const cr = row + dr;
+    const cc = col + dc;
+    const cropCell = g[cr]?.[cc];
+    if (!cropCell?.gear) continue;
+    if (cropCell.gear.gearType !== "cropsticks") continue;
+    if (cropCell.gear.crossbreedStartedAt != null) continue; // already running
+
+    // Collect infused+bloomed cardinal neighbours of this cropsticks
+    type N = { types: FlowerType[]; rarity: Rarity };
+    const nbrs: N[] = [];
+    for (const [or, oc] of OFFSETS) {
+      const nr = cr + or;
+      const nc = cc + oc;
+      const nPlant = g[nr]?.[nc]?.plant;
+      if (!nPlant || !nPlant.bloomedAt || !nPlant.infused) continue;
+      const sp = getFlower(nPlant.speciesId);
+      if (!sp) continue;
+      nbrs.push({ types: sp.types as FlowerType[], rarity: sp.rarity });
+    }
+
+    // Need at least 2 neighbours to form a pair
+    let found = false;
+    outer: for (let i = 0; i < nbrs.length; i++) {
+      for (let j = i + 1; j < nbrs.length; j++) {
+        if (findCrossbreedRecipe(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity)) {
+          found = true;
+          break outer;
+        }
+      }
+    }
+    if (!found) continue;
+
+    // Stamp crossbreedStartedAt on this cropsticks cell
+    g = g.map((r, ri) =>
+      r.map((p, ci) =>
+        ri === cr && ci === cc && p.gear
+          ? { ...p, gear: { ...p.gear, crossbreedStartedAt: now } }
+          : p
+      )
+    );
+  }
+  return g;
 }
 
 // ── Growth calculation ─────────────────────────────────────────────────────
