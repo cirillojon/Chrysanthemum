@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { FLOWERS, MUTATIONS, RARITY_CONFIG } from "../data/flowers";
-import type { Rarity, MutationType } from "../data/flowers";
+import { FLOWERS, MUTATIONS, RARITY_CONFIG, FLOWER_TYPES } from "../data/flowers";
+import type { Rarity, MutationType, FlowerType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import {
   getTotalCodexEntries,
@@ -25,6 +25,9 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
 
   const [filterRarity, setFilterRarity] = useState<FilterRarity>("all");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  // Multi-select type filter (OR semantics — show flowers with ANY selected
+  // type). Empty array = "all types". Mirrors the Alchemy → Sacrifice filter.
+  const [activeTypes, setActiveTypes]   = useState<FlowerType[]>([]);
   const [search, setSearch]             = useState("");
   const [expandedId, setExpandedId]     = useState<string | null>(null);
 
@@ -35,6 +38,12 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
   const filtered = useMemo(() => {
     return FLOWERS.filter((f) => {
       if (filterRarity !== "all" && f.rarity !== filterRarity) return false;
+
+      // Type filter — OR semantics: a flower passes if it has any selected type.
+      // Empty selection = no filter.
+      if (activeTypes.length > 0 && !f.types.some((t) => activeTypes.includes(t))) {
+        return false;
+      }
 
       const { found: specFound } = getSpeciesCompletion(discovered, f.id);
       if (filterStatus === "discovered"   && specFound === 0) return false;
@@ -50,7 +59,7 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
 
       return true;
     });
-  }, [discovered, filterRarity, filterStatus, search]);
+  }, [discovered, filterRarity, filterStatus, activeTypes, search]);
 
   if (compact) {
     return <CompactCodex discovered={discovered} total={total} found={found} pct={pct} />;
@@ -134,6 +143,44 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
               {r === "all" ? "All" : r}
             </button>
           ))}
+        </div>
+
+        {/* Type filter — OR multi-select. Click to toggle a type; empty = all */}
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setActiveTypes([])}
+            className={`
+              px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all
+              ${activeTypes.length === 0
+                ? "bg-foreground/10 border border-foreground/40 text-foreground"
+                : "bg-card/60 border border-border text-muted-foreground hover:border-foreground/30"
+              }
+            `}
+          >
+            All types
+          </button>
+          {(Object.keys(FLOWER_TYPES) as FlowerType[]).map((t) => {
+            const cfg      = FLOWER_TYPES[t];
+            const isActive = activeTypes.includes(t);
+            return (
+              <button
+                key={t}
+                onClick={() => setActiveTypes((prev) =>
+                  isActive ? prev.filter((x) => x !== t) : [...prev, t]
+                )}
+                className={`
+                  inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all
+                  ${isActive
+                    ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color} border`
+                    : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                  }
+                `}
+              >
+                <span>{cfg.emoji}</span>
+                <span>{cfg.name}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Status filter */}
