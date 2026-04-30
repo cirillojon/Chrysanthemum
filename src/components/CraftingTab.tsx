@@ -354,6 +354,55 @@ function QueueEntryRow({
   );
 }
 
+// ── Empty slot placeholder ───────────────────────────────────────────────────
+// Rendered for each unused crafting slot so the "Crafting Slots" panel is
+// always visible at the same height regardless of queue length. Keeps the user
+// oriented to how many slots they have and which are free.
+function EmptySlotRow() {
+  return (
+    <div className="rounded-xl border border-dashed border-border/60 bg-card/20 px-3 py-2 min-h-[3rem] flex items-center gap-2">
+      <span className="text-lg leading-none shrink-0 opacity-30">⚒️</span>
+      <p className="text-xs text-muted-foreground italic">Empty slot</p>
+    </div>
+  );
+}
+
+// ── Upgrade-as-next-slot row ────────────────────────────────────────────────
+// Renders as a "ghost" slot directly after the player's current slots — clicking
+// it spends the upgrade cost to permanently unlock the next slot.
+function UpgradeSlotRow({
+  upgrade, onUpgrade, disabled, upgrading,
+}: {
+  upgrade:   { slots: number; cost: number };
+  onUpgrade: () => void;
+  disabled:  boolean;
+  upgrading: boolean;
+}) {
+  return (
+    <button
+      onClick={onUpgrade}
+      disabled={disabled}
+      title={`Unlock crafting slot ${upgrade.slots}`}
+      className="
+        w-full rounded-xl border border-dashed border-amber-600/40 bg-amber-500/5
+        hover:bg-amber-500/10 hover:border-amber-400/60
+        px-3 py-2 min-h-[3rem] flex items-center justify-between gap-2
+        transition-all disabled:opacity-40 disabled:cursor-not-allowed
+      "
+    >
+      <div className="flex items-center gap-2">
+        <span className="text-lg leading-none shrink-0 opacity-70">➕</span>
+        <p className="text-xs font-semibold text-amber-400">
+          {upgrading ? "Unlocking…" : `Unlock slot ${upgrade.slots}`}
+        </p>
+      </div>
+      <span className="text-[11px] font-mono text-amber-400">
+        {upgrade.cost.toLocaleString()} 🪙
+      </span>
+    </button>
+  );
+}
+
 // ── Popup ─────────────────────────────────────────────────────────────────────
 
 function CraftPopup({
@@ -1000,7 +1049,9 @@ export function CraftingTab() {
       {/* ── Window ──────────────────────────────────────────────────────────── */}
       <div className="rounded-2xl overflow-hidden border border-amber-800/30 shadow-lg shadow-amber-950/20 max-w-[33rem] mx-auto w-full">
 
-        {/* Window header */}
+        {/* Window header — slot counter + upgrade button moved into the
+            "Crafting Slots" panel below to colocate the metadata with the
+            slots themselves. The header now just frames the tab. */}
         <div className="px-4 py-3 bg-gradient-to-r from-amber-950/50 to-card/80 border-b border-amber-800/25 flex items-center justify-between gap-3">
           <div>
             <h2 className="font-bold text-base text-foreground">⚒️ Craft</h2>
@@ -1011,32 +1062,24 @@ export function CraftingTab() {
               }
             </p>
           </div>
-          {/* Crafting slot counter + upgrade */}
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <p className="text-[10px] text-muted-foreground">
-              Slots: <span className={`font-semibold ${slotsAvailable ? "text-foreground" : "text-amber-400"}`}>{slotsInUse}/{craftingSlotCount}</span>
-            </p>
-            {nextSlotUpgrade && (
-              <button
-                onClick={handleUpgradeSlots}
-                disabled={state.coins < nextSlotUpgrade.cost || upgradingSlots}
-                className="text-[10px] px-2 py-0.5 rounded-md border border-amber-600/40 text-amber-400 hover:border-amber-400/60 hover:bg-amber-500/10 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                title={`Unlock slot ${nextSlotUpgrade.slots}`}
-              >
-                {upgradingSlots ? "…" : `+1 Slot · ${nextSlotUpgrade.cost.toLocaleString()}🪙`}
-              </button>
-            )}
-            {!nextSlotUpgrade && craftingSlotCount >= 6 && (
-              <p className="text-[10px] text-amber-400/60">Max slots</p>
-            )}
-          </div>
+          {!nextSlotUpgrade && craftingSlotCount >= 6 && (
+            <p className="text-[10px] text-amber-400/60 shrink-0">Max slots</p>
+          )}
         </div>
 
-        {/* ── Crafting queue panel ─────────────────────────────────────────── */}
-        {craftingQueue.length > 0 && (
-          <div className="px-4 py-3 bg-card/50 border-b border-amber-800/25 space-y-2">
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest">Crafting Queue</p>
-            {craftingQueue.map((qEntry) => (
+        {/* ── Crafting slots panel ─────────────────────────────────────────── */}
+        {/*  Always visible (even when empty) so the user can see how many slots
+            they have at a glance. The next-tier upgrade is rendered directly
+            below as a "ghost slot" with a purchase button — combines the
+            "show empty slots" + "move upgrade button to be the next slot"
+            polish items. */}
+        <div className="px-4 py-3 bg-card/50 border-b border-amber-800/25 space-y-2">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+            Crafting Slots <span className="text-muted-foreground/60">· {slotsInUse}/{craftingSlotCount}</span>
+          </p>
+          {Array.from({ length: craftingSlotCount }).map((_, i) => {
+            const qEntry = craftingQueue[i];
+            return qEntry ? (
               <QueueEntryRow
                 key={qEntry.id}
                 entry={qEntry}
@@ -1046,9 +1089,19 @@ export function CraftingTab() {
                 isCollecting={collectingId === qEntry.id}
                 isCanceling={cancelingId === qEntry.id}
               />
-            ))}
-          </div>
-        )}
+            ) : (
+              <EmptySlotRow key={`empty-${i}`} />
+            );
+          })}
+          {nextSlotUpgrade && (
+            <UpgradeSlotRow
+              upgrade={nextSlotUpgrade}
+              onUpgrade={handleUpgradeSlots}
+              disabled={state.coins < nextSlotUpgrade.cost || upgradingSlots}
+              upgrading={upgradingSlots}
+            />
+          )}
+        </div>
 
         {/* Category filter */}
         <div className="px-4 pt-3 pb-2 bg-card/60 flex gap-2">
