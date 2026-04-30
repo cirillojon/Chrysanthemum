@@ -372,12 +372,12 @@ export function PlotTooltip({
               </button>
             )}
 
-            {/* Attunement section — only when bloomed (it operates on bloomed plants) */}
+            {/* Infuser section — only when bloomed (it operates on bloomed plants) */}
             {isBloomed && (
               plant.infused ? (
                 <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  <span>🥢</span>
-                  <span className="text-[10px] text-emerald-400 font-medium">Attuned · awaiting Cropsticks</span>
+                  <span>💉</span>
+                  <span className="text-[10px] text-emerald-400 font-medium">Infused · awaiting Cropsticks</span>
                 </div>
               ) : matchingAttunement ? (
                 <button
@@ -385,10 +385,10 @@ export function PlotTooltip({
                   disabled={applyingAttunement}
                   className="w-full py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
                 >
-                  {applyingAttunement ? "Applying…" : `🥢 Attune ×${matchingAttunement.quantity}`}
+                  {applyingAttunement ? "Applying…" : `💉 Infuse ×${matchingAttunement.quantity}`}
                 </button>
               ) : (
-                <p className="text-[10px] text-muted-foreground text-center">No matching Attunement Crystal in inventory</p>
+                <p className="text-[10px] text-muted-foreground text-center">No matching Infuser in inventory</p>
               )
             )}
           </div>

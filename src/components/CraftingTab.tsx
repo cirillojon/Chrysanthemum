@@ -184,12 +184,13 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
       });
     }
 
-    // Attunement crystals
+    // Infusion crystals (cross-breeding) — internal kind stays "attunement"
+    // for save-format stability, but the UI label is now "Infusion".
     for (const recipe of ATTUNEMENT_RECIPES) {
       entries.push({
         id:          `attunement:${recipe.tier}`,
         kind:        "attunement",
-        emoji:       "🥢",
+        emoji:       "💉",
         name:        recipe.name,
         rarity:      recipe.rarity,
         description: recipe.description,
@@ -636,7 +637,7 @@ function CraftPopup({
         const need = cost.quantity * quantity;
         ingredientsSection = (
           <div className="space-y-1">
-            <IngredientRow emoji="🥢" label={`Attunement ${toRoman(cost.tier)}`} need={need} have={have} enough={have >= need} {...rarityChip(prevRarity)} />
+            <IngredientRow emoji="💉" label={`Infuser ${toRoman(cost.tier)}`} need={need} have={have} enough={have >= need} {...rarityChip(prevRarity)} />
           </div>
         );
       }

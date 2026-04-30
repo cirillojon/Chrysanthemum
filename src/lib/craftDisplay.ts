@@ -27,5 +27,5 @@ export function queueEntryDisplay(entry: CraftingQueueEntry): { emoji: string; n
   }
   // attunement — outputId is the rarity string
   const capitalized = outputId.charAt(0).toUpperCase() + outputId.slice(1);
-  return { emoji: "🥢", name: `${capitalized} Attunement` };
+  return { emoji: "💉", name: `${capitalized} Infuser` };
 }

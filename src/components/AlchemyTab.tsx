@@ -151,7 +151,7 @@ function CostChips({
     const ok   = have >= (cost.quantity ?? 2);
     return (
       <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}>
-        🥢 ×{cost.quantity} Attunement {ROMAN[cost.tier as 1 | 2 | 3 | 4 | 5]}
+        💉 ×{cost.quantity} Infuser {ROMAN[cost.tier as 1 | 2 | 3 | 4 | 5]}
         <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
       </span>
     );
@@ -350,7 +350,7 @@ function gearSubCat(gearType: GearType): GearSubCat {
 }
 
 const CRAFT_CATEGORIES: { id: ConsumableCategory | "attunement" | "gear"; label: string; emoji: string }[] = [
-  { id: "attunement",     label: "Attunements",     emoji: "🥢" },
+  { id: "attunement",     label: "Infusers",        emoji: "💉" },
   { id: "gear",           label: "Gear",             emoji: "⚒️" },
   { id: "growth",         label: "Growth",          emoji: "🌱" },
   { id: "mutation_boost", label: "Mutation Boosts",  emoji: "🧪" },

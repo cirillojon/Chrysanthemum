@@ -338,7 +338,7 @@ export function PlotTile({
         `}
         title={
           isBloomed
-            ? `${species?.name} — ${plant.infused ? "Attuned 🥢 · " : ""}Tap for options`
+            ? `${species?.name} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
             : open
             ? "Click to close"
             : `${species?.name} — Click for options`
@@ -439,7 +439,7 @@ export function PlotTile({
             {isUnderGrowLamp && <span className="text-[9px]" title="Under grow lamp">💡</span>}
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
-            {plant.infused && <span className="text-[9px]" title="Attuned — cross-breeding active">🥢</span>}
+            {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
             {plant.revealed && <span className="text-[9px]" title="Revealed — mutation locked in">🔎</span>}
           </div>
         )}

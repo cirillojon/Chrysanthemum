@@ -129,14 +129,18 @@ export function consumableShopPrice(recipe: ConsumableRecipe): number {
   return Math.round(base * mult);
 }
 
-// ── Attunement Crystal recipes ─────────────────────────────────────────────
+// ── Infuser recipes (cross-breeding consumable) ──────────────────────────
+// Internal kind stays "attunement" for save-format stability — only the
+// user-facing names + descriptions changed in the v2.3 rename. The Alchemy
+// Attune view (essence-mutation) is the *other* mechanic that keeps the
+// "Attunement" name.
 
 export const ATTUNEMENT_RECIPES: AttunementRecipe[] = [
-  { tier: 1, rarity: "rare",      name: "Attunement I",   description: "Apply to a Rare bloomed flower to mark it as a cross-breeding participant.",      cost: { kind: "essence",    amounts: [{ type: "universal", amount: 2 }] } },
-  { tier: 2, rarity: "legendary", name: "Attunement II",  description: "Apply to a Legendary bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 1, quantity: 2 } },
-  { tier: 3, rarity: "mythic",    name: "Attunement III", description: "Apply to a Mythic bloomed flower to mark it as a cross-breeding participant.",    cost: { kind: "attunement", tier: 2, quantity: 2 } },
-  { tier: 4, rarity: "exalted",   name: "Attunement IV",  description: "Apply to an Exalted bloomed flower to mark it as a cross-breeding participant.",  cost: { kind: "attunement", tier: 3, quantity: 2 } },
-  { tier: 5, rarity: "prismatic", name: "Attunement V",   description: "Apply to a Prismatic bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 4, quantity: 2 } },
+  { tier: 1, rarity: "rare",      name: "Infuser I",   description: "Apply to a Rare bloomed flower to mark it as a cross-breeding participant.",      cost: { kind: "essence",    amounts: [{ type: "universal", amount: 2 }] } },
+  { tier: 2, rarity: "legendary", name: "Infuser II",  description: "Apply to a Legendary bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 1, quantity: 2 } },
+  { tier: 3, rarity: "mythic",    name: "Infuser III", description: "Apply to a Mythic bloomed flower to mark it as a cross-breeding participant.",    cost: { kind: "attunement", tier: 2, quantity: 2 } },
+  { tier: 4, rarity: "exalted",   name: "Infuser IV",  description: "Apply to an Exalted bloomed flower to mark it as a cross-breeding participant.",  cost: { kind: "attunement", tier: 3, quantity: 2 } },
+  { tier: 5, rarity: "prismatic", name: "Infuser V",   description: "Apply to a Prismatic bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 4, quantity: 2 } },
 ];
 
 // ── Consumable recipes ─────────────────────────────────────────────────────
