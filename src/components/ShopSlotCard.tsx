@@ -315,7 +315,7 @@ export function ShopSlotCard({ slot }: Props) {
       )}
 
       <div className="flex items-start justify-between">
-        <span className="text-4xl">{species.emoji.bloom}</span>
+        <span className="text-4xl">{isNew ? "❓" : species.emoji.bloom}</span>
         <span
           className={`text-xs font-mono font-medium px-2 py-0.5 rounded-full border ${rarity.color} border-current bg-current/10`}
         >
@@ -324,10 +324,12 @@ export function ShopSlotCard({ slot }: Props) {
       </div>
 
       <div>
-        <h3 className="font-semibold text-sm">{species.name}</h3>
-        <FlowerTypeBadges types={species.types} className="mt-1.5" />
+        <h3 className="font-semibold text-sm">{isNew ? "???" : species.name}</h3>
+        {!isNew && <FlowerTypeBadges types={species.types} className="mt-1.5" />}
         <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-          {species.description}
+          {isNew
+            ? "Undiscovered seed — buy and grow it to reveal the species."
+            : species.description}
         </p>
       </div>
 
