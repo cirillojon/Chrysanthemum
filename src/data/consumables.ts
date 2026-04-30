@@ -20,6 +20,7 @@ export type ConsumableId =
   | "seed_pouch_1"     | "seed_pouch_2"     | "seed_pouch_3"     | "seed_pouch_4"     | "seed_pouch_5"
   | `seed_pouch_${"blaze"|"tide"|"grove"|"frost"|"storm"|"lunar"|"solar"|"fairy"|"shadow"|"arcane"|"stellar"|"zephyr"}_${1|2|3|4|5}`
   | "magnifying_glass_1" | "magnifying_glass_2" | "magnifying_glass_3" | "magnifying_glass_4" | "magnifying_glass_5"
+  | "garden_pin_1"       | "garden_pin_2"       | "garden_pin_3"       | "garden_pin_4"       | "garden_pin_5"
   | "verdant_rush_1"     | "verdant_rush_2"     | "verdant_rush_3"     | "verdant_rush_4"     | "verdant_rush_5"
   | "forge_haste_1"      | "forge_haste_2"      | "forge_haste_3"      | "forge_haste_4"      | "forge_haste_5"
   | "resonance_draft_1"  | "resonance_draft_2"  | "resonance_draft_3"  | "resonance_draft_4"  | "resonance_draft_5";
@@ -314,6 +315,25 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   { id: "magnifying_glass_5", name: "Magnifying Glass V",   emoji: "🔍", tier: 5, rarity: "prismatic", category: "utility",
     description: `Reveals all details of a ${r(5)} plot — species, mutation, and exact growth progress.`,
     cost: { kind: "consumable", id: "magnifying_glass_4", quantity: 2 } },
+
+  // ── Garden Pin (I–V) — utility ───────────────────────────────────────────
+  // Pins a single plot — when bloomed, the plant is shielded from auto-harvest
+  // (Harvest Bell, Auto-Planter). Player can still manually harvest at will.
+  { id: "garden_pin_1", name: "Garden Pin I",   emoji: "📌", tier: 1, rarity: "rare",      category: "utility",
+    description: `Pins a ${r(1)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
+    cost: { kind: "essence", amounts: [{ type: "arcane", amount: 3 }, { type: "fairy", amount: 3 }] } },
+  { id: "garden_pin_2", name: "Garden Pin II",  emoji: "📌", tier: 2, rarity: "legendary", category: "utility",
+    description: `Pins a ${r(2)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
+    cost: { kind: "consumable", id: "garden_pin_1", quantity: 2 } },
+  { id: "garden_pin_3", name: "Garden Pin III", emoji: "📌", tier: 3, rarity: "mythic",    category: "utility",
+    description: `Pins a ${r(3)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
+    cost: { kind: "consumable", id: "garden_pin_2", quantity: 2 } },
+  { id: "garden_pin_4", name: "Garden Pin IV",  emoji: "📌", tier: 4, rarity: "exalted",   category: "utility",
+    description: `Pins a ${r(4)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
+    cost: { kind: "consumable", id: "garden_pin_3", quantity: 2 } },
+  { id: "garden_pin_5", name: "Garden Pin V",   emoji: "📌", tier: 5, rarity: "prismatic", category: "utility",
+    description: `Pins a ${r(5)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
+    cost: { kind: "consumable", id: "garden_pin_4", quantity: 2 } },
 
   // ── Verdant Rush (I–V) — speed_boost ─────────────────────────────────────
   // Doubles growth speed for all garden plots for a limited time.

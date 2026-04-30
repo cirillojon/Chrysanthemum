@@ -136,6 +136,9 @@ interface Plant {
   // Magnifying Glass — once true, this plant's mutation state is locked and
   // no further weather/sprinkler/fan rolls should change it.
   revealed?:        boolean;
+  // Garden Pin — when bloomed, plant is shielded from auto-harvest (Harvest
+  // Bell, Auto-Planter). Manual harvest still works.
+  pinned?:          boolean;
 }
 interface Gear { gearType: string; placedAt: number; }
 interface Plot { id: string; plant?: Plant | null; gear?: Gear | null; }
@@ -218,6 +221,8 @@ function runHarvestBells(save: Save, now: number): Save {
         if (!targetPlot.plant.bloomedAt || now - targetPlot.plant.bloomedAt < 5_000) continue;
         // Skip infused plants — they are reserved for Cropsticks cross-breeding
         if (targetPlot.plant.infused) continue;
+        // Garden Pin shields plants from auto-harvest (manual harvest still works)
+        if (targetPlot.plant.pinned) continue;
 
         const { speciesId, mutation } = targetPlot.plant;
         const mut = mutation ?? null;

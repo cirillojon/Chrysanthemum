@@ -468,10 +468,19 @@ export function PlotTile({
           </div>
         )}
 
-        {/* Bloom pulse dot — top-right */}
-        {isBloomed && (
+        {/* Top-right indicator:
+            - pinned plant → 📌 (overrides the bloom pulse, since auto-harvest is shielded)
+            - bloomed unpinned → pulsing circle to draw attention to harvest-ready state */}
+        {plant.pinned ? (
+          <span
+            className="absolute -top-1 -right-1 text-sm leading-none"
+            title="Pinned — auto-harvest blocked"
+          >
+            📌
+          </span>
+        ) : isBloomed ? (
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full animate-pulse" />
-        )}
+        ) : null}
 
         {/* Mutation emoji — bottom-right */}
         {settings.plotMutationIndicator && isBloomed && (plant as PlantedFlower).mutation && (
@@ -480,8 +489,8 @@ export function PlotTile({
           </span>
         )}
 
-        {/* Tooltip-open indicator */}
-        {open && !isBloomed && (
+        {/* Tooltip-open indicator (suppressed when pinned — 📌 occupies the slot) */}
+        {open && !isBloomed && !plant.pinned && (
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary/60 rounded-full" />
         )}
 

@@ -232,6 +232,7 @@ type PlantData = {
   forcedMutation?:  string;
   mutationBoost?:   { mutation: string; multiplier: number };
   revealed?:        boolean;
+  pinned?:          boolean;
   [key: string]: unknown;
 };
 type GridCell = { id: string; plant: PlantData | null; gear?: unknown };
@@ -455,6 +456,13 @@ Deno.serve(async (req: Request) => {
       } else if (consumableId.startsWith("magnifying_glass_")) {
         if (plant.revealed) return err("This plant is already revealed");
         updatedPlant = { ...updatedPlant, revealed: true };
+
+      // ── Garden Pin ──────────────────────────────────────────────────────────
+      // Shields the plot from auto-harvest (Harvest Bell, Auto-Planter).
+      // Manual harvest still works. Permanent for the life of the plant.
+      } else if (consumableId.startsWith("garden_pin_")) {
+        if (plant.pinned) return err("This plant is already pinned");
+        updatedPlant = { ...updatedPlant, pinned: true };
 
       // ── Mutation-boost vials (Frost, Ember, Storm, Moon, Golden, Rainbow) ───
       } else {

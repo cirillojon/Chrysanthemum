@@ -114,6 +114,8 @@ export function PlotTooltip({
     if (c.id.startsWith("heirloom_charm_") && !isBloomed) return false;
     // Magnifying Glass: hide once the plant is already revealed
     if (c.id.startsWith("magnifying_glass_") && plant.revealed) return false;
+    // Garden Pin: hide once the plant is already pinned
+    if (c.id.startsWith("garden_pin_") && plant.pinned) return false;
     return true;
   });
 

@@ -51,6 +51,9 @@ export interface PlantedFlower {
   /** Set by Magnifying Glass — locks in whatever mutation state the plant currently has.
    *  Future weather/sprinkler/fan ticks skip this plant so its mutation can no longer change. */
   revealed?: boolean;
+  /** Set by Garden Pin — when bloomed, the plant is shielded from auto-harvest
+   *  (Harvest Bell, Auto-Planter). Manual harvest still works. */
+  pinned?: boolean;
 }
 
 export interface Plot {
@@ -1418,6 +1421,8 @@ export function tickHarvestBells(
         if (ar === ri && ac === ci) continue; // never process bell's own cell
         const targetPlot = updated.grid[ar]?.[ac];
         if (!targetPlot?.plant) continue;
+        // Garden Pin shields the plant from auto-harvest
+        if (targetPlot.plant.pinned) continue;
         const stage = getCurrentStage(targetPlot.plant, now, weatherType);
         if (stage !== "bloom") continue;
         // Skip plants that bloomed less than 5 s ago — prevents same-render-tick harvesting
@@ -1458,6 +1463,8 @@ export function findHarvestBellTargets(
         if (ar === ri && ac === ci) continue;
         const targetPlot = state.grid[ar]?.[ac];
         if (!targetPlot?.plant) continue;
+        // Garden Pin shields the plant from auto-harvest
+        if (targetPlot.plant.pinned) continue;
         const stage = getCurrentStage(targetPlot.plant, now, weatherType);
         if (stage !== "bloom") continue;
         // Grace period: skip plants that bloomed < 5 s ago (avoids same-tick self-harvest)
@@ -2375,6 +2382,10 @@ export function applyPlantConsumable(
     // Lock in the plant's current mutation state — future ticks skip revealed plants.
     if (plant.revealed) return null;
     updatedPlant = { ...updatedPlant, revealed: true };
+  } else if (consumableId.startsWith("garden_pin_")) {
+    // Shield the plot from auto-harvest (Harvest Bell, Auto-Planter).
+    if (plant.pinned) return null;
+    updatedPlant = { ...updatedPlant, pinned: true };
   }
 
   const newGrid = after.grid.map((r, ri) =>

@@ -55,7 +55,6 @@ const GEAR_RECIPES: GearRecipe[] = [
   { outputGearType: "aegis_uncommon",        ingredients: [E("zephyr", 5), E("shadow", 3)] },
   { outputGearType: "aegis_rare",            ingredients: [G("aegis_uncommon")] },
   { outputGearType: "aegis_legendary",       ingredients: [G("aegis_rare")] },
-  { outputGearType: "garden_pin",            ingredients: [E("arcane", 3), E("fairy", 3)] },
   { outputGearType: "cropsticks",            ingredients: [E("arcane", 4), E("stellar", 4), E("grove", 4)] },
   { outputGearType: "auto_planter_prismatic",ingredients: [G("sprinkler_prismatic", 1), G("harvest_bell_legendary", 1), E("universal", 10)] },
 ];
