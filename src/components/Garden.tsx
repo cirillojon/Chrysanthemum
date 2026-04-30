@@ -299,7 +299,24 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     if (!selectedPlot) return;
     const { row, col } = selectedPlot;
     const optimistic = plantSeed(state, row, col, speciesId);
-    if (optimistic) perform(optimistic, () => edgePlantSeed(row, col, speciesId));
+    if (optimistic) {
+      perform(
+        optimistic,
+        async () => {
+          try {
+            return await edgePlantSeed(row, col, speciesId);
+          } catch (e) {
+            // "Plot already occupied" = client/server desync (server has a plant
+            // here that we don't see). Reload cloud state instead of letting the
+            // user click endlessly into a 400. Same recovery as auto-planter.
+            if ((e as Error).message?.includes("Plot already occupied")) {
+              reloadFromCloud();
+            }
+            throw e;
+          }
+        },
+      );
+    }
     setSelectedPlot(null);
   }
 
@@ -441,7 +458,23 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
 
       perform(
         next,
-        () => edgePlantSeed(row, col, speciesId),
+        async () => {
+          try {
+            return await edgePlantSeed(row, col, speciesId);
+          } catch (e) {
+            // "Plot already occupied" means the server thinks this plot is
+            // planted but our client thinks it's empty — a desync, usually from
+            // a previous network failure where the server wrote but we never
+            // got the response and rolled back locally. The rollback below will
+            // still fire (clearing the plot + refunding the seed), but immediately
+            // after we reload from cloud to overwrite local state with the
+            // authoritative version. Mirrors the auto-planter's recovery path.
+            if ((e as Error).message?.includes("Plot already occupied")) {
+              reloadFromCloud();
+            }
+            throw e;
+          }
+        },
         undefined,
         {
           serialize: true,

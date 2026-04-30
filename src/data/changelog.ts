@@ -18,8 +18,10 @@ export const CHANGELOGS: ChangelogEntry[] = [
     title:   "Reliability Hotfix",
     items: [
       { type: "fixed", text: "Sell All no longer wipes out flowers harvested during the sell — if the server fails the sale, only the sold blooms are restored, leaving any harvests you did mid-sale intact (was the root cause of 'items disappear, no money' reports)" },
+      { type: "fixed", text: "Selling individual flower stacks (single bloom or full stack) no longer wipes concurrent harvests on a server failure — same incremental-rollback fix applied to the per-card sell buttons" },
       { type: "fixed", text: "Plant All no longer wipes out plots that successfully planted when a single seed fails — each plot is now an independent action with its own rollback, so a failed plant never erases the rest of the batch" },
       { type: "fixed", text: "Plant All no longer clobbers concurrent harvests/sells that land during the planting chain" },
+      { type: "fixed", text: "Stuck 'Plot already occupied' errors on planting (after spamming Plant All on slow connections) — when the server reports a plot we don't see as occupied, the client now reloads cloud state automatically to resolve the desync, instead of leaving the player unable to plant on that tile" },
     ],
   },
   {

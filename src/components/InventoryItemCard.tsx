@@ -2,7 +2,7 @@ import { useRef } from "react";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { useGame } from "../store/GameContext";
-import { sellFlower } from "../store/gameStore";
+import { sellFlower, rollbackSellAll } from "../store/gameStore";
 import { edgeSellFlower } from "../lib/edgeFunctions";
 import type { InventoryItem } from "../store/gameStore";
 
@@ -29,15 +29,18 @@ export function InventoryItemCard({ item }: Props) {
     const optimistic = sellFlower(cur, item.speciesId, 1, item.mutation);
     if (!optimistic) return;
     sellingRef.current = true;
-    const savedCoins     = cur.coins;
-    const savedInventory = cur.inventory;
+    // Snapshot the coin delta this action introduced so the rollback can be
+    // SURGICAL — undoing only this sell, not anything that landed during the
+    // server roundtrip (e.g. a harvest the user did mid-sell).
+    const earned = optimistic.coins - cur.coins;
+    const items  = [{ speciesId: item.speciesId, mutation: item.mutation, quantity: 1 }];
     perform(
       optimistic,
       async () => { try { return await edgeSellFlower(item.speciesId, item.mutation, 1); } finally { sellingRef.current = false; } },
       undefined,
       {
         serialize: true,
-        rollback: (c) => ({ ...c, coins: savedCoins, inventory: savedInventory }),
+        rollback: (c) => rollbackSellAll(c, items, earned),
       }
     );
   }
@@ -53,15 +56,15 @@ export function InventoryItemCard({ item }: Props) {
     const optimistic = sellFlower(cur, item.speciesId, liveQty, item.mutation);
     if (!optimistic) return;
     sellingRef.current = true;
-    const savedCoins     = cur.coins;
-    const savedInventory = cur.inventory;
+    const earned = optimistic.coins - cur.coins;
+    const items  = [{ speciesId: item.speciesId, mutation: item.mutation, quantity: liveQty }];
     perform(
       optimistic,
       async () => { try { return await edgeSellFlower(item.speciesId, item.mutation, liveQty); } finally { sellingRef.current = false; } },
       undefined,
       {
         serialize: true,
-        rollback: (c) => ({ ...c, coins: savedCoins, inventory: savedInventory }),
+        rollback: (c) => rollbackSellAll(c, items, earned),
       }
     );
   }
