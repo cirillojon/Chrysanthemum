@@ -105,13 +105,19 @@ function formatDurationLabel(ms: number): string {
 // ── Rarity style helpers ──────────────────────────────────────────────────────
 
 function cellBorderClass(rarity: Rarity): string {
-  if (rarity === "prismatic") return "rainbow-border";
+  // Prismatic: return `rainbow-tile` which animates border + bg + glow in a
+  // SINGLE animation declaration. Splitting border/bg into separate classes
+  // (rainbow-border + rainbow-bg) collides on the `animation` shorthand —
+  // the later-defined class wins and the other animation silently drops.
+  if (rarity === "prismatic") return "rainbow-tile";
   const cfg = RARITY_CONFIG[rarity];
   return cfg.borderBloom || cfg.borderGrowing || "border-border";
 }
 
 function cellBgClass(rarity: Rarity): string {
-  if (rarity === "prismatic") return "bg-card/60";
+  // Prismatic's bg is already part of `rainbow-tile` returned by cellBorderClass.
+  // Returning an empty string here avoids overriding the animated background.
+  if (rarity === "prismatic") return "";
   return RARITY_CONFIG[rarity].bgBloom || "bg-card/60";
 }
 
