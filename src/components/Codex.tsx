@@ -322,8 +322,17 @@ export function Codex({ discoveredOverride, compact = false, unseenEntries, mark
                 </span>
               </button>
 
-              {/* Expanded mutation details */}
-              {isExpanded && (
+              {/* Expanded mutation details — uses the CSS-grid `0fr → 1fr`
+                  trick so the dropdown smoothly animates open/closed without
+                  needing to measure heights. Inner div is `overflow-hidden`
+                  so the content clips while the row collapses. */}
+              <div
+                className={`
+                  grid transition-[grid-template-rows] duration-300 ease-out
+                  ${isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}
+                `}
+              >
+                <div className="overflow-hidden">
                 <div className="px-4 pb-3 border-t border-border/40 pt-3 space-y-2">
                   {/* Stats — growth time + sell price (only for discovered species) */}
                   {hasBase && (
@@ -402,7 +411,8 @@ export function Codex({ discoveredOverride, compact = false, unseenEntries, mark
                     </div>
                   )}
                 </div>
-              )}
+                </div>
+              </div>
             </div>
           );
         })}
