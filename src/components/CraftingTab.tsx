@@ -321,14 +321,14 @@ function QueueEntryRow({
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-lg leading-none shrink-0">{emoji}</span>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">
-              {name}
+            <div className="flex items-center gap-1.5">
+              <p className="text-xs font-semibold text-foreground truncate">{name}</p>
               {qty > 1 && (
-                <span className="ml-1.5 text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/40 rounded px-1 py-0.5">
+                <span className="shrink-0 inline-flex items-center justify-center text-[10px] leading-none font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/40 rounded px-1.5 py-1">
                   ×{qty}
                 </span>
               )}
-            </p>
+            </div>
             <p className="text-[10px] text-muted-foreground">
               {isDone ? <span className="text-green-400 font-semibold">Ready to collect!</span> : formatDuration(remaining)}
             </p>
@@ -409,7 +409,7 @@ function UpgradeSlotRow({
         </p>
       </div>
       <span className="text-[11px] font-mono text-amber-400">
-        {upgrade.cost.toLocaleString()} 🪙
+        {upgrade.cost.toLocaleString()} 🟡
       </span>
     </button>
   );
@@ -542,7 +542,7 @@ function CraftPopup({
     ingredientsSection = (
       <div className="space-y-1">
         <IngredientRow
-          emoji="🪙"
+          emoji="🟡"
           label="Coin Cost"
           need={totalCoinCost}
           have={state.coins}
@@ -659,7 +659,7 @@ function CraftPopup({
                 <button
                   onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                   disabled={quantity <= 1 || isCrafting}
-                  className="w-7 h-7 rounded-lg bg-card/60 border border-border text-foreground hover:border-amber-500/50 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold leading-none"
+                  className="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-card/60 border border-border text-foreground hover:border-amber-500/50 disabled:opacity-30 disabled:cursor-not-allowed text-base font-bold leading-none pb-0.5"
                   aria-label="Decrease quantity"
                 >−</button>
                 <span className="font-mono font-semibold text-sm text-foreground min-w-[2rem] text-center">
@@ -668,7 +668,7 @@ function CraftPopup({
                 <button
                   onClick={() => setQuantity((q) => Math.min(maxAffordable, q + 1))}
                   disabled={quantity >= maxAffordable || isCrafting}
-                  className="w-7 h-7 rounded-lg bg-card/60 border border-border text-foreground hover:border-amber-500/50 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold leading-none"
+                  className="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-card/60 border border-border text-foreground hover:border-amber-500/50 disabled:opacity-30 disabled:cursor-not-allowed text-base font-bold leading-none"
                   aria-label="Increase quantity"
                 >+</button>
                 <button
