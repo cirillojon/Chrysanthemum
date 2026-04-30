@@ -218,12 +218,13 @@ function IngredientRow({
 }
 
 function GearIngredients({
-  recipe, essences, gearInventory, consumables,
+  recipe, essences, gearInventory, consumables, quantity = 1,
 }: {
   recipe:        GearRecipe;
   essences:      { type: string; amount: number }[];
   gearInventory: { gearType: string; quantity: number }[];
   consumables:   { id: string; quantity: number }[];
+  quantity?:     number;
 }) {
   return (
     <div className="space-y-1">
@@ -233,16 +234,19 @@ function GearIngredients({
           const cfg   = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[ing.essenceType as FlowerType];
           const have  = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
           const label = isUniversal ? "Universal Essence" : `${cfg.name} Essence`;
-          return <IngredientRow key={i} emoji={cfg.emoji} label={label} need={ing.amount} have={have} enough={have >= ing.amount} {...essenceChip(ing.essenceType)} />;
+          const need  = ing.amount * quantity;
+          return <IngredientRow key={i} emoji={cfg.emoji} label={label} need={need} have={have} enough={have >= need} {...essenceChip(ing.essenceType)} />;
         }
         if (ing.kind === "gear") {
           const def   = GEAR[ing.gearType as GearType];
           const have  = gearInventory.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
-          return <IngredientRow key={i} emoji={def?.emoji ?? "⚙️"} label={def?.name ?? ing.gearType} need={ing.quantity} have={have} enough={have >= ing.quantity} {...rarityChip(def?.rarity ?? "common")} />;
+          const need  = ing.quantity * quantity;
+          return <IngredientRow key={i} emoji={def?.emoji ?? "⚙️"} label={def?.name ?? ing.gearType} need={need} have={have} enough={have >= need} {...rarityChip(def?.rarity ?? "common")} />;
         }
         const crec = CONSUMABLE_RECIPE_MAP[ing.consumableId as ConsumableId];
         const have = consumables.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
-        return <IngredientRow key={i} emoji={crec?.emoji ?? "🧪"} label={crec?.name ?? ing.consumableId} need={ing.quantity} have={have} enough={have >= ing.quantity} {...(crec ? rarityChip(crec.rarity) : { color: "text-muted-foreground", border: "border-border", bg: "bg-card/60" })} />;
+        const need = ing.quantity * quantity;
+        return <IngredientRow key={i} emoji={crec?.emoji ?? "🧪"} label={crec?.name ?? ing.consumableId} need={need} have={have} enough={have >= need} {...(crec ? rarityChip(crec.rarity) : { color: "text-muted-foreground", border: "border-border", bg: "bg-card/60" })} />;
       })}
     </div>
   );
@@ -309,6 +313,7 @@ function QueueEntryRow({
   const progress  = Math.max(0, Math.min(elapsed / entry.durationMs, 1));
   const isDone    = progress >= 1;
   const remaining = Math.max(entry.durationMs - elapsed, 0);
+  const qty       = entry.quantity && entry.quantity > 1 ? entry.quantity : 1;
 
   return (
     <div className="rounded-xl border border-border bg-card/40 px-3 py-2 space-y-1.5">
@@ -316,7 +321,14 @@ function QueueEntryRow({
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-lg leading-none shrink-0">{emoji}</span>
           <div className="min-w-0">
-            <p className="text-xs font-semibold text-foreground truncate">{name}</p>
+            <p className="text-xs font-semibold text-foreground truncate">
+              {name}
+              {qty > 1 && (
+                <span className="ml-1.5 text-[10px] font-mono font-bold text-amber-400 bg-amber-500/10 border border-amber-500/40 rounded px-1 py-0.5">
+                  ×{qty}
+                </span>
+              )}
+            </p>
             <p className="text-[10px] text-muted-foreground">
               {isDone ? <span className="text-green-400 font-semibold">Ready to collect!</span> : formatDuration(remaining)}
             </p>
@@ -336,7 +348,7 @@ function QueueEntryRow({
             onClick={() => onCancel(entry.id)}
             disabled={isCollecting || isCanceling}
             className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-card/60 border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            title="Cancel (refunds ingredients, not coins)"
+            title="Cancel (refunds ingredients and coins)"
           >
             {isCanceling ? "…" : "✕"}
           </button>
@@ -403,6 +415,68 @@ function UpgradeSlotRow({
   );
 }
 
+// ── Bulk crafting ─────────────────────────────────────────────────────────────
+// Hard cap on bulk quantity per craft. Mirrors MAX_BULK_QUANTITY in
+// supabase/functions/craft-start/index.ts — keep them in sync.
+const MAX_BULK_QUANTITY = 50;
+
+/** How many of `entry` the player can afford right now (capped at MAX_BULK_QUANTITY). */
+function maxCraftableQuantity(entry: CraftEntry, state: GameState): number {
+  const essences = state.essences      ?? [];
+  const gearInv  = state.gearInventory ?? [];
+  const consum   = state.consumables   ?? [];
+  const infusers = state.infusers      ?? [];
+
+  let cap = MAX_BULK_QUANTITY;
+  const limit = (have: number, need: number) => {
+    if (need <= 0) return;
+    cap = Math.min(cap, Math.floor(have / need));
+  };
+
+  if (entry.kind === "gear") {
+    const gearType = entry.id.replace("gear:", "");
+    const recipe   = GEAR_RECIPES.find((r) => r.outputGearType === gearType);
+    if (!recipe) return 0;
+    if (recipe.coinCost > 0) limit(state.coins, recipe.coinCost);
+    for (const ing of recipe.ingredients) {
+      if (ing.kind === "essence") {
+        limit(essences.find((e) => e.type === ing.essenceType)?.amount ?? 0, ing.amount);
+      } else if (ing.kind === "gear") {
+        limit(gearInv.find((g) => g.gearType === ing.gearType)?.quantity ?? 0, ing.quantity);
+      } else {
+        limit(consum.find((c) => c.id === ing.consumableId)?.quantity ?? 0, ing.quantity);
+      }
+    }
+  } else if (entry.kind === "consumable") {
+    const id     = entry.id.replace("consumable:", "") as ConsumableId;
+    const recipe = CONSUMABLE_RECIPE_MAP[id];
+    if (!recipe) return 0;
+    const cost = recipe.cost;
+    if (cost.kind === "essence") {
+      for (const { type, amount } of cost.amounts) {
+        limit(essences.find((e) => e.type === type)?.amount ?? 0, amount);
+      }
+    } else {
+      limit(consum.find((c) => c.id === cost.id)?.quantity ?? 0, cost.quantity);
+    }
+  } else if (entry.kind === "attunement") {
+    const tier   = parseInt(entry.id.replace("attunement:", ""), 10) as 1|2|3|4|5;
+    const recipe = ATTUNEMENT_RECIPES.find((r) => r.tier === tier);
+    if (!recipe) return 0;
+    const cost = recipe.cost;
+    if (cost.kind === "essence") {
+      for (const { type, amount } of cost.amounts) {
+        limit(essences.find((e) => e.type === type)?.amount ?? 0, amount);
+      }
+    } else {
+      const prevRarity = TIER_RARITIES[cost.tier as 1|2|3|4|5] as string;
+      limit(infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0, cost.quantity);
+    }
+  }
+
+  return Math.max(0, cap);
+}
+
 // ── Popup ─────────────────────────────────────────────────────────────────────
 
 function CraftPopup({
@@ -410,7 +484,7 @@ function CraftPopup({
 }: {
   entry:          CraftEntry;
   onClose:        () => void;
-  onCraft:        () => void;
+  onCraft:        (quantity: number) => void;
   isCrafting:     boolean;
   craftError:     string | null;
   state:          GameState;
@@ -425,42 +499,59 @@ function CraftPopup({
   const gearType   = entry.kind === "gear" ? entry.id.replace("gear:", "") : null;
   const gearRecipe = gearType ? GEAR_RECIPES.find((r) => r.outputGearType === gearType) : null;
 
+  // ── Bulk crafting selector ─────────────────────────────────────────────────
+  // `maxAffordable` is the largest quantity the player can afford right now.
+  // The local quantity is clamped to [1, max(1, maxAffordable)] so the +/- UI
+  // always points at a valid value as inventory changes.
+  const maxAffordable = useMemo(
+    () => maxCraftableQuantity(entry, state),
+    [entry, state],
+  );
+  const [quantity, setQuantity] = useState(1);
+  // Re-clamp whenever maxAffordable shrinks (e.g., another tab spent essences).
+  useEffect(() => {
+    setQuantity((q) => Math.min(Math.max(1, q), Math.max(1, maxAffordable)));
+  }, [maxAffordable]);
+
   // All crafts now go into the queue — slot availability applies to all kinds
-  const canAct = slotsAvailable && entry.canCraft;
+  const canAct = slotsAvailable && entry.canCraft && quantity >= 1 && quantity <= maxAffordable;
 
   let buttonLabel: string;
   if (isCrafting)           buttonLabel = "Starting…";
   else if (!slotsAvailable) buttonLabel = "No crafting slots available";
   else if (!entry.canCraft) buttonLabel = "Missing ingredients or coins";
+  else if (quantity > 1)    buttonLabel = `⏳ Craft ×${quantity}`;
   else                      buttonLabel = "⏳ Start Crafting";
 
-  // Duration for display
-  let durationMs = 0;
+  // Duration for display (multiplied by quantity)
+  let baseDurationMs = 0;
   if (entry.kind === "gear" && gearRecipe) {
-    durationMs = gearRecipe.durationMs;
+    baseDurationMs = gearRecipe.durationMs;
   } else if (entry.kind === "consumable") {
-    durationMs = craftDurationFromRarity(entry.rarity);
+    baseDurationMs = craftDurationFromRarity(entry.rarity);
   } else if (entry.kind === "attunement") {
-    durationMs = craftDurationFromRarity(entry.rarity);
+    baseDurationMs = craftDurationFromRarity(entry.rarity);
   }
+  const totalDurationMs = baseDurationMs * quantity;
 
   // Render ingredients section depending on item kind
   let ingredientsSection: React.ReactNode = null;
 
   if (entry.kind === "gear" && gearRecipe) {
+    const totalCoinCost = gearRecipe.coinCost * quantity;
     ingredientsSection = (
       <div className="space-y-1">
         <IngredientRow
           emoji="🪙"
           label="Coin Cost"
-          need={gearRecipe.coinCost}
+          need={totalCoinCost}
           have={state.coins}
-          enough={state.coins >= gearRecipe.coinCost}
+          enough={state.coins >= totalCoinCost}
           color="text-amber-400"
           border="border-amber-500/40"
           bg="bg-amber-950/20"
         />
-        <GearIngredients recipe={gearRecipe} essences={essences} gearInventory={gearInv} consumables={consum} />
+        <GearIngredients recipe={gearRecipe} essences={essences} gearInventory={gearInv} consumables={consum} quantity={quantity} />
       </div>
     );
   } else if (entry.kind === "consumable") {
@@ -476,16 +567,18 @@ function CraftPopup({
               const cfg   = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
               const have  = essences.find((e) => e.type === type)?.amount ?? 0;
               const label = isUniversal ? "Universal Essence" : `${cfg.name} Essence`;
-              return <IngredientRow key={type} emoji={cfg.emoji} label={label} need={amount} have={have} enough={have >= amount} {...essenceChip(type)} />;
+              const need  = amount * quantity;
+              return <IngredientRow key={type} emoji={cfg.emoji} label={label} need={need} have={have} enough={have >= need} {...essenceChip(type)} />;
             })}
           </div>
         );
       } else {
         const src  = CONSUMABLE_RECIPE_MAP[cost.id as ConsumableId];
         const have = consum.find((c) => c.id === cost.id)?.quantity ?? 0;
+        const need = cost.quantity * quantity;
         ingredientsSection = (
           <div className="space-y-1">
-            <IngredientRow emoji={src?.emoji ?? "?"} label={src?.name ?? cost.id} need={cost.quantity} have={have} enough={have >= cost.quantity} {...(src ? rarityChip(src.rarity) : { color: "text-muted-foreground", border: "border-border", bg: "bg-card/60" })} />
+            <IngredientRow emoji={src?.emoji ?? "?"} label={src?.name ?? cost.id} need={need} have={have} enough={have >= need} {...(src ? rarityChip(src.rarity) : { color: "text-muted-foreground", border: "border-border", bg: "bg-card/60" })} />
           </div>
         );
       }
@@ -503,16 +596,18 @@ function CraftPopup({
               const cfg   = isUniversal ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
               const have  = essences.find((e) => e.type === type)?.amount ?? 0;
               const label = isUniversal ? "Universal Essence" : `${cfg.name} Essence`;
-              return <IngredientRow key={type} emoji={cfg.emoji} label={label} need={amount} have={have} enough={have >= amount} {...essenceChip(type)} />;
+              const need  = amount * quantity;
+              return <IngredientRow key={type} emoji={cfg.emoji} label={label} need={need} have={have} enough={have >= need} {...essenceChip(type)} />;
             })}
           </div>
         );
       } else {
         const prevRarity = TIER_RARITIES[cost.tier as 1|2|3|4|5];
         const have = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
+        const need = cost.quantity * quantity;
         ingredientsSection = (
           <div className="space-y-1">
-            <IngredientRow emoji="🥢" label={`Attunement ${toRoman(cost.tier)}`} need={cost.quantity} have={have} enough={have >= cost.quantity} {...rarityChip(prevRarity)} />
+            <IngredientRow emoji="🥢" label={`Attunement ${toRoman(cost.tier)}`} need={need} have={have} enough={have >= need} {...rarityChip(prevRarity)} />
           </div>
         );
       }
@@ -553,15 +648,53 @@ function CraftPopup({
           <p className="text-xs text-muted-foreground mt-2 leading-snug">{entry.description}</p>
         </div>
 
+        {/* Quantity selector — only shown when bulk is possible */}
+        {entry.canCraft && maxAffordable > 1 && (
+          <div className="px-5 pt-4 pb-1">
+            <div className="flex items-center justify-between gap-3 px-3 py-2 rounded-xl bg-card/40 border border-border">
+              <span className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                Quantity
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setQuantity((q) => Math.max(1, q - 1))}
+                  disabled={quantity <= 1 || isCrafting}
+                  className="w-7 h-7 rounded-lg bg-card/60 border border-border text-foreground hover:border-amber-500/50 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold leading-none"
+                  aria-label="Decrease quantity"
+                >−</button>
+                <span className="font-mono font-semibold text-sm text-foreground min-w-[2rem] text-center">
+                  ×{quantity}
+                </span>
+                <button
+                  onClick={() => setQuantity((q) => Math.min(maxAffordable, q + 1))}
+                  disabled={quantity >= maxAffordable || isCrafting}
+                  className="w-7 h-7 rounded-lg bg-card/60 border border-border text-foreground hover:border-amber-500/50 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-bold leading-none"
+                  aria-label="Increase quantity"
+                >+</button>
+                <button
+                  onClick={() => setQuantity(maxAffordable)}
+                  disabled={quantity >= maxAffordable || isCrafting}
+                  className="ml-1 px-2 py-1 rounded-lg bg-card/60 border border-border text-[10px] font-semibold text-muted-foreground hover:text-amber-300 hover:border-amber-500/50 disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  Max ({maxAffordable})
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Ingredients */}
         <div className="px-5 py-4 space-y-1">
           <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
             {entry.kind === "gear" ? "Cost & Ingredients" : "Ingredients"}
           </p>
           {ingredientsSection}
-          {durationMs > 0 && (
+          {totalDurationMs > 0 && (
             <p className="text-[10px] text-muted-foreground pt-1 px-0.5">
-              ⏱ Duration: <span className="text-foreground">{formatDurationLabel(durationMs)}</span>
+              ⏱ Duration: <span className="text-foreground">{formatDurationLabel(totalDurationMs)}</span>
+              {quantity > 1 && (
+                <span className="text-muted-foreground/70"> ({formatDurationLabel(baseDurationMs)} × {quantity})</span>
+              )}
             </p>
           )}
         </div>
@@ -572,7 +705,7 @@ function CraftPopup({
             <p className="text-xs text-red-400 mb-2">{craftError}</p>
           )}
           <button
-            onClick={onCraft}
+            onClick={() => onCraft(quantity)}
             disabled={!canAct || isCrafting}
             className={`
               w-full py-3 rounded-xl font-semibold text-sm transition-all text-center
@@ -683,8 +816,12 @@ export function CraftingTab() {
   }
 
   // ── Start crafting (all kinds → queue) ───────────────────────────────────
-  async function handleCraft() {
+  // `quantity` is the bulk count; costs and durationMs are multiplied. Server
+  // mirrors this multiplication (gear) or accepts the multiplier (consumable /
+  // attunement, where the client passes BASE costs + quantity).
+  async function handleCraft(quantity: number) {
     if (!liveSelected || crafting) return;
+    const qty = Math.max(1, Math.min(MAX_BULK_QUANTITY, Math.floor(quantity)));
     setCrafting(true);
     setCraftError(null);
 
@@ -697,32 +834,36 @@ export function CraftingTab() {
         const recipe   = GEAR_RECIPES.find((r) => r.outputGearType === gearType);
         if (!recipe) return;
 
-        // Optimistic: deduct coins + ingredients, push a temp queue entry
+        // Optimistic: deduct coins + ingredients (multiplied by qty), push a temp queue entry
         let essences = [...(cur.essences      ?? [])];
         let gearInv  = [...(cur.gearInventory ?? [])];
         let consum   = [...(cur.consumables   ?? [])];
 
         for (const ing of recipe.ingredients) {
           if (ing.kind === "essence") {
-            essences = essences.map((e) => e.type === ing.essenceType ? { ...e, amount: e.amount - ing.amount } : e).filter((e) => e.amount > 0);
+            const need = ing.amount * qty;
+            essences = essences.map((e) => e.type === ing.essenceType ? { ...e, amount: e.amount - need } : e).filter((e) => e.amount > 0);
           } else if (ing.kind === "gear") {
-            gearInv = gearInv.map((g) => g.gearType === ing.gearType ? { ...g, quantity: g.quantity - ing.quantity } : g).filter((g) => g.quantity > 0);
+            const need = ing.quantity * qty;
+            gearInv = gearInv.map((g) => g.gearType === ing.gearType ? { ...g, quantity: g.quantity - need } : g).filter((g) => g.quantity > 0);
           } else {
-            consum = consum.map((c) => c.id === ing.consumableId ? { ...c, quantity: c.quantity - ing.quantity } : c).filter((c) => c.quantity > 0);
+            const need = ing.quantity * qty;
+            consum = consum.map((c) => c.id === ing.consumableId ? { ...c, quantity: c.quantity - need } : c).filter((c) => c.quantity > 0);
           }
         }
 
-        // Build stored costs for optimistic cancel refund
-        const essenceCosts    = recipe.ingredients.filter((i): i is { kind: "essence"; essenceType: string; amount: number } => i.kind === "essence").map(({ essenceType: type, amount }) => ({ type, amount }));
-        const gearCosts       = recipe.ingredients.filter((i): i is { kind: "gear"; gearType: string; quantity: number } => i.kind === "gear").map(({ gearType: gt, quantity }) => ({ gearType: gt, quantity }));
-        const consumableCosts = recipe.ingredients.filter((i): i is { kind: "consumable"; consumableId: string; quantity: number } => i.kind === "consumable").map(({ consumableId: id, quantity }) => ({ id, quantity }));
+        // Build stored costs for optimistic cancel refund (already × qty)
+        const essenceCosts    = recipe.ingredients.filter((i): i is { kind: "essence"; essenceType: string; amount: number } => i.kind === "essence").map(({ essenceType: type, amount }) => ({ type, amount: amount * qty }));
+        const gearCosts       = recipe.ingredients.filter((i): i is { kind: "gear"; gearType: string; quantity: number } => i.kind === "gear").map(({ gearType: gt, quantity }) => ({ gearType: gt, quantity: quantity * qty }));
+        const consumableCosts = recipe.ingredients.filter((i): i is { kind: "consumable"; consumableId: string; quantity: number } => i.kind === "consumable").map(({ consumableId: id, quantity }) => ({ id, quantity: quantity * qty }));
 
         const tempEntry: CraftingQueueEntry = {
           id:              crypto.randomUUID(),
           kind:            "gear",
           outputId:        gearType,
           startedAt:       new Date().toISOString(),
-          durationMs:      applyCraftBoost(recipe.durationMs, "gear", cur, Date.now()),
+          durationMs:      applyCraftBoost(recipe.durationMs * qty, "gear", cur, Date.now()),
+          ...(qty > 1 && { quantity: qty }),
           ...(essenceCosts.length    && { essenceCosts }),
           ...(gearCosts.length       && { gearCosts }),
           ...(consumableCosts.length && { consumableCosts }),
@@ -731,13 +872,13 @@ export function CraftingTab() {
         await perform(
           {
             ...cur,
-            coins:         cur.coins - recipe.coinCost,
+            coins:         cur.coins - recipe.coinCost * qty,
             essences,
             gearInventory: gearInv,
             consumables:   consum,
             craftingQueue: [...(cur.craftingQueue ?? []), tempEntry],
           },
-          () => edgeCraftStart("gear", gearType),
+          () => edgeCraftStart("gear", gearType, undefined, undefined, qty),
           (res) => {
             const fresh = getState();
             update({
@@ -755,22 +896,25 @@ export function CraftingTab() {
         );
 
       } else if (liveSelected.kind === "consumable") {
-        // ── Consumable: client-declared costs, server validates ───────────
+        // ── Consumable: client-declared BASE costs, server multiplies by qty
         const id     = liveSelected.id.replace("consumable:", "") as ConsumableId;
         const recipe = CONSUMABLE_RECIPE_MAP[id];
         if (!recipe) return;
 
-        const durationMs = craftDurationFromRarity(recipe.rarity);
-        const cost       = recipe.cost;
+        const baseDurationMs = craftDurationFromRarity(recipe.rarity);
+        const cost           = recipe.cost;
 
-        const essenceCosts:    { type: string; amount: number }[]  = [];
-        const consumableCosts: { id: string; quantity: number }[]  = [];
-
+        // BASE costs (sent to server)
+        const baseEssenceCosts:    { type: string; amount: number }[]  = [];
+        const baseConsumableCosts: { id: string; quantity: number }[]  = [];
         if (cost.kind === "essence") {
-          essenceCosts.push(...cost.amounts);
+          baseEssenceCosts.push(...cost.amounts);
         } else {
-          consumableCosts.push({ id: cost.id, quantity: cost.quantity });
+          baseConsumableCosts.push({ id: cost.id, quantity: cost.quantity });
         }
+        // MULTIPLIED costs (used for optimistic deduction and stored on entry for cancel refund)
+        const essenceCosts    = baseEssenceCosts.map((c)    => ({ type: c.type, amount: c.amount * qty }));
+        const consumableCosts = baseConsumableCosts.map((c) => ({ id: c.id,     quantity: c.quantity * qty }));
 
         // Optimistic deductions
         let essences = [...(cur.essences    ?? [])];
@@ -791,14 +935,15 @@ export function CraftingTab() {
           // Boost only adjusts the optimistic display — server halves its own
           // copy when it sees an active boost, and we read durationMs back from
           // res.craftingQueue when the server responds.
-          durationMs: applyCraftBoost(durationMs, "consumable", cur, Date.now()),
+          durationMs: applyCraftBoost(baseDurationMs * qty, "consumable", cur, Date.now()),
+          ...(qty > 1 && { quantity: qty }),
           ...(essenceCosts.length    && { essenceCosts }),
           ...(consumableCosts.length && { consumableCosts }),
         };
 
         await perform(
           { ...cur, essences, consumables: consum, craftingQueue: [...(cur.craftingQueue ?? []), tempEntry] },
-          () => edgeCraftStart("consumable", id, durationMs, { essenceCosts, consumableCosts }),
+          () => edgeCraftStart("consumable", id, baseDurationMs, { essenceCosts: baseEssenceCosts, consumableCosts: baseConsumableCosts }, qty),
           (res) => {
             const fresh = getState();
             update({
@@ -816,25 +961,28 @@ export function CraftingTab() {
         );
 
       } else {
-        // ── Attunement: client-declared costs, server validates ───────────
+        // ── Attunement: client-declared BASE costs, server multiplies by qty
         const tier   = parseInt(liveSelected.id.replace("attunement:", ""), 10) as 1|2|3|4|5;
         const recipe = ATTUNEMENT_RECIPES.find((r) => r.tier === tier);
         if (!recipe) return;
 
-        const outputId   = TIER_RARITIES[tier] as string;
-        const durationMs = craftDurationFromRarity(recipe.rarity);
-        const cost       = recipe.cost;
+        const outputId       = TIER_RARITIES[tier] as string;
+        const baseDurationMs = craftDurationFromRarity(recipe.rarity);
+        const cost           = recipe.cost;
 
-        const essenceCosts:    { type: string; amount: number }[]    = [];
-        const attunementCosts: { rarity: string; quantity: number }[] = [];
-
+        // BASE costs (sent to server)
+        const baseEssenceCosts:    { type: string; amount: number }[]    = [];
+        const baseAttunementCosts: { rarity: string; quantity: number }[] = [];
         if (cost.kind === "essence") {
-          essenceCosts.push(...cost.amounts);
+          baseEssenceCosts.push(...cost.amounts);
         } else {
           // cost.tier = previous tier; cost.quantity = how many needed
           const prevRarity = TIER_RARITIES[cost.tier as 1|2|3|4|5] as string;
-          attunementCosts.push({ rarity: prevRarity, quantity: cost.quantity });
+          baseAttunementCosts.push({ rarity: prevRarity, quantity: cost.quantity });
         }
+        // MULTIPLIED costs
+        const essenceCosts    = baseEssenceCosts.map((c)    => ({ type: c.type,     amount: c.amount * qty }));
+        const attunementCosts = baseAttunementCosts.map((c) => ({ rarity: c.rarity, quantity: c.quantity * qty }));
 
         // Optimistic deductions
         let essences = [...(cur.essences  ?? [])];
@@ -853,14 +1001,15 @@ export function CraftingTab() {
           outputId,
           startedAt: new Date().toISOString(),
           // Boost only adjusts the optimistic display; server halves its own copy.
-          durationMs: applyCraftBoost(durationMs, "attunement", cur, Date.now()),
+          durationMs: applyCraftBoost(baseDurationMs * qty, "attunement", cur, Date.now()),
+          ...(qty > 1 && { quantity: qty }),
           ...(essenceCosts.length    && { essenceCosts }),
           ...(attunementCosts.length && { attunementCosts }),
         };
 
         await perform(
           { ...cur, essences, infusers, craftingQueue: [...(cur.craftingQueue ?? []), tempEntry] },
-          () => edgeCraftStart("attunement", outputId, durationMs, { essenceCosts, attunementCosts }),
+          () => edgeCraftStart("attunement", outputId, baseDurationMs, { essenceCosts: baseEssenceCosts, attunementCosts: baseAttunementCosts }, qty),
           (res) => {
             const fresh = getState();
             update({
@@ -895,29 +1044,30 @@ export function CraftingTab() {
 
     const kind     = entry.kind     ?? "gear";
     const outputId = entry.outputId ?? (entry as unknown as { gearType?: string }).gearType ?? "";
+    const qty      = Math.max(1, entry.quantity ?? 1);
     const newQueue = (cur.craftingQueue ?? []).filter((e) => e.id !== craftId);
 
-    // Build optimistic delivery based on kind
+    // Build optimistic delivery based on kind (×qty for bulk crafts)
     let optimistic: Partial<GameState> = { craftingQueue: newQueue };
 
     if (kind === "gear") {
       const gearInv = cur.gearInventory ?? [];
       const idx     = gearInv.findIndex((g) => g.gearType === outputId);
       optimistic.gearInventory = idx >= 0
-        ? gearInv.map((g, i) => i === idx ? { ...g, quantity: g.quantity + 1 } : g)
-        : [...gearInv, { gearType: outputId as GearType, quantity: 1 }];
+        ? gearInv.map((g, i) => i === idx ? { ...g, quantity: g.quantity + qty } : g)
+        : [...gearInv, { gearType: outputId as GearType, quantity: qty }];
     } else if (kind === "consumable") {
       const consum = cur.consumables ?? [];
       const idx    = consum.findIndex((c) => c.id === outputId);
       optimistic.consumables = idx >= 0
-        ? consum.map((c, i) => i === idx ? { ...c, quantity: c.quantity + 1 } : c)
-        : [...consum, { id: outputId, quantity: 1 }];
+        ? consum.map((c, i) => i === idx ? { ...c, quantity: c.quantity + qty } : c)
+        : [...consum, { id: outputId, quantity: qty }];
     } else if (kind === "attunement") {
       const inf = cur.infusers ?? [];
       const idx = inf.findIndex((i) => i.rarity === outputId);
       optimistic.infusers = idx >= 0
-        ? inf.map((i, j) => j === idx ? { ...i, quantity: i.quantity + 1 } : i)
-        : [...inf, { rarity: outputId as Rarity, quantity: 1 }];
+        ? inf.map((i, j) => j === idx ? { ...i, quantity: i.quantity + qty } : i)
+        : [...inf, { rarity: outputId as Rarity, quantity: qty }];
     }
 
     const { emoji, name } = queueEntryDisplay(entry);
@@ -990,14 +1140,22 @@ export function CraftingTab() {
         : [...infusers, { rarity: rarity as Rarity, quantity }];
     }
 
+    // Coin refund (stored on the queue entry as `coinCost`, server already
+    // multiplied by quantity at start time). Legacy entries lack this field.
+    const entryWithCoin = entry as CraftingQueueEntry & { coinCost?: number };
+    const coinRefund    = typeof entryWithCoin.coinCost === "number" && entryWithCoin.coinCost > 0
+      ? entryWithCoin.coinCost
+      : 0;
+
     try {
       await perform(
-        { ...cur, craftingQueue: newQueue, essences, gearInventory: gearInv, consumables: consum, infusers },
+        { ...cur, coins: cur.coins + coinRefund, craftingQueue: newQueue, essences, gearInventory: gearInv, consumables: consum, infusers },
         () => edgeCraftCancel(craftId),
         (res) => {
           const fresh = getState();
           update({
             ...fresh,
+            coins:           res.coins,
             craftingQueue:   res.craftingQueue,
             essences:        res.essences,
             gearInventory:   res.gearInventory,

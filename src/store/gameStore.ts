@@ -141,8 +141,13 @@ export interface CraftingQueueEntry {
   kind:       CraftKind;
   outputId:   string;      // gearType | consumableId | rarity string (for attunement)
   startedAt:  string;      // ISO timestamp
-  durationMs: number;
-  // Stored ingredient costs — used by craft-cancel for refund without recipe lookup
+  durationMs: number;      // total duration (includes quantity multiplier)
+  // Bulk crafting — number of output items the entry will deliver on collect.
+  // Defaults to 1 if absent (legacy entries created before bulk crafting shipped).
+  // Costs already stored on this entry have been multiplied by quantity at start time.
+  quantity?:  number;
+  // Stored ingredient costs — used by craft-cancel for refund without recipe lookup.
+  // Costs are stored AS PAID (already multiplied by quantity).
   essenceCosts?:    { type: string; amount: number }[];
   gearCosts?:       { gearType: string; quantity: number }[];
   consumableCosts?: { id: string; quantity: number }[];

@@ -400,6 +400,7 @@ export interface CraftCollectResult {
 
 export interface CraftCancelResult {
   ok:              true;
+  coins:           number;
   craftingQueue:   GameState["craftingQueue"];
   essences:        GameState["essences"];
   gearInventory:   GameState["gearInventory"];
@@ -424,8 +425,9 @@ export function edgeCraftStart(
     consumableCosts?: { id: string; quantity: number }[];
     attunementCosts?: { rarity: string; quantity: number }[];
   },
+  quantity:    number = 1,
 ) {
-  return callEdge<CraftStartResult>("craft-start", { kind, outputId, durationMs, costs });
+  return callEdge<CraftStartResult>("craft-start", { kind, outputId, quantity, durationMs, costs });
 }
 
 export function edgeCraftCollect(craftId: string) {
