@@ -111,11 +111,28 @@ const OFFSETS_DIAMOND: [number, number][] = [
 ];
 
 // ── Gear definitions ───────────────────────────────────────────────────────
-interface GearDef { subtype: "harvest_bell" | "auto_planter"; offsets: [number, number][]; durationMs: number; }
+interface GearDef {
+  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis";
+  /** Radius offsets for radial gear (harvest bell, auto-planter, scarecrow). */
+  offsets?: [number, number][];
+  /** Line-of-sight cell count for directional gear (aegis). */
+  fanRange?: number;
+  durationMs: number;
+  /** Scarecrow only — cumulative strip chance over a 1-hour window. */
+  scarecrowStripPerHour?: number;
+}
 const GEAR_DEFS: Record<string, GearDef> = {
   harvest_bell_rare:      { subtype: "harvest_bell", offsets: OFFSETS_CROSS,   durationMs:  4 * 60 * 60 * 1_000 },
-  harvest_bell_legendary: { subtype: "harvest_bell", offsets: OFFSETS_3X3,    durationMs:  8 * 60 * 60 * 1_000 },
+  harvest_bell_legendary: { subtype: "harvest_bell", offsets: OFFSETS_3X3,     durationMs:  8 * 60 * 60 * 1_000 },
   auto_planter_prismatic: { subtype: "auto_planter", offsets: OFFSETS_DIAMOND, durationMs: 12 * 60 * 60 * 1_000 },
+  // Scarecrow — blocks weather AND gear mutations within radius, plus strip chance
+  scarecrow_rare:         { subtype: "scarecrow", offsets: OFFSETS_3X3,     durationMs:  4 * 60 * 60 * 1_000, scarecrowStripPerHour: 0.15 },
+  scarecrow_legendary:    { subtype: "scarecrow", offsets: OFFSETS_3X3,     durationMs:  8 * 60 * 60 * 1_000, scarecrowStripPerHour: 0.25 },
+  scarecrow_mythic:       { subtype: "scarecrow", offsets: OFFSETS_DIAMOND, durationMs: 12 * 60 * 60 * 1_000, scarecrowStripPerHour: 0.40 },
+  // Aegis — directional, blocks weather mutations only (gear mutations still apply)
+  aegis_uncommon:         { subtype: "aegis", fanRange: 2, durationMs: 2 * 60 * 60 * 1_000 },
+  aegis_rare:             { subtype: "aegis", fanRange: 3, durationMs: 4 * 60 * 60 * 1_000 },
+  aegis_legendary:        { subtype: "aegis", fanRange: 4, durationMs: 8 * 60 * 60 * 1_000 },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -140,7 +157,7 @@ interface Plant {
   // Bell, Auto-Planter). Manual harvest still works.
   pinned?:          boolean;
 }
-interface Gear { gearType: string; placedAt: number; }
+interface Gear { gearType: string; placedAt: number; direction?: "up" | "down" | "left" | "right"; }
 interface Plot { id: string; plant?: Plant | null; gear?: Gear | null; }
 interface InvItem { speciesId: string; quantity: number; isSeed: boolean; mutation?: string | null; }
 interface Save {
@@ -180,12 +197,95 @@ function isExpired(gear: Gear, now: number): boolean {
   return !def || now >= gear.placedAt + def.durationMs;
 }
 
-function affectedCells(gearType: string, ri: number, ci: number, rows: number, cols: number): [number, number][] {
+function affectedCells(
+  gearType: string,
+  ri: number,
+  ci: number,
+  rows: number,
+  cols: number,
+  direction?: "up" | "down" | "left" | "right",
+): [number, number][] {
   const def = GEAR_DEFS[gearType];
   if (!def) return [];
+
+  // Directional gear (Aegis): line of cells in chosen direction
+  if (def.fanRange && direction) {
+    const offsets: [number, number][] = [];
+    for (let i = 1; i <= def.fanRange; i++) {
+      if (direction === "up")    offsets.push([-i,  0]);
+      if (direction === "down")  offsets.push([ i,  0]);
+      if (direction === "left")  offsets.push([ 0, -i]);
+      if (direction === "right") offsets.push([ 0,  i]);
+    }
+    return offsets
+      .map(([dr, dc]): [number, number] => [ri + dr, ci + dc])
+      .filter(([r, c]) => r >= 0 && r < rows && c >= 0 && c < cols);
+  }
+
+  // Radial gear (harvest bell, auto-planter, scarecrow)
+  if (!def.offsets) return [];
   return def.offsets
     .map(([dr, dc]): [number, number] => [ri + dr, ci + dc])
     .filter(([r, c]) => r >= 0 && r < rows && c >= 0 && c < cols);
+}
+
+// ── Mutation shield coverage ────────────────────────────────────────────────
+// Builds a per-cell map of mutation-shield coverage in one pass so the weather
+// + strip pass can do O(1) lookups instead of re-scanning gear per cell.
+//   - hasShield: true if any unexpired Scarecrow OR Aegis covers this cell
+//   - stripPerHour: max scarecrowStripPerHour from any covering Scarecrow
+interface CoverageEntry { hasShield: boolean; stripPerHour: number }
+function buildShieldCoverage(grid: Plot[][], now: number): Map<string, CoverageEntry> {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const map  = new Map<string, CoverageEntry>();
+
+  for (let ri = 0; ri < rows; ri++) {
+    for (let ci = 0; ci < cols; ci++) {
+      const gear = grid[ri][ci]?.gear;
+      if (!gear) continue;
+      const def = GEAR_DEFS[gear.gearType];
+      if (!def || isExpired(gear, now)) continue;
+      if (def.subtype !== "scarecrow" && def.subtype !== "aegis") continue;
+
+      for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols, gear.direction)) {
+        const key = `${ar},${ac}`;
+        const cur = map.get(key) ?? { hasShield: false, stripPerHour: 0 };
+        cur.hasShield = true;
+        if (def.subtype === "scarecrow" && (def.scarecrowStripPerHour ?? 0) > cur.stripPerHour) {
+          cur.stripPerHour = def.scarecrowStripPerHour ?? 0;
+        }
+        map.set(key, cur);
+      }
+    }
+  }
+  return map;
+}
+
+// ── Scarecrow strip ────────────────────────────────────────────────────────
+// Per cron run, for each bloomed plant under a Scarecrow with an existing
+// string mutation, rolls the converted-to-per-minute strip chance. On hit
+// sets `mutation = null` (matches client convention; Giant-tried marker).
+function rollScarecrowStrip(grid: Plot[][], coverage: Map<string, CoverageEntry>, now: number): { grid: Plot[][]; changed: boolean } {
+  let changed = false;
+  const next = grid.map((row, ri) => row.map((plot, ci) => {
+    if (!plot.plant || !plot.plant.bloomedAt) return plot;
+    if (plot.plant.revealed) return plot;
+    if (typeof plot.plant.mutation !== "string") return plot;
+
+    const cov = coverage.get(`${ri},${ci}`);
+    if (!cov || cov.stripPerHour <= 0) return plot;
+
+    // Per-cron-run probability: cumulative perHour distributed evenly across 60 minutes.
+    // Cron runs ~per minute, so apply 1 minute's worth of strip chance per run.
+    const perMin = 1 - Math.pow(1 - cov.stripPerHour, 1 / 60);
+    if (Math.random() < perMin) {
+      changed = true;
+      return { ...plot, plant: { ...plot.plant, mutation: null } };
+    }
+    return plot;
+  }));
+  return { grid: changed ? next : grid, changed };
 }
 
 // ── Stamp bloomedAt ────────────────────────────────────────────────────────
@@ -308,9 +408,13 @@ function runAutoPlanter(save: Save, now: number): Save {
 // ── Weather mutations ──────────────────────────────────────────────────────
 // Rolls weather-based mutations on all bloomed plants (same logic as
 // tickWeatherMutations in gameStore.ts, but scaled to per-minute probability).
-// Scarecrow protection is not applied here (server has no gear-coverage lookup);
-// the worst case is an offline player gets a mutation they'd have been protected from.
-function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number): { grid: Plot[][]; changed: boolean } {
+// Plants under a Scarecrow OR Aegis are skipped (both block weather mutations).
+function rollWeatherMutations(
+  grid: Plot[][],
+  weatherType: string,
+  now: number,
+  coverage: Map<string, CoverageEntry>,
+): { grid: Plot[][]; changed: boolean } {
   if (!weatherType || weatherType === "clear") return { grid, changed: false };
 
   const mutType   = WEATHER_MUTATION_TYPE[weatherType];
@@ -318,7 +422,7 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
   const night     = isNightUTC(now);
   let changed     = false;
 
-  const next = grid.map(row => row.map(plot => {
+  const next = grid.map((row, ri) => row.map((plot, ci) => {
     if (!plot.plant || !plot.plant.bloomedAt) return plot;
 
     // ── Magnifying Glass guard ───────────────────────────────────────────────
@@ -329,6 +433,9 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
     // mutationBlocked plants are shielded from all weather mutations.
     // The flag is consumed at harvest time, not here.
     if (plot.plant.mutationBlocked) return plot;
+
+    // ── Scarecrow / Aegis shield ─────────────────────────────────────────────
+    if (coverage.get(`${ri},${ci}`)?.hasShield) return plot;
 
     // Helper: look up any active mutation boost for a given mutation type.
     const boostFor = (mt: string): number =>
@@ -783,9 +890,16 @@ Deno.serve(async (req: Request) => {
       const { grid: stamped, changed: stampChanged } = stampBloomed(original.grid, now, weatherMult);
       let sim = stampChanged ? { ...original, grid: stamped } : original;
 
-      // 2. Roll weather mutations on bloomed plants
-      const { grid: mutGrid, changed: mutChanged } = rollWeatherMutations(sim.grid, weatherType, now);
+      // 2a. Build mutation-shield coverage once per garden (Scarecrow + Aegis)
+      const shieldCoverage = buildShieldCoverage(sim.grid, now);
+
+      // 2b. Roll weather mutations on bloomed plants (skipping shielded cells)
+      const { grid: mutGrid, changed: mutChanged } = rollWeatherMutations(sim.grid, weatherType, now, shieldCoverage);
       if (mutChanged) sim = { ...sim, grid: mutGrid };
+
+      // 2c. Scarecrow strip — chance to remove existing mutations from covered plants
+      const { grid: stripGrid, changed: stripChanged } = rollScarecrowStrip(sim.grid, shieldCoverage, now);
+      if (stripChanged) sim = { ...sim, grid: stripGrid };
 
       // 3. Harvest bell
       sim = runHarvestBells(sim, now);
