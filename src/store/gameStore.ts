@@ -91,6 +91,45 @@ export interface ShopSlot {
 
 export type CraftKind = "gear" | "consumable" | "attunement";
 
+// ── Active speed-boost consumables (Phase 5a) ─────────────────────────────────
+// Verdant Rush  → "growth"     → 2× growth speed for all plants
+// Forge Haste   → "craft"      → 2× progress on gear + consumable craft entries
+// Resonance Draft → "attunement" → 2× progress on attunement craft entries
+export type ActiveBoostType = "growth" | "craft" | "attunement";
+
+export interface ActiveBoost {
+  type:         ActiveBoostType;
+  expiresAt:    string;   // ISO timestamp
+  consumableId: string;   // e.g. "verdant_rush_3" — for UI display + telemetry
+}
+
+/** Map a speed_boost consumable id → boost type. Returns null for non-boost ids. */
+export function consumableToBoostType(consumableId: string): ActiveBoostType | null {
+  if (consumableId.startsWith("verdant_rush_"))    return "growth";
+  if (consumableId.startsWith("forge_haste_"))     return "craft";
+  if (consumableId.startsWith("resonance_draft_")) return "attunement";
+  return null;
+}
+
+/** Returns 2.0 if any unexpired boost of `type` exists, otherwise 1.0. */
+export function getBoostMultiplier(
+  activeBoosts: ActiveBoost[] | undefined,
+  type:         ActiveBoostType,
+  now:          number,
+): number {
+  if (!activeBoosts) return 1;
+  for (const b of activeBoosts) {
+    if (b.type === type && new Date(b.expiresAt).getTime() > now) return 2;
+  }
+  return 1;
+}
+
+/** Drop expired boosts. Pure — returns a new array. */
+export function pruneActiveBoosts(boosts: ActiveBoost[] | undefined, now: number): ActiveBoost[] {
+  if (!boosts || boosts.length === 0) return [];
+  return boosts.filter((b) => new Date(b.expiresAt).getTime() > now);
+}
+
 export interface CraftingQueueEntry {
   id:         string;      // server-generated uuid
   kind:       CraftKind;
@@ -143,6 +182,11 @@ export interface GameState {
   // Phase 3 — time-gated crafting queue
   craftingQueue:     CraftingQueueEntry[];
   craftingSlotCount: number;
+  // Phase 5a — active speed-boost consumables (Verdant Rush, Forge Haste, Resonance Draft).
+  // Each entry tracks one consumable activation with its expiry. Multiple of the same type
+  // are allowed but only the latest expiry matters; getBoostMultiplier returns 2× while any
+  // matching boost is unexpired, otherwise 1×.
+  activeBoosts:      ActiveBoost[];
   // Server sync — the updated_at value from the last successful DB read or write.
   // saveToCloud uses this as a CAS guard so stale sessions can't overwrite
   // server-authoritative state (inventory, coins, etc.) with stale client data.
@@ -407,6 +451,7 @@ export function defaultState(): GameState {
     lastWindShearUsed:    null,
     craftingQueue:        [],
     craftingSlotCount:    1,
+    activeBoosts:         [],
     serverUpdatedAt:      null,
   };
 }
@@ -492,6 +537,7 @@ export function applyOfflineTick(
     consumables:          save.consumables           ?? [],
     lastEclipseTonic:     save.lastEclipseTonic      ?? null,
     lastWindShearUsed:    save.lastWindShearUsed     ?? null,
+    activeBoosts:         pruneActiveBoosts(save.activeBoosts, now),
   };
 
   let shopRestocked    = false;
@@ -999,6 +1045,9 @@ export function stampStageTransitions(
   let changed = false;
   const newlyBloomedCells: [number, number][] = [];
 
+  // Verdant Rush — global 2× growth while active
+  const boostMult = getBoostMultiplier(state.activeBoosts, "growth", now);
+
   let newGrid = state.grid.map((row, ri) =>
     row.map((plot, ci) => {
       if (!plot.plant || plot.plant.bloomedAt) return plot; // fully grown — nothing to do
@@ -1011,7 +1060,7 @@ export function stampStageTransitions(
       const fertMultiplier     = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
       const weatherMultiplier  = WEATHER[weatherType].growthMultiplier;
       const masteredMultiplier = plant.masteredBonus ?? 1.0;
-      const multiplier         = fertMultiplier * weatherMultiplier * masteredMultiplier * gearMult;
+      const multiplier         = fertMultiplier * weatherMultiplier * masteredMultiplier * gearMult * boostMult;
 
       const seedMs   = species.growthTime.seed;
       const sproutMs = species.growthTime.sprout;

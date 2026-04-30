@@ -123,7 +123,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, essences, gear_inventory, consumables, infusers, crafting_queue, crafting_slot_count, updated_at")
+        .select("coins, essences, gear_inventory, consumables, infusers, crafting_queue, crafting_slot_count, active_boosts, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -267,6 +267,25 @@ Deno.serve(async (req: Request) => {
       if (essenceCostList.length)    newEntryEssenceCosts    = essenceCostList;
       if (consumableCostList.length) newEntryConsumableCosts = consumableCostList;
       if (attunementCostList.length) newEntryAttunementCosts = attunementCostList;
+    }
+
+    // ── Apply Forge Haste / Resonance Draft (Phase 5a) ─────────────────────────
+    // Halve durationMs for new crafts started while a matching boost is active.
+    // Existing in-flight crafts are NOT retroactively boosted — keeps the math
+    // simple and exploit-proof. Players are expected to activate boosts before
+    // queueing crafts.
+    type BoostType = "growth" | "craft" | "attunement";
+    const activeBoosts = (save.active_boosts ?? []) as { type: BoostType; expiresAt: string }[];
+    const craftBoostType: BoostType | null =
+      kind === "attunement" ? "attunement" :
+      kind === "gear" || kind === "consumable" ? "craft" : null;
+
+    if (craftBoostType) {
+      const nowMs = Date.now();
+      const hasActive = activeBoosts.some(
+        (b) => b.type === craftBoostType && new Date(b.expiresAt).getTime() > nowMs,
+      );
+      if (hasActive) durationMs = Math.max(1, Math.floor(durationMs / 2));
     }
 
     // ── Build queue entry ──────────────────────────────────────────────────────
