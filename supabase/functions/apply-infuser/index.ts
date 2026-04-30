@@ -166,8 +166,22 @@ Deno.serve(async (req: Request) => {
     const rarity = SPECIES_RARITY[plant.speciesId];
     if (!rarity) return err("Unknown species");
 
-    const infuserItem = infusers.find((i) => i.rarity === rarity && i.quantity > 0);
-    if (!infuserItem) return err(`No ${rarity} Flower Infuser in inventory`);
+    // Backwards-tier matching: any infuser with tier ≥ flower's rarity tier works.
+    // Use the lowest matching tier to conserve higher-tier infusers.
+    const RARITY_TIER_ORDER: Record<string, number> = {
+      common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+    };
+    const flowerTierOrder = RARITY_TIER_ORDER[rarity] ?? -1;
+    if (flowerTierOrder < 0) return err("Unknown species rarity");
+
+    const sortedCandidates = infusers
+      .filter((i) => (RARITY_TIER_ORDER[i.rarity] ?? -1) >= flowerTierOrder && i.quantity > 0)
+      .sort((a, b) => (RARITY_TIER_ORDER[a.rarity] ?? 0) - (RARITY_TIER_ORDER[b.rarity] ?? 0));
+
+    const infuserItem = sortedCandidates[0] ?? null;
+    if (!infuserItem) return err("No matching Flower Infuser in inventory");
+
+    const usedRarity = infuserItem.rarity;
 
     // ── Apply changes ─────────────────────────────────────────────────────────
 
@@ -180,7 +194,7 @@ Deno.serve(async (req: Request) => {
     );
 
     const newInfusers = infusers
-      .map((i) => i.rarity === rarity ? { ...i, quantity: i.quantity - 1 } : i)
+      .map((i) => i.rarity === usedRarity ? { ...i, quantity: i.quantity - 1 } : i)
       .filter((i) => i.quantity > 0);
 
     // ── CAS write ─────────────────────────────────────────────────────────────
@@ -197,7 +211,7 @@ Deno.serve(async (req: Request) => {
 
     void supabaseAdmin.from("action_log").insert({
       user_id: userId, action: "apply_infuser",
-      payload: { row, col, rarity },
+      payload: { row, col, flowerRarity: rarity, infuserRarity: usedRarity },
       result:  { remainingInfusers: infuserItem.quantity - 1 },
     });
 

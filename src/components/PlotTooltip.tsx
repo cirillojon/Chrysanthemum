@@ -12,7 +12,7 @@ import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
-import { CONSUMABLE_RECIPE_MAP, ROMAN, type ConsumableId } from "../data/consumables";
+import { CONSUMABLE_RECIPE_MAP, ROMAN, RARITY_TIER, type ConsumableId } from "../data/consumables";
 
 interface Props {
   plant:                 PlantedFlower;
@@ -98,10 +98,17 @@ export function PlotTooltip({
     .filter((f) => f.quantity > 0)
     .sort((a, b) => FERTILIZERS[a.type].speedMultiplier - FERTILIZERS[b.type].speedMultiplier);
 
-  // Attunement Crystal — find one that matches this flower's rarity
-  const matchingAttunement = (state.infusers ?? []).find(
-    (i) => i.rarity === species.rarity && i.quantity > 0
-  );
+  // Rarity ordering used for both infuser and consumable matching.
+  const RARITY_ORDER: Record<string, number> = {
+    common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+  };
+
+  // Infuser matching — backwards-tier: any infuser with tier ≥ flower's rarity tier works.
+  // Select the lowest matching tier first to conserve higher-tier infusers.
+  const flowerRarityTier = RARITY_ORDER[species.rarity] ?? 0;
+  const matchingInfuser = [...(state.infusers ?? [])]
+    .filter((i) => (RARITY_ORDER[i.rarity] ?? 0) >= flowerRarityTier && i.quantity > 0)
+    .sort((a, b) => (RARITY_ORDER[a.rarity] ?? 0) - (RARITY_ORDER[b.rarity] ?? 0))[0] ?? null;
 
   // Consumables applicable to this plant right now.
   //
@@ -109,9 +116,6 @@ export function PlotTooltip({
   // higher-tier consumable works on lower-rarity plants (e.g. Mythic vial on
   // a Rare). Floor is still tier 1 (Rare), so Common/Uncommon plants stay
   // excluded.
-  const RARITY_ORDER: Record<string, number> = {
-    common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
-  };
   const applicableConsumables = (state.consumables ?? []).filter((c) => {
     if (c.quantity <= 0) return false;
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
@@ -299,6 +303,9 @@ export function PlotTooltip({
             <p className="text-[10px] text-muted-foreground font-mono">🔎 No mutation (locked)</p>
           )}
           {/* Active consumable flags */}
+          {plant.infused && (
+            <p className="text-[10px] font-mono text-emerald-400">💉 Infused · awaiting Cropsticks</p>
+          )}
           {plant.heirloomActive && (
             <p className="text-[10px] font-mono text-emerald-400">🔮 Heirloom Charm active</p>
           )}
@@ -315,8 +322,8 @@ export function PlotTooltip({
           )}
         </div>
 
-        {/* Plant-targeting consumables */}
-        {applicableConsumables.length > 0 && (
+        {/* Plant-targeting consumables + infuser */}
+        {(applicableConsumables.length > 0 || (isBloomed && !plant.infused && matchingInfuser)) && (
           <div className="pt-1 border-t border-border">
             <p className="text-[10px] text-muted-foreground mb-1">Use consumable</p>
             <div className="flex flex-wrap gap-1">
@@ -344,6 +351,26 @@ export function PlotTooltip({
                   </button>
                 );
               })}
+              {isBloomed && !plant.infused && matchingInfuser && (() => {
+                const tier  = RARITY_TIER[matchingInfuser.rarity as keyof typeof RARITY_TIER] ?? 1;
+                const roman = ROMAN[tier as 1|2|3|4|5];
+                return (
+                  <button
+                    onClick={handleApplyAttunement}
+                    disabled={!!applyingAttunement}
+                    title={`Infuser ${roman} — Mark this bloom as a cross-breeding participant`}
+                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[10px] transition-colors disabled:opacity-50 ${
+                      applyingAttunement
+                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                        : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                    }`}
+                  >
+                    <span>💉</span>
+                    <span>{roman}</span>
+                    <span className="text-muted-foreground ml-0.5">×{matchingInfuser.quantity}</span>
+                  </button>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -372,25 +399,6 @@ export function PlotTooltip({
               </button>
             )}
 
-            {/* Infuser section — only when bloomed (it operates on bloomed plants) */}
-            {isBloomed && (
-              plant.infused ? (
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  <span>💉</span>
-                  <span className="text-[10px] text-emerald-400 font-medium">Infused · awaiting Cropsticks</span>
-                </div>
-              ) : matchingAttunement ? (
-                <button
-                  onClick={handleApplyAttunement}
-                  disabled={applyingAttunement}
-                  className="w-full py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
-                >
-                  {applyingAttunement ? "Applying…" : `💉 Infuse ×${matchingAttunement.quantity}`}
-                </button>
-              ) : (
-                <p className="text-[10px] text-muted-foreground text-center">No matching Infuser in inventory</p>
-              )
-            )}
           </div>
         )}
 
