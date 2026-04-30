@@ -9,6 +9,7 @@ import {
   upgradeFarm,
   harvestPlant,
   plantAll,
+  rollbackPlantOne,
   assignBloomMutations,
   tickWeatherMutations,
   tickSprinklerMutations,
@@ -444,19 +445,9 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
         undefined,
         {
           serialize: true,
-          // Surgical rollback: undo ONLY this plot + this one seed. Don't
+          // Surgical rollback: undo ONLY this plot + this one seed. Doesn't
           // touch the rest of the grid or any other concurrent inventory changes.
-          rollback: (c) => ({
-            ...c,
-            grid: c.grid.map((r, ri) =>
-              r.map((p, ci) => ri === row && ci === col ? { ...p, plant: null } : p)
-            ),
-            inventory: c.inventory
-              .map((i) => i.speciesId === speciesId && i.isSeed
-                ? { ...i, quantity: i.quantity + 1 }
-                : i,
-              ),
-          }),
+          rollback: (c) => rollbackPlantOne(c, row, col, speciesId),
         },
       );
     }
