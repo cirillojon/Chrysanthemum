@@ -301,6 +301,22 @@ export const SHOP_RARITY_WEIGHTS: Partial<Record<Rarity, number>> = {
   mythic:    1,
 };
 
+/**
+ * Seed price as a fraction of sellValue, tiered by rarity. Early-game flowers
+ * get a higher % profit margin (0.65 → 35% margin) and late-game flowers a
+ * tighter margin (0.85 → 15%). Stops bulk-buying high-rarity seeds from being
+ * a free coin printer once the player can afford them.
+ */
+const SEED_PRICE_RATIO: Record<Rarity, number> = {
+  common:    0.65,
+  uncommon:  0.68,
+  rare:      0.72,
+  legendary: 0.75,
+  mythic:    0.78,
+  exalted:   0.82,
+  prismatic: 0.85,
+};
+
 function generateShop(shopSlots: number = DEFAULT_SHOP_SLOTS): ShopSlot[] {
   const chosen: ShopSlot[] = [];
   const usedIds = new Set<string>();
@@ -340,7 +356,7 @@ function generateShop(shopSlots: number = DEFAULT_SHOP_SLOTS): ShopSlot[] {
     usedIds.add(flower.id);
     chosen.push({
       speciesId: flower.id,
-      price:     Math.max(5, Math.floor(flower.sellValue * 0.75)),
+      price:     Math.max(5, Math.floor(flower.sellValue * SEED_PRICE_RATIO[flower.rarity])),
       quantity:  Math.floor(Math.random() * 4) + 1,
     });
   }
