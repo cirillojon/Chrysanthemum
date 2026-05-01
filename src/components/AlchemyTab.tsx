@@ -10,7 +10,7 @@ import { YieldTableModal } from "./YieldTableModal";
 import { ROMAN } from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
 import {
-  edgeAlchemySacrifice, edgeAlchemyStrip,
+  edgeAlchemySacrifice,
   edgeAttuneStart, edgeAttuneCollect, edgeAttuneCancel, edgeUpgradeAttunementSlots,
 } from "../lib/edgeFunctions";
 import {
@@ -104,13 +104,6 @@ export function AlchemyTab() {
   const [attuneError,      setAttuneError]      = useState<string | null>(null);
   const [attuneResult,     setAttuneResult]     = useState<{ mutation: string; tier: number } | null>(null);
   const [attuneResultVisible, setAttuneResultVisible] = useState(false);
-  // Strip state
-  const [stripSpeciesId,   setStripSpeciesId]   = useState<string | null>(null);
-  const [stripMutation,    setStripMutation]    = useState<string | null>(null);
-  const [stripping,        setStripping]        = useState(false);
-  const [stripError,       setStripError]       = useState<string | null>(null);
-  const [stripSuccess,     setStripSuccess]     = useState(false);
-  const [stripSuccessVisible, setStripSuccessVisible] = useState(false);
 
   // Tick once a second for the attunement queue progress bars.
   const [attuneNow, setAttuneNow] = useState(() => Date.now());
@@ -141,16 +134,6 @@ export function AlchemyTab() {
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
   }, [attuneResult]);
 
-  // Auto-dismiss strip success
-  useEffect(() => {
-    if (!stripSuccess) return;
-    const frame = requestAnimationFrame(() => setStripSuccessVisible(true));
-    const timer = setTimeout(() => {
-      setStripSuccessVisible(false);
-      setTimeout(() => setStripSuccess(false), 400);
-    }, 3_000);
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
-  }, [stripSuccess]);
 
   // Inventory of harvested (non-seed) flowers grouped by rarity
   const sacrificableByRarity = useMemo(() => {
@@ -603,11 +586,6 @@ export function AlchemyTab() {
           (i) => !i.isSeed && i.quantity > 0 && (i.mutation === undefined || i.mutation === null)
         );
 
-        // Mutated blooms available to strip
-        const strippableBlooms = state.inventory.filter(
-          (i) => !i.isSeed && i.quantity > 0 && i.mutation
-        );
-
         // Essences the player owns (excluding universal for infuse — only elemental count)
         const ownedEssences = (state.essences ?? []).filter(
           (e) => e.type !== "universal" && e.amount > 0
@@ -639,17 +617,6 @@ export function AlchemyTab() {
           goldCostPreview = costs ? costs[tierPreview - 1] : 0;
         }
 
-        // Strip cost preview
-        const MUT_MULT: Record<string, number> = {
-          golden: 4, rainbow: 5, giant: 2, moonlit: 2.5,
-          frozen: 2, scorched: 2, wet: 1.25, windstruck: 0.7, shocked: 2.5,
-        };
-        const stripSpecies  = stripSpeciesId ? getFlower(stripSpeciesId) : null;
-        const stripRarity   = stripSpecies?.rarity ?? null;
-        const stripGoldCost = stripSpeciesId && stripMutation && stripRarity
-          ? Math.floor((GOLD_COST_TABLE[stripRarity]?.[0] ?? 0) * (MUT_MULT[stripMutation] ?? 1))
-          : 0;
-
         const TIER_LABEL = ["", "I — Common", "II — Balanced", "III — Rare-Weighted", "IV — Rare Dominant"];
         const TIER_COLOR = ["", "text-muted-foreground", "text-blue-400", "text-violet-400", "text-yellow-400"];
 
@@ -678,29 +645,6 @@ export function AlchemyTab() {
             setAttuneError(e instanceof Error ? e.message : "Attunement failed");
           } finally {
             setAttuning(false);
-          }
-        }
-
-        async function handleStrip() {
-          if (stripping || !stripSpeciesId || !stripMutation) return;
-          setStripError(null);
-          setStripping(true);
-          try {
-            const res = await edgeAlchemyStrip(stripSpeciesId, stripMutation);
-            const cur = getState();
-            update({
-              ...cur,
-              inventory:  res.inventory,
-              coins:      res.coins,
-              serverUpdatedAt: res.serverUpdatedAt,
-            });
-            setStripSuccess(true);
-            setStripSpeciesId(null);
-            setStripMutation(null);
-          } catch (e) {
-            setStripError(e instanceof Error ? e.message : "Strip failed");
-          } finally {
-            setStripping(false);
           }
         }
 
@@ -1045,68 +989,6 @@ export function AlchemyTab() {
               })()}
             </div>
 
-            {/* ── Strip section ───────────────────────────────────────────── */}
-            <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-4">
-              <p className="text-xs font-semibold">✂️ Strip Mutation</p>
-              <p className="text-xs text-muted-foreground">
-                Remove a mutation from a bloom, returning it to its base form. Costs coins.
-              </p>
-
-              {strippableBlooms.length === 0 ? (
-                <p className="text-xs text-muted-foreground">No mutated blooms in inventory.</p>
-              ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {rarityOrder.flatMap((r) =>
-                    strippableBlooms
-                      .filter((i) => getFlower(i.speciesId)?.rarity === r)
-                      .map((item, idx) => {
-                        const sp      = getFlower(item.speciesId)!;
-                        const mut     = item.mutation ? MUTATIONS[item.mutation as MutationType] : null;
-                        const isSelected = stripSpeciesId === item.speciesId && stripMutation === item.mutation;
-                        return (
-                          <button
-                            key={`${item.speciesId}-${item.mutation}-${idx}`}
-                            onClick={() => {
-                              setStripSpeciesId(isSelected ? null : item.speciesId);
-                              setStripMutation(isSelected ? null : (item.mutation ?? null));
-                              setStripError(null);
-                            }}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors ${
-                              isSelected
-                                ? "border-primary text-primary bg-primary/10"
-                                : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                            }`}
-                          >
-                            <span>{sp.emoji.bloom}</span>
-                            <span>{sp.name}</span>
-                            {mut && <span className={`font-mono ${mut.color}`}>{mut.emoji}</span>}
-                            <span className="text-muted-foreground/60">×{item.quantity}</span>
-                          </button>
-                        );
-                      })
-                  )}
-                </div>
-              )}
-
-              {stripSpeciesId && stripMutation && (
-                <div className="space-y-2">
-                  <div className="rounded-lg bg-card/60 border border-border px-3 py-2 text-xs flex justify-between">
-                    <span className="text-muted-foreground">Strip cost</span>
-                    <span className={`font-mono ${state.coins >= stripGoldCost ? "" : "text-destructive"}`}>
-                      {stripGoldCost.toLocaleString()} 🟡
-                    </span>
-                  </div>
-                  {stripError && <p className="text-xs text-destructive">{stripError}</p>}
-                  <button
-                    onClick={handleStrip}
-                    disabled={stripping || state.coins < stripGoldCost}
-                    className="w-full py-2 rounded-xl bg-destructive/10 border border-destructive/30 text-destructive text-sm font-semibold hover:bg-destructive/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-center"
-                  >
-                    {stripping ? "Stripping…" : "✂️ Strip Mutation"}
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         );
       })()}
@@ -1128,19 +1010,6 @@ export function AlchemyTab() {
           </div>
         );
       })()}
-
-      {/* ── Strip success toast ── */}
-      {stripSuccess && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-400 ${stripSuccessVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}`}>
-          <div className="flex items-center gap-3 bg-card border border-border rounded-2xl px-5 py-4 shadow-2xl min-w-56">
-            <span className="text-2xl">✂️</span>
-            <div>
-              <p className="text-sm font-bold mb-0.5">Mutation stripped</p>
-              <p className="text-xs text-muted-foreground">Bloom returned to base form</p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── Success toast (floating, auto-dismiss) ── */}
       {success && (
