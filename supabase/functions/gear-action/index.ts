@@ -148,6 +148,28 @@ const SPECIES_TYPES_G: Record<string, string[]> = {
   lovebind:        ["fairy","arcane"],     eternal_heart:   ["fairy","solar"],
   nova_bloom:      ["stellar","storm","blaze"],
   princess_blossom:["fairy","arcane"],     the_first_bloom: ["arcane","stellar"],
+  // v2.3.1 — new flowers
+  cloudveil:    ["storm"],              pepperbloom:   ["blaze"],
+  flurrysprig:  ["frost"],              showerbloom:   ["storm","tide"],
+  creamcap:     ["frost","fairy"],      duskling:      ["lunar"],
+  moongrass:    ["lunar"],              owlsage:       ["shadow","arcane"],
+  brewleaf:     ["arcane","grove"],     hexblossom:    ["arcane"],
+  starfleck:    ["stellar"],            cometail:      ["stellar"],
+  glacierbud:   ["frost"],              cloudgrass:    ["storm"],
+  chimebloom:   ["storm","arcane"],     evenfall:      ["lunar","shadow"],
+  sundrift:     ["solar","zephyr"],     moonspan:      ["lunar","tide"],
+  tanglewort:   ["shadow"],             medalwort:     ["stellar"],
+  topazbloom:   ["stellar"],
+  blazecrown:   ["blaze"],              terracotta:    ["grove","blaze"],
+  frostmark:    ["frost"],              coldsnap:      ["frost","storm"],
+  voidpetal:    ["shadow","arcane"],
+  galebloom:    ["zephyr"],
+  infernopetal: ["blaze"],              anchorweed:    ["tide","shadow"],
+  worldroot:    ["grove","arcane"],     clearingbloom: ["grove","solar"],
+  permafrost:   ["frost"],              frostspine:    ["frost","storm"],
+  tempest_eye:  ["storm"],              thundercrown:  ["storm"],
+  moonsmile:    ["lunar","fairy"],      dreamshade:    ["fairy","arcane"],
+  gravewilt:    ["shadow"],
 };
 
 const SPECIES_RARITY_G: Record<string, string> = {
@@ -193,6 +215,17 @@ const SPECIES_RARITY_G: Record<string, string> = {
   // Prismatic
   dreambloom:"prismatic",fairy_blossom:"prismatic",lovebind:"prismatic",eternal_heart:"prismatic",
   nova_bloom:"prismatic",princess_blossom:"prismatic",the_first_bloom:"prismatic",
+  // v2.3.1 — new flowers
+  cloudveil:"common",pepperbloom:"common",flurrysprig:"common",showerbloom:"common",
+  creamcap:"common",duskling:"common",moongrass:"common",owlsage:"common",
+  brewleaf:"common",hexblossom:"common",starfleck:"common",cometail:"common",
+  glacierbud:"uncommon",cloudgrass:"uncommon",chimebloom:"uncommon",evenfall:"uncommon",
+  sundrift:"uncommon",moonspan:"uncommon",tanglewort:"uncommon",medalwort:"uncommon",topazbloom:"uncommon",
+  blazecrown:"rare",terracotta:"rare",frostmark:"rare",coldsnap:"rare",voidpetal:"rare",
+  galebloom:"legendary",
+  infernopetal:"mythic",anchorweed:"mythic",worldroot:"mythic",clearingbloom:"mythic",
+  permafrost:"mythic",frostspine:"mythic",tempest_eye:"mythic",thundercrown:"mythic",
+  moonsmile:"mythic",dreamshade:"mythic",gravewilt:"mythic",
 };
 
 function findBestRecipeG(tA: string[], rA: string, tB: string[], rB: string): RecipeG | null {
