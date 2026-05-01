@@ -2045,6 +2045,16 @@ export function mergeServerResult<T extends Partial<GameState>>(
   result: T,
 ): GameState {
   const merged = { ...cur, ...result, ok: undefined } as GameState;
+
+  // Never let shop/supply reset timestamps roll backwards.  A stale server
+  // response (read from DB before an in-flight edgeSyncShop/edgeSyncSupplyShop
+  // write completes) would otherwise clobber the client's newer lastShopReset,
+  // causing the 1-second tick interval to fire a phantom restock — and the
+  // restock banner to reappear immediately after the user dismissed it.
+  const r = result as Partial<GameState>;
+  merged.lastShopReset   = Math.max(cur.lastShopReset,        r.lastShopReset   ?? 0);
+  merged.lastSupplyReset = Math.max(cur.lastSupplyReset ?? 0, r.lastSupplyReset ?? 0);
+
   if (result.grid) {
     // Identify the same plant by speciesId + timePlanted so we never copy a
     // mutation onto a different plant (e.g. after a harvest + re-plant).
