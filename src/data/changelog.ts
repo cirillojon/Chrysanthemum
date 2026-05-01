@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.3.1",
+    title:   "Flower Expansion & Fan Fix",
+    items: [
+      { type: "added", text: "38 new flowers added across common, uncommon, rare, legendary, and mythic rarities; all edge functions updated to recognise the new species" },
+      { type: "fixed", text: "Fan no longer strips Windstruck — the strip branch was matching Windstruck (stored as a string) and removing it; fan now leaves any plant already carrying Windstruck alone" },
+      { type: "fixed", text: "Fan no longer re-applies Windstruck to a plant that already has it — the apply-Windstruck branch now only fires when the plant has no mutation at all" },
+    ],
+  },
+  {
     version: "2.3.0",
     title:   "The Alchemy & Crafting Update",
     items: [
