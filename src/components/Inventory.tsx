@@ -15,7 +15,9 @@ import type { GearInventoryItem } from "../data/gear";
 import { CONSUMABLE_RECIPE_MAP, type ConsumableId } from "../data/consumables";
 
 type Tab = 0 | 1 | 2 | 3 | 4;
-const TAB_LABELS = ["Seeds", "Blooms", "Supplies", "Consumables", "Essences"] as const;
+const TAB_LABELS       = ["Seeds", "Blooms", "Supplies", "Consumables", "Essences"] as const;
+// Shorter labels used on small screens where the full names overflow
+const TAB_SHORT_LABELS = ["Seeds", "Blooms", "Supplies",      "Items",   "Essence"] as const;
 
 interface Props {
   newSeeds?:    number;
@@ -207,7 +209,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       </div>
 
       {/* Tab bar */}
-      <div className="flex gap-1 bg-card/40 border border-border rounded-xl p-1">
+      <div className="flex gap-px sm:gap-1 bg-card/40 border border-border rounded-xl p-1">
         {TAB_LABELS.map((label, i) => {
           const count    = i === 0 ? seedCount
                          : i === 1 ? bloomCount
@@ -227,16 +229,17 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
                 if (i < 3) onSubTabView?.(subKey);
               }}
               className={`
-                flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold transition-all relative
+                min-w-0 flex-1 flex items-center justify-center gap-0.5 sm:gap-1 py-2 rounded-lg text-[10px] sm:text-[11px] font-semibold transition-all relative
                 ${tab === i
                   ? "bg-primary/20 text-primary border border-primary/30"
                   : "text-muted-foreground hover:text-foreground"
                 }
               `}
             >
-              {label}
+              <span className="sm:hidden">{TAB_SHORT_LABELS[i]}</span>
+              <span className="hidden sm:inline">{label}</span>
               {count > 0 && (
-                <span className={`text-[10px] font-mono px-1 py-0.5 rounded-full ${
+                <span className={`flex-shrink-0 text-[9px] sm:text-[10px] font-mono px-0.5 sm:px-1 py-0.5 rounded-full ${
                   tab === i ? "bg-primary/20 text-primary" : "bg-border text-muted-foreground"
                 }`}>
                   {count}
