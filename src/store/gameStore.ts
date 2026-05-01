@@ -2057,7 +2057,24 @@ export function mergeServerResult<T extends Partial<GameState>>(
           plot.plant.speciesId === curPlot.plant.speciesId &&
           plot.plant.timePlanted === curPlot.plant.timePlanted
         ) {
-          return { ...plot, plant: { ...plot.plant, mutation: curPlot.plant.mutation } };
+          return {
+            ...plot,
+            plant: {
+              ...plot.plant,
+              // Client-side mutation rolls are not in the DB yet — preserve them.
+              mutation:   curPlot.plant.mutation,
+              // Client-computed progress fields — the server grid never carries these,
+              // so the merge must copy them over or gear changes wipe all growth progress
+              // (stampStageTransitions stamps bloomedAt before a removal, but the stamp
+              // would be discarded without this copy).
+              growthMs:   curPlot.plant.growthMs,
+              lastTickAt: curPlot.plant.lastTickAt,
+              // Prefer client's stamp (force-stamped before gear change); fall back to
+              // server's (may be set by tick-offline-gardens on an offline plant).
+              bloomedAt:  curPlot.plant.bloomedAt  ?? (plot.plant as PlantedFlower).bloomedAt,
+              sproutedAt: curPlot.plant.sproutedAt ?? (plot.plant as PlantedFlower).sproutedAt,
+            },
+          };
         }
         return plot;
       }),

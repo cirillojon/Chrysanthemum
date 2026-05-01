@@ -649,6 +649,7 @@ export interface ActivateBoostResult {
   ok:              true;
   consumables:     GameState["consumables"];
   activeBoosts:    GameState["activeBoosts"];
+  craftingQueue:   GameState["craftingQueue"];
   serverUpdatedAt: string;
 }
 

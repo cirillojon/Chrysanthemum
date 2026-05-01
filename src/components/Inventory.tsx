@@ -165,6 +165,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
         ...cur,
         consumables:     res.consumables,
         activeBoosts:    res.activeBoosts,
+        craftingQueue:   res.craftingQueue ?? cur.craftingQueue,
         serverUpdatedAt: res.serverUpdatedAt,
       });
     } catch {

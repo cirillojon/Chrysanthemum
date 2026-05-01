@@ -340,7 +340,7 @@ Deno.serve(async (req: Request) => {
       eclipse_tonic:  ", grid, last_eclipse_tonic",
       wind_shear:     ", last_wind_shear_used",
       slot_lock:      ", supply_shop",
-      activate_boost: ", active_boosts",
+      activate_boost: ", active_boosts, crafting_queue",
     } as Record<string, string>;
 
     const selectCols = `consumables, updated_at${extraCols[action] ?? ""}`;
@@ -734,12 +734,28 @@ Deno.serve(async (req: Request) => {
       };
       const newActiveBoosts = [...otherTypes, newBoost];
 
+      // ── Retroactive queue speedup ──────────────────────────────────────────
+      // If this is a NEW boost (not renewing an already-active one), halve
+      // the remaining durationMs of every in-progress crafting queue entry.
+      // Forge Haste ("craft") covers all crafting_queue kinds.
+      const wasAlreadyActive = sameType !== undefined && existingExpiryMs > now;
+      type CraftQueueEntry = Record<string, unknown>;
+      const rawQueue = (save.crafting_queue ?? []) as CraftQueueEntry[];
+      const updatedQueue: CraftQueueEntry[] =
+        !wasAlreadyActive && boostType === "craft" && rawQueue.length > 0
+          ? rawQueue.map((entry) => ({
+              ...entry,
+              durationMs: Math.max(1, Math.floor((entry.durationMs as number) / 2)),
+            }))
+          : rawQueue;
+
       const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
         .update({
-          consumables:   newConsumables,
-          active_boosts: newActiveBoosts,
-          updated_at:    new Date().toISOString(),
+          consumables:    newConsumables,
+          active_boosts:  newActiveBoosts,
+          crafting_queue: updatedQueue,
+          updated_at:     new Date().toISOString(),
         })
         .eq("user_id", userId)
         .eq("updated_at", priorUpdatedAt)
@@ -750,13 +766,14 @@ Deno.serve(async (req: Request) => {
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "use_consumable",
-        payload: { action, consumableId, boostType, durationMs },
+        payload: { action, consumableId, boostType, durationMs, retroactiveEntries: updatedQueue.length },
       });
 
       return json({
         ok:              true,
         consumables:     newConsumables,
         activeBoosts:    newActiveBoosts,
+        craftingQueue:   updatedQueue,
         serverUpdatedAt: ud.updated_at,
       });
     }
