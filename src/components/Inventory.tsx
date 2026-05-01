@@ -393,8 +393,9 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
     {/* ── Pouch result toast ── */}
 
     {pouchResult && (() => {
-      const flower = getFlower(pouchResult.speciesId);
-      const rarity = flower ? RARITY_CONFIG[flower.rarity] : null;
+      const flower     = getFlower(pouchResult.speciesId);
+      const rarity     = flower ? RARITY_CONFIG[flower.rarity] : null;
+      const discovered = state.discovered.includes(pouchResult.speciesId);
       return (
         <div
           className={`
@@ -404,13 +405,13 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           `}
         >
           <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
-            <span className="text-2xl">{flower?.emoji.seed ?? "🎁"}</span>
+            <span className="text-2xl">{discovered ? (flower?.emoji.seed ?? "🎁") : "❓"}</span>
             <div>
               <p className="text-sm font-bold text-primary mb-0.5">Pouch opened!</p>
               <p className="text-[11px] text-muted-foreground">
                 New{" "}
                 <span className={rarity?.color ?? ""}>{rarity?.label ?? "Unknown"}</span>
-                {" "}seed
+                {" "}{discovered ? (flower?.name ?? pouchResult.speciesId) : "???"} seed
               </p>
             </div>
           </div>
