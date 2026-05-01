@@ -128,7 +128,8 @@ export function PlotTooltip({
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
     if (!recipe || recipe.tier === null) return false;
 
-    if ((RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
+    // Magnifying Glass bypasses the rarity gate — identification works on any species
+    if (c.id !== "magnifying_glass" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;

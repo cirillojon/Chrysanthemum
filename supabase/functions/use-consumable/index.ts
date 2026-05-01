@@ -375,21 +375,24 @@ Deno.serve(async (req: Request) => {
       const rarity = SPECIES_RARITY[plant.speciesId];
       if (!rarity) return err("Unknown species");
 
-      // Validate consumable tier vs. plant rarity
-      const tier = extractTier(consumableId);
-      if (tier === null) return err("This consumable cannot be applied to a plant");
+      // Validate consumable tier vs. plant rarity.
+      // Magnifying Glass has no tier suffix and works on any rarity — skip the gate.
+      if (consumableId !== "magnifying_glass") {
+        const tier = extractTier(consumableId);
+        if (tier === null) return err("This consumable cannot be applied to a plant");
 
-      const requiredRarity = TIER_RARITIES[tier];
-      if (!requiredRarity) return err("Unknown consumable tier");
+        const requiredRarity = TIER_RARITIES[tier];
+        if (!requiredRarity) return err("Unknown consumable tier");
 
-      // All plant-targeting consumables match DOWNWARD — a higher-tier consumable
-      // works on lower-rarity plants (e.g. Mythic vial → Rare plant). Tier 1
-      // (Rare) is still the floor, so Common/Uncommon plants stay excluded.
-      const RARITY_ORDER: Record<string, number> = {
-        common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
-      };
-      if ((RARITY_ORDER[requiredRarity] ?? -1) < (RARITY_ORDER[rarity] ?? 999)) {
-        return err(`This ${requiredRarity} consumable can't reach ${rarity} plants`);
+        // All plant-targeting consumables match DOWNWARD — a higher-tier consumable
+        // works on lower-rarity plants (e.g. Mythic vial → Rare plant). Tier 1
+        // (Rare) is still the floor, so Common/Uncommon plants stay excluded.
+        const RARITY_ORDER: Record<string, number> = {
+          common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+        };
+        if ((RARITY_ORDER[requiredRarity] ?? -1) < (RARITY_ORDER[rarity] ?? 999)) {
+          return err(`This ${requiredRarity} consumable can't reach ${rarity} plants`);
+        }
       }
 
       // Deduct consumable
