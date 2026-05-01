@@ -15,9 +15,8 @@ import type { GearInventoryItem } from "../data/gear";
 import { CONSUMABLE_RECIPE_MAP, type ConsumableId } from "../data/consumables";
 
 type Tab = 0 | 1 | 2 | 3 | 4;
-const TAB_LABELS       = ["Seeds", "Blooms", "Supplies", "Consumables", "Essences"] as const;
-// Shorter labels used on small screens where the full names overflow
-const TAB_SHORT_LABELS = ["Seeds", "Blooms", "Supplies",      "Items",   "Essence"] as const;
+const TAB_LABELS  = ["Seeds", "Blooms", "Supplies", "Consumables", "Essences"] as const;
+const TAB_EMOJIS  = ["🌱",    "🌸",     "⚙️",       "🧪",          "✨"]       as const;
 
 interface Props {
   newSeeds?:    number;
@@ -208,19 +207,14 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
         </span>
       </div>
 
-      {/* Tab bar */}
-      <div className="flex gap-px sm:gap-1 bg-card/40 border border-border rounded-xl p-1">
+      {/* Tab bar — matches the shop / social / alchemy style */}
+      <div className="flex gap-2">
         {TAB_LABELS.map((label, i) => {
-          const count    = i === 0 ? seedCount
-                         : i === 1 ? bloomCount
-                         : i === 2 ? supplyCount
-                         : i === 3 ? consumableCount
-                         : essenceCount;
           const newCount = i === 0 ? newSeeds
                          : i === 1 ? newBlooms
                          : i === 2 ? newSupplies
                          : 0;
-          const subKey   = (i === 0 ? "seeds" : i === 1 ? "blooms" : "supplies") as "seeds" | "blooms" | "supplies";
+          const subKey = (i === 0 ? "seeds" : i === 1 ? "blooms" : "supplies") as "seeds" | "blooms" | "supplies";
           return (
             <button
               key={label}
@@ -229,22 +223,15 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
                 if (i < 3) onSubTabView?.(subKey);
               }}
               className={`
-                min-w-0 flex-1 flex items-center justify-center gap-0.5 sm:gap-1 py-2 rounded-lg text-[10px] sm:text-[11px] font-semibold transition-all relative
+                flex-1 py-2 rounded-xl text-xs font-semibold transition-all relative text-center
                 ${tab === i
-                  ? "bg-primary/20 text-primary border border-primary/30"
-                  : "text-muted-foreground hover:text-foreground"
+                  ? "bg-primary/20 border border-primary/50 text-primary"
+                  : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30 hover:text-foreground"
                 }
               `}
             >
-              <span className="sm:hidden">{TAB_SHORT_LABELS[i]}</span>
-              <span className="hidden sm:inline">{label}</span>
-              {count > 0 && (
-                <span className={`flex-shrink-0 text-[9px] sm:text-[10px] font-mono px-0.5 sm:px-1 py-0.5 rounded-full ${
-                  tab === i ? "bg-primary/20 text-primary" : "bg-border text-muted-foreground"
-                }`}>
-                  {count}
-                </span>
-              )}
+              <span>{TAB_EMOJIS[i]}</span>
+              <span className="hidden sm:inline ml-1">{label}</span>
               {newCount > 0 && tab !== i && (
                 <span className="absolute -top-1 -right-1 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
                   {newCount > 9 ? "9+" : newCount}
