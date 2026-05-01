@@ -6,12 +6,17 @@ import {
   getAffectedCells,
   getGearAffectingCell,
   getMaxSupplyRarity,
+  isAegis,
+  isAqueduct,
   isAutoPlanter,
+  isBalanceScale,
   isComposter,
+  isCropsticks,
   isFan,
   isGearExpired,
   isGrowLamp,
   isHarvestBell,
+  isLawnmower,
   isMutationSprinkler,
   isRarityUnlocked,
   isRegularSprinkler,
@@ -103,8 +108,13 @@ describe("GEAR catalog (regression)", () => {
         isFan(def),
         isHarvestBell(def),
         isAutoPlanter(def),
+        isAegis(def),
+        isCropsticks(def),
+        isLawnmower(def),
+        isBalanceScale(def),
+        isAqueduct(def),
       ];
-      expect(flags.filter(Boolean).length, `${id} matches multiple predicates`).toBe(1);
+      expect(flags.filter(Boolean).length, `${id} should match exactly one predicate`).toBe(1);
     }
   });
 });
@@ -208,12 +218,14 @@ describe("getGearAffectingCell (regression)", () => {
 });
 
 describe("Supply pools and rarity gating (regression)", () => {
-  it("every supply pool entry references a known fertilizer or gear type", () => {
+  it("every supply pool entry references a known fertilizer, gear, or consumable type", () => {
     for (const items of Object.values(SUPPLY_POOLS)) {
       if (!items) continue;
       for (const item of items) {
         if (item.kind === "gear") {
           expect(GEAR[item.gearType], `unknown gear ${item.gearType}`).toBeDefined();
+        } else if (item.kind === "consumable") {
+          expect(item.consumableId, `consumable item missing id`).toBeTruthy();
         } else {
           expect(item.fertilizerType).toBeTruthy();
         }

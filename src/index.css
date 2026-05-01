@@ -249,6 +249,116 @@
 .gear-wind-up    { animation-name: gear-wind-up;    bottom: 0; }
 .gear-wind-down  { animation-name: gear-wind-down;  top:    0; }
 
+/* Lawnmower: 🍃 clippings tumble in the mower's facing direction */
+@keyframes gear-mow-right {
+  0%   { transform: translateX(0)     rotate(0deg);   opacity: 0;   }
+  10%  {                                               opacity: 0.8; }
+  80%  {                                               opacity: 0.4; }
+  100% { transform: translateX(60px)  rotate(200deg); opacity: 0;   }
+}
+@keyframes gear-mow-left {
+  0%   { transform: translateX(0)     rotate(0deg);    opacity: 0;   }
+  10%  {                                                opacity: 0.8; }
+  80%  {                                                opacity: 0.4; }
+  100% { transform: translateX(-60px) rotate(-200deg); opacity: 0;   }
+}
+@keyframes gear-mow-up {
+  0%   { transform: translateY(0)     rotate(0deg);    opacity: 0;   }
+  10%  {                                                opacity: 0.8; }
+  80%  {                                                opacity: 0.4; }
+  100% { transform: translateY(-60px) rotate(-200deg); opacity: 0;   }
+}
+@keyframes gear-mow-down {
+  0%   { transform: translateY(0)    rotate(0deg);   opacity: 0;   }
+  10%  {                                              opacity: 0.8; }
+  80%  {                                              opacity: 0.4; }
+  100% { transform: translateY(60px) rotate(200deg); opacity: 0;   }
+}
+.gear-mow-right, .gear-mow-left, .gear-mow-up, .gear-mow-down {
+  animation-duration: 1.8s;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+  position: absolute;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+}
+.gear-mow-right { animation-name: gear-mow-right; left:   0; }
+.gear-mow-left  { animation-name: gear-mow-left;  right:  0; }
+.gear-mow-up    { animation-name: gear-mow-up;    bottom: 2px; }
+.gear-mow-down  { animation-name: gear-mow-down;  top:    0; }
+
+/* Balance Scale: ✦ boost-side particles float upward (golden/amber) */
+@keyframes gear-scale-boost {
+  0%   { transform: translateY(4px)   scale(0.8); opacity: 0;   }
+  15%  {                                           opacity: 0.9; }
+  85%  {                                           opacity: 0.5; }
+  100% { transform: translateY(-52px) scale(0.5); opacity: 0;   }
+}
+.gear-scale-boost {
+  animation: gear-scale-boost 1.4s ease-out infinite;
+  position: absolute;
+  bottom: 2px;
+  font-size: 9px;
+  line-height: 1;
+  color: rgb(251, 191, 36); /* amber-400 */
+  pointer-events: none;
+}
+
+/* Balance Scale: ▾ slow-side particles drift downward (gray) */
+@keyframes gear-scale-slow {
+  0%   { transform: translateY(-4px); opacity: 0;   }
+  15%  {                               opacity: 0.6; }
+  85%  {                               opacity: 0.3; }
+  100% { transform: translateY(52px); opacity: 0;   }
+}
+.gear-scale-slow {
+  animation: gear-scale-slow 2.4s ease-in infinite;
+  position: absolute;
+  top: 2px;
+  font-size: 8px;
+  line-height: 1;
+  color: rgb(148, 163, 184); /* slate-400 */
+  pointer-events: none;
+}
+
+/* ── Cropsticks cross-breed source particle animations ─────────────────── */
+/* Small emerald dots drift from the infused plant towards the cropsticks.  */
+@keyframes cross-particle-right {
+  0%   { transform: translateX(0);     opacity: 0;    }
+  15%  {                                opacity: 0.85; }
+  80%  {                                opacity: 0.5;  }
+  100% { transform: translateX(52px);  opacity: 0;    }
+}
+@keyframes cross-particle-left {
+  0%   { transform: translateX(0);     opacity: 0;    }
+  15%  {                                opacity: 0.85; }
+  80%  {                                opacity: 0.5;  }
+  100% { transform: translateX(-52px); opacity: 0;    }
+}
+@keyframes cross-particle-up {
+  0%   { transform: translateY(0);     opacity: 0;    }
+  15%  {                                opacity: 0.85; }
+  80%  {                                opacity: 0.5;  }
+  100% { transform: translateY(-52px); opacity: 0;    }
+}
+@keyframes cross-particle-down {
+  0%   { transform: translateY(0);    opacity: 0;    }
+  15%  {                               opacity: 0.85; }
+  80%  {                               opacity: 0.5;  }
+  100% { transform: translateY(52px); opacity: 0;    }
+}
+.cross-particle {
+  position: absolute;
+  width:  5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(52 211 153 / 0.85); /* emerald-400 */
+  pointer-events: none;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+
 /* ── Base resets ───────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after {

@@ -14,8 +14,9 @@ function b64url(s: string): string {
 function buildItemLabel(speciesId: string, mutation: string | null, isSeed: boolean): string {
   const cap   = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
   const words = (s: string) => s.split("_").map(cap).join(" ");
-  if (speciesId.startsWith("fert:")) return words(speciesId.replace("fert:", "")) + " Fertilizer";
-  if (speciesId.startsWith("gear:")) return words(speciesId.replace("gear:", ""));
+  if (speciesId.startsWith("fert:"))       return words(speciesId.replace("fert:", "")) + " Fertilizer";
+  if (speciesId.startsWith("gear:"))       return words(speciesId.replace("gear:", ""));
+  if (speciesId.startsWith("consumable:")) return words(speciesId.replace("consumable:", ""));
   const base = words(speciesId);
   return (mutation ? cap(mutation) + " " : "") + base + (isSeed ? " Seed" : "");
 }
@@ -121,12 +122,15 @@ Deno.serve(async (req: Request) => {
     const isGear       = speciesId.startsWith("gear:");
     const isSeed       = (listing.is_seed as boolean) ?? false;
 
+    const isConsumable = speciesId.startsWith("consumable:");
+
     // Determine item kind for mailbox
     let itemKind: string;
-    if (isFertilizer)    itemKind = "fertilizer";
-    else if (isGear)     itemKind = "gear";
-    else if (isSeed)     itemKind = "seed";
-    else                 itemKind = "flower";
+    if (isFertilizer)      itemKind = "fertilizer";
+    else if (isGear)       itemKind = "gear";
+    else if (isConsumable) itemKind = "consumable";
+    else if (isSeed)       itemKind = "seed";
+    else                   itemKind = "flower";
 
     // ── Mark listing sold (optimistic lock prevents double-buy) ───────────────
     const { error: listingUpdateError } = await supabaseAdmin

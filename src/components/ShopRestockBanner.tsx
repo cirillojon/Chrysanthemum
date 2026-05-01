@@ -26,10 +26,13 @@ export function ShopRestockBanner({ onDismiss, type = "seeds" }: Props) {
   }, []);
 
   return (
+    // Positioning + z-index live on the wrapper in App.tsx so multiple banners
+    // can stack vertically instead of overlapping. `pointer-events-auto` re-enables
+    // pointer events for the dismiss button (the wrapper sets `pointer-events-none`
+    // so the empty space around stacked banners doesn't block taps below).
     <div
       className={`
-        fixed bottom-6 left-1/2 -translate-x-1/2 z-50
-        transition-all duration-400
+        transition-all duration-400 pointer-events-auto
         ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
       `}
     >

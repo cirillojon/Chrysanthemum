@@ -1,12 +1,14 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { useSwipe } from "./hooks/useSwipe";
 import { Garden } from "./components/Garden";
 import { Shop } from "./components/Shop";
 import { Inventory } from "./components/Inventory";
 import { OfflineBanner } from "./components/OfflineBanner";
 import { ShopRestockBanner } from "./components/ShopRestockBanner";
+import { CraftCompletionBanner } from "./components/CraftCompletionBanner";
 import { GearExpiryBanner } from "./components/GearExpiryBanner";
 import { UsernameModal } from "./components/UsernameModal";
+import { SignInPromptModal } from "./components/SignInPromptModal";
 import { SearchPage } from "./components/SearchPage";
 import { ProfilePage } from "./components/ProfilePage";
 import { FriendsPage } from "./components/FriendsPage";
@@ -15,7 +17,9 @@ import { LeaderboardPage } from "./components/LeaderboardPage";
 import { FriendRequestNotification } from "./components/FriendRequestNotification";
 import { GiftNotification } from "./components/GiftNotification";
 import { Codex } from "./components/Codex";
-import { Botany } from "./components/Botany";
+import { AlchemyTab } from "./components/AlchemyTab";
+import { CraftingTab } from "./components/CraftingTab";
+import { ActiveBoostsHUD } from "./components/ActiveBoostsHUD";
 import { MarketplaceTab } from "./components/MarketplaceTab";
 import { WeatherOverlay } from "./components/WeatherOverlay";
 import { DevWeatherPanel } from "./components/DevWeatherPanel";
@@ -36,7 +40,7 @@ import { UpdateBanner } from "./components/UpdateBanner";
 import { HarvestPopup } from "./components/HarvestPopup";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
-type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "botany";
+type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "alchemy" | "craft";
 type ShopView   = "seeds" | "supply";
 type SocialView = "search" | "friends" | "mailbox" | "leaderboard" | "marketplace";
 
@@ -51,10 +55,13 @@ function AppInner() {
     shopJustRestocked,   clearShopNotification,
     supplyJustRestocked, clearSupplyNotification,
     gearExpiry, clearGearExpiry,
+    craftCompletions, dismissCraftCompletion,
+    attunementCompletions, dismissAttunementCompletion,
     user, profile, authLoading,
     signInWithGoogle, signOut,
     needsUsername, completeUsername,
     isStaleTab,
+    signInPromptReason, dismissSignInPrompt,
     activeWeather, weatherMsLeft, weatherIsActive,
   } = useGame();
 
@@ -197,16 +204,92 @@ function AppInner() {
 
   const newInvTotal = newSeeds + newBlooms + newSupplies;
 
+  // ── Codex unseen entries (badge + red dot + "newly discovered" labels) ───
+  // Tracks WHICH entries the user has acknowledged by opening the card —
+  // unseen = state.discovered − acknowledged. Persisted to localStorage so
+  // the "newly discovered" indicators survive page reloads / new builds.
+  // The set persists across tab navigations (badge sticks until user opens
+  // the specific entry's card) and is invalidated on sign-out.
+  const codexAckKey = useMemo(
+    () => `chrysanthemum_codex_ack_${user?.id ?? "guest"}`,
+    [user?.id],
+  );
+  const [acknowledgedCodex, setAcknowledgedCodex] = useState<Set<string> | null>(null);
+
+  // Bootstrap the set: prefer the persisted localStorage copy; fall back to
+  // `state.discovered` (one-time bootstrap so first-time users of this feature
+  // don't see a giant badge on existing discoveries). Re-runs on user change.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(codexAckKey);
+      if (raw) {
+        setAcknowledgedCodex(new Set(JSON.parse(raw) as string[]));
+        return;
+      }
+    } catch { /* malformed JSON — fall through to bootstrap */ }
+    setAcknowledgedCodex(new Set(state.discovered ?? []));
+  }, [codexAckKey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Persist the set whenever it changes. Skip the initial null state.
+  useEffect(() => {
+    if (acknowledgedCodex === null) return;
+    try {
+      localStorage.setItem(codexAckKey, JSON.stringify([...acknowledgedCodex]));
+    } catch { /* storage full — silently ignore, not a critical write */ }
+  }, [acknowledgedCodex, codexAckKey]);
+
+  const unseenCodex = useMemo<Set<string>>(() => {
+    if (!acknowledgedCodex) return new Set();
+    const out = new Set<string>();
+    for (const id of state.discovered ?? []) {
+      if (!acknowledgedCodex.has(id)) out.add(id);
+    }
+    return out;
+  }, [state.discovered, acknowledgedCodex]);
+
+  // Codex calls this when the user expands a flower's card — marks every
+  // entry belonging to that species (base + any mutations) as seen.
+  const markCodexSeen = useCallback((speciesId: string) => {
+    setAcknowledgedCodex((prev) => {
+      if (!prev) return prev;
+      const next = new Set(prev);
+      const prefix = `${speciesId}:`;
+      for (const id of state.discovered ?? []) {
+        if (id === speciesId || id.startsWith(prefix)) next.add(id);
+      }
+      return next;
+    });
+  }, [state.discovered]);
+
   // Social tab badge = friend requests + unread mailbox
   // (gifts now arrive via mailbox so mailboxUnreadCount already includes them)
   const socialBadgeCount = pendingCount + mailboxUnreadCount;
 
+  // ── Craft tab badge — count of claimable (done) crafts in the queue ─────
+  // Drives the badge under the ⚒️ tab. Re-derived every second via the local
+  // `craftBadgeNow` ticker (state.craftingQueue itself doesn't change as a
+  // craft passes its finish time, so we need our own clock for this).
+  const [craftBadgeNow, setCraftBadgeNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setCraftBadgeNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, []);
+  const claimableCraftsCount = (state.craftingQueue ?? []).reduce((acc, e) => {
+    const doneAt = new Date(e.startedAt).getTime() + e.durationMs;
+    return craftBadgeNow >= doneAt ? acc + 1 : acc;
+  }, 0);
+  // Same logic for the Alchemy attunement queue — drives the ⚗️ tab badge.
+  const claimableAttunementsCount = (state.attunementQueue ?? []).reduce((acc, e) => {
+    const doneAt = new Date(e.startedAt).getTime() + e.durationMs;
+    return craftBadgeNow >= doneAt ? acc + 1 : acc;
+  }, 0);
+
   // ── Swipe navigation ─────────────────────────────────────────────────────────
   // Flat order: garden(0) → shop:seeds(1) → shop:supply(2) →
-  //             inventory(3) → botany(4) → codex(5) →
+  //             inventory(3) → alchemy(4) → codex(5) →
   //             social:search(6) → friends(7) → mailbox(8) →
   //             marketplace(9) → leaderboard(10) → me(profile)
-  const MAIN_TABS: Tab[] = ["garden", "shop", "inventory", "botany", "codex", "social"];
+  const MAIN_TABS: Tab[] = ["garden", "shop", "inventory", "alchemy", "craft", "codex", "social"];
 
   const handleSwipeLeft = useCallback(() => {
     if (profileUsername) return;
@@ -290,7 +373,7 @@ function AppInner() {
 
   // Flat index across the entire nav sequence:
   // garden(0) → shop:seeds(1) → shop:supply(2) → inventory(3) →
-  // botany(4) → codex(5) → social:search(6) → friends(7) → mailbox(8) →
+  // alchemy(4) → codex(5) → social:search(6) → friends(7) → mailbox(8) →
   // marketplace(9) → leaderboard(10)
   const SHOP_VIEWS:   ShopView[]   = ["seeds", "supply"];
   const SOCIAL_VIEWS: SocialView[] = ["search", "friends", "mailbox", "marketplace", "leaderboard"];
@@ -299,9 +382,10 @@ function AppInner() {
     if (t === "garden")    return 0;
     if (t === "shop")      return 1 + SHOP_VIEWS.indexOf(shv);
     if (t === "inventory") return 3;
-    if (t === "botany")    return 4;
-    if (t === "codex")     return 5;
-    return 6 + SOCIAL_VIEWS.indexOf(sv); // social
+    if (t === "alchemy")   return 4;
+    if (t === "craft")     return 5;
+    if (t === "codex")     return 6;
+    return 7 + SOCIAL_VIEWS.indexOf(sv); // social
   }
 
   function handleViewProfile(username: string) {
@@ -322,6 +406,14 @@ function AppInner() {
     if (t === "social") setSocialView("search");
     setProfileUsername(null);
 
+    // Scroll to top whenever the user actually navigates to a different tab.
+    // Without this, switching from a deeply-scrolled tab (leaderboard, codex, marketplace)
+    // to another tab leaves you mid-page on the new tab, which feels broken on mobile.
+    // Skipped on same-tab clicks so re-tapping the active tab doesn't punt you out of context.
+    if (t !== tab) {
+      window.scrollTo({ top: 0, behavior: "instant" });
+    }
+
     // Clear inventory new-items badges and reset baselines when entering inventory
     if (t === "inventory") {
       setNewSeeds(0);
@@ -341,6 +433,8 @@ function AppInner() {
       setNewSeedsShopBadge(0);
       setNewSupplyShopBadge(0);
     }
+    // Codex badge intentionally persists across tab visits — cleared per-flower
+    // when the user expands that flower's card (handled inside <Codex/>).
   }
 
   function handleShopViewChange(v: ShopView) {
@@ -399,11 +493,36 @@ function AppInner() {
           }}
         />
       )}
-      {shopJustRestocked && (
-        <ShopRestockBanner onDismiss={clearShopNotification} type="seeds" />
-      )}
-      {supplyJustRestocked && (
-        <ShopRestockBanner onDismiss={clearSupplyNotification} type="supply" />
+      {/* Floating banners — wrapped in a single fixed container so they stack
+          vertically when multiple fire instead of rendering on top of each
+          other. flex-col-reverse keeps the most recent banner closest to the
+          anchor (bottom edge); older banners stack above. */}
+      {(shopJustRestocked || supplyJustRestocked || craftCompletions.length > 0 || attunementCompletions.length > 0) && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col-reverse items-center gap-2 pointer-events-none">
+          {shopJustRestocked && (
+            <ShopRestockBanner onDismiss={clearShopNotification} type="seeds" />
+          )}
+          {supplyJustRestocked && (
+            <ShopRestockBanner onDismiss={clearSupplyNotification} type="supply" />
+          )}
+          {craftCompletions.map((c) => (
+            <CraftCompletionBanner
+              key={c.id}
+              emoji={c.emoji}
+              name={c.name}
+              onDismiss={() => dismissCraftCompletion(c.id)}
+            />
+          ))}
+          {attunementCompletions.map((c) => (
+            <CraftCompletionBanner
+              key={c.id}
+              emoji={c.emoji}
+              name={c.name}
+              title="Attunement Ready!"
+              onDismiss={() => dismissAttunementCompletion(c.id)}
+            />
+          ))}
+        </div>
       )}
       {gearExpiry && (
         <GearExpiryBanner gearType={gearExpiry.gearType} onDismiss={clearGearExpiry} />
@@ -432,6 +551,18 @@ function AppInner() {
       )}
       {needsUsername && user && (
         <UsernameModal user={user} onComplete={completeUsername} />
+      )}
+      {/* Guest sign-in prompt — opened by requestSignIn() from any component
+          that needs auth (Buy buttons, Upgrade buttons, etc. — see #148). */}
+      {signInPromptReason !== null && (
+        <SignInPromptModal
+          reason={signInPromptReason}
+          onClose={dismissSignInPrompt}
+          onSignIn={async () => {
+            dismissSignInPrompt();
+            await signInWithGoogle();
+          }}
+        />
       )}
 
       {updateAvailable && !dismissedUpdate && (
@@ -477,6 +608,7 @@ function AppInner() {
                 period={dayPeriod}
               />
             </button>
+            <ActiveBoostsHUD activeBoosts={state.activeBoosts} />
             <span className="text-sm font-mono">🟡 {state.coins.toLocaleString()}</span>
             {!authLoading && (
               user ? (
@@ -518,7 +650,7 @@ function AppInner() {
       {/* Tabs */}
       <nav className="bg-card/40 border-b border-border backdrop-blur">
         <div className="w-full sm:max-w-2xl sm:mx-auto flex">
-          {(["garden", "shop", "inventory", "botany", "codex", "social"] as Tab[]).map((t) => (
+          {(["garden", "shop", "inventory", "alchemy", "craft", "codex", "social"] as Tab[]).map((t) => (
             <button
               key={t}
               onClick={() => handleTabChange(t)}
@@ -534,7 +666,8 @@ function AppInner() {
               {t === "garden"      ? "🌱"
                : t === "shop"      ? "🛒"
                : t === "inventory" ? "🎒"
-               : t === "botany"    ? "🌿"
+               : t === "alchemy"   ? "⚗️"
+               : t === "craft"     ? "⚒️"
                : t === "codex"     ? "📖"
                : "🌍"}
               <span className="ml-1 hidden sm:inline capitalize">{t}</span>
@@ -552,6 +685,21 @@ function AppInner() {
               {t === "inventory" && newInvTotal > 0 && (
                 <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
                   {newInvTotal > 9 ? "9+" : newInvTotal}
+                </span>
+              )}
+              {t === "craft" && claimableCraftsCount > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-amber-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                  {claimableCraftsCount > 9 ? "9+" : claimableCraftsCount}
+                </span>
+              )}
+              {t === "alchemy" && claimableAttunementsCount > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-emerald-500 rounded-full text-[10px] text-white flex items-center justify-center font-bold">
+                  {claimableAttunementsCount > 9 ? "9+" : claimableAttunementsCount}
+                </span>
+              )}
+              {t === "codex" && unseenCodex.size > 0 && (
+                <span className="absolute top-2 right-1 sm:right-6 w-4 h-4 bg-primary rounded-full text-[10px] text-primary-foreground flex items-center justify-center font-bold">
+                  {unseenCodex.size > 9 ? "9+" : unseenCodex.size}
                 </span>
               )}
               {t === "social" && socialBadgeCount > 0 && (
@@ -630,8 +778,9 @@ function AppInner() {
               }}
             />
           )}
-          {tab === "botany"      && <Botany />}
-          {tab === "codex"       && <Codex />}
+          {tab === "alchemy"     && <AlchemyTab />}
+          {tab === "craft"       && <CraftingTab />}
+          {tab === "codex"       && <Codex unseenEntries={unseenCodex} markSeen={markCodexSeen} />}
           {tab === "social"    && (
             <>
               {/* Sub-nav — always visible for signed-in users; guests only see Market */}

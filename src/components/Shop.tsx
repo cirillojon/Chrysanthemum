@@ -32,7 +32,7 @@ interface ShopProps {
 }
 
 export function Shop({ view }: ShopProps) {
-  const { state, perform } = useGame();
+  const { state, perform, user, requestSignIn } = useGame();
   const [countdown,  setCountdown]  = useState(() => msUntilShopReset(state));
   const [showRates,  setShowRates]  = useState(false);
 
@@ -49,6 +49,7 @@ export function Shop({ view }: ShopProps) {
   const atMaxSlots      = state.shopSlots >= MAX_SHOP_SLOTS;
 
   function handleUpgradeShopSlots() {
+    if (!user) { requestSignIn("to upgrade your shop slots"); return; }
     const optimistic = upgradeShopSlots(state);
     if (optimistic) perform(optimistic, () => edgeUpgradeShopSlots());
   }

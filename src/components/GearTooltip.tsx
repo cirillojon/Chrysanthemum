@@ -1,8 +1,8 @@
-import { useState, useRef, useLayoutEffect } from "react";
-import { GEAR, isGearExpired, type PlacedGear, type FanDirection } from "../data/gear";
+import { useState, useRef, useLayoutEffect, useEffect } from "react";
+import { GEAR, isGearExpired, CROPSTICKS_BREED_DURATION_MS, type PlacedGear, type FanDirection } from "../data/gear";
 import { MUTATIONS, RARITY_CONFIG } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
-import { removeGear, collectFromComposter, setFanDirection } from "../store/gameStore";
+import { removeGear, collectFromComposter, setFanDirection, stampStageTransitions } from "../store/gameStore";
 import { useGame } from "../store/GameContext";
 import { edgeRemoveGear, edgeCollectFromComposter, edgeSetFanDirection } from "../lib/edgeFunctions";
 
@@ -26,10 +26,18 @@ function formatMs(ms: number): string {
 }
 
 export function GearTooltip({ gear, row, col, onClose }: Props) {
-  const { state, perform } = useGame();
+  const { state, perform, getState, activeWeather } = useGame();
   const [nudge,   setNudge]   = useState(0);
   const [flipped, setFlipped] = useState(false);
+  const [, setTick] = useState(0);
   const tooltipRef = useRef<HTMLDivElement>(null);
+
+  // Tick every second to keep cropsticks countdown live
+  useEffect(() => {
+    if (gear.gearType !== "cropsticks" || gear.crossbreedStartedAt == null) return;
+    const id = setInterval(() => setTick((n) => (n + 1) & 0xffff), 1_000);
+    return () => clearInterval(id);
+  }, [gear.gearType, gear.crossbreedStartedAt]);
 
   useLayoutEffect(() => {
     const el = tooltipRef.current;
@@ -69,7 +77,14 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
   const maxStorage  = def.maxStorage ?? 10;
 
   function handleRemove() {
-    const optimistic = removeGear(state, row, col);
+    // Force-stamp any pending stage transitions before the gear change so that
+    // bloomedAt / sproutedAt are permanently written at the current multiplier.
+    // Without this, a plant that visually shows "bloom" via 3x extrapolation but
+    // hasn't been ticked yet would revert to "sprout" the moment the sprinkler
+    // is removed and the multiplier drops back to 1x.
+    const cur     = getState();
+    const stamped = stampStageTransitions(cur, Date.now(), activeWeather, true);
+    const optimistic = removeGear(stamped, row, col);
     if (!optimistic) return;
     const savedGear = gear; // captured at click time
     perform(
@@ -141,7 +156,12 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
     );
   }
 
-  const isFan = def.passiveSubtype === "fan";
+  const isDirectional = def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower" || def.passiveSubtype === "aqueduct";
+
+  // Balance Scale: which side is currently boosting?
+  const balanceScalePhase = def.passiveSubtype === "balance_scale"
+    ? Math.floor(now / 3_600_000) % 2
+    : null;
 
   return (
     <div
@@ -174,8 +194,8 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
         {/* Description */}
         <p className="text-[10px] text-muted-foreground leading-snug">{def.description}</p>
 
-        {/* Fan direction picker */}
-        {isFan && (
+        {/* Directional gear picker (fan, aegis, lawnmower) */}
+        {isDirectional && def.passiveSubtype !== "aqueduct" && (
           <div className="pt-1 border-t border-border space-y-1.5">
             <p className="text-[10px] text-muted-foreground">Direction</p>
             <div className="grid grid-cols-3 gap-1">
@@ -197,7 +217,7 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
                     : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
                 }`}
               >←</button>
-              <div className="flex items-center justify-center text-base">💨</div>
+              <div className="flex items-center justify-center text-base">{def.emoji}</div>
               <button
                 onClick={() => handleFanDirection("right")}
                 className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
@@ -220,6 +240,44 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
           </div>
         )}
 
+        {/* Aqueduct: 2-button axis picker (bidirectional — left=right, up=down) */}
+        {def.passiveSubtype === "aqueduct" && (
+          <div className="pt-1 border-t border-border space-y-1.5">
+            <p className="text-[10px] text-muted-foreground">Axis</p>
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                onClick={() => handleFanDirection("right")}
+                className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
+                  gear.direction === "left" || gear.direction === "right"
+                    ? "bg-primary/20 border border-primary/40 text-primary"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                }`}
+              >←→</button>
+              <button
+                onClick={() => handleFanDirection("up")}
+                className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
+                  gear.direction === "up" || gear.direction === "down"
+                    ? "bg-primary/20 border border-primary/40 text-primary"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                }`}
+              >↑↓</button>
+            </div>
+          </div>
+        )}
+
+        {/* Balance Scale: current phase status */}
+        {balanceScalePhase !== null && (
+          <div className="pt-1 border-t border-border space-y-1">
+            <p className="text-[10px] text-muted-foreground">
+              Now boosting:{" "}
+              <span className="text-amber-300 font-mono">
+                {balanceScalePhase === 0 ? "← left" : "→ right"}
+              </span>
+              <span className="text-muted-foreground"> · switches hourly</span>
+            </p>
+          </div>
+        )}
+
         {/* Expiry */}
         {msRemaining !== null && (
           <div className="space-y-1">
@@ -239,6 +297,25 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
             )}
           </div>
         )}
+
+        {/* Cropsticks cross-breed countdown */}
+        {def.passiveSubtype === "cropsticks" && gear.crossbreedStartedAt != null && (() => {
+          const elapsed  = Date.now() - gear.crossbreedStartedAt;
+          const msLeft   = Math.max(0, CROPSTICKS_BREED_DURATION_MS - elapsed);
+          const progress = Math.min(1, elapsed / CROPSTICKS_BREED_DURATION_MS);
+          return (
+            <div className="pt-1 border-t border-border space-y-1">
+              <p className="text-[10px] text-muted-foreground">
+                {msLeft > 0
+                  ? <>Cross-breeding · <span className="font-mono text-emerald-400">{formatMs(msLeft)}</span></>
+                  : <span className="text-emerald-400">Cross-breeding · Ready!</span>}
+              </p>
+              <div className="h-1 bg-border rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-emerald-400" style={{ width: `${progress * 100}%` }} />
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Composter stored fertilizers */}
         {def.passiveSubtype === "composter" && (

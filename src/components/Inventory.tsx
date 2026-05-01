@@ -1,17 +1,21 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useGame } from "../store/GameContext";
-import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
-import type { MutationType } from "../data/flowers";
+import { getFlower, RARITY_CONFIG, MUTATIONS, FLOWER_TYPES } from "../data/flowers";
+import type { FlowerType, MutationType } from "../data/flowers";
+import {
+  ALL_FLOWER_TYPES, UNIVERSAL_ESSENCE_DISPLAY, UNIVERSAL_ESSENCE_TYPE,
+} from "../data/essences";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
-import { sellFlower, rollbackSellAll, type InventoryItem } from "../store/gameStore";
-import { edgeSellAll } from "../lib/edgeFunctions";
+import { sellFlower, rollbackSellAll, applyEclipseTonic, type InventoryItem } from "../store/gameStore";
+import { edgeSellAll, edgeUseEclipseTonic, edgeAlchemyCraftSeed, edgeActivateBoost } from "../lib/edgeFunctions";
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";
+import { CONSUMABLE_RECIPE_MAP, type ConsumableId } from "../data/consumables";
 
-type Tab = 0 | 1 | 2;
-const TAB_LABELS = ["Seeds", "Blooms", "Supplies"] as const;
+type Tab = 0 | 1 | 2 | 3 | 4;
+const TAB_LABELS = ["Seeds", "Blooms", "Supplies", "Consumables", "Essences"] as const;
 
 interface Props {
   newSeeds?:    number;
@@ -21,19 +25,28 @@ interface Props {
 }
 
 export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView }: Props) {
-  const { state, perform, getState, awaitHarvests } = useGame();
-  const [tab, setTab] = useState<Tab>(0);
+  const { state, perform, getState, awaitHarvests, update } = useGame();
+  const [tab,                 setTab]                 = useState<Tab>(0);
+  const [usingEclipse,        setUsingEclipse]        = useState<string | null>(null);
+  const [openingPouch,        setOpeningPouch]        = useState<string | null>(null);
+  const [activatingBoost,     setActivatingBoost]     = useState<string | null>(null);
+  const [pouchResult,         setPouchResult]         = useState<{ speciesId: string } | null>(null);
+  const [pouchResultVisible,  setPouchResultVisible]  = useState(false);
 
-  const items       = state.inventory.filter((i) => i.quantity > 0);
-  const seeds       = items.filter((i) => i.isSeed);
-  const blooms      = items.filter((i) => !i.isSeed);
-  const fertilizers = state.fertilizers.filter((f) => f.quantity > 0);
-  const gearItems   = (state.gearInventory ?? []).filter((g) => g.quantity > 0);
+  const items           = state.inventory.filter((i) => i.quantity > 0);
+  const seeds           = items.filter((i) => i.isSeed);
+  const blooms          = items.filter((i) => !i.isSeed);
+  const fertilizers     = state.fertilizers.filter((f) => f.quantity > 0);
+  const gearItems       = (state.gearInventory ?? []).filter((g) => g.quantity > 0);
+  const consumableItems = (state.consumables ?? []).filter((c) => c.quantity > 0);
 
-  const seedCount   = seeds.reduce((s, i) => s + i.quantity, 0);
-  const bloomCount  = blooms.reduce((s, i) => s + i.quantity, 0);
-  const supplyCount = fertilizers.reduce((s, f) => s + f.quantity, 0)
-                    + gearItems.reduce((s, g) => s + g.quantity, 0);
+  const seedCount        = seeds.reduce((s, i) => s + i.quantity, 0);
+  const bloomCount       = blooms.reduce((s, i) => s + i.quantity, 0);
+  const supplyCount      = fertilizers.reduce((s, f) => s + f.quantity, 0)
+                         + gearItems.reduce((s, g) => s + g.quantity, 0);
+  const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0);
+  const essenceItems     = (state.essences ?? []).filter((e) => e.amount > 0);
+  const essenceCount     = essenceItems.reduce((s, e) => s + e.amount, 0);
 
   const totalBloomValue = blooms.reduce((sum, item) => {
     const species = getFlower(item.speciesId);
@@ -81,7 +94,81 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
     );
   }
 
-  const isEmpty = items.length === 0 && fertilizers.length === 0 && gearItems.length === 0;
+  async function handleUseEclipseTonic(consumableId: ConsumableId) {
+    if (usingEclipse) return;
+    const recipe = CONSUMABLE_RECIPE_MAP[consumableId];
+    if (!recipe?.advanceHours) return;
+    const cur = getState();
+    const optimistic = applyEclipseTonic(cur, consumableId, recipe.advanceHours);
+    if (!optimistic) return;
+    const savedConsumables = cur.consumables;
+    const savedGrid        = cur.grid;
+    setUsingEclipse(consumableId);
+    perform(
+      optimistic,
+      () => edgeUseEclipseTonic(consumableId),
+      () => setUsingEclipse(null),
+      {
+        rollback: (c) => ({
+          ...c,
+          grid: savedGrid,
+          consumables: savedConsumables,
+          lastEclipseTonic: cur.lastEclipseTonic,
+        }),
+      }
+    );
+  }
+
+  // Auto-dismiss pouch result toast
+  useEffect(() => {
+    if (!pouchResult) return;
+    const frame = requestAnimationFrame(() => setPouchResultVisible(true));
+    const timer = setTimeout(() => {
+      setPouchResultVisible(false);
+      setTimeout(() => setPouchResult(null), 400);
+    }, 4_000);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [pouchResult]);
+
+  async function handleOpenPouch(consumableId: ConsumableId) {
+    if (openingPouch) return;
+    setOpeningPouch(consumableId);
+    try {
+      const res = await edgeAlchemyCraftSeed(consumableId);
+      const cur = getState();
+      update({ ...cur, inventory: res.inventory, consumables: res.consumables, serverUpdatedAt: res.serverUpdatedAt });
+      setPouchResult({ speciesId: res.outputSpeciesId });
+    } catch {
+      // silent — pouch stays in inventory on failure
+    } finally {
+      setOpeningPouch(null);
+    }
+  }
+
+  // Phase 5a — activate a Verdant Rush / Forge Haste / Resonance Draft.
+  // No optimistic state because the duration depends on consumable tier and we
+  // already trust the server response. Roundtrip is one quick edge call.
+  async function handleActivateBoost(consumableId: ConsumableId) {
+    if (activatingBoost) return;
+    setActivatingBoost(consumableId);
+    try {
+      const res = await edgeActivateBoost(consumableId);
+      const cur = getState();
+      update({
+        ...cur,
+        consumables:     res.consumables,
+        activeBoosts:    res.activeBoosts,
+        serverUpdatedAt: res.serverUpdatedAt,
+      });
+    } catch {
+      // silent — server rejected (e.g. CAS miss); the consumable wasn't deducted
+    } finally {
+      setActivatingBoost(null);
+    }
+  }
+
+  const isEmpty = items.length === 0 && fertilizers.length === 0 && gearItems.length === 0
+               && consumableItems.length === 0;
 
   if (isEmpty) {
     return (
@@ -96,6 +183,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   }
 
   return (
+    <>
     <div className="flex flex-col gap-5">
 
       {/* Header */}
@@ -121,18 +209,25 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       {/* Tab bar */}
       <div className="flex gap-1 bg-card/40 border border-border rounded-xl p-1">
         {TAB_LABELS.map((label, i) => {
-          const count    = i === 0 ? seedCount : i === 1 ? bloomCount : supplyCount;
-          const newCount = i === 0 ? newSeeds  : i === 1 ? newBlooms  : newSupplies;
+          const count    = i === 0 ? seedCount
+                         : i === 1 ? bloomCount
+                         : i === 2 ? supplyCount
+                         : i === 3 ? consumableCount
+                         : essenceCount;
+          const newCount = i === 0 ? newSeeds
+                         : i === 1 ? newBlooms
+                         : i === 2 ? newSupplies
+                         : 0;
           const subKey   = (i === 0 ? "seeds" : i === 1 ? "blooms" : "supplies") as "seeds" | "blooms" | "supplies";
           return (
             <button
               key={label}
               onClick={() => {
                 setTab(i as Tab);
-                onSubTabView?.(subKey);
+                if (i < 3) onSubTabView?.(subKey);
               }}
               className={`
-                flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-semibold transition-all relative
+                flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-[11px] font-semibold transition-all relative
                 ${tab === i
                   ? "bg-primary/20 text-primary border border-primary/30"
                   : "text-muted-foreground hover:text-foreground"
@@ -141,7 +236,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
             >
               {label}
               {count > 0 && (
-                <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full ${
+                <span className={`text-[10px] font-mono px-1 py-0.5 rounded-full ${
                   tab === i ? "bg-primary/20 text-primary" : "bg-border text-muted-foreground"
                 }`}>
                   {count}
@@ -193,12 +288,32 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           )
         )}
 
+        {/* ── Consumables ─────────────────────────────────────────────────── */}
+        {tab === 3 && (
+          consumableItems.length > 0 ? (
+            <ConsumablesTabContent
+              consumables={consumableItems}
+              lastEclipseTonic={state.lastEclipseTonic}
+              usingEclipse={usingEclipse}
+              openingPouch={openingPouch}
+              activatingBoost={activatingBoost}
+              activeBoosts={state.activeBoosts ?? []}
+              onUseEclipse={handleUseEclipseTonic}
+              onOpenPouch={handleOpenPouch}
+              onActivateBoost={handleActivateBoost}
+            />
+          ) : (
+            <EmptyTab emoji="🧪" message="No consumables" hint="Craft consumables in the Alchemy lab." />
+          )
+        )}
+
         {/* ── Supplies ────────────────────────────────────────────────────── */}
         {tab === 2 && (
           fertilizers.length > 0 || gearItems.length > 0 ? (
             <>
               {fertilizers.map((f) => {
-                const fert = FERTILIZERS[f.type];
+                const fert       = FERTILIZERS[f.type];
+                const fertRarity = RARITY_CONFIG[fert.rarity];
                 return (
                   <div
                     key={f.type}
@@ -208,12 +323,12 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-sm">{fert.name}</h3>
-                        <span className={`text-xs font-mono ${fert.color}`}>
-                          {fert.speedMultiplier}× speed
+                        <span className={`text-xs font-mono ${fertRarity.color}`}>
+                          {fertRarity.label}
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        ×{f.quantity} · Apply to a growing plant in the garden
+                        ×{f.quantity} · Speeds growth by <span className="text-foreground font-semibold">{fert.speedMultiplier}×</span> · Apply to a growing plant
                       </p>
                     </div>
                   </div>
@@ -228,9 +343,80 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           )
         )}
 
+        {/* ── Essences ────────────────────────────────────────────────────── */}
+        {tab === 4 && (() => {
+          // Always show all 12 elementals + Universal in the same fixed order
+          // as the EssenceBank widget. Empty rows dim to 40% so the player can
+          // see what's missing — same pattern as the bank tile grid.
+          const amountByType = new Map<string, number>(
+            (state.essences ?? []).map((e) => [e.type, e.amount])
+          );
+          const rows = [
+            ...ALL_FLOWER_TYPES.map((type) => ({
+              type, amount: amountByType.get(type) ?? 0,
+              cfg: FLOWER_TYPES[type as FlowerType],
+              isUniversal: false,
+            })),
+            {
+              type: UNIVERSAL_ESSENCE_TYPE,
+              amount: amountByType.get(UNIVERSAL_ESSENCE_TYPE) ?? 0,
+              cfg: UNIVERSAL_ESSENCE_DISPLAY,
+              isUniversal: true,
+            },
+          ];
+          return (
+            <>
+              <p className="text-[11px] text-muted-foreground px-1 pb-1">
+                Essences are earned by sacrificing flowers in the Alchemy lab. Combine all 12 elementals into a Universal Essence in Craft → Other.
+              </p>
+              {rows.map((r) => (
+                <EssenceInventoryRow
+                  key={r.type}
+                  type={r.type}
+                  amount={r.amount}
+                  emoji={r.cfg.emoji}
+                  name={r.cfg.name}
+                  color={r.cfg.color}
+                  bgColor={r.cfg.bgColor}
+                  borderColor={r.cfg.borderColor}
+                  isUniversal={r.isUniversal}
+                />
+              ))}
+            </>
+          );
+        })()}
+
       </div>
 
     </div>
+
+    {/* ── Pouch result toast ── */}
+
+    {pouchResult && (() => {
+      const flower     = getFlower(pouchResult.speciesId);
+      const rarity     = flower ? RARITY_CONFIG[flower.rarity] : null;
+      return (
+        <div
+          className={`
+            fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none
+            transition-all duration-400
+            ${pouchResultVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
+          `}
+        >
+          <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
+            <span className="text-2xl">❓</span>
+            <div>
+              <p className="text-sm font-bold text-primary mb-0.5">Pouch opened!</p>
+              <p className="text-[11px] text-muted-foreground">
+                You received a{" "}
+                <span className={rarity?.color ?? ""}>{rarity?.label ?? "Unknown"} seed</span>
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    })()}
+    </>
   );
 }
 
@@ -244,8 +430,47 @@ function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hi
   );
 }
 
+function EssenceInventoryRow({
+  type, amount, emoji, name, color: _color, bgColor, borderColor, isUniversal,
+}: {
+  type: string; amount: number; emoji: string; name: string;
+  color: string; bgColor: string; borderColor: string; isUniversal: boolean;
+}) {
+  const empty = amount <= 0;
+  // Universal Essence gets the prismatic rainbow treatment; others use their
+  // flower-type config. Empty rows dim to 40% but stay visible so the player
+  // can see which types they're missing.
+  const card = isUniversal
+    ? "rainbow-tile border"
+    : `bg-card/60 border ${borderColor}`;
+  const bg   = isUniversal ? "" : bgColor; // bgColor would conflict with rainbow-tile's animated bg
+  return (
+    <div
+      key={type}
+      className={`flex items-center gap-4 rounded-xl px-4 py-3 transition-opacity ${card} ${bg} ${empty ? "opacity-40" : ""}`}
+    >
+      <span className="text-3xl flex-shrink-0">{emoji}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="font-semibold text-sm">{name} Essence</h3>
+          {isUniversal && (
+            <span className="text-xs font-mono rainbow-text">Prismatic</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          ×{amount.toLocaleString()}
+          {isUniversal
+            ? " · Used in legendary+ cross-breed recipes"
+            : " · Sacrifice flowers to earn more"}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function GearInventoryRow({ item }: { item: GearInventoryItem }) {
   const def    = GEAR[item.gearType];
+  if (!def) return null; // orphan from a removed gear type (cleaned up on next applyOfflineTick)
   const rarity = RARITY_CONFIG[def.rarity];
   return (
     <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${def.rarity === "prismatic" ? "rainbow-border rainbow-glow" : `${rarity?.glow ?? ""} border-border`}`}>
@@ -264,22 +489,184 @@ function GearInventoryRow({ item }: { item: GearInventoryItem }) {
   );
 }
 
+// ── Consumables tab ──────────────────────────────────────────────────────────
+
+const USAGE_CONTEXT: Record<string, string> = {
+  bloom_burst:    "Use in Garden (tap a plant)",
+  heirloom_charm: "Use in Garden (tap a bloomed plant)",
+  purity_vial:    "Use in Garden (tap a plant that has a mutation)",
+  giant_vial:     "Use in Garden (tap a plant)",
+  frost_vial:     "Use in Garden (tap a plant)",
+  ember_vial:     "Use in Garden (tap a plant)",
+  storm_vial:     "Use in Garden (tap a plant)",
+  moon_vial:      "Use in Garden (tap a plant)",
+  golden_vial:    "Use in Garden (tap a plant)",
+  rainbow_vial:   "Use in Garden (tap a plant)",
+  magnifying_glass: "Use in Garden (tap a growing plant)",
+  garden_pin:     "Use in Garden (tap a growing or bloomed plant)",
+  ruler:          "Use in Garden (tap a growing plant)",
+  shovel:         "Required to dig up a growing plant (consumed on remove)",
+  eclipse_tonic:  "Use below — advances all garden plants",
+  wind_shear:     "Use in Supply Shop",
+  slot_lock:      "Use in Supply Shop",
+  seed_pouch:     "Open below to reveal your mystery seed",
+};
+
+function getConsumablePrefix(id: string): string {
+  // Trim trailing _1 … _5
+  return id.replace(/_\d+$/, "");
+}
+
+interface ConsumablesTabProps {
+  consumables:      { id: string; quantity: number }[];
+  lastEclipseTonic: string | null;
+  usingEclipse:     string | null;
+  openingPouch:     string | null;
+  activatingBoost:  string | null;
+  activeBoosts:     { type: string; expiresAt: string; consumableId: string }[];
+  onUseEclipse:     (id: ConsumableId) => void;
+  onOpenPouch:      (id: ConsumableId) => void;
+  onActivateBoost:  (id: ConsumableId) => void;
+}
+
+function ConsumablesTabContent({
+  consumables, lastEclipseTonic, usingEclipse, openingPouch, activatingBoost, activeBoosts,
+  onUseEclipse, onOpenPouch, onActivateBoost,
+}: ConsumablesTabProps) {
+  const today = new Date().toISOString().slice(0, 10);
+  const alreadyUsedToday = lastEclipseTonic === today;
+
+  return (
+    <div className="space-y-3">
+      {consumables.map((c) => {
+        const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
+        if (!recipe) return null;
+        const prefix    = getConsumablePrefix(c.id);
+        const context   = USAGE_CONTEXT[prefix] ?? "Use contextually";
+        const isEclipse = c.id.startsWith("eclipse_tonic_");
+        const isPouch   = c.id.startsWith("seed_pouch_");
+        const isBoost   = recipe.category === "speed_boost";
+        const busy      = usingEclipse === c.id;
+        const usedToday = isEclipse && alreadyUsedToday;
+        const opening   = openingPouch === c.id;
+        const activating = activatingBoost === c.id;
+
+        // Surface "currently active" if a boost of this type is live
+        const boostType =
+          c.id.startsWith("verdant_rush_")    ? "growth"     :
+          c.id.startsWith("forge_haste_")     ? "craft"      :
+          c.id.startsWith("resonance_draft_") ? "attunement" : null;
+        const nowMs       = Date.now();
+        const liveBoost   = boostType
+          ? activeBoosts.find((b) => b.type === boostType && new Date(b.expiresAt).getTime() > nowMs)
+          : null;
+
+        const consRarity   = RARITY_CONFIG[recipe.rarity];
+        const isPrismatic  = recipe.rarity === "prismatic";
+        // Prismatic uses rainbow-tile (animated border + bg + glow in a single
+        // declaration) so the border actually animates — `glow` is empty for
+        // prismatic in RARITY_CONFIG, so without this branch it'd fall back
+        // to the static gray border-border.
+        return (
+          <div
+            key={c.id}
+            className={`
+              flex items-start gap-4 bg-card/60 border rounded-xl px-4 py-3
+              ${isPrismatic ? "rainbow-tile" : `${consRarity?.glow ?? ""} border-border`}
+            `}
+          >
+            <span className="text-3xl flex-shrink-0">{recipe.emoji}</span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-semibold text-sm">{recipe.name}</h3>
+                {recipe.tier !== null && (
+                  <span className={`text-xs font-mono ${consRarity?.color ?? ""}`}>
+                    {consRarity?.label ?? recipe.rarity}
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{recipe.description}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">×{c.quantity} · {context}</p>
+
+              {isEclipse && (
+                <button
+                  onClick={() => onUseEclipse(c.id as ConsumableId)}
+                  disabled={busy || usedToday}
+                  className={`mt-2 px-3 py-1 rounded-lg text-xs font-semibold transition-colors ${
+                    usedToday
+                      ? "bg-card border border-border text-muted-foreground cursor-not-allowed"
+                      : busy
+                      ? "bg-primary/20 text-primary"
+                      : "bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30"
+                  }`}
+                >
+                  {busy ? "Advancing…" : usedToday ? "Used today" : `🌒 Use (${recipe.advanceHours}h advance)`}
+                </button>
+              )}
+
+              {isPouch && (
+                <button
+                  onClick={() => onOpenPouch(c.id as ConsumableId)}
+                  disabled={!!openingPouch}
+                  className={`mt-2 px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                    opening
+                      ? "border-primary/40 bg-primary/20 text-primary"
+                      : "border-primary/50 text-primary hover:bg-primary/10"
+                  } disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                  {opening ? "Opening…" : "🎁 Open"}
+                </button>
+              )}
+
+              {isBoost && (
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <button
+                    onClick={() => onActivateBoost(c.id as ConsumableId)}
+                    disabled={!!activatingBoost}
+                    className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-colors ${
+                      activating
+                        ? "border-primary/40 bg-primary/20 text-primary"
+                        : "border-primary/50 text-primary hover:bg-primary/10"
+                    } disabled:opacity-40 disabled:cursor-not-allowed`}
+                  >
+                    {activating ? "Activating…" : "✨ Activate"}
+                  </button>
+                  {liveBoost && (
+                    <span className="text-[10px] text-amber-400">
+                      Active until {new Date(liveBoost.expiresAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function SeedInventoryRow({ item }: { item: InventoryItem }) {
+  const { state } = useGame();
   const species = getFlower(item.speciesId);
   const rarity  = species ? RARITY_CONFIG[species.rarity] : null;
   if (!species) return null;
 
+  const isNew = !state.discovered.includes(item.speciesId);
+
   return (
     <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${rarity?.glow ?? ""} border-border`}>
-      <span className="text-3xl flex-shrink-0">{species.emoji.seed}</span>
+      <span className="text-3xl flex-shrink-0">{isNew ? "❓" : species.emoji.seed}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">{species.name} Seed</h3>
+          <h3 className="font-semibold text-sm">{isNew ? "??? Seed" : `${species.name} Seed`}</h3>
           <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
         </div>
-        <FlowerTypeBadges types={species.types} className="mt-1" />
+        {!isNew && <FlowerTypeBadges types={species.types} className="mt-1" />}
         <p className="text-xs text-muted-foreground mt-0.5">
-          ×{item.quantity} · Plant in your garden to grow
+          {isNew
+            ? `×${item.quantity} · Grow it to reveal the species`
+            : `×${item.quantity} · Plant in your garden to grow`}
         </p>
       </div>
     </div>

@@ -14,6 +14,7 @@ function b64url(s: string): string {
 
 const VALID_FERTILIZER_TYPES = ["basic", "advanced", "premium", "elite", "miracle"];
 
+interface PlantedFlower  { fertilizer?: string; bloomedAt?: number; [key: string]: unknown; }
 interface FertilizerItem { type: string; quantity: number; }
 
 Deno.serve(async (req: Request) => {
@@ -82,7 +83,7 @@ Deno.serve(async (req: Request) => {
     const save = saveResult.data;
 
     // ── Validate plot ─────────────────────────────────────────────────────────
-    const grid = save.grid as { id: string; plant: Record<string, unknown> | null }[][];
+    const grid = save.grid as { id: string; plant: PlantedFlower | null }[][];
     const plot = grid[row]?.[col];
 
     if (!plot) {
@@ -92,6 +93,11 @@ Deno.serve(async (req: Request) => {
     }
     if (!plot.plant) {
       return new Response(JSON.stringify({ error: "No plant in this plot" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (plot.plant.bloomedAt) {
+      return new Response(JSON.stringify({ error: "Cannot apply fertilizer to a bloomed plant" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }

@@ -1,3 +1,119 @@
+## [v2.3.0] — 2026-05-01 — The Alchemy & Crafting Update
+
+### Added
+
+#### Alchemy & Essence
+- **🧪 Alchemy system** — sacrifice harvested blooms to earn Essence tokens (one type per flower type, plus Universal Essence)
+- **AlchemyTab** — replaces the old Botany conversion tab; sacrifice view with multi-select rarity/type filters and essence preview
+- **🧬 Universal Essence** — craft from 12 elemental essences (1 of each); Prismatic rarity with rainbow styling
+- **Essence Bank** — shows all 12 elemental + Universal essence counts; prismatic styling for Universal
+
+#### Crafting Queue
+- **⚒️ Time-gated Crafting Queue** — all crafting (gear, consumables, attunement) is now time-gated through a queue; Forge tab renamed to Craft
+- **Crafting slot upgrades** — start with 1 slot; buy up to 4 parallel craft slots
+- **Bulk crafting** — craft 1–50× of any recipe at once; cost and duration scale by quantity
+- **Craft ready banner + badge** — amber navbar badge shows count of claimable crafts; banner notification fires when a craft completes
+- **Fertilizer crafting** — craft Basic → Miracle fertilizers in a chain (Basic: 1 minute)
+- **Universal Essence in Craft tab** — dedicated Other tab with time-gated Universal Essence craft
+- **Crafting queue search bar** — filter the recipe grid by name
+
+#### Attunement Queue
+- **⏳ Attunement Queue** — time-gated essence-mutation flow; applies a mutation to a bloomed plant over time; mutation outcome hidden until collected (surprise reveal)
+- **Attunement slots** — start with 0; buy up to 4 slots ($50k–$700k)
+- **Emerald navbar badge + completion banner** — badge counts claimable attunements; banner fires on completion
+- **Resonance Draft boost consumable** — halves all active attunement craft durations
+
+#### Cross-Breeding (Cropsticks)
+- **🌿 Cropsticks gear** — place on adjacent plots with infused blooms to start a cross-breed; passive system requiring no cron
+- **Infuser system** — apply an Attunement Crystal to a bloomed plant to mark it as a cross-breed participant
+- **Deterministic 1-hour progress bar** — shows accurate time-to-breed countdown instead of per-hour RNG rolls
+- **Cross-breed particles** — visual effect fires when a cross-breed completes
+- **Cross-breed tooltip countdown** — hover Cropsticks plot to see time remaining
+
+#### Seed Pouches
+- **🎁 Seed Pouches** — craftable mystery seeds; open to receive a random flower seed of a matching rarity
+- **12 element-typed pouches × 5 tiers** — one pouch per flower type, each tier covering a rarity band
+- **Generic Universal Pouch** — costs 1 Universal Essence; mystery seed from any rarity
+
+#### Consumables
+- **🥄 Shovel** — required to dig up a growing (non-bloomed) plant; one-use; pinned plants block shovel use
+- **📏 Ruler** — reveal the exact growth-speed multiplier active on a plant
+- **🧪 Mutation Vials (7 types)** — Frost, Ember, Storm, Moon, Golden, Rainbow, Giant — directly apply a mutation to a bloomed plant; blocked if the bloom already carries a mutation (use Purity Vial first)
+- **🧼 Purity Vial** — remove an existing mutation from a bloomed plant; tiered I–V
+
+#### Active Boost Consumables
+- **⚡ Verdant Rush** — temporarily doubles farm growth speed (2×)
+- **🔥 Forge Haste** — halves active crafting queue durations
+- **🎵 Resonance Draft** — halves active attunement queue durations
+
+#### Gear
+- **🚜 Lawnmower (I–III)** — directional harvest bell; harvests bloomed plants in a line with a pollen-cloud animation
+- **⚖️ Balance Scale (I–III)** — alternates between 3× growth boost and 0.5× growth penalty every hour; covers a radius of plots
+- **🌊 Aqueduct (I–III)** — bidirectional line growth sprinkler; boosts cells in both directions along the chosen axis (1/2/3 cells each way)
+
+#### New Flowers & Codex
+- **10 new flowers** — added across all rarities to ensure every flower type has at least one species per rarity tier
+- **Codex type filter** — multi-select row of all 12 flower types (OR semantics) filters the codex list
+- **Codex unseen badge** — persistent red dot per newly discovered entry; clears on expand; stored in localStorage
+- **Codex smooth animation** — entry expand/collapse uses CSS grid `0fr → 1fr` transition
+- **Codex growth times + sell values** — shown at the top of each expanded codex entry
+
+#### Social & Profile
+- **👥 User presence indicators** — online/offline dot on leaderboard entries and profile cards
+- **ReadOnlyGarden sync** — profile view now shows all PlotTile effects (sprinkler drops, fan gusts, lawnmower animation, etc.) matching the live garden
+
+#### Guest UX
+- **Sign-in prompt modal** — guests tapping an empty plot, clicking Buy, or clicking Upgrade now see a friendly sign-in prompt instead of silent failure
+
+#### Marketplace
+- **Consumables listing tab** — consumable items (vials, boosts, etc.) can now be listed and purchased on the Marketplace
+- **Gear listing tab** — gear items can be listed and purchased on the Marketplace
+- **Fertilizer listings** — fertilizers retain their own listing path on the Marketplace
+
+#### Offline & UI
+- **"Crafts ready" offline overlay row** — the offline-return banner now includes a count of crafts ready to collect
+- **Inventory consumable rows** — consumable items styled to match the seeds/blooms format; Prismatic items get the rainbow-tile treatment
+
+---
+
+### Changed
+- **AlchemyTab replaces Botany** — seed pouches (crafted in AlchemyTab) replace direct rarity conversion; old Botany conversion tab removed
+- **Craft tab always shows slots** — crafting slot list is always visible; an upgrade slot ghost card appears at the end when max isn't reached
+- **Marketplace no longer lists Seeds** — Seeds tab removed from the Create Listing modal; Supplies split into separate Consumables and Gear tabs
+- **Scarecrow rework** — now strips weather-caused mutations with a chance instead of fully blocking them; Aegis added as a weather-only mutation shield
+- **Magnifying Glass rework** — collapsed from 5 tiers to a single Rare item; works on any rarity plant; always shows the rarity label in the species-reveal tooltip
+- **Garden Pin** — collapsed from 5 tiers to a single non-tiered item; bypasses rarity gate; requires pin removal before harvesting
+- **Weather mutation rates** — reduced to approximately 2/3 of previous rates across all weather events
+- **Supply shop gear prices** — gear returned to supply shop at 2× craft price; meaningful margin over crafting remains
+- **Supply shop prices rebalanced** — fertilizers, gear, and magnifying glass prices adjusted across the board
+- **Gear crafting durations halved** — all gear craft times cut in half
+- **Crafting recipe costs rebalanced** — essence and ingredient costs adjusted across all tiers
+- **Seed pouch rarity rates capped** — pouch outcomes capped at 1 rarity tier above the pouch tier at 5% chance
+- **Tile seed/sellValue ratio adjusted** — Common 0.65 → 0.85 (Prismatic) for better economy scaling
+- **Crop breed duration** — Cropsticks cross-breed fixed at 1 hour
+- **Mutation vials** — reworked from chance-boosters to direct mutation applicators
+- **Purity Vial** — reworked from mutation-shield to mutation-remover
+- **Fertilizer rarity labels** — supply shop and inventory now show rarity label on fertilizer items (e.g. "Rare · 1.5× speed")
+- **Alchemy tab font/style** — aligned with Codex style (uppercase filter buttons, consistent sizing)
+
+---
+
+### Fixed
+- **Mutation vials blocked on blooms with existing mutations** — all 7 mutation vial types are now hidden from the consumable picker and rejected by the server when the bloom already carries a mutation; Purity Vial must be used first
+- **Growth stage reverting after gear removal** — removing a sprinkler or lamp from a nearly-bloomed plant no longer rolls the stage back to sprout; stage transitions are permanently stamped before gear changes, and `sproutedAt`/`bloomedAt` timestamps act as floors that can never be walked back
+- **Fertilizer applicable to bloomed plants** — applying fertilizer to a bloomed plant is now blocked on both client (picker hidden) and server (400 error)
+- **Harvest blocked on cross-breed source plants** — plants actively used as a Cropsticks cross-breed source can no longer be manually harvested mid-breed
+- **Cancel button shown on completed crafts** — the cancel button is now hidden once a craft is done; only collect is available
+- **Pouch toast shows rarity name and color** — seed pouch open notification now shows the rarity name in the correct rarity color instead of the raw flower name
+- **Codex duration display for 24h+ tiers** — growth time in codex entries now shows `Xd Xh Xm` for all tiers including those with 24h+ durations
+- **Cross-breeding reliability** — cross-breed now works for all rarities; falls back to a deterministic non-recipe bloom when no matching recipe exists; best-pair selection uses a stable algorithm
+- **Collect All fires harvest popup** — batch harvesting via Collect All now triggers the bloom harvest notification the same as single-plot harvests
+- **Emoji compatibility (Windows)** — replaced broken Emoji 13+ glyphs and deduplicated bloom emoji with Windows-safe alternatives
+- **Craft tab Other filter** — the Other sub-tab no longer incorrectly shows gear and consumables alongside universal essence recipes
+- **Codex undiscovered entries not leaking** — searching the codex by internal species ID no longer reveals undiscovered flowers
+
+---
+
 ## [v2.2.5] — 2026-04-29 — Reliability Hotfix
 
 ### Fixed

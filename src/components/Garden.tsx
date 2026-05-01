@@ -6,6 +6,7 @@ import { SeedPicker } from "./SeedPicker";
 import {
   getCurrentStage,
   plantSeed,
+  plantBloom,
   upgradeFarm,
   harvestPlant,
   plantAll,
@@ -13,6 +14,7 @@ import {
   assignBloomMutations,
   tickWeatherMutations,
   tickSprinklerMutations,
+  tickScarecrowStrip,
   tickFanMutations,
   findHarvestBellTargets,
   findAutoPlantTargets,
@@ -20,7 +22,7 @@ import {
   placeGear,
   getDevShowGrowthDebug,
 } from "../store/gameStore";
-import { edgePlantSeed, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
+import { edgePlantSeed, edgePlantBloom, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
 import { getAffectedCells, GEAR, isGearExpired } from "../data/gear";
 import { MUTATIONS } from "../data/flowers";
@@ -28,7 +30,7 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType) => void }) {
-  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud } = useGame();
+  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, user, requestSignIn } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -57,6 +59,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     let next = stampStageTransitions(latest, now, weather);
     next = tickWeatherMutations(next, weather);
     next = tickSprinklerMutations(next, weather);
+    next = tickScarecrowStrip(next, weather);
     next = tickFanMutations(next, weather);
     next = assignBloomMutations(next, weather);
     if (next !== latest) update(next);
@@ -65,7 +68,12 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const bellTargets = findHarvestBellTargets(next, weather);
     const nowBell = Date.now();
     if (nowBell - lastBellActionRef.current >= GEAR_ACTION_INTERVAL_MS) {
-      const bellTarget = bellTargets.find(({ row, col }) => !harvestingPlots.current.has(`${row}-${col}`));
+      // Skip plants that are infused (awaiting cross-breed) or are active Cropsticks sources
+      const bellTarget = bellTargets.find(({ row, col }) =>
+        !harvestingPlots.current.has(`${row}-${col}`) &&
+        !getState().grid[row]?.[col]?.plant?.infused &&
+        !crossbreedSourceCells.has(`${row}-${col}`)
+      );
       if (bellTarget) {
         const { row, col } = bellTarget;
         const key = `${row}-${col}`;
@@ -241,7 +249,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   }, [highlightSource, state.farmRows, state.farmSize, state.grid]);
 
   // Per-cell gear coverage — used for plant indicator icons
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, autoPlantCoveredCells } =
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, lawnmowerCoveredCells, balanceScaleCoveredCells, autoPlantCoveredCells } =
     useMemo(() => {
       const regular  = new Set<string>();
       const mutation = new Map<string, { emoji: string; label: string }[]>(); // cellKey → unique mutation sprinklers
@@ -250,6 +258,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const growLamp  = new Set<string>();
       const fan        = new Map<string, FanDirection>();
       const harvestBell  = new Set<string>();
+      const lawnmower    = new Map<string, FanDirection>();
+      const balanceScale = new Map<string, "boost" | "slow">();
       const autoPlanter  = new Set<string>();
       const now = Date.now();
       for (let ri = 0; ri < state.grid.length; ri++) {
@@ -259,7 +269,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
           const def     = GEAR[g.gearType];
           const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize, g.direction);
           const keys    = affected.map(([r, c]) => `${r}-${c}`);
-          if (def.category === "sprinkler_regular") {
+          if (def.category === "sprinkler_regular" || def.passiveSubtype === "aqueduct") {
             keys.forEach((k) => regular.add(k));
           } else if (def.category === "sprinkler_mutation" && def.mutationType) {
             const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
@@ -280,19 +290,83 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             keys.forEach((k) => fan.set(k, dir));
           } else if (def.passiveSubtype === "harvest_bell") {
             keys.forEach((k) => harvestBell.add(k));
+          } else if (def.passiveSubtype === "lawnmower") {
+            const dir = g.direction ?? "right";
+            keys.forEach((k) => lawnmower.set(k, dir));
+          } else if (def.passiveSubtype === "balance_scale") {
+            // Phase synced to the real-world clock so it never flickers due to
+            // server/client clock skew or placedAt unit mismatches.
+            const phase  = Math.floor(now / 3_600_000) % 2;
+            affected.forEach(([r, c]) => {
+              const dc      = c - ci;
+              const inLeft  = dc < 0;
+              const isBoost = phase === 0 ? inLeft : !inLeft;
+              balanceScale.set(`${r}-${c}`, isBoost ? "boost" : "slow");
+            });
           } else if (def.passiveSubtype === "auto_planter") {
             keys.forEach((k) => autoPlanter.add(k));
           }
         }
       }
-      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, autoPlantCoveredCells: autoPlanter };
+      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, lawnmowerCoveredCells: lawnmower, balanceScaleCoveredCells: balanceScale, autoPlantCoveredCells: autoPlanter };
     }, [state.grid, state.farmRows, state.farmSize]);
+
+  // Plant cells adjacent to active cropsticks, mapped to the direction their
+  // particle should travel (toward the cropsticks).
+  // Uses stored crossbreedSourceA/B coordinates so particles keep flowing even
+  // after plant.infused is cleared at cycle-start.
+  const crossbreedSourceCells = useMemo(() => {
+    const map = new Map<string, "up" | "down" | "left" | "right">();
+    const OFFSETS: [number, number, "up" | "down" | "left" | "right"][] = [
+      [-1, 0, "down"],
+      [ 1, 0, "up"  ],
+      [ 0,-1, "right"],
+      [ 0, 1, "left" ],
+    ];
+    for (let ri = 0; ri < state.grid.length; ri++) {
+      for (let ci = 0; ci < state.grid[ri].length; ci++) {
+        const gear = state.grid[ri][ci].gear;
+        if (!gear || gear.gearType !== "cropsticks") continue;
+        if (gear.crossbreedStartedAt == null) continue;
+
+        // Prefer stored source coordinates (set when infused is cleared at cycle start)
+        if (gear.crossbreedSourceA && gear.crossbreedSourceB) {
+          const sources = [gear.crossbreedSourceA, gear.crossbreedSourceB];
+          for (const { r: sr, c: sc } of sources) {
+            if (!state.grid[sr]?.[sc]?.plant) continue;
+            for (const [dr, dc, dir] of OFFSETS) {
+              if (ri + dr === sr && ci + dc === sc) {
+                map.set(`${sr}-${sc}`, dir);
+                break;
+              }
+            }
+          }
+          continue;
+        }
+
+        // Fallback: legacy cycles where infused flag is still set on the plants
+        for (const [dr, dc, dir] of OFFSETS) {
+          const nr = ri + dr;
+          const nc = ci + dc;
+          const plant = state.grid[nr]?.[nc]?.plant;
+          if (!plant || !plant.infused) continue;
+          map.set(`${nr}-${nc}`, dir);
+        }
+      }
+    }
+    return map;
+  }, [state.grid]);
 
   function handlePlotClick(row: number, col: number) {
     const plot = state.grid[row][col];
-    if (!plot.plant && !harvestingPlots.current.has(`${row}-${col}`)) {
-      setSelectedPlot({ row, col });
-    }
+    if (plot.plant || harvestingPlots.current.has(`${row}-${col}`)) return;
+
+    // Guest guard — guests have empty inventories, so opening the SeedPicker
+    // would just show "Nothing to place" (#148). Surface the sign-in prompt
+    // instead so the next click can actually do something.
+    if (!user) { requestSignIn("to plant seeds"); return; }
+
+    setSelectedPlot({ row, col });
   }
 
   function handleSeedSelect(speciesId: string) {
@@ -324,11 +398,19 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     setSelectedPlot(null);
   }
 
+  function handleBloomSelect(speciesId: string, mutation?: string) {
+    if (!selectedPlot) return;
+    const { row, col } = selectedPlot;
+    const optimistic = plantBloom(state, row, col, speciesId, mutation);
+    if (optimistic) perform(optimistic, () => edgePlantBloom(row, col, speciesId, mutation));
+    setSelectedPlot(null);
+  }
+
   function handleGearSelect(gearType: GearType) {
     if (!selectedPlot) return;
     const def = GEAR[gearType];
-    if (def.passiveSubtype === "fan") {
-      // Fan needs a direction — show direction picker first
+    if (def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower" || def.passiveSubtype === "aqueduct") {
+      // Directional gear needs a direction — show direction picker first
       setPendingFan({ gearType, row: selectedPlot.row, col: selectedPlot.col });
       setSelectedPlot(null);
       return;
@@ -361,6 +443,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   }
 
   function handleUpgrade() {
+    if (!user) { requestSignIn("to upgrade your farm"); return; }
     const optimistic = upgradeFarm(state);
     if (optimistic) perform(optimistic, () => edgeUpgradeFarm());
   }
@@ -371,7 +454,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     for (let ri = 0; ri < currentState.grid.length; ri++) {
       for (let ci = 0; ci < currentState.grid[ri].length; ci++) {
         const p = currentState.grid[ri][ci];
-        if (p.plant && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom") {
+        // Skip cross-breeding plants — they're active Cropsticks sources and must not be harvested
+        if (p.plant && !crossbreedSourceCells.has(`${ri}-${ci}`) && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom") {
           bloomed.push({ row: ri, col: ci });
         }
       }
@@ -391,9 +475,6 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const savedCell           = cur.grid[row][col];
       const harvestedSpeciesId  = savedCell.plant?.speciesId;
       const harvestedMutation   = savedCell.plant?.mutation ?? undefined;
-      // Capture the optimistic coin delta so the rollback can undo it precisely.
-      // bonusCoins = 0 for unmutated blooms, so this is a no-op in the common case.
-      const savedBonusCoins = opt.state.coins - cur.coins;
       perform(
         opt.state,
         async () => {
@@ -403,12 +484,18 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             harvestingPlots.current.delete(`${row}-${col}`);
           }
         },
-        undefined,
+        () => {
+          // Fire the harvest popup on success — same pattern as PlotTile's
+          // manual harvest and Garden.tsx's bell auto-harvest. Without this
+          // Collect All silently filled inventory with no visible feedback.
+          if (harvestedSpeciesId) {
+            onHarvestPopup(harvestedSpeciesId, harvestedMutation);
+          }
+        },
         {
           serialize: true,
           rollback: (c) => ({
             ...c,
-            coins: c.coins - savedBonusCoins,
             grid: c.grid.map((r2, ri2) =>
               r2.map((p2, ci2) => ri2 === row && ci2 === col ? savedCell : p2)
             ),
@@ -570,7 +657,12 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 isUnderFan={fanCoveredCells.has(`${row}-${col}`)}
                 fanDirection={fanCoveredCells.get(`${row}-${col}`)}
                 isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
+                isUnderLawnmower={lawnmowerCoveredCells.has(`${row}-${col}`)}
+                lawnmowerDirection={lawnmowerCoveredCells.get(`${row}-${col}`)}
+                balanceScaleSide={balanceScaleCoveredCells.get(`${row}-${col}`)}
                 isUnderAutoPlanter={autoPlantCoveredCells.has(`${row}-${col}`)}
+                crossbreedDirection={crossbreedSourceCells.get(`${row}-${col}`)}
+                isCrossBreeding={crossbreedSourceCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}
@@ -589,6 +681,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             <div onClick={(e) => e.stopPropagation()}>
               <SeedPicker
                 onSelect={handleSeedSelect}
+                onBloomSelect={handleBloomSelect}
                 onGearSelect={handleGearSelect}
                 onClose={() => setSelectedPlot(null)}
               />
@@ -609,6 +702,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                   setPendingFan(null);
                 }}
                 onClose={() => setPendingFan(null)}
+                emoji={GEAR[pendingFan.gearType].emoji}
+                bidirectional={GEAR[pendingFan.gearType].passiveSubtype === "aqueduct"}
               />
             </div>
           </div>
@@ -643,61 +738,89 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   );
 }
 
-// ── Fan direction picker ───────────────────────────────────────────────────
+// ── Direction picker (fan, aegis, lawnmower) ──────────────────────────────
 
 function FanDirectionPicker({
   onDirection,
   onClose,
+  emoji = "💨",
+  bidirectional = false,
 }: {
   onDirection: (dir: FanDirection) => void;
   onClose: () => void;
+  emoji?: string;
+  bidirectional?: boolean;
 }) {
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 w-64 shadow-xl z-50 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">Which way does it blow?</p>
+        <p className="text-sm font-semibold">{bidirectional ? "Choose an axis" : "Choose a direction"}</p>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
       </div>
-      <p className="text-xs text-muted-foreground">Choose the direction the fan faces.</p>
-      <div className="grid grid-cols-3 gap-2">
-        {/* Top row: just Up */}
-        <div />
-        <button
-          onClick={() => onDirection("up")}
-          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
-        >
-          <span className="text-lg font-bold leading-none">↑</span>
-          <span className="text-[10px] text-muted-foreground">Up</span>
-        </button>
-        <div />
-        {/* Middle row: Left, Fan, Right */}
-        <button
-          onClick={() => onDirection("left")}
-          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
-        >
-          <span className="text-lg font-bold leading-none">←</span>
-          <span className="text-[10px] text-muted-foreground">Left</span>
-        </button>
-        <div className="flex items-center justify-center text-2xl">💨</div>
-        <button
-          onClick={() => onDirection("right")}
-          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
-        >
-          <span className="text-lg font-bold leading-none">→</span>
-          <span className="text-[10px] text-muted-foreground">Right</span>
-        </button>
-        {/* Bottom row: just Down */}
-        <div />
-        <button
-          onClick={() => onDirection("down")}
-          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
-        >
-          <span className="text-lg font-bold leading-none">↓</span>
-          <span className="text-[10px] text-muted-foreground">Down</span>
-        </button>
-        <div />
-      </div>
+      <p className="text-xs text-muted-foreground">
+        {bidirectional
+          ? "Flows in both directions along the chosen axis."
+          : "Choose which direction it faces."}
+      </p>
+
+      {bidirectional ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onDirection("right")}
+            className="flex flex-col items-center justify-center gap-0.5 py-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">←→</span>
+            <span className="text-[10px] text-muted-foreground">Horizontal</span>
+          </button>
+          <button
+            onClick={() => onDirection("up")}
+            className="flex flex-col items-center justify-center gap-0.5 py-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">↑↓</span>
+            <span className="text-[10px] text-muted-foreground">Vertical</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {/* Top row: just Up */}
+          <div />
+          <button
+            onClick={() => onDirection("up")}
+            className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">↑</span>
+            <span className="text-[10px] text-muted-foreground">Up</span>
+          </button>
+          <div />
+          {/* Middle row: Left, gear emoji, Right */}
+          <button
+            onClick={() => onDirection("left")}
+            className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">←</span>
+            <span className="text-[10px] text-muted-foreground">Left</span>
+          </button>
+          <div className="flex items-center justify-center text-2xl">{emoji}</div>
+          <button
+            onClick={() => onDirection("right")}
+            className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">→</span>
+            <span className="text-[10px] text-muted-foreground">Right</span>
+          </button>
+          {/* Bottom row: just Down */}
+          <div />
+          <button
+            onClick={() => onDirection("down")}
+            className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">↓</span>
+            <span className="text-[10px] text-muted-foreground">Down</span>
+          </button>
+          <div />
+        </div>
+      )}
     </div>
   );
 }

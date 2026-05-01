@@ -5,18 +5,25 @@ import {
   getMsUntilNextStage,
   applyFertilizer,
   removePlant,
+  applyPlantConsumable,
+  stampCropsticksCycles,
 } from "../store/gameStore";
-import { edgeApplyFertilizer, edgeRemovePlant } from "../lib/edgeFunctions";
+import { edgeApplyFertilizer, edgeRemovePlant, edgeApplyAttunement, edgeApplyPlantConsumable, edgeUnpinPlant } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
+import { CONSUMABLE_RECIPE_MAP, ROMAN, RARITY_TIER, type ConsumableId } from "../data/consumables";
 
 interface Props {
   plant:                 PlantedFlower;
   row:                   number;
   col:                   number;
   onClose?:              () => void;
+  /** Called when the user clicks the Harvest button (for bloomed plants). */
+  onHarvestRequest?:     () => void;
+  /** True when this plant is actively serving as a Cropsticks cross-breed source. */
+  isCrossBreeding?:      boolean;
   /** Combined sprinkler × grow-lamp growth multiplier for this cell. */
   gearGrowthMultiplier?: number;
   isUnderSprinkler?:     boolean;
@@ -26,6 +33,9 @@ interface Props {
   isUnderComposter?:     boolean;
   isUnderFan?:           boolean;
   isUnderHarvestBell?:   boolean;
+  isUnderLawnmower?:     boolean;
+  /** "boost" (3×) or "slow" (0.5×) when covered by an active Balance Scale. */
+  balanceScaleSide?:     "boost" | "slow";
 }
 
 function formatMs(ms: number): string {
@@ -43,17 +53,21 @@ function formatMs(ms: number): string {
 }
 
 export function PlotTooltip({
-  plant, row, col, onClose,
+  plant, row, col, onClose, onHarvestRequest, isCrossBreeding = false,
   gearGrowthMultiplier = 1.0,
   isUnderSprinkler, sprinklerMutations = [],
-  isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell,
+  isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell, isUnderLawnmower,
+  balanceScaleSide,
 }: Props) {
-  const { state, getState, perform, activeWeather } = useGame();
-  const [showFertPicker,  setShowFertPicker]  = useState(false);
-  const [confirmRemove,   setConfirmRemove]   = useState(false);
-  const [removing,        setRemoving]        = useState(false);
-  const [nudge,           setNudge]           = useState(0);
-  const [flipped,         setFlipped]         = useState(false);
+  const { state, getState, perform, update, activeWeather } = useGame();
+  const [showFertPicker,    setShowFertPicker]    = useState(false);
+  const [confirmRemove,     setConfirmRemove]     = useState(false);
+  const [removing,          setRemoving]          = useState(false);
+  const [applyingAttunement, setApplyingAttunement] = useState(false);
+  const [applyingConsumable,setApplyingConsumable]= useState<string | null>(null);
+  const [unpinning,         setUnpinning]         = useState(false);
+  const [nudge,             setNudge]             = useState(0);
+  const [flipped,           setFlipped]           = useState(false);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
@@ -86,10 +100,105 @@ export function PlotTooltip({
   const msLeft        = getMsUntilNextStage(plant, now, activeWeather, gearGrowthMultiplier);
   const rarity        = RARITY_CONFIG[species.rarity];
   const isBloomed     = stage === "bloom";
+  // A plant is "identified" (species known to this player) if it's already in the
+  // codex (harvested before) OR the player used a Magnifying Glass on this tile.
+  const isIdentified = state.discovered.includes(plant.speciesId) || !!plant.revealed;
   const hasFertilizer = !!plant.fertilizer;
   const availableFerts = state.fertilizers
     .filter((f) => f.quantity > 0)
     .sort((a, b) => FERTILIZERS[a.type].speedMultiplier - FERTILIZERS[b.type].speedMultiplier);
+
+  // Rarity ordering used for both infuser and consumable matching.
+  const RARITY_ORDER: Record<string, number> = {
+    common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+  };
+
+  // Infuser matching — backwards-tier: any infuser with tier ≥ flower's rarity tier works.
+  // Select the lowest matching tier first to conserve higher-tier infusers.
+  const flowerRarityTier = RARITY_ORDER[species.rarity] ?? 0;
+  const matchingInfuser = [...(state.infusers ?? [])]
+    .filter((i) => (RARITY_ORDER[i.rarity] ?? 0) >= flowerRarityTier && i.quantity > 0)
+    .sort((a, b) => (RARITY_ORDER[a.rarity] ?? 0) - (RARITY_ORDER[b.rarity] ?? 0))[0] ?? null;
+
+  // Consumables applicable to this plant right now.
+  //
+  // Tier-vs-rarity rule: ALL plant-targeting consumables match DOWNWARD — a
+  // higher-tier consumable works on lower-rarity plants (e.g. Mythic vial on
+  // a Rare). Floor is still tier 1 (Rare), so Common/Uncommon plants stay
+  // excluded.
+  // Null-tier utility consumables that are applied directly to a plant plot.
+  const NULL_TIER_PLANT_CONSUMABLES = new Set(["garden_pin", "ruler"]);
+
+  const applicableConsumables = (state.consumables ?? []).filter((c) => {
+    if (c.quantity <= 0) return false;
+    const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
+    if (!recipe) return false;
+    // Allow null-tier plant utilities through; block all other null-tier items
+    // (seed pouches, speed boosts, etc. are handled elsewhere).
+    if (recipe.tier === null && !NULL_TIER_PLANT_CONSUMABLES.has(c.id)) return false;
+
+    // Magnifying Glass, Garden Pin, and Ruler bypass the rarity gate — they work on any species
+    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && c.id !== "ruler" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
+
+    // Bloom Burst only works on non-bloomed plants
+    if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
+    // Heirloom Charm only works on bloomed plants
+    if (c.id.startsWith("heirloom_charm_") && !isBloomed) return false;
+    // Magnifying Glass: only usable on non-bloomed, not-yet-revealed plants
+    if (c.id === "magnifying_glass" && (plant.revealed || isBloomed)) return false;
+    // Garden Pin: hide once the plant is already pinned
+    if (c.id === "garden_pin" && plant.pinned) return false;
+    // Ruler: hide once already applied, or on a bloomed plant
+    if (c.id === "ruler" && (plant.showMultiplier || isBloomed)) return false;
+    // Mutation vials: blocked when the bloom already carries a mutation.
+    // Player must use a Purity Vial to clear it first.
+    if (
+      (c.id.startsWith("giant_vial_")   ||
+       c.id.startsWith("frost_vial_")   ||
+       c.id.startsWith("ember_vial_")   ||
+       c.id.startsWith("storm_vial_")   ||
+       c.id.startsWith("moon_vial_")    ||
+       c.id.startsWith("golden_vial_")  ||
+       c.id.startsWith("rainbow_vial_")) &&
+      isBloomed && typeof plant.mutation === "string"
+    ) return false;
+    return true;
+  });
+
+  async function handleApplyAttunement() {
+    if (applyingAttunement) return;
+    setApplyingAttunement(true);
+    try {
+      const res = await edgeApplyAttunement(row, col);
+      const cur = getState();
+      // Client-side fallback: stamp crossbreedStartedAt on adjacent cropsticks that
+      // now have a valid infused pair, in case the edge function didn't (e.g. older
+      // deployment or network quirk). Skips cells already stamped by the server.
+      const activeGrid = stampCropsticksCycles(res.grid, row, col, Date.now());
+      update({ ...cur, grid: activeGrid, infusers: res.infusers, serverUpdatedAt: res.serverUpdatedAt });
+      onClose?.();
+    } catch {
+      // Server function not yet active or error — silently re-enable button
+    } finally {
+      setApplyingAttunement(false);
+    }
+  }
+
+  // Garden Pin removal — required before a pinned plant can be manually
+  // harvested. Pin is consumed (no refund of the original consumable).
+  async function handleRemovePin() {
+    if (unpinning) return;
+    setUnpinning(true);
+    try {
+      const res = await edgeUnpinPlant(row, col);
+      const cur = getState();
+      update({ ...cur, grid: res.grid, serverUpdatedAt: res.serverUpdatedAt });
+    } catch {
+      // Silent — server rejected (e.g. CAS miss); pin stays in place
+    } finally {
+      setUnpinning(false);
+    }
+  }
 
   function handleApplyFertilizer(type: FertilizerType) {
     const optimistic = applyFertilizer(state, row, col, type);
@@ -98,14 +207,42 @@ export function PlotTooltip({
     onClose?.();
   }
 
+  function handleUseConsumable(consumableId: string) {
+    if (applyingConsumable) return;
+    const cur = getState();
+    const optimistic = applyPlantConsumable(cur, row, col, consumableId);
+    if (!optimistic) return;
+    const savedCell       = cur.grid[row][col];
+    const savedConsumables = cur.consumables;
+    setApplyingConsumable(consumableId);
+    perform(
+      optimistic,
+      () => edgeApplyPlantConsumable(row, col, consumableId),
+      () => setApplyingConsumable(null),
+      {
+        rollback: (c) => ({
+          ...c,
+          grid: c.grid.map((r, ri) =>
+            r.map((p, ci) => ri === row && ci === col ? savedCell : p)
+          ),
+          consumables: savedConsumables,
+        }),
+      }
+    );
+  }
+
+  // Shovel check — required to dig up any growing plant
+  const hasShovel = (state.consumables ?? []).some((c) => c.id === "shovel" && c.quantity > 0);
+
   function handleRemove() {
-    if (removing) return;
+    if (removing || !hasShovel) return;
     const cur = getState();
     const optimistic = removePlant(cur, row, col);
     if (!optimistic) return;
     setRemoving(true);
-    // Snapshot the cell for surgical rollback
-    const savedCell = cur.grid[row][col];
+    // Snapshot the cell + consumables for surgical rollback
+    const savedCell        = cur.grid[row][col];
+    const savedConsumables = cur.consumables;
     perform(
       optimistic,
       async () => {
@@ -130,6 +267,8 @@ export function PlotTooltip({
                 : i
             )
             .filter((i) => i.quantity > 0),
+          // Restore the shovel that was optimistically deducted
+          consumables: savedConsumables,
         }),
       }
     );
@@ -145,11 +284,11 @@ export function PlotTooltip({
 
         {/* Header */}
         <div className="flex items-center gap-2">
-          <span className="text-xl">{species.emoji[stage]}</span>
+          <span className="text-xl">{!isIdentified ? (isBloomed ? "❓" : "🌱") : species.emoji[stage]}</span>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold leading-tight">{species.name}</p>
+            <p className="text-xs font-semibold leading-tight">{!isIdentified ? "???" : species.name}</p>
             <p className={`text-[10px] font-mono ${rarity.color}`}>{rarity.label}</p>
-            <FlowerTypeBadges types={species.types} className="mt-1" />
+            {isIdentified && <FlowerTypeBadges types={species.types} className="mt-1" />}
           </div>
           {/* Close button */}
           {onClose && (
@@ -182,7 +321,8 @@ export function PlotTooltip({
           {isBloomed && (
             <p className="text-primary font-semibold">Ready to harvest!</p>
           )}
-          {isBloomed && plant.mutation && (() => {
+          {/* Mutation display — only for identified bloomed plants */}
+          {isBloomed && isIdentified && plant.mutation && (() => {
             const mut = MUTATIONS[plant.mutation];
             return (
               <p className={`text-[10px] font-mono ${mut.color}`}>
@@ -190,13 +330,123 @@ export function PlotTooltip({
               </p>
             );
           })()}
-          {isBloomed && plant.mutation === null && (
+          {/* "No mutation" — only for identified bloomed plants */}
+          {isBloomed && isIdentified && plant.mutation === null && (
             <p className="text-[10px] text-muted-foreground font-mono">No mutation</p>
+          )}
+          {/* Magnifying Glass used — species is revealed for this growing tile */}
+          {plant.revealed && !isBloomed && (
+            <p className="text-[10px] font-mono text-sky-400">🔎 Species revealed</p>
+          )}
+          {/* Active consumable flags */}
+          {plant.infused && (() => {
+            const crossbreedActive = (
+              [[row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]] as [number, number][]
+            ).some(([r, c]) => {
+              const g = state.grid[r]?.[c]?.gear;
+              return g?.gearType === "cropsticks" && g.crossbreedStartedAt != null;
+            });
+            return (
+              <p className="text-[10px] font-mono text-emerald-400">
+                {crossbreedActive ? "💉 Cross-breeding…" : "💉 Infused · awaiting Cropsticks"}
+              </p>
+            );
+          })()}
+          {plant.heirloomActive && (
+            <p className="text-[10px] font-mono text-emerald-400">🔮 Heirloom Charm active</p>
+          )}
+          {plant.forcedMutation === "giant" && (
+            <p className="text-[10px] font-mono text-violet-400">🧬 Giant Force active</p>
           )}
         </div>
 
+        {/* Plant-targeting consumables + infuser */}
+        {(applicableConsumables.length > 0 || (isBloomed && !plant.infused && matchingInfuser)) && (
+          <div className="pt-1 border-t border-border">
+            <p className="text-[10px] text-muted-foreground mb-1">Use consumable</p>
+            <div className="flex flex-wrap gap-1">
+              {applicableConsumables.map((c) => {
+                const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
+                if (!recipe) return null;
+                const busy = applyingConsumable === c.id;
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => handleUseConsumable(c.id)}
+                    disabled={!!applyingConsumable}
+                    title={`${recipe.name} — ${recipe.description}`}
+                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[10px] transition-colors disabled:opacity-50 ${
+                      busy
+                        ? "bg-primary/20 border-primary/40 text-primary"
+                        : "bg-primary/10 border-primary/20 text-primary hover:bg-primary/20"
+                    }`}
+                  >
+                    <span>{recipe.emoji}</span>
+                    {recipe.tier !== null && (
+                      <span>{ROMAN[recipe.tier as 1|2|3|4|5]}</span>
+                    )}
+                    <span className="text-muted-foreground ml-0.5">×{c.quantity}</span>
+                  </button>
+                );
+              })}
+              {isBloomed && (!!plant.bloomedAt || plant.timePlanted === 0) && !plant.infused && matchingInfuser && (() => {
+                const tier  = RARITY_TIER[matchingInfuser.rarity as keyof typeof RARITY_TIER] ?? 1;
+                const roman = ROMAN[tier as 1|2|3|4|5];
+                return (
+                  <button
+                    onClick={handleApplyAttunement}
+                    disabled={!!applyingAttunement}
+                    title={`Infuser ${roman} — Mark this bloom as a cross-breeding participant`}
+                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[10px] transition-colors disabled:opacity-50 ${
+                      applyingAttunement
+                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                        : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                    }`}
+                  >
+                    <span>💉</span>
+                    <span>{roman}</span>
+                    <span className="text-muted-foreground ml-0.5">×{matchingInfuser.quantity}</span>
+                  </button>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* Bloomed / pinned actions — Harvest + Remove Pin + Attunement.
+            Pinned plants surface "Remove Pin" instead of Harvest; the user must
+            unpin first to actually take the bloom (pin is consumed). Unbloomed
+            pinned plants also get the button so a misplaced pin can be undone.
+            Cross-breeding plants show a lock message instead of Harvest. */}
+        {(isBloomed || plant.pinned) && (
+          <div className="pt-1 border-t border-border space-y-1.5">
+            {plant.pinned ? (
+              <button
+                onClick={handleRemovePin}
+                disabled={unpinning}
+                title="Removes the Garden Pin (consumed). Required before harvesting."
+                className="w-full py-1.5 rounded-lg bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-semibold hover:bg-amber-500/30 transition-colors text-center disabled:opacity-50"
+              >
+                {unpinning ? "Removing…" : "📌 Remove Pin"}
+              </button>
+            ) : isCrossBreeding ? (
+              <p className="text-[11px] text-emerald-400/80 font-mono text-center py-0.5">
+                🔗 Cross-breeding — harvest locked
+              </p>
+            ) : onHarvestRequest && (
+              <button
+                onClick={() => { onHarvestRequest(); onClose?.(); }}
+                className="w-full py-1.5 rounded-lg bg-primary/20 border border-primary/50 text-primary text-xs font-semibold hover:bg-primary/30 transition-colors text-center"
+              >
+                Harvest
+              </button>
+            )}
+
+          </div>
+        )}
+
         {/* Active gear effects */}
-        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell) && (
+        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide) && (
           <div className="pt-1 border-t border-border space-y-1">
             <p className="text-[10px] text-muted-foreground">Active gear</p>
 
@@ -237,6 +487,21 @@ export function PlotTooltip({
               {isUnderHarvestBell && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/20 text-[10px] text-yellow-300">
                   <span>🔔</span><span>Harvest Bell</span>
+                </span>
+              )}
+              {isUnderLawnmower && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-400/10 border border-green-400/20 text-[10px] text-green-300">
+                  <span>🦼</span><span>Lawnmower</span>
+                </span>
+              )}
+              {balanceScaleSide === "boost" && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-400/10 border border-amber-400/20 text-[10px] text-amber-300">
+                  <span>⚖️</span><span>Scale 3× boost</span>
+                </span>
+              )}
+              {balanceScaleSide === "slow" && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-400/10 border border-slate-400/20 text-[10px] text-slate-400">
+                  <span>⚖️</span><span>Scale 0.5× slow</span>
                 </span>
               )}
             </div>
@@ -285,12 +550,21 @@ export function PlotTooltip({
           </div>
         )}
 
-        {/* Remove section — only for growing (non-bloomed) plants */}
+        {/* Remove section — only for growing (non-bloomed), non-pinned plants.
+            Pinned plants are protected; the pin must be removed first. */}
         {!isBloomed && (
           <div className="pt-1 border-t border-border">
-            {confirmRemove ? (
+            {plant.pinned ? (
+              <p className="text-[10px] text-muted-foreground">
+                📌 Remove Pin first to dig up
+              </p>
+            ) : !hasShovel ? (
+              <p className="text-[10px] text-muted-foreground">
+                🥄 Need a Shovel to dig up
+              </p>
+            ) : confirmRemove ? (
               <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground">Seed will be returned. Sure?</p>
+                <p className="text-[10px] text-muted-foreground">Uses 1 Shovel. Seed returned. Sure?</p>
                 <div className="flex gap-1.5">
                   <button
                     onClick={handleRemove}
@@ -312,7 +586,7 @@ export function PlotTooltip({
                 onClick={() => { setShowFertPicker(false); setConfirmRemove(true); }}
                 className="text-[10px] text-red-400 hover:text-red-300 transition-colors w-full text-left"
               >
-                🗑 Remove plant
+                🥄 Remove plant
               </button>
             )}
           </div>

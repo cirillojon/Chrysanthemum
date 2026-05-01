@@ -14,17 +14,259 @@ function b64url(s: string): string {
 // ── Types (mirror src/data/gear.ts + src/store/gameStore.ts) ─────────────────
 
 type PlacedGear = {
-  gearType:           string;
-  placedAt:           number;
-  direction?:         string;
-  storedFertilizers?: string[];
+  gearType:             string;
+  placedAt:             number;
+  direction?:           string;
+  storedFertilizers?:   string[];
+  crossbreedStartedAt?: number;
+  crossbreedSourceA?:   { r: number; c: number };
+  crossbreedSourceB?:   { r: number; c: number };
+};
+
+type PlantData = {
+  speciesId:   string;
+  timePlanted: number;
+  bloomedAt?:  number;
+  infused?:    boolean;
+  [key: string]: unknown;
 };
 
 type GridCell = {
   id:     string;
-  plant:  unknown;
+  plant:  PlantData | null;
   gear?:  PlacedGear | null;
 };
+
+// ── Cropsticks activation (mirrors apply-infuser/index.ts) ───────────────────
+// When cropsticks are placed next to infused+bloomed plants, immediately start
+// the cross-breed cycle so the progress bar appears without waiting for the cron.
+
+const OFFSETS_CROSS_G: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+const RARITY_IDX_G: Record<string, number> = {
+  common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+};
+
+type RecipeG = { id: string; tier: number; typeA: string; typeB: string; minRarity: string };
+const RECIPES_G: RecipeG[] = [
+  { id: "blaze+frost",       tier: 1, typeA: "blaze",   typeB: "frost",   minRarity: "rare"      },
+  { id: "lunar+solar",       tier: 1, typeA: "lunar",   typeB: "solar",   minRarity: "rare"      },
+  { id: "tide+storm",        tier: 1, typeA: "tide",    typeB: "storm",   minRarity: "rare"      },
+  { id: "grove+shadow",      tier: 1, typeA: "grove",   typeB: "shadow",  minRarity: "rare"      },
+  { id: "arcane+stellar",    tier: 1, typeA: "arcane",  typeB: "stellar", minRarity: "rare"      },
+  { id: "fairy+zephyr",      tier: 1, typeA: "fairy",   typeB: "zephyr",  minRarity: "rare"      },
+  { id: "blaze+solar",       tier: 2, typeA: "blaze",   typeB: "solar",   minRarity: "legendary" },
+  { id: "lunar+tide",        tier: 2, typeA: "lunar",   typeB: "tide",    minRarity: "legendary" },
+  { id: "grove+zephyr",      tier: 2, typeA: "grove",   typeB: "zephyr",  minRarity: "legendary" },
+  { id: "frost+arcane",      tier: 2, typeA: "frost",   typeB: "arcane",  minRarity: "legendary" },
+  { id: "arcane+shadow-t3",  tier: 3, typeA: "arcane",  typeB: "shadow",  minRarity: "mythic"    },
+  { id: "stellar+zephyr-t3", tier: 3, typeA: "stellar", typeB: "zephyr",  minRarity: "mythic"    },
+  { id: "arcane+stellar-t4", tier: 4, typeA: "arcane",  typeB: "stellar", minRarity: "exalted"   },
+];
+
+const SPECIES_TYPES_G: Record<string, string[]> = {
+  // Common
+  quickgrass:    ["grove"],              dustweed:      ["zephyr","shadow"],
+  sprig:         ["grove"],             dewdrop:       ["tide"],
+  pebblebloom:   ["grove"],             ember_moss:    ["blaze","grove"],
+  dandelion:     ["grove","zephyr"],    clover:        ["grove","fairy"],
+  violet:        ["fairy","arcane"],    lemongrass:    ["grove","solar"],
+  daisy:         ["grove","fairy"],     honeywort:     ["grove","solar"],
+  buttercup:     ["fairy","solar"],     dawnpetal:     ["lunar","solar"],
+  poppy:         ["blaze","grove"],     chamomile:     ["grove","solar"],
+  marigold:      ["solar","grove"],     sunflower:     ["solar"],
+  coppercup:     ["grove"],             ivybell:       ["grove","tide"],
+  thornberry:    ["grove"],             saltmoss:      ["tide"],
+  ashpetal:      ["shadow","zephyr"],   snowdrift:     ["frost"],
+  // Uncommon
+  swiftbloom:    ["zephyr"],            shortcress:    ["grove"],
+  thornwhistle:  ["grove","blaze"],     starwort:      ["stellar"],
+  mintleaf:      ["grove","frost"],     tulip:         ["fairy","grove"],
+  inkbloom:      ["arcane","shadow"],   hyacinth:      ["blaze","fairy"],
+  snapdragon:    ["blaze","arcane"],    beebalm:       ["grove","solar"],
+  candleflower:  ["blaze","arcane"],    carnation:     ["fairy"],
+  ribbonweed:    ["fairy"],             hibiscus:      ["solar","blaze"],
+  wildberry:     ["grove"],             frostbell:     ["frost"],
+  bluebell:      ["fairy","tide"],      cherry_blossom:["fairy","grove"],
+  rose:          ["fairy"],             peacockflower: ["arcane","zephyr"],
+  bamboo_bloom:  ["grove","zephyr"],    hummingbloom:  ["zephyr","fairy"],
+  water_lily:    ["tide"],              lanternflower: ["blaze","arcane"],
+  dovebloom:     ["zephyr","fairy"],    coral_bells:   ["tide","fairy"],
+  sundew:        ["grove","shadow"],    bubblebloom:   ["tide","fairy"],
+  // Rare
+  flashpetal:      ["storm"],              rushwillow:      ["zephyr","tide"],
+  sweetheart_lily: ["fairy"],              glassbell:       ["arcane","stellar"],
+  stormcaller:     ["storm"],              lavender:        ["fairy","arcane"],
+  amber_crown:     ["solar","blaze"],      peach_blossom:   ["grove","fairy"],
+  foxglove:        ["shadow","arcane"],    butterbloom:     ["fairy","zephyr"],
+  peony:           ["fairy"],              tidebloom:       ["tide"],
+  starweave:       ["stellar","arcane"],   wisteria:        ["fairy","arcane"],
+  dreamcup:        ["fairy","arcane"],     coralbell:       ["tide"],
+  foxfire:         ["blaze","arcane"],     bird_of_paradise:["zephyr","solar"],
+  solarbell:       ["solar"],              moonpetal:       ["lunar"],
+  orchid:          ["fairy","arcane"],     duskrose:        ["lunar","shadow"],
+  passionflower:   ["arcane","storm"],     glasswing:       ["arcane"],
+  mirror_orchid:   ["arcane","stellar"],   stargazer_lily:  ["stellar"],
+  prism_lily:      ["arcane","stellar"],   dusk_orchid:     ["lunar","solar"],
+  // Legendary
+  firstbloom:      ["solar","fairy"],      haste_lily:      ["zephyr","storm"],
+  verdant_crown:   ["grove","fairy"],      ironwood_bloom:  ["grove"],
+  sundial:         ["solar","arcane"],     lotus:           ["tide","arcane"],
+  candy_blossom:   ["fairy"],              prismbark:       ["grove","arcane"],
+  dolphinia:       ["tide"],               ghost_orchid:    ["shadow","arcane"],
+  nestbloom:       ["grove","fairy"],      black_rose:      ["shadow"],
+  pumpkin_blossom: ["shadow","grove"],     starburst_lily:  ["stellar","storm"],
+  sporebloom:      ["grove","shadow"],     fire_lily:       ["blaze"],
+  stargazer:       ["stellar"],            fullmoon_bloom:  ["lunar"],
+  ice_crown:       ["frost"],              diamond_bloom:   ["frost","arcane"],
+  oracle_eye:      ["arcane","shadow"],    halfmoon_bloom:  ["lunar"],
+  aurora_bloom:    ["stellar","arcane"],   mirrorpetal:     ["arcane","stellar"],
+  emberspark:      ["blaze","storm"],
+  // Legendary recipe-only (Tier 1 outputs — can be Tier 2 inputs)
+  phoenix_lily:    ["blaze","frost"],      eclipse_bloom:   ["lunar","solar"],
+  tempest_orchid:  ["tide","storm"],       blightmantle:    ["grove","shadow"],
+  cosmosbloom:     ["arcane","stellar"],   dreamgust:       ["fairy","zephyr"],
+  // Mythic
+  blink_rose:      ["arcane","shadow"],    dawnfire:        ["solar","blaze"],
+  moonflower:      ["lunar"],              jellybloom:      ["tide","arcane"],
+  celestial_bloom: ["stellar"],            void_blossom:    ["shadow","arcane"],
+  seraph_wing:     ["zephyr","fairy"],     solar_rose:      ["solar"],
+  nebula_drift:    ["stellar","arcane"],   superbloom:      ["storm","stellar"],
+  wanderbloom:     ["zephyr","arcane"],    chrysanthemum:   ["arcane","stellar","fairy"],
+  // Mythic recipe-only (Tier 2 outputs)
+  solarburst:      ["blaze","solar"],      tidalune:        ["lunar","tide"],
+  whisperleaf:     ["grove","zephyr"],     crystalmind:     ["frost","arcane"],
+  // Exalted
+  umbral_bloom:    ["shadow","lunar"],     obsidian_rose:   ["shadow"],
+  duskmantle:      ["shadow","lunar"],     graveweb:        ["shadow"],
+  nightwing:       ["shadow","zephyr"],    ashenveil:       ["shadow","blaze"],
+  voidfire:        ["shadow","blaze"],
+  // Exalted recipe-only (Tier 3 outputs)
+  void_chrysalis:  ["arcane"],             starloom:        ["stellar"],
+  // Prismatic
+  dreambloom:      ["fairy","arcane"],     fairy_blossom:   ["fairy"],
+  lovebind:        ["fairy","arcane"],     eternal_heart:   ["fairy","solar"],
+  nova_bloom:      ["stellar","storm","blaze"],
+  princess_blossom:["fairy","arcane"],     the_first_bloom: ["arcane","stellar"],
+};
+
+const SPECIES_RARITY_G: Record<string, string> = {
+  // Common
+  quickgrass:"common",dustweed:"common",sprig:"common",dewdrop:"common",pebblebloom:"common",
+  ember_moss:"common",dandelion:"common",clover:"common",violet:"common",lemongrass:"common",
+  daisy:"common",honeywort:"common",buttercup:"common",dawnpetal:"common",poppy:"common",
+  chamomile:"common",marigold:"common",sunflower:"common",coppercup:"common",ivybell:"common",
+  thornberry:"common",saltmoss:"common",ashpetal:"common",snowdrift:"common",
+  // Uncommon
+  swiftbloom:"uncommon",shortcress:"uncommon",thornwhistle:"uncommon",starwort:"uncommon",
+  mintleaf:"uncommon",tulip:"uncommon",inkbloom:"uncommon",hyacinth:"uncommon",
+  snapdragon:"uncommon",beebalm:"uncommon",candleflower:"uncommon",carnation:"uncommon",
+  ribbonweed:"uncommon",hibiscus:"uncommon",wildberry:"uncommon",frostbell:"uncommon",
+  bluebell:"uncommon",cherry_blossom:"uncommon",rose:"uncommon",peacockflower:"uncommon",
+  bamboo_bloom:"uncommon",hummingbloom:"uncommon",water_lily:"uncommon",lanternflower:"uncommon",
+  dovebloom:"uncommon",coral_bells:"uncommon",sundew:"uncommon",bubblebloom:"uncommon",
+  // Rare
+  flashpetal:"rare",rushwillow:"rare",sweetheart_lily:"rare",glassbell:"rare",
+  stormcaller:"rare",lavender:"rare",amber_crown:"rare",peach_blossom:"rare",
+  foxglove:"rare",butterbloom:"rare",peony:"rare",tidebloom:"rare",starweave:"rare",
+  wisteria:"rare",dreamcup:"rare",coralbell:"rare",foxfire:"rare",bird_of_paradise:"rare",
+  solarbell:"rare",moonpetal:"rare",orchid:"rare",duskrose:"rare",passionflower:"rare",
+  glasswing:"rare",mirror_orchid:"rare",stargazer_lily:"rare",prism_lily:"rare",dusk_orchid:"rare",
+  // Legendary
+  firstbloom:"legendary",haste_lily:"legendary",verdant_crown:"legendary",ironwood_bloom:"legendary",
+  sundial:"legendary",lotus:"legendary",candy_blossom:"legendary",prismbark:"legendary",
+  dolphinia:"legendary",ghost_orchid:"legendary",nestbloom:"legendary",black_rose:"legendary",
+  pumpkin_blossom:"legendary",starburst_lily:"legendary",sporebloom:"legendary",
+  fire_lily:"legendary",stargazer:"legendary",fullmoon_bloom:"legendary",ice_crown:"legendary",
+  diamond_bloom:"legendary",oracle_eye:"legendary",halfmoon_bloom:"legendary",
+  aurora_bloom:"legendary",mirrorpetal:"legendary",emberspark:"legendary",
+  phoenix_lily:"legendary",eclipse_bloom:"legendary",tempest_orchid:"legendary",
+  blightmantle:"legendary",cosmosbloom:"legendary",dreamgust:"legendary",
+  // Mythic
+  blink_rose:"mythic",dawnfire:"mythic",moonflower:"mythic",jellybloom:"mythic",
+  celestial_bloom:"mythic",void_blossom:"mythic",seraph_wing:"mythic",solar_rose:"mythic",
+  nebula_drift:"mythic",superbloom:"mythic",wanderbloom:"mythic",chrysanthemum:"mythic",
+  solarburst:"mythic",tidalune:"mythic",whisperleaf:"mythic",crystalmind:"mythic",
+  // Exalted
+  umbral_bloom:"exalted",obsidian_rose:"exalted",duskmantle:"exalted",graveweb:"exalted",
+  nightwing:"exalted",ashenveil:"exalted",voidfire:"exalted",void_chrysalis:"exalted",starloom:"exalted",
+  // Prismatic
+  dreambloom:"prismatic",fairy_blossom:"prismatic",lovebind:"prismatic",eternal_heart:"prismatic",
+  nova_bloom:"prismatic",princess_blossom:"prismatic",the_first_bloom:"prismatic",
+};
+
+function findBestRecipeG(tA: string[], rA: string, tB: string[], rB: string): RecipeG | null {
+  let best: RecipeG | null = null;
+  for (const r of RECIPES_G) {
+    if ((RARITY_IDX_G[rA] ?? -1) < RARITY_IDX_G[r.minRarity]) continue;
+    if ((RARITY_IDX_G[rB] ?? -1) < RARITY_IDX_G[r.minRarity]) continue;
+    const fwd = tA.includes(r.typeA) && tB.includes(r.typeB);
+    const rev = tA.includes(r.typeB) && tB.includes(r.typeA);
+    if (!fwd && !rev) continue;
+    if (!best || r.tier > best.tier) best = r;
+  }
+  return best;
+}
+
+/** When cropsticks are placed at (cropRow, cropCol), scan adjacent cells for
+ *  infused+bloomed plants and start a cycle if a valid recipe pair is found.
+ *  Mirrors tryStartCropsticksCycles in apply-infuser/index.ts (from the other direction). */
+function tryActivateCropsticks(grid: GridCell[][], cropRow: number, cropCol: number, now: number): GridCell[][] {
+  const cropCell = grid[cropRow]?.[cropCol];
+  if (!cropCell?.gear || cropCell.gear.gearType !== "cropsticks") return grid;
+  if ((cropCell.gear as PlacedGear).crossbreedStartedAt != null) return grid; // already running
+
+  type N = { r: number; c: number; types: string[]; rarity: string };
+  const nbrs: N[] = [];
+  for (const [dr, dc] of OFFSETS_CROSS_G) {
+    const nr = cropRow + dr;
+    const nc = cropCol + dc;
+    const nCell = grid[nr]?.[nc];
+    if (!nCell?.plant || (!nCell.plant.bloomedAt && nCell.plant.timePlanted !== 0) || !nCell.plant.infused) continue;
+    const nRarity = SPECIES_RARITY_G[nCell.plant.speciesId];
+    const nTypes  = SPECIES_TYPES_G[nCell.plant.speciesId];
+    if (!nRarity || !nTypes) continue;
+    nbrs.push({ r: nr, c: nc, types: nTypes, rarity: nRarity });
+  }
+
+  // Need at least 2 infused neighbours to crossbreed
+  if (nbrs.length < 2) return grid;
+
+  // Pick highest-tier recipe pair; fall back to first available pair when no recipe.
+  let bestPairTier = -1;
+  let sourceA: N = nbrs[0];
+  let sourceB: N = nbrs[1];
+  for (let i = 0; i < nbrs.length; i++) {
+    for (let j = i + 1; j < nbrs.length; j++) {
+      const recipe = findBestRecipeG(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity);
+      if (recipe && recipe.tier > bestPairTier) {
+        bestPairTier = recipe.tier;
+        sourceA = nbrs[i];
+        sourceB = nbrs[j];
+      }
+    }
+  }
+
+  return grid.map((r, ri) =>
+    r.map((p, ci) => {
+      if (ri === cropRow && ci === cropCol && p.gear) {
+        return {
+          ...p,
+          gear: {
+            ...p.gear,
+            crossbreedStartedAt: now,
+            crossbreedSourceA: { r: sourceA!.r, c: sourceA!.c },
+            crossbreedSourceB: { r: sourceB!.r, c: sourceB!.c },
+          },
+        };
+      }
+      if ((ri === sourceA!.r && ci === sourceA!.c) || (ri === sourceB!.r && ci === sourceB!.c)) {
+        if (p.plant) return { ...p, plant: { ...p.plant, infused: false } };
+      }
+      return p;
+    })
+  );
+}
 
 type GearInvItem   = { gearType: string; quantity: number };
 type FertItem      = { type: string;     quantity: number };
@@ -126,6 +368,12 @@ Deno.serve(async (req: Request) => {
             : p
         )
       );
+      // When placing cropsticks, immediately start a cycle if adjacent infused+bloomed
+      // plants form a valid recipe pair — mirrors what apply-infuser does when the
+      // second plant is infused while cropsticks are already present.
+      if (gearType === "cropsticks") {
+        grid = tryActivateCropsticks(grid, row, col, placedAt);
+      }
       gearInventory = gearInventory
         .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)
         .filter((g) => g.quantity > 0);
@@ -159,9 +407,12 @@ Deno.serve(async (req: Request) => {
         const retryGear: PlacedGear = direction
           ? { gearType, placedAt: retryPlacedAt, direction }
           : { gearType, placedAt: retryPlacedAt };
-        const retryGrid = (fresh.grid as GridCell[][]).map((r, ri) =>
+        let retryGrid = (fresh.grid as GridCell[][]).map((r, ri) =>
           r.map((p, ci) => ri === row && ci === col ? { ...p, gear: retryGear } : p)
         );
+        if (gearType === "cropsticks") {
+          retryGrid = tryActivateCropsticks(retryGrid, row, col, retryPlacedAt);
+        }
         const retryGearInv = (fresh.gear_inventory as GearInvItem[])
           .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)
           .filter((g) => g.quantity > 0);
@@ -271,7 +522,7 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, grid, fertilizers, serverUpdatedAt: ud.updated_at });
     }
 
-    // ── set_direction (fan) ───────────────────────────────────────────────────
+    // ── set_direction (fan / aegis / lawnmower) ──────────────────────────────
     if (action === "set_direction") {
       const { direction } = body;
       if (!direction) return err("direction required");

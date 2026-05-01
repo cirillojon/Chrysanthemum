@@ -122,6 +122,51 @@ Throttle to **Slow 4G** (DevTools → Network → Throttling) for these.
 
 ---
 
+## I. v2.3.0 — Shovel, Stage Stability & Fertilizer Guard
+
+### I1. Shovel — required to dig up a growing plant
+
+| # | Action | Expected |
+|---|--------|----------|
+| I1 | Plant a seed. Open tooltip. Have **no Shovel** in consumables. | "🥄 Need a Shovel to dig up" message shown; no remove button |
+| I2 | Craft or buy a Shovel. Open tooltip on a growing plant. Click **🥄 Remove plant** → confirm. | Plot cleared, seed returned to inventory, shovel count decreases by 1 |
+| I3 | Place a Garden Pin on a growing plant. Open tooltip with a Shovel present. | "📌 Remove Pin first to dig up" shown; shovel has no effect while pinned |
+| I4 | Open tooltip on a **bloomed** plant. | No remove / dig-up section visible at all (harvest section shown instead) |
+| I5 | DevTools → Network: block `remove-plant` after clicking confirm. | Plant and shovel both restored to pre-click state (rollback works) |
+
+---
+
+### I2. Stage Stability — no revert when gear multiplier changes
+
+| # | Action | Expected |
+|---|--------|----------|
+| I6 | Place a 3× Grow Lamp or Mythic Sprinkler next to a plant that is very close to bloom (< 5 s remaining). Watch it cross into bloom stage. Immediately remove the gear. | Stage stays **bloom** — does not revert to sprout or seed |
+| I7 | Same as I6 but remove the gear **while the plant is still a sprout** with high multiplier. | Stage stays **sprout** — does not revert to seed |
+| I8 | DevTools Console: look for any errors during I6 / I7 | No errors, no warnings about unexpected stage transitions |
+
+---
+
+### I3. Fertilizer — cannot be applied to a bloomed plant
+
+| # | Action | Expected |
+|---|--------|----------|
+| I9 | Open tooltip on a **bloomed** plant with fertilizer in inventory. | No fertilizer section shown (guarded by bloom state) |
+| I10 | Open tooltip on a **sprout**, open fertilizer picker, wait for the plant to bloom before clicking. | Fertilizer picker disappears as soon as plant crosses into bloom |
+| I11 | DevTools → Network: manually POST to `apply-fertilizer` with a `row`/`col` pointing at a bloomed plant. | Server returns **400** `"Cannot apply fertilizer to a bloomed plant"` |
+
+---
+
+### I4. Mutation Vials — blocked on blooms that already have a mutation
+
+| # | Action | Expected |
+|---|--------|----------|
+| I12 | Have a **shocked** bloom (or any mutated bloom). Open its tooltip with a Frost Vial in inventory. | Frost Vial (and all other mutation vials) **do not appear** in the consumable picker |
+| I13 | Same bloom — have a **Purity Vial** in inventory. | Purity Vial **does** appear and is usable |
+| I14 | Apply Purity Vial to clear the mutation. Re-open tooltip with a mutation vial. | Mutation vial now **appears** and can be applied |
+| I15 | DevTools → Network: manually POST to `use-consumable` with a mutation vial targeting a bloomed plant that has a mutation. | Server returns **400** `"This bloom already has a mutation — use a Purity Vial to remove it first"` |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```

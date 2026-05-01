@@ -23,20 +23,20 @@ const corsHeaders = {
 const FLOWER_BLOOM_MS: Record<string, number> = {
   quickgrass: 120_000, dustweed: 135_000, sprig: 180_000, dewdrop: 195_000,
   pebblebloom: 204_000, ember_moss: 210_000, dandelion: 225_000, clover: 240_000,
-  violet: 255_000, lemongrass: 264_000, daisy: 270_000, honeywort: 276_000,
+  violet: 255_000, stormcap: 261_000, lemongrass: 264_000, daisy: 270_000, honeywort: 276_000,
   buttercup: 285_000, dawnpetal: 291_000, poppy: 300_000, chamomile: 315_000,
-  marigold: 330_000, sunflower: 360_000, coppercup: 375_000, ivybell: 390_000,
+  marigold: 330_000, stardust: 345_000, sunflower: 360_000, coppercup: 375_000, ivybell: 390_000,
   thornberry: 420_000, saltmoss: 444_000, ashpetal: 465_000, snowdrift: 489_000,
   swiftbloom: 720_000, shortcress: 765_000, thornwhistle: 840_000, starwort: 870_000,
   mintleaf: 885_000, tulip: 900_000, inkbloom: 930_000, hyacinth: 960_000,
-  snapdragon: 990_000, beebalm: 1_035_000, candleflower: 1_050_000, carnation: 1_080_000,
+  snapdragon: 990_000, moonstrike: 1_020_000, beebalm: 1_035_000, candleflower: 1_050_000, carnation: 1_080_000,
   ribbonweed: 1_110_000, hibiscus: 1_140_000, wildberry: 1_185_000, frostbell: 1_170_000,
   bluebell: 1_200_000, cherry_blossom: 1_230_000, rose: 1_260_000, peacockflower: 1_290_000,
   bamboo_bloom: 1_320_000, hummingbloom: 1_320_000, water_lily: 1_350_000, lanternflower: 1_380_000,
   dovebloom: 1_440_000, coral_bells: 1_500_000, sundew: 1_560_000, bubblebloom: 1_620_000,
   flashpetal: 2_700_000, rushwillow: 2_880_000, sweetheart_lily: 3_240_000, glassbell: 3_300_000,
   stormcaller: 3_420_000, lavender: 3_600_000, amber_crown: 3_600_000, peach_blossom: 3_600_000,
-  foxglove: 3_960_000, butterbloom: 4_140_000, peony: 4_320_000, tidebloom: 4_500_000,
+  foxglove: 3_960_000, winterwood: 4_050_000, butterbloom: 4_140_000, peony: 4_320_000, tidebloom: 4_500_000,
   starweave: 4_500_000, wisteria: 4_680_000, dreamcup: 4_680_000, coralbell: 4_860_000,
   foxfire: 4_950_000, bird_of_paradise: 5_040_000, solarbell: 5_040_000, moonpetal: 5_220_000,
   orchid: 5_400_000, duskrose: 5_580_000, passionflower: 5_760_000, glasswing: 6_000_000,
@@ -53,9 +53,11 @@ const FLOWER_BLOOM_MS: Record<string, number> = {
   solar_rose: 172_800_000, nebula_drift: 194_400_000, superbloom: 216_000_000,
   wanderbloom: 216_000_000, chrysanthemum: 259_200_000,
   umbral_bloom: 324_000_000, obsidian_rose: 388_800_000, duskmantle: 432_000_000,
-  graveweb: 518_400_000, nightwing: 648_000_000, ashenveil: 712_800_000, voidfire: 777_600_000,
+  deeproot: 450_000_000, graveweb: 518_400_000, rimestorm: 540_000_000,
+  nightwing: 648_000_000, solglow: 675_000_000, ashenveil: 712_800_000, voidfire: 777_600_000,
   dreambloom: 900_000_000, fairy_blossom: 972_000_000, lovebind: 1_036_800_000,
-  eternal_heart: 1_123_200_000, nova_bloom: 1_209_600_000, princess_blossom: 1_296_000_000,
+  islebloom: 1_065_000_000, eternal_heart: 1_123_200_000, moonrime: 1_155_000_000,
+  nova_bloom: 1_209_600_000, shadowgale: 1_245_000_000, princess_blossom: 1_296_000_000,
 };
 
 // ── Fertilizer speed multipliers (mirrors src/data/upgrades.ts) ───────────
@@ -111,11 +113,32 @@ const OFFSETS_DIAMOND: [number, number][] = [
 ];
 
 // ── Gear definitions ───────────────────────────────────────────────────────
-interface GearDef { subtype: "harvest_bell" | "auto_planter"; offsets: [number, number][]; durationMs: number; }
+interface GearDef {
+  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis" | "lawnmower";
+  /** Radius offsets for radial gear (harvest bell, auto-planter, scarecrow). */
+  offsets?: [number, number][];
+  /** Line-of-sight cell count for directional gear (aegis). */
+  fanRange?: number;
+  durationMs: number;
+  /** Scarecrow only — cumulative strip chance over a 1-hour window. */
+  scarecrowStripPerHour?: number;
+}
 const GEAR_DEFS: Record<string, GearDef> = {
   harvest_bell_rare:      { subtype: "harvest_bell", offsets: OFFSETS_CROSS,   durationMs:  4 * 60 * 60 * 1_000 },
-  harvest_bell_legendary: { subtype: "harvest_bell", offsets: OFFSETS_3X3,    durationMs:  8 * 60 * 60 * 1_000 },
+  harvest_bell_legendary: { subtype: "harvest_bell", offsets: OFFSETS_3X3,     durationMs:  8 * 60 * 60 * 1_000 },
   auto_planter_prismatic: { subtype: "auto_planter", offsets: OFFSETS_DIAMOND, durationMs: 12 * 60 * 60 * 1_000 },
+  // Scarecrow — blocks weather AND gear mutations within radius, plus strip chance
+  scarecrow_rare:         { subtype: "scarecrow", offsets: OFFSETS_3X3,     durationMs:  4 * 60 * 60 * 1_000, scarecrowStripPerHour: 0.15 },
+  scarecrow_legendary:    { subtype: "scarecrow", offsets: OFFSETS_3X3,     durationMs:  8 * 60 * 60 * 1_000, scarecrowStripPerHour: 0.25 },
+  scarecrow_mythic:       { subtype: "scarecrow", offsets: OFFSETS_DIAMOND, durationMs: 12 * 60 * 60 * 1_000, scarecrowStripPerHour: 0.40 },
+  // Aegis — directional, blocks weather mutations only (gear mutations still apply)
+  aegis_uncommon:         { subtype: "aegis", fanRange: 2, durationMs: 2 * 60 * 60 * 1_000 },
+  aegis_rare:             { subtype: "aegis", fanRange: 3, durationMs: 4 * 60 * 60 * 1_000 },
+  aegis_legendary:        { subtype: "aegis", fanRange: 4, durationMs: 8 * 60 * 60 * 1_000 },
+  // Lawnmower — directional harvest bell
+  lawnmower_uncommon:     { subtype: "lawnmower", fanRange: 2, durationMs: 2 * 60 * 60 * 1_000 },
+  lawnmower_rare:         { subtype: "lawnmower", fanRange: 3, durationMs: 4 * 60 * 60 * 1_000 },
+  lawnmower_legendary:    { subtype: "lawnmower", fanRange: 4, durationMs: 8 * 60 * 60 * 1_000 },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -129,8 +152,18 @@ interface Plant {
   fertilizer?: string;
   masteredBonus?: number;
   mutation?: string | null;
+  infused?: boolean;
+  // Consumable flags — set by use-consumable, consumed at harvest
+  mutationBlocked?: boolean;
+  mutationBoost?:   { mutation: string; multiplier: number };
+  // Magnifying Glass — once true, this plant's mutation state is locked and
+  // no further weather/sprinkler/fan rolls should change it.
+  revealed?:        boolean;
+  // Garden Pin — when bloomed, plant is shielded from auto-harvest (Harvest
+  // Bell, Auto-Planter). Manual harvest still works.
+  pinned?:          boolean;
 }
-interface Gear { gearType: string; placedAt: number; }
+interface Gear { gearType: string; placedAt: number; direction?: "up" | "down" | "left" | "right"; }
 interface Plot { id: string; plant?: Plant | null; gear?: Gear | null; }
 interface InvItem { speciesId: string; quantity: number; isSeed: boolean; mutation?: string | null; }
 interface Save {
@@ -139,6 +172,7 @@ interface Save {
   grid: Plot[][];
   inventory: InvItem[];
   discovered: string[];
+  discoveredRecipes: string[];
 }
 
 // ── Growth helpers ─────────────────────────────────────────────────────────
@@ -169,12 +203,95 @@ function isExpired(gear: Gear, now: number): boolean {
   return !def || now >= gear.placedAt + def.durationMs;
 }
 
-function affectedCells(gearType: string, ri: number, ci: number, rows: number, cols: number): [number, number][] {
+function affectedCells(
+  gearType: string,
+  ri: number,
+  ci: number,
+  rows: number,
+  cols: number,
+  direction?: "up" | "down" | "left" | "right",
+): [number, number][] {
   const def = GEAR_DEFS[gearType];
   if (!def) return [];
+
+  // Directional gear (Aegis): line of cells in chosen direction
+  if (def.fanRange && direction) {
+    const offsets: [number, number][] = [];
+    for (let i = 1; i <= def.fanRange; i++) {
+      if (direction === "up")    offsets.push([-i,  0]);
+      if (direction === "down")  offsets.push([ i,  0]);
+      if (direction === "left")  offsets.push([ 0, -i]);
+      if (direction === "right") offsets.push([ 0,  i]);
+    }
+    return offsets
+      .map(([dr, dc]): [number, number] => [ri + dr, ci + dc])
+      .filter(([r, c]) => r >= 0 && r < rows && c >= 0 && c < cols);
+  }
+
+  // Radial gear (harvest bell, auto-planter, scarecrow)
+  if (!def.offsets) return [];
   return def.offsets
     .map(([dr, dc]): [number, number] => [ri + dr, ci + dc])
     .filter(([r, c]) => r >= 0 && r < rows && c >= 0 && c < cols);
+}
+
+// ── Mutation shield coverage ────────────────────────────────────────────────
+// Builds a per-cell map of mutation-shield coverage in one pass so the weather
+// + strip pass can do O(1) lookups instead of re-scanning gear per cell.
+//   - hasShield: true if any unexpired Scarecrow OR Aegis covers this cell
+//   - stripPerHour: max scarecrowStripPerHour from any covering Scarecrow
+interface CoverageEntry { hasShield: boolean; stripPerHour: number }
+function buildShieldCoverage(grid: Plot[][], now: number): Map<string, CoverageEntry> {
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const map  = new Map<string, CoverageEntry>();
+
+  for (let ri = 0; ri < rows; ri++) {
+    for (let ci = 0; ci < cols; ci++) {
+      const gear = grid[ri][ci]?.gear;
+      if (!gear) continue;
+      const def = GEAR_DEFS[gear.gearType];
+      if (!def || isExpired(gear, now)) continue;
+      if (def.subtype !== "scarecrow" && def.subtype !== "aegis") continue;
+
+      for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols, gear.direction)) {
+        const key = `${ar},${ac}`;
+        const cur = map.get(key) ?? { hasShield: false, stripPerHour: 0 };
+        cur.hasShield = true;
+        if (def.subtype === "scarecrow" && (def.scarecrowStripPerHour ?? 0) > cur.stripPerHour) {
+          cur.stripPerHour = def.scarecrowStripPerHour ?? 0;
+        }
+        map.set(key, cur);
+      }
+    }
+  }
+  return map;
+}
+
+// ── Scarecrow strip ────────────────────────────────────────────────────────
+// Per cron run, for each bloomed plant under a Scarecrow with an existing
+// string mutation, rolls the converted-to-per-minute strip chance. On hit
+// sets `mutation = null` (matches client convention; Giant-tried marker).
+function rollScarecrowStrip(grid: Plot[][], coverage: Map<string, CoverageEntry>, _now: number): { grid: Plot[][]; changed: boolean } {
+  let changed = false;
+  const next = grid.map((row, ri) => row.map((plot, ci) => {
+    if (!plot.plant || !plot.plant.bloomedAt) return plot;
+    if (plot.plant.revealed) return plot;
+    if (typeof plot.plant.mutation !== "string") return plot;
+
+    const cov = coverage.get(`${ri},${ci}`);
+    if (!cov || cov.stripPerHour <= 0) return plot;
+
+    // Per-cron-run probability: cumulative perHour distributed evenly across 60 minutes.
+    // Cron runs ~per minute, so apply 1 minute's worth of strip chance per run.
+    const perMin = 1 - Math.pow(1 - cov.stripPerHour, 1 / 60);
+    if (Math.random() < perMin) {
+      changed = true;
+      return { ...plot, plant: { ...plot.plant, mutation: null } };
+    }
+    return plot;
+  }));
+  return { grid: changed ? next : grid, changed };
 }
 
 // ── Stamp bloomedAt ────────────────────────────────────────────────────────
@@ -200,14 +317,18 @@ function runHarvestBells(save: Save, now: number): Save {
       const gear = cur.grid[ri][ci].gear;
       if (!gear) continue;
       const def = GEAR_DEFS[gear.gearType];
-      if (!def || def.subtype !== "harvest_bell") continue;
+      if (!def || (def.subtype !== "harvest_bell" && def.subtype !== "lawnmower")) continue;
       if (isExpired(gear, now)) continue;
 
-      for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols)) {
+      for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols, gear.direction)) {
         const targetPlot = cur.grid[ar]?.[ac];
         if (!targetPlot?.plant) continue;
         // Only harvest plants with bloomedAt stamped AND past the 5-second grace
         if (!targetPlot.plant.bloomedAt || now - targetPlot.plant.bloomedAt < 5_000) continue;
+        // Skip infused plants — they are reserved for Cropsticks cross-breeding
+        if (targetPlot.plant.infused) continue;
+        // Garden Pin shields plants from auto-harvest (manual harvest still works)
+        if (targetPlot.plant.pinned) continue;
 
         const { speciesId, mutation } = targetPlot.plant;
         const mut = mutation ?? null;
@@ -293,9 +414,13 @@ function runAutoPlanter(save: Save, now: number): Save {
 // ── Weather mutations ──────────────────────────────────────────────────────
 // Rolls weather-based mutations on all bloomed plants (same logic as
 // tickWeatherMutations in gameStore.ts, but scaled to per-minute probability).
-// Scarecrow protection is not applied here (server has no gear-coverage lookup);
-// the worst case is an offline player gets a mutation they'd have been protected from.
-function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number): { grid: Plot[][]; changed: boolean } {
+// Plants under a Scarecrow OR Aegis are skipped (both block weather mutations).
+function rollWeatherMutations(
+  grid: Plot[][],
+  weatherType: string,
+  now: number,
+  coverage: Map<string, CoverageEntry>,
+): { grid: Plot[][]; changed: boolean } {
   if (!weatherType || weatherType === "clear") return { grid, changed: false };
 
   const mutType   = WEATHER_MUTATION_TYPE[weatherType];
@@ -303,12 +428,31 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
   const night     = isNightUTC(now);
   let changed     = false;
 
-  const next = grid.map(row => row.map(plot => {
+  const next = grid.map((row, ri) => row.map((plot, ci) => {
     if (!plot.plant || !plot.plant.bloomedAt) return plot;
+
+    // ── Magnifying Glass guard ───────────────────────────────────────────────
+    // Once revealed, the plant's mutation state is locked across reloads.
+    if (plot.plant.revealed) return plot;
+
+    // ── Purity Vial guard ────────────────────────────────────────────────────
+    // mutationBlocked plants are shielded from all weather mutations.
+    // The flag is consumed at harvest time, not here.
+    if (plot.plant.mutationBlocked) return plot;
+
+    // ── Scarecrow / Aegis shield ─────────────────────────────────────────────
+    if (coverage.get(`${ri},${ci}`)?.hasShield) return plot;
+
+    // Helper: look up any active mutation boost for a given mutation type.
+    const boostFor = (mt: string): number =>
+      plot.plant!.mutationBoost?.mutation === mt
+        ? (plot.plant!.mutationBoost!.multiplier ?? 1)
+        : 1;
 
     // Thunderstorm combo: wet → shocked
     if (weatherType === "thunderstorm" && plot.plant.mutation === "wet") {
-      if (Math.random() < THUNDERSTORM_SHOCKED_CHANCE_PER_MIN) {
+      const chance = Math.min(1.0, THUNDERSTORM_SHOCKED_CHANCE_PER_MIN * boostFor("shocked"));
+      if (Math.random() < chance) {
         changed = true;
         return { ...plot, plant: { ...plot.plant, mutation: "shocked" } };
       }
@@ -320,22 +464,27 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
 
     // Thunderstorm: null/undefined → wet
     if (weatherType === "thunderstorm" && plot.plant.mutation == null) {
-      if (Math.random() < THUNDERSTORM_WET_CHANCE_PER_MIN) {
+      const chance = Math.min(1.0, THUNDERSTORM_WET_CHANCE_PER_MIN * boostFor("wet"));
+      if (Math.random() < chance) {
         changed = true;
         return { ...plot, plant: { ...plot.plant, mutation: "wet" } };
       }
       return plot;
     }
 
-    // Standard weather mutation roll
-    if (mutType && mutChance > 0 && Math.random() < mutChance) {
-      changed = true;
-      return { ...plot, plant: { ...plot.plant, mutation: mutType } };
+    // Standard weather mutation roll — apply boost if the vial matches this weather's mutation
+    if (mutType && mutChance > 0) {
+      const chance = Math.min(1.0, mutChance * boostFor(mutType));
+      if (Math.random() < chance) {
+        changed = true;
+        return { ...plot, plant: { ...plot.plant, mutation: mutType } };
+      }
     }
 
     // Moonlit at night (outside star_shower)
     if (night && weatherType !== "star_shower" && plot.plant.mutation === undefined) {
-      if (Math.random() < MOONLIT_NIGHT_CHANCE_PER_MIN) {
+      const chance = Math.min(1.0, MOONLIT_NIGHT_CHANCE_PER_MIN * boostFor("moonlit"));
+      if (Math.random() < chance) {
         changed = true;
         return { ...plot, plant: { ...plot.plant, mutation: "moonlit" } };
       }
@@ -345,6 +494,450 @@ function rollWeatherMutations(grid: Plot[][], weatherType: string, now: number):
   }));
 
   return { grid: changed ? next : grid, changed };
+}
+
+// ── Cropsticks cross-breeding ──────────────────────────────────────────────
+//
+// v2.3: deterministic progress timer — once a cropsticks finds a valid recipe
+// pair of infused neighbors, it stamps `crossbreedStartedAt` and produces a
+// seed exactly 1 hour later. Replaces the old per-tick RNG roll so the UI
+// can render a progress bar with predictable arrival time.
+
+const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1_000; // 1 hour
+
+const RARITY_IDX: Record<string, number> = {
+  common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+};
+
+// Mirrors CROSS_BREED_RECIPES in src/data/recipes.ts
+interface Recipe {
+  id:              string;
+  tier:            1 | 2 | 3 | 4;
+  typeA:           string;
+  typeB:           string;
+  minRarity:       string;
+  outputSpeciesId: string;
+}
+
+const RECIPES: Recipe[] = [
+  // Tier 1 — Rare+ inputs → Legendary output
+  { id: "blaze+frost",       tier: 1, typeA: "blaze",   typeB: "frost",   minRarity: "rare",      outputSpeciesId: "phoenix_lily"   },
+  { id: "lunar+solar",       tier: 1, typeA: "lunar",   typeB: "solar",   minRarity: "rare",      outputSpeciesId: "eclipse_bloom"  },
+  { id: "tide+storm",        tier: 1, typeA: "tide",    typeB: "storm",   minRarity: "rare",      outputSpeciesId: "tempest_orchid" },
+  { id: "grove+shadow",      tier: 1, typeA: "grove",   typeB: "shadow",  minRarity: "rare",      outputSpeciesId: "blightmantle"   },
+  { id: "arcane+stellar",    tier: 1, typeA: "arcane",  typeB: "stellar", minRarity: "rare",      outputSpeciesId: "cosmosbloom"    },
+  { id: "fairy+zephyr",      tier: 1, typeA: "fairy",   typeB: "zephyr",  minRarity: "rare",      outputSpeciesId: "dreamgust"      },
+  // Tier 2 — Legendary+ inputs → Mythic output
+  { id: "blaze+solar",       tier: 2, typeA: "blaze",   typeB: "solar",   minRarity: "legendary", outputSpeciesId: "solarburst"     },
+  { id: "lunar+tide",        tier: 2, typeA: "lunar",   typeB: "tide",    minRarity: "legendary", outputSpeciesId: "tidalune"       },
+  { id: "grove+zephyr",      tier: 2, typeA: "grove",   typeB: "zephyr",  minRarity: "legendary", outputSpeciesId: "whisperleaf"    },
+  { id: "frost+arcane",      tier: 2, typeA: "frost",   typeB: "arcane",  minRarity: "legendary", outputSpeciesId: "crystalmind"    },
+  // Tier 3 — Mythic+ inputs → Exalted output
+  { id: "arcane+shadow-t3",  tier: 3, typeA: "arcane",  typeB: "shadow",  minRarity: "mythic",    outputSpeciesId: "void_chrysalis" },
+  { id: "stellar+zephyr-t3", tier: 3, typeA: "stellar", typeB: "zephyr",  minRarity: "mythic",    outputSpeciesId: "starloom"       },
+  // Tier 4 — Exalted+ inputs → Prismatic output
+  { id: "arcane+stellar-t4", tier: 4, typeA: "arcane",  typeB: "stellar", minRarity: "exalted",   outputSpeciesId: "the_first_bloom" },
+];
+
+function findBestRecipe(
+  typesA: string[], rarityA: string,
+  typesB: string[], rarityB: string,
+): Recipe | null {
+  let best: Recipe | null = null;
+  for (const recipe of RECIPES) {
+    if (RARITY_IDX[rarityA] < RARITY_IDX[recipe.minRarity]) continue;
+    if (RARITY_IDX[rarityB] < RARITY_IDX[recipe.minRarity]) continue;
+    const fwd = typesA.includes(recipe.typeA) && typesB.includes(recipe.typeB);
+    const rev = typesA.includes(recipe.typeB) && typesB.includes(recipe.typeA);
+    if (!fwd && !rev) continue;
+    if (!best || recipe.tier > best.tier) best = recipe;
+  }
+  return best;
+}
+
+// Species → { types, rarity } — mirrors ALL_FLOWERS in src/data/flowers.ts
+const SPECIES_DATA: Record<string, { t: string[]; r: string }> = {
+  // Common
+  quickgrass:    { t: ["grove"],           r: "common" },
+  dustweed:      { t: ["zephyr","shadow"], r: "common" },
+  sprig:         { t: ["grove"],           r: "common" },
+  dewdrop:       { t: ["tide"],            r: "common" },
+  pebblebloom:   { t: ["grove"],           r: "common" },
+  ember_moss:    { t: ["blaze","grove"],   r: "common" },
+  dandelion:     { t: ["grove","zephyr"],  r: "common" },
+  clover:        { t: ["grove","fairy"],   r: "common" },
+  violet:        { t: ["fairy","arcane"],  r: "common" },
+  lemongrass:    { t: ["grove","solar"],   r: "common" },
+  daisy:         { t: ["grove","fairy"],   r: "common" },
+  honeywort:     { t: ["grove","solar"],   r: "common" },
+  buttercup:     { t: ["fairy","solar"],   r: "common" },
+  dawnpetal:     { t: ["lunar","solar"],   r: "common" },
+  poppy:         { t: ["blaze","grove"],   r: "common" },
+  chamomile:     { t: ["grove","solar"],   r: "common" },
+  marigold:      { t: ["solar","grove"],   r: "common" },
+  sunflower:     { t: ["solar"],           r: "common" },
+  coppercup:     { t: ["grove"],           r: "common" },
+  ivybell:       { t: ["grove","tide"],    r: "common" },
+  thornberry:    { t: ["grove"],           r: "common" },
+  saltmoss:      { t: ["tide"],            r: "common" },
+  ashpetal:      { t: ["shadow","zephyr"], r: "common" },
+  snowdrift:     { t: ["frost"],           r: "common" },
+  // Uncommon
+  swiftbloom:    { t: ["zephyr"],          r: "uncommon" },
+  shortcress:    { t: ["grove"],           r: "uncommon" },
+  thornwhistle:  { t: ["grove","blaze"],   r: "uncommon" },
+  starwort:      { t: ["stellar"],         r: "uncommon" },
+  mintleaf:      { t: ["grove","frost"],   r: "uncommon" },
+  tulip:         { t: ["fairy","grove"],   r: "uncommon" },
+  inkbloom:      { t: ["arcane","shadow"], r: "uncommon" },
+  hyacinth:      { t: ["blaze","fairy"],   r: "uncommon" },
+  snapdragon:    { t: ["blaze","arcane"],  r: "uncommon" },
+  beebalm:       { t: ["grove","solar"],   r: "uncommon" },
+  candleflower:  { t: ["blaze","arcane"],  r: "uncommon" },
+  carnation:     { t: ["fairy"],           r: "uncommon" },
+  ribbonweed:    { t: ["fairy"],           r: "uncommon" },
+  hibiscus:      { t: ["solar","blaze"],   r: "uncommon" },
+  wildberry:     { t: ["grove"],           r: "uncommon" },
+  frostbell:     { t: ["frost"],           r: "uncommon" },
+  bluebell:      { t: ["fairy","tide"],    r: "uncommon" },
+  cherry_blossom:{ t: ["fairy","grove"],   r: "uncommon" },
+  rose:          { t: ["fairy"],           r: "uncommon" },
+  peacockflower: { t: ["arcane","zephyr"], r: "uncommon" },
+  bamboo_bloom:  { t: ["grove","zephyr"],  r: "uncommon" },
+  hummingbloom:  { t: ["zephyr","fairy"],  r: "uncommon" },
+  water_lily:    { t: ["tide"],            r: "uncommon" },
+  lanternflower: { t: ["blaze","arcane"],  r: "uncommon" },
+  dovebloom:     { t: ["zephyr","fairy"],  r: "uncommon" },
+  coral_bells:   { t: ["tide","fairy"],    r: "uncommon" },
+  sundew:        { t: ["grove","shadow"],  r: "uncommon" },
+  bubblebloom:   { t: ["tide","fairy"],    r: "uncommon" },
+  // Rare
+  flashpetal:      { t: ["storm"],           r: "rare" },
+  rushwillow:      { t: ["zephyr","tide"],   r: "rare" },
+  sweetheart_lily: { t: ["fairy"],           r: "rare" },
+  glassbell:       { t: ["arcane","stellar"],r: "rare" },
+  stormcaller:     { t: ["storm"],           r: "rare" },
+  lavender:        { t: ["fairy","arcane"],  r: "rare" },
+  amber_crown:     { t: ["solar","blaze"],   r: "rare" },
+  peach_blossom:   { t: ["grove","fairy"],   r: "rare" },
+  foxglove:        { t: ["shadow","arcane"], r: "rare" },
+  butterbloom:     { t: ["fairy","zephyr"],  r: "rare" },
+  peony:           { t: ["fairy"],           r: "rare" },
+  tidebloom:       { t: ["tide"],            r: "rare" },
+  starweave:       { t: ["stellar","arcane"],r: "rare" },
+  wisteria:        { t: ["fairy","arcane"],  r: "rare" },
+  dreamcup:        { t: ["fairy","arcane"],  r: "rare" },
+  coralbell:       { t: ["tide"],            r: "rare" },
+  foxfire:         { t: ["blaze","arcane"],  r: "rare" },
+  bird_of_paradise:{ t: ["zephyr","solar"],  r: "rare" },
+  solarbell:       { t: ["solar"],           r: "rare" },
+  moonpetal:       { t: ["lunar"],           r: "rare" },
+  orchid:          { t: ["fairy","arcane"],  r: "rare" },
+  duskrose:        { t: ["lunar","shadow"],  r: "rare" },
+  passionflower:   { t: ["arcane","storm"],  r: "rare" },
+  glasswing:       { t: ["arcane"],          r: "rare" },
+  mirror_orchid:   { t: ["arcane","stellar"],r: "rare" },
+  stargazer_lily:  { t: ["stellar"],         r: "rare" },
+  prism_lily:      { t: ["arcane","stellar"],r: "rare" },
+  dusk_orchid:     { t: ["lunar","solar"],   r: "rare" },
+  // Legendary
+  firstbloom:      { t: ["solar","fairy"],    r: "legendary" },
+  haste_lily:      { t: ["zephyr","storm"],   r: "legendary" },
+  verdant_crown:   { t: ["grove","fairy"],    r: "legendary" },
+  ironwood_bloom:  { t: ["grove"],            r: "legendary" },
+  sundial:         { t: ["solar","arcane"],   r: "legendary" },
+  lotus:           { t: ["tide","arcane"],    r: "legendary" },
+  candy_blossom:   { t: ["fairy"],            r: "legendary" },
+  prismbark:       { t: ["grove","arcane"],   r: "legendary" },
+  dolphinia:       { t: ["tide"],             r: "legendary" },
+  ghost_orchid:    { t: ["shadow","arcane"],  r: "legendary" },
+  nestbloom:       { t: ["grove","fairy"],    r: "legendary" },
+  black_rose:      { t: ["shadow"],           r: "legendary" },
+  pumpkin_blossom: { t: ["shadow","grove"],   r: "legendary" },
+  starburst_lily:  { t: ["stellar","storm"],  r: "legendary" },
+  sporebloom:      { t: ["grove","shadow"],   r: "legendary" },
+  fire_lily:       { t: ["blaze"],            r: "legendary" },
+  stargazer:       { t: ["stellar"],          r: "legendary" },
+  fullmoon_bloom:  { t: ["lunar"],            r: "legendary" },
+  ice_crown:       { t: ["frost"],            r: "legendary" },
+  diamond_bloom:   { t: ["frost","arcane"],   r: "legendary" },
+  oracle_eye:      { t: ["arcane","shadow"],  r: "legendary" },
+  halfmoon_bloom:  { t: ["lunar"],            r: "legendary" },
+  aurora_bloom:    { t: ["stellar","arcane"], r: "legendary" },
+  mirrorpetal:     { t: ["arcane","stellar"], r: "legendary" },
+  emberspark:      { t: ["blaze","storm"],    r: "legendary" },
+  // Legendary recipe-only (Tier 1 outputs — can themselves be inputs for Tier 2)
+  phoenix_lily:    { t: ["blaze","frost"],    r: "legendary" },
+  eclipse_bloom:   { t: ["lunar","solar"],    r: "legendary" },
+  tempest_orchid:  { t: ["tide","storm"],     r: "legendary" },
+  blightmantle:    { t: ["grove","shadow"],   r: "legendary" },
+  cosmosbloom:     { t: ["arcane","stellar"], r: "legendary" },
+  dreamgust:       { t: ["fairy","zephyr"],   r: "legendary" },
+  // Mythic
+  blink_rose:      { t: ["arcane","shadow"],  r: "mythic" },
+  dawnfire:        { t: ["solar","blaze"],    r: "mythic" },
+  moonflower:      { t: ["lunar"],            r: "mythic" },
+  jellybloom:      { t: ["tide","arcane"],    r: "mythic" },
+  celestial_bloom: { t: ["stellar"],          r: "mythic" },
+  void_blossom:    { t: ["shadow","arcane"],  r: "mythic" },
+  seraph_wing:     { t: ["zephyr","fairy"],   r: "mythic" },
+  solar_rose:      { t: ["solar"],            r: "mythic" },
+  nebula_drift:    { t: ["stellar","arcane"], r: "mythic" },
+  superbloom:      { t: ["storm","stellar"],  r: "mythic" },
+  wanderbloom:     { t: ["zephyr","arcane"],  r: "mythic" },
+  chrysanthemum:   { t: ["arcane","stellar","fairy"], r: "mythic" },
+  // Mythic recipe-only (Tier 2 outputs — can be inputs for Tier 3)
+  solarburst:      { t: ["blaze","solar"],    r: "mythic" },
+  tidalune:        { t: ["lunar","tide"],     r: "mythic" },
+  whisperleaf:     { t: ["grove","zephyr"],   r: "mythic" },
+  crystalmind:     { t: ["frost","arcane"],   r: "mythic" },
+  // Exalted
+  umbral_bloom:    { t: ["shadow","lunar"],   r: "exalted" },
+  obsidian_rose:   { t: ["shadow"],           r: "exalted" },
+  duskmantle:      { t: ["shadow","lunar"],   r: "exalted" },
+  graveweb:        { t: ["shadow"],           r: "exalted" },
+  nightwing:       { t: ["shadow","zephyr"],  r: "exalted" },
+  ashenveil:       { t: ["shadow","blaze"],   r: "exalted" },
+  voidfire:        { t: ["shadow","blaze"],   r: "exalted" },
+  // Exalted recipe-only (Tier 3 outputs — inputs for Tier 4)
+  void_chrysalis:  { t: ["arcane"],           r: "exalted" },
+  starloom:        { t: ["stellar"],          r: "exalted" },
+  // Prismatic
+  dreambloom:      { t: ["fairy","arcane"],   r: "prismatic" },
+  fairy_blossom:   { t: ["fairy"],            r: "prismatic" },
+  lovebind:        { t: ["fairy","arcane"],   r: "prismatic" },
+  eternal_heart:   { t: ["fairy","solar"],    r: "prismatic" },
+  nova_bloom:      { t: ["stellar","storm","blaze"], r: "prismatic" },
+  princess_blossom:{ t: ["fairy","arcane"],   r: "prismatic" },
+  the_first_bloom: { t: ["arcane","stellar"], r: "prismatic" },
+};
+
+function runCropsticks(save: Save, now: number): Save {
+  let cur = save;
+  const rows = cur.grid.length;
+  const cols = cur.grid[0]?.length ?? 0;
+
+  for (let ri = 0; ri < rows; ri++) {
+    for (let ci = 0; ci < cols; ci++) {
+      const rawGear = cur.grid[ri][ci].gear;
+      if (!rawGear || rawGear.gearType !== "cropsticks") continue;
+
+      const gear      = rawGear as PlacedGearWithProgress;
+      const startedAt = gear.crossbreedStartedAt;
+      const storedA   = gear.crossbreedSourceA;
+      const storedB   = gear.crossbreedSourceB;
+
+      // ── In-progress cycle with stored source coordinates (v2.4+ path) ───
+      // Infused flag was already cleared when the cycle started; locate the
+      // source plants purely by stored grid coordinates.
+      if (startedAt != null && storedA && storedB) {
+        const plantA = cur.grid[storedA.r]?.[storedA.c]?.plant;
+        const plantB = cur.grid[storedB.r]?.[storedB.c]?.plant;
+
+        // Source plants must still exist and be bloomed (bloomedAt set, or timePlanted===0 for placed blooms).
+        const aIsBloomed = plantA && (plantA.bloomedAt || plantA.timePlanted === 0);
+        const bIsBloomed = plantB && (plantB.bloomedAt || plantB.timePlanted === 0);
+        if (!aIsBloomed || !bIsBloomed) {
+          const newGrid = cur.grid.map((row, r) =>
+            row.map((plot, c) =>
+              r === ri && c === ci && plot.gear
+                ? { ...plot, gear: clearStartedAt(plot.gear as PlacedGearWithProgress) }
+                : plot
+            )
+          );
+          cur = { ...cur, grid: newGrid };
+          continue;
+        }
+
+        // Not done yet — wait
+        if (now - startedAt < CROPSTICKS_BREED_DURATION_MS) continue;
+
+        // ── Complete ──────────────────────────────────────────────────────
+        const da = SPECIES_DATA[plantA.speciesId];
+        const db = SPECIES_DATA[plantB.speciesId];
+        const bestRecipe = da && db ? findBestRecipe(da.t, da.r, db.t, db.r) : null;
+
+        let outputSpeciesId: string;
+        let newDiscovered: string[];
+        let newDiscoveredRecipes: string[];
+
+        if (bestRecipe) {
+          // Recipe match → always produce the recipe output.
+          outputSpeciesId = bestRecipe.outputSpeciesId;
+          newDiscovered = cur.discovered.includes(outputSpeciesId)
+            ? cur.discovered
+            : [...cur.discovered, outputSpeciesId];
+          newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+            ? cur.discoveredRecipes
+            : [...cur.discoveredRecipes, bestRecipe.id];
+        } else {
+          // No recipe match → lower-rarity parent; random when tied.
+          const tierA = da ? (RARITY_IDX[da.r] ?? 0) : 0;
+          const tierB = db ? (RARITY_IDX[db.r] ?? 0) : 0;
+          if (tierA < tierB)      outputSpeciesId = plantA.speciesId;
+          else if (tierB < tierA) outputSpeciesId = plantB.speciesId;
+          else                    outputSpeciesId = Math.random() < 0.5 ? plantA.speciesId : plantB.speciesId;
+          newDiscovered      = cur.discovered;
+          newDiscoveredRecipes = cur.discoveredRecipes;
+        }
+
+        // Replace cropsticks cell with the seed; source plants' infused was
+        // already cleared when the cycle started — nothing to change on them.
+        const newGrid = cur.grid.map((row, r) =>
+          row.map((plot, c) => {
+            if (r === ri && c === ci) {
+              return { ...plot, gear: null, plant: { speciesId: outputSpeciesId, timePlanted: now } };
+            }
+            return plot;
+          })
+        );
+        cur = { ...cur, grid: newGrid, discovered: newDiscovered, discoveredRecipes: newDiscoveredRecipes };
+        continue;
+      }
+
+      // ── Scan for infused neighbors (new-cycle start OR legacy in-progress) ─
+      type Neighbor = { r: number; c: number; plant: Plant };
+      const infusedNeighbors: Neighbor[] = [];
+      for (const [dr, dc] of OFFSETS_CROSS) {
+        const nr = ri + dr;
+        const nc = ci + dc;
+        const plot = cur.grid[nr]?.[nc];
+        if (!plot?.plant || (!plot.plant.bloomedAt && plot.plant.timePlanted !== 0) || !plot.plant.infused) continue;
+        infusedNeighbors.push({ r: nr, c: nc, plant: plot.plant });
+      }
+
+      // Need at least 2 infused neighbours to crossbreed
+      if (infusedNeighbors.length < 2) {
+        if (startedAt != null) {
+          const newGrid = cur.grid.map((row, r) =>
+            row.map((plot, c) =>
+              r === ri && c === ci && plot.gear
+                ? { ...plot, gear: clearStartedAt(plot.gear as PlacedGearWithProgress) }
+                : plot
+            )
+          );
+          cur = { ...cur, grid: newGrid };
+        }
+        continue;
+      }
+
+      // Pick highest-tier recipe pair; fall back to first available pair when
+      // no recipe matches (lower-rarity parent is produced at completion).
+      let bestRecipe: Recipe | null = null;
+      let bestA: Neighbor = infusedNeighbors[0];
+      let bestB: Neighbor = infusedNeighbors[1];
+
+      for (let i = 0; i < infusedNeighbors.length; i++) {
+        for (let j = i + 1; j < infusedNeighbors.length; j++) {
+          const a = infusedNeighbors[i];
+          const b = infusedNeighbors[j];
+          const da = SPECIES_DATA[a.plant.speciesId];
+          const db = SPECIES_DATA[b.plant.speciesId];
+          if (!da || !db) continue;
+          const recipe = findBestRecipe(da.t, da.r, db.t, db.r);
+          if (recipe && (!bestRecipe || recipe.tier > bestRecipe.tier)) {
+            bestRecipe = recipe;
+            bestA = a;
+            bestB = b;
+          }
+        }
+      }
+
+      // ── Valid pair, no cycle yet → start one with stored source coords ────
+      if (startedAt == null) {
+        const aR = bestA.r, aC = bestA.c;
+        const bR = bestB.r, bC = bestB.c;
+        const newGrid = cur.grid.map((row, r) =>
+          row.map((plot, c) => {
+            if (r === ri && c === ci && plot.gear) {
+              return {
+                ...plot,
+                gear: {
+                  ...plot.gear,
+                  crossbreedStartedAt: now,
+                  crossbreedSourceA: { r: aR, c: aC },
+                  crossbreedSourceB: { r: bR, c: bC },
+                },
+              };
+            }
+            // Clear infused immediately on the source plants
+            if ((r === aR && c === aC) || (r === bR && c === bC)) {
+              if (plot.plant) return { ...plot, plant: { ...plot.plant, infused: false } };
+            }
+            return plot;
+          })
+        );
+        cur = { ...cur, grid: newGrid };
+        continue;
+      }
+
+      // ── Legacy: cycle in progress (no stored coords) + pair still valid ──
+      // This handles saves created before v2.4. Complete if time has elapsed.
+      if (now - startedAt < CROPSTICKS_BREED_DURATION_MS) continue;
+
+      const aR = bestA.r, aC = bestA.c;
+      const bR = bestB.r, bC = bestB.c;
+      const daLeg = SPECIES_DATA[bestA.plant.speciesId];
+      const dbLeg = SPECIES_DATA[bestB.plant.speciesId];
+
+      let outputSpeciesId: string;
+      let newDiscovered: string[];
+      let newDiscoveredRecipes: string[];
+
+      if (bestRecipe) {
+        // Recipe match → always produce the recipe output.
+        outputSpeciesId = bestRecipe.outputSpeciesId;
+        newDiscovered = cur.discovered.includes(outputSpeciesId)
+          ? cur.discovered
+          : [...cur.discovered, outputSpeciesId];
+        newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+          ? cur.discoveredRecipes
+          : [...cur.discoveredRecipes, bestRecipe.id];
+      } else {
+        // No recipe → lower-rarity parent; random when tied.
+        const tierA = daLeg ? (RARITY_IDX[daLeg.r] ?? 0) : 0;
+        const tierB = dbLeg ? (RARITY_IDX[dbLeg.r] ?? 0) : 0;
+        if (tierA < tierB)      outputSpeciesId = bestA.plant.speciesId;
+        else if (tierB < tierA) outputSpeciesId = bestB.plant.speciesId;
+        else                    outputSpeciesId = Math.random() < 0.5 ? bestA.plant.speciesId : bestB.plant.speciesId;
+        newDiscovered      = cur.discovered;
+        newDiscoveredRecipes = cur.discoveredRecipes;
+      }
+
+      // Clear infused from source plants + replace cropsticks cell with the seed
+      const newGrid = cur.grid.map((row, r) =>
+        row.map((plot, c) => {
+          if ((r === aR && c === aC) || (r === bR && c === bC)) {
+            if (!plot.plant) return plot;
+            return { ...plot, plant: { ...plot.plant, infused: false } };
+          }
+          if (r === ri && c === ci) {
+            return { ...plot, gear: null, plant: { speciesId: outputSpeciesId, timePlanted: now } };
+          }
+          return plot;
+        })
+      );
+
+      cur = { ...cur, grid: newGrid, discovered: newDiscovered, discoveredRecipes: newDiscoveredRecipes };
+    }
+  }
+
+  return cur;
+}
+
+// Type-helper: PlacedGear may carry crossbreed fields on cropsticks.
+type PlacedGearWithProgress = {
+  gearType: string;
+  crossbreedStartedAt?: number;
+  crossbreedSourceA?: { r: number; c: number };
+  crossbreedSourceB?: { r: number; c: number };
+};
+function clearStartedAt(gear: PlacedGearWithProgress) {
+  const next = { ...gear };
+  delete next.crossbreedStartedAt;
+  delete next.crossbreedSourceA;
+  delete next.crossbreedSourceB;
+  return next;
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
@@ -390,7 +983,7 @@ Deno.serve(async (req: Request) => {
     const cutoff = new Date(now - 25 * 60 * 60 * 1_000).toISOString();
     const { data: saves, error: fetchErr } = await supabase
       .from("game_saves")
-      .select("user_id, updated_at, grid, inventory, discovered")
+      .select("user_id, updated_at, grid, inventory, discovered, discovered_recipes")
       .gt("updated_at", cutoff);
 
     if (fetchErr || !saves) {
@@ -407,32 +1000,49 @@ Deno.serve(async (req: Request) => {
       if (!grid?.length) continue;
 
       // Fast-path: skip saves that have nothing to do.
-      // Process if: active harvest_bell/auto_planter gear, OR weather is active
-      // and there are bloomed plants that could receive mutations.
-      const hasActiveGear = grid.flat().some(plot => {
+      // Process if: active harvest_bell/auto_planter gear, OR weather mutation possible,
+      // OR cropsticks + infused bloomed plant both present.
+      const flatGrid = grid.flat();
+      const hasActiveGear = flatGrid.some(plot => {
         if (!plot.gear) return false;
         const def = GEAR_DEFS[plot.gear.gearType];
         return !!def && !isExpired(plot.gear, now);
       });
       const hasBloomedForMutation = weatherType !== "clear" &&
-        grid.flat().some(plot => plot.plant && hasBloom(plot.plant, now, weatherMult));
-      if (!hasActiveGear && !hasBloomedForMutation) continue;
+        flatGrid.some(plot => plot.plant && hasBloom(plot.plant, now, weatherMult));
+      const hasCropsticks = flatGrid.some(plot => plot.gear?.gearType === "cropsticks");
+      const hasInfusedBloomed = flatGrid.some(plot => plot.plant?.infused && plot.plant?.bloomedAt);
+      // Also process saves where a cropsticks cycle is already in progress
+      // (stored coords path — source plants are no longer marked infused).
+      const hasCropsticksCycleActive = flatGrid.some(plot =>
+        plot.gear?.gearType === "cropsticks" &&
+        (plot.gear as PlacedGearWithProgress).crossbreedStartedAt != null
+      );
+      if (!hasActiveGear && !hasBloomedForMutation && !(hasCropsticks && hasInfusedBloomed) && !hasCropsticksCycleActive) continue;
 
       const original: Save = {
-        user_id:    raw.user_id,
-        updated_at: raw.updated_at,
+        user_id:           raw.user_id,
+        updated_at:        raw.updated_at,
         grid,
-        inventory:  (raw.inventory  ?? []) as InvItem[],
-        discovered: (raw.discovered ?? []) as string[],
+        inventory:         (raw.inventory          ?? []) as InvItem[],
+        discovered:        (raw.discovered         ?? []) as string[],
+        discoveredRecipes: (raw.discovered_recipes ?? []) as string[],
       };
 
       // 1. Stamp bloomedAt so harvest bell + mutations can find ready plants
       const { grid: stamped, changed: stampChanged } = stampBloomed(original.grid, now, weatherMult);
       let sim = stampChanged ? { ...original, grid: stamped } : original;
 
-      // 2. Roll weather mutations on bloomed plants
-      const { grid: mutGrid, changed: mutChanged } = rollWeatherMutations(sim.grid, weatherType, now);
+      // 2a. Build mutation-shield coverage once per garden (Scarecrow + Aegis)
+      const shieldCoverage = buildShieldCoverage(sim.grid, now);
+
+      // 2b. Roll weather mutations on bloomed plants (skipping shielded cells)
+      const { grid: mutGrid, changed: mutChanged } = rollWeatherMutations(sim.grid, weatherType, now, shieldCoverage);
       if (mutChanged) sim = { ...sim, grid: mutGrid };
+
+      // 2c. Scarecrow strip — chance to remove existing mutations from covered plants
+      const { grid: stripGrid, changed: stripChanged } = rollScarecrowStrip(sim.grid, shieldCoverage, now);
+      if (stripChanged) sim = { ...sim, grid: stripGrid };
 
       // 3. Harvest bell
       sim = runHarvestBells(sim, now);
@@ -440,24 +1050,50 @@ Deno.serve(async (req: Request) => {
       // 4. Auto-planter
       sim = runAutoPlanter(sim, now);
 
+      // 5. Cropsticks cross-breeding
+      sim = runCropsticks(sim, now);
+
       // Skip if nothing actually changed
       if (sim.grid === original.grid &&
           sim.inventory === original.inventory &&
-          sim.discovered === original.discovered) continue;
+          sim.discovered === original.discovered &&
+          sim.discoveredRecipes === original.discoveredRecipes) continue;
 
       // Write back — optimistic lock on updated_at to avoid stomping concurrent client saves
       const { error: writeErr } = await supabase
         .from("game_saves")
         .update({
-          grid:       sim.grid,
-          inventory:  sim.inventory,
-          discovered: sim.discovered,
-          updated_at: new Date(now).toISOString(),
+          grid:              sim.grid,
+          inventory:         sim.inventory,
+          discovered:        sim.discovered,
+          discovered_recipes: sim.discoveredRecipes,
+          updated_at:        new Date(now).toISOString(),
         })
         .eq("user_id", sim.user_id)
         .eq("updated_at", original.updated_at); // only update if row hasn't changed
 
-      if (!writeErr) changed++;
+      if (!writeErr) {
+        changed++;
+
+        // Write plant_timings for any seeds the auto-planter just planted.
+        // Without this, harvest finds no timing entry → silently clears the plot
+        // and gives the player nothing (the "gets nothing from harvest" bug).
+        const newlyPlanted: Array<{ row: number; col: number; planted_at: string }> = [];
+        for (let ri = 0; ri < sim.grid.length; ri++) {
+          for (let ci = 0; ci < (sim.grid[ri]?.length ?? 0); ci++) {
+            if (!original.grid[ri]?.[ci]?.plant && sim.grid[ri]?.[ci]?.plant) {
+              const tp = sim.grid[ri][ci].plant!.timePlanted;
+              newlyPlanted.push({ row: ri, col: ci, planted_at: new Date(tp).toISOString() });
+            }
+          }
+        }
+        if (newlyPlanted.length > 0) {
+          void supabase.from("plant_timings").upsert(
+            newlyPlanted.map((p) => ({ user_id: sim.user_id, row: p.row, col: p.col, planted_at: p.planted_at })),
+            { onConflict: "user_id,row,col" }
+          );
+        }
+      }
     }
 
     return new Response(

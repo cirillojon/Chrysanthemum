@@ -5,13 +5,14 @@ import {
   getCurrentStage,
   getStageProgress,
   getPassiveGrowthMultiplier,
+  getBoostMultiplier,
   harvestPlant,
 } from "../store/gameStore";
 import { getFlower, RARITY_CONFIG, MUTATIONS, type MutationType } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
 import { WEATHER } from "../data/weather";
 import type { WeatherType } from "../data/weather";
-import { GEAR, isGearExpired, type FanDirection } from "../data/gear";
+import { GEAR, isGearExpired, CROPSTICKS_BREED_DURATION_MS, type FanDirection } from "../data/gear";
 import { PlotTooltip } from "./PlotTooltip";
 import { GearTooltip } from "./GearTooltip";
 import { useGame } from "../store/GameContext";
@@ -34,7 +35,7 @@ interface Props {
   row:             number;
   col:             number;
   onEmptyClick:    () => void;
-  onHarvest:       (speciesId: string, mutation?: MutationType) => void;
+  onHarvest:       (speciesId: string, mutation?: MutationType, isBloomPlaced?: boolean) => void;
   onHarvestStart?: () => void;
   onHarvestEnd?:   () => void;
   /** Called at click time to check if this plot is already queued by Collect All. */
@@ -58,8 +59,18 @@ interface Props {
   fanDirection?: FanDirection;
   /** True when this cell is within a harvest bell's radius. */
   isUnderHarvestBell?: boolean;
+  /** True when this cell is within a lawnmower's range. */
+  isUnderLawnmower?: boolean;
+  /** Direction the lawnmower covering this cell is facing. */
+  lawnmowerDirection?: FanDirection;
+  /** "boost" (3×) or "slow" (0.5×) — set when this cell is covered by a Balance Scale. */
+  balanceScaleSide?: "boost" | "slow";
   /** True when this cell is within an auto-planter's radius. */
   isUnderAutoPlanter?: boolean;
+  /** Direction a crossbreed particle should travel (toward the active cropsticks). */
+  crossbreedDirection?: "up" | "down" | "left" | "right";
+  /** True when this plant is actively serving as a Cropsticks cross-breed source — blocks manual harvest. */
+  isCrossBreeding?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -73,24 +84,34 @@ export function PlotTile({
   isSelected, isHighlighted,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
-  isUnderFan, fanDirection, isUnderHarvestBell, isUnderAutoPlanter,
+  isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, balanceScaleSide, isUnderAutoPlanter,
+  crossbreedDirection, isCrossBreeding = false,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
   showGrowthDebug = false,
 }: Props) {
-  const { perform, getState, activeWeather } = useGame();
+  const { state, perform, getState, activeWeather, reloadFromCloud } = useGame();
   const { settings } = useSettings();
   const now    = Date.now();
   const plant  = plot.plant;
   const gear   = plot.gear;
   const species = plant ? getFlower(plant.speciesId) : null;
 
-  const gearMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
+  // gearMult already folds Verdant Rush in so PlotTooltip downstream gets the
+  // combined multiplier without needing a separate prop for activeBoosts.
+  const passiveMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
+  const boostMult   = plant ? getBoostMultiplier(getState().activeBoosts, "growth", now) : 1.0;
+  const gearMult    = passiveMult * boostMult;
   const stage    = plant ? getCurrentStage(plant, now, activeWeather, gearMult) : null;
   const progress = plant ? getStageProgress(plant, now, activeWeather, gearMult) : 0;
 
   const rarity     = species ? RARITY_CONFIG[species.rarity] : null;
   const isBloomed  = stage === "bloom";
+  // A plant is "identified" (species known) if it's already in the codex (harvested
+  // before) OR the player used a Magnifying Glass on this specific tile.
+  const isIdentified = plant
+    ? (state.discovered.includes(plant.speciesId) || !!plant.revealed)
+    : false;
   const hasFert    = !!plant?.fertilizer;
 
   const debugTotalMult = showGrowthDebug && plant ? (() => {
@@ -103,6 +124,28 @@ export function PlotTile({
 
   const [open,     setOpen]     = useState(false);
   const [gearOpen, setGearOpen] = useState(false);
+  // Force a 1s re-render while a cropsticks cycle is active so the progress
+  // bar visually advances even when no other state changes are happening
+  // (a fully-bloomed garden with cropsticks doesn't tick anything else).
+  const [, forceTick] = useState(0);
+  const cropsticksActive =
+    plot.gear?.gearType === "cropsticks" && plot.gear.crossbreedStartedAt != null;
+  const cropsticksComplete =
+    cropsticksActive &&
+    (now - (plot.gear!.crossbreedStartedAt as number)) >= CROPSTICKS_BREED_DURATION_MS;
+  useEffect(() => {
+    if (!cropsticksActive) return;
+    const id = setInterval(() => forceTick((n) => (n + 1) & 0xffff), 1_000);
+    return () => clearInterval(id);
+  }, [cropsticksActive]);
+  // When the progress bar hits 100%, poll the server every 10 s until the tick
+  // has replaced the cropsticks with a seed (cropsticksActive becomes false).
+  useEffect(() => {
+    if (!cropsticksComplete) return;
+    reloadFromCloud();
+    const id = setInterval(() => reloadFromCloud(), 10_000);
+    return () => clearInterval(id);
+  }, [cropsticksComplete]);
   const tileRef       = useRef<HTMLDivElement>(null);
   const harvestingRef = useRef(false);
 
@@ -126,54 +169,56 @@ export function PlotTile({
     if (!gear) setGearOpen(false);
   }, [gear]);
 
+  function handleHarvest() {
+    if (!plant) return;
+    if (isCrossBreeding) return;
+    if (harvestingRef.current) return;
+    if (harvestPending?.()) return;
+    const currentState = getState();
+    const optimistic   = harvestPlant(currentState, row, col, activeWeather);
+    if (optimistic) {
+      const savedCell         = currentState.grid[row][col];
+      const harvestedSpecies  = savedCell.plant?.speciesId;
+      const harvestedMutation = savedCell.plant?.mutation ?? undefined;
+      harvestingRef.current = true;
+      onHarvestStart?.();
+      perform(
+        optimistic.state,
+        async () => {
+          try { return await edgeHarvest(row, col); }
+          finally {
+            harvestingRef.current = false;
+            onHarvestEnd?.();
+          }
+        },
+        () => { onHarvest(plant.speciesId, optimistic.mutation, savedCell.plant?.timePlanted === 0); },
+        {
+          serialize: true,
+          rollback: (cur) => ({
+            ...cur,
+            grid: cur.grid.map((r, ri) =>
+              r.map((p, ci) => ri === row && ci === col ? savedCell : p)
+            ),
+            inventory: harvestedSpecies
+              ? cur.inventory
+                  .map((item) =>
+                    item.speciesId === harvestedSpecies &&
+                    item.mutation  === harvestedMutation &&
+                    !item.isSeed
+                      ? { ...item, quantity: item.quantity - 1 }
+                      : item
+                  )
+                  .filter((item) => item.quantity > 0)
+              : cur.inventory,
+          }),
+        }
+      );
+      setOpen(false);
+    }
+  }
+
   function handleClick() {
     if (!plant) { onEmptyClick(); return; }
-    if (isBloomed) {
-      if (harvestingRef.current) return;
-      if (harvestPending?.()) return;
-      const currentState = getState();
-      const optimistic   = harvestPlant(currentState, row, col, activeWeather);
-      if (optimistic) {
-        const savedCell         = currentState.grid[row][col];
-        const harvestedSpecies  = savedCell.plant?.speciesId;
-        const harvestedMutation = savedCell.plant?.mutation ?? undefined;
-        harvestingRef.current = true;
-        onHarvestStart?.();
-        perform(
-          optimistic.state,
-          async () => {
-            try { return await edgeHarvest(row, col); }
-            finally {
-              harvestingRef.current = false;
-              onHarvestEnd?.();
-            }
-          },
-          () => { onHarvest(plant.speciesId, optimistic.mutation); },
-          {
-            serialize: true,
-            rollback: (cur) => ({
-              ...cur,
-              grid: cur.grid.map((r, ri) =>
-                r.map((p, ci) => ri === row && ci === col ? savedCell : p)
-              ),
-              inventory: harvestedSpecies
-                ? cur.inventory
-                    .map((item) =>
-                      item.speciesId === harvestedSpecies &&
-                      item.mutation  === harvestedMutation &&
-                      !item.isSeed
-                        ? { ...item, quantity: item.quantity - 1 }
-                        : item
-                    )
-                    .filter((item) => item.quantity > 0)
-                : cur.inventory,
-            }),
-          }
-        );
-        setOpen(false);
-      }
-      return;
-    }
     setOpen((v) => !v);
   }
 
@@ -187,6 +232,14 @@ export function PlotTile({
     const expiryProgress = def.durationMs
       ? Math.max(0, (gear.placedAt + def.durationMs - now) / def.durationMs)
       : null;
+
+    // Cropsticks cross-breed progress (0..1) — ticks deterministically from
+    // crossbreedStartedAt over CROPSTICKS_BREED_DURATION_MS. Replaces the old
+    // hourly RNG roll with a visible bar.
+    const cropProgress: number | null =
+      def.passiveSubtype === "cropsticks" && gear.crossbreedStartedAt != null
+        ? Math.min(1, Math.max(0, (now - gear.crossbreedStartedAt) / CROPSTICKS_BREED_DURATION_MS))
+        : null;
 
     // Prismatic uses "rainbow-text" and Exalted uses "text-black" — both need manual mapping
     const gearBarBg = gearRarity.color === "rainbow-text"
@@ -250,6 +303,19 @@ export function PlotTile({
             </div>
           )}
 
+          {/* Cropsticks cross-breed progress (deterministic — replaces RNG) */}
+          {cropProgress !== null && (
+            <div
+              className="absolute bottom-1 left-2 right-2 h-1 bg-border rounded-full overflow-hidden"
+              title={`Cross-breeding · ${Math.floor(cropProgress * 100)}%`}
+            >
+              <div
+                className="h-full rounded-full bg-emerald-400"
+                style={{ width: `${cropProgress * 100}%`, transition: "width 1s linear" }}
+              />
+            </div>
+          )}
+
           {/* Composter stored count badge */}
           {def.passiveSubtype === "composter" && storedCount > 0 && (
             <span className="absolute top-0.5 right-0.5 text-[9px] font-mono font-bold text-primary leading-none">
@@ -295,12 +361,14 @@ export function PlotTile({
   // ── Plant tile ─────────────────────────────────────────────────────────────
   return (
     <div ref={tileRef} className="relative">
-      {open && !isBloomed && (
+      {open && (
         <PlotTooltip
           plant={plant}
           row={row}
           col={col}
           onClose={() => setOpen(false)}
+          onHarvestRequest={isBloomed ? handleHarvest : undefined}
+          isCrossBreeding={isCrossBreeding}
           gearGrowthMultiplier={gearMult}
           isUnderSprinkler={isUnderSprinkler}
           sprinklerMutations={sprinklerMutations}
@@ -309,12 +377,14 @@ export function PlotTile({
           isUnderComposter={isUnderComposter}
           isUnderFan={isUnderFan}
           isUnderHarvestBell={isUnderHarvestBell}
+          isUnderLawnmower={isUnderLawnmower}
+          balanceScaleSide={balanceScaleSide}
         />
       )}
 
       <button
         onClick={handleClick}
-        style={isBloomed && species?.rarity === "prismatic"
+        style={isBloomed && isIdentified && species?.rarity === "prismatic"
           ? { animation: "rainbow-border-cycle 3s linear infinite, rainbow-bg-cycle 3s linear infinite, rainbow-glow-cycle 3s linear infinite" }
           : undefined
         }
@@ -327,18 +397,18 @@ export function PlotTile({
             ? `${rarity?.borderGrowing ?? "border-border/60"} bg-card/80 scale-105`
             : `${rarity?.borderGrowing ?? "border-border/60"} bg-card/60 hover:bg-card/80 cursor-pointer`
           }
-          ${isHighlighted ? "ring-2 ring-primary/40" : ""}
+          ${plant.infused ? "ring-2 ring-emerald-400/60" : isHighlighted ? "ring-2 ring-primary/40" : ""}
         `}
         title={
           isBloomed
-            ? `${species?.name} — Tap to harvest!`
+            ? `${isIdentified ? species?.name : "???"} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
             : open
             ? "Click to close"
-            : `${species?.name} — Click for options`
+            : `${isIdentified ? species?.name : "???"} — Click for options`
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell) && (
+        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -386,6 +456,31 @@ export function PlotTile({
                 <span className="gear-bell" style={{ left: "74%", animationDelay: "0s"    }}>🔔</span>
               </>
             )}
+            {/* Lawnmower: 🍃 clippings tumble in the mower's direction */}
+            {isUnderLawnmower && (() => {
+              const dir   = lawnmowerDirection ?? "right";
+              const cls   = `gear-mow-${dir}`;
+              const horiz = dir === "left" || dir === "right";
+              const axis  = horiz ? "top" : "left";
+              return (["18%", "50%", "76%"] as const).map((pos, i) => (
+                <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.6 - 1.2}s` }}>🍃</span>
+              ));
+            })()}
+            {/* Balance Scale: ✦ boost side rises (amber), ▾ slow side drifts down (gray) */}
+            {balanceScaleSide === "boost" && (
+              <>
+                <span className="gear-scale-boost" style={{ left: "18%", animationDelay: "-1.2s" }}>✦</span>
+                <span className="gear-scale-boost" style={{ left: "50%", animationDelay: "-0.5s" }}>✦</span>
+                <span className="gear-scale-boost" style={{ left: "76%", animationDelay: "0s"    }}>✦</span>
+              </>
+            )}
+            {balanceScaleSide === "slow" && (
+              <>
+                <span className="gear-scale-slow" style={{ left: "18%", animationDelay: "-1.6s" }}>▾</span>
+                <span className="gear-scale-slow" style={{ left: "50%", animationDelay: "-0.8s" }}>▾</span>
+                <span className="gear-scale-slow" style={{ left: "76%", animationDelay: "0s"    }}>▾</span>
+              </>
+            )}
             {/* Fan: 💨 gusts drifting in the fan's direction */}
             {isUnderFan && (() => {
               const dir  = fanDirection ?? "right";
@@ -399,8 +494,32 @@ export function PlotTile({
           </div>
         )}
 
+        {/* Crossbreed particle overlay — emerald dots drift toward adjacent cropsticks */}
+        {settings.plotAnimations && !!crossbreedDirection && (
+          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+            {(["0s", "-0.55s", "-1.1s"] as const).map((delay, i) => {
+              const horiz = crossbreedDirection === "left" || crossbreedDirection === "right";
+              return (
+                <div
+                  key={i}
+                  className="cross-particle"
+                  style={{
+                    animationName: `cross-particle-${crossbreedDirection}`,
+                    animationDuration: "1.4s",
+                    animationDelay: delay,
+                    // Spread perpendicular to the travel axis so the 3 dots
+                    // form distinct lanes rather than stacking on one line.
+                    left: horiz ? "42%" : `${20 + i * 22}%`,
+                    top:  horiz ? `${20 + i * 22}%` : "42%",
+                  }}
+                />
+              );
+            })}
+          </div>
+        )}
+
         <span className="text-2xl leading-none">
-          {species?.emoji[stage!] ?? "🌱"}
+          {isIdentified ? (species?.emoji[stage!] ?? "🌱") : (isBloomed ? "❓" : "🌱")}
         </span>
 
         {/* Fertilizer indicator — top-left */}
@@ -421,7 +540,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || plant.infused || plant.revealed || plant.showMultiplier) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map(({ emoji, label }, i) => (
@@ -432,6 +551,21 @@ export function PlotTile({
             {isUnderGrowLamp && <span className="text-[9px]" title="Under grow lamp">💡</span>}
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
+            {isUnderLawnmower && <span className="text-[9px]" title="Lawnmower — directional auto-harvest">🦼</span>}
+            {balanceScaleSide === "boost" && <span className="text-[9px]" title="Balance Scale — 3× growth boost">⚖️</span>}
+            {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× growth penalty">⚖️</span>}
+            {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
+            {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
+            {plant.showMultiplier && <span className="text-[9px]" title={`Ruler — ${gearMult.toFixed(2)}× total gear growth`}>📏</span>}
+          </div>
+        )}
+
+        {/* Ruler multiplier badge — top-center, amber, permanent once applied */}
+        {plant.showMultiplier && !isBloomed && (
+          <div className="absolute top-0.5 inset-x-0 flex justify-center pointer-events-none z-10">
+            <span className="bg-amber-500/20 border border-amber-500/25 rounded px-0.5 text-[7px] font-mono leading-tight text-amber-300 whitespace-nowrap">
+              {gearMult.toFixed(2)}×
+            </span>
           </div>
         )}
 
@@ -459,20 +593,29 @@ export function PlotTile({
           </div>
         )}
 
-        {/* Bloom pulse dot — top-right */}
-        {isBloomed && (
+        {/* Top-right indicator:
+            - pinned plant → 📌 (overrides the bloom pulse, since auto-harvest is shielded)
+            - bloomed unpinned → pulsing circle to draw attention to harvest-ready state */}
+        {plant.pinned ? (
+          <span
+            className="absolute -top-1 -right-1 text-sm leading-none"
+            title="Pinned — auto-harvest blocked"
+          >
+            📌
+          </span>
+        ) : isBloomed ? (
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary rounded-full animate-pulse" />
-        )}
+        ) : null}
 
         {/* Mutation emoji — bottom-right */}
-        {settings.plotMutationIndicator && isBloomed && (plant as PlantedFlower).mutation && (
+        {settings.plotMutationIndicator && isBloomed && isIdentified && (plant as PlantedFlower).mutation && (
           <span className="absolute -bottom-1 -right-1 text-sm leading-none">
             {MUTATIONS[(plant as PlantedFlower).mutation!].emoji}
           </span>
         )}
 
-        {/* Tooltip-open indicator */}
-        {open && !isBloomed && (
+        {/* Tooltip-open indicator (suppressed when pinned — 📌 occupies the slot) */}
+        {open && !isBloomed && !plant.pinned && (
           <div className="absolute -top-1 -right-1 w-3 h-3 bg-primary/60 rounded-full" />
         )}
 

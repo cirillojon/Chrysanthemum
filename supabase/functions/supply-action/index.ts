@@ -21,11 +21,14 @@ type ShopSlot = {
   fertilizerType?: string;
   isGear?:        boolean;
   gearType?:      string;
+  isConsumable?:  boolean;
+  consumableId?:  string;
   isEmpty?:       boolean;
 };
 
-type GearInvItem = { gearType: string; quantity: number };
-type FertItem    = { type: string;     quantity: number };
+type GearInvItem    = { gearType: string; quantity: number };
+type FertItem       = { type: string;     quantity: number };
+type ConsumableItem = { id: string;       quantity: number };
 
 // ── Response helpers ─────────────────────────────────────────────────────────
 
@@ -103,7 +106,7 @@ Deno.serve(async (req: Request) => {
         supabaseAdmin.auth.getUser(token),
         supabaseAdmin
           .from("game_saves")
-          .select("coins, supply_shop, fertilizers, gear_inventory, updated_at")
+          .select("coins, supply_shop, fertilizers, gear_inventory, consumables, updated_at")
           .eq("user_id", userId)
           .single(),
       ]);
@@ -121,6 +124,7 @@ Deno.serve(async (req: Request) => {
       let supplyShop    = [...(save.supply_shop   ?? []) as ShopSlot[]];
       let fertilizers   = [...(save.fertilizers   ?? []) as FertItem[]];
       let gearInventory = [...(save.gear_inventory ?? []) as GearInvItem[]];
+      let consumables   = [...(save.consumables   ?? []) as ConsumableItem[]];
 
       const slot = supplyShop.find((s) => s.speciesId === body.slotId);
       if (!slot || slot.isEmpty)      return err("Slot not found");
@@ -144,18 +148,25 @@ Deno.serve(async (req: Request) => {
           ? gearInventory.map((g) => g.gearType === slot.gearType ? { ...g, quantity: g.quantity + 1 } : g)
           : [...gearInventory, { gearType: slot.gearType, quantity: 1 }];
 
+      } else if (slot.isConsumable && slot.consumableId) {
+        const existing = consumables.find((c) => c.id === slot.consumableId);
+        consumables = existing
+          ? consumables.map((c) => c.id === slot.consumableId ? { ...c, quantity: c.quantity + 1 } : c)
+          : [...consumables, { id: slot.consumableId, quantity: 1 }];
+
       } else {
-        return err("Slot has invalid type — not fertilizer or gear");
+        return err("Slot has invalid type — not fertilizer, gear, or consumable");
       }
 
       const { data: ud, error: ue } = await supabaseAdmin
         .from("game_saves")
         .update({
           coins,
-          supply_shop:   supplyShop,
+          supply_shop:    supplyShop,
           fertilizers,
           gear_inventory: gearInventory,
-          updated_at:    new Date().toISOString(),
+          consumables,
+          updated_at:     new Date().toISOString(),
         })
         .eq("user_id", userId)
         .eq("updated_at", priorUpdatedAt)
@@ -167,10 +178,10 @@ Deno.serve(async (req: Request) => {
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "supply_buy",
         payload: { slotId: body.slotId },
-        result:  { coins, type: slot.isFertilizer ? "fertilizer" : "gear" },
+        result:  { coins, type: slot.isFertilizer ? "fertilizer" : slot.isGear ? "gear" : "consumable" },
       });
 
-      return json({ ok: true, coins, supplyShop, fertilizers, gearInventory, serverUpdatedAt: ud.updated_at });
+      return json({ ok: true, coins, supplyShop, fertilizers, gearInventory, consumables, serverUpdatedAt: ud.updated_at });
     }
 
     return err("Unhandled action");

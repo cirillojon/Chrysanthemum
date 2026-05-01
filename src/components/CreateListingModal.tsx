@@ -6,20 +6,22 @@ import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
 import { GEAR as GEAR_CATALOG } from "../data/gear";
 import type { GearType } from "../data/gear";
+import { CONSUMABLE_RECIPE_MAP } from "../data/consumables";
+import type { ConsumableId } from "../data/consumables";
 import {
   edgeMarketplaceCreateListing,
   edgeMarketplaceCreateFertilizerListing,
   edgeMarketplaceCreateGearListing,
+  edgeMarketplaceCreateConsumableListing,
 } from "../lib/edgeFunctions";
 
 const LISTING_FEE_PCT = 0.05;
 
-type Tab = "flowers" | "seeds" | "supplies";
+type Tab = "flowers" | "consumables" | "gear";
 
-// A supply item is either a fertilizer or a gear item
-type SupplyItem =
+type ConsumableItem =
   | { kind: "fertilizer"; type: FertilizerType; quantity: number }
-  | { kind: "gear";       gearType: GearType;   quantity: number };
+  | { kind: "consumable"; id: string; quantity: number };
 
 interface Props {
   onClose:  () => void;
@@ -41,18 +43,14 @@ export function CreateListingModal({ onClose, onListed }: Props) {
   const [listing,     setListing]     = useState(false);
   const [error,       setError]       = useState("");
 
-  const flowers  = state.inventory.filter((i) => i.quantity > 0 && !i.isSeed);
-  const seeds    = state.inventory.filter((i) => i.quantity > 0 && i.isSeed);
-
-  // Merge fertilizers + gear into a single supplies list
-  const supplies: SupplyItem[] = [
-    ...state.fertilizers
-      .filter((f) => f.quantity > 0)
-      .map((f) => ({ kind: "fertilizer" as const, type: f.type as FertilizerType, quantity: f.quantity })),
-    ...state.gearInventory
-      .filter((g) => g.quantity > 0)
-      .map((g) => ({ kind: "gear" as const, gearType: g.gearType as GearType, quantity: g.quantity })),
+  const flowers   = state.inventory.filter((i) => i.quantity > 0 && !i.isSeed);
+  const consumables: ConsumableItem[] = [
+    ...state.fertilizers.filter((f) => f.quantity > 0).map((f) => ({ kind: "fertilizer" as const, type: f.type as FertilizerType, quantity: f.quantity })),
+    ...(state.consumables ?? []).filter((c) => c.quantity > 0).map((c) => ({ kind: "consumable" as const, id: c.id, quantity: c.quantity })),
   ];
+  const gearItems = state.gearInventory
+    .filter((g) => g.quantity > 0)
+    .map((g) => ({ gearType: g.gearType as GearType, quantity: g.quantity }));
 
   function switchTab(tab: Tab) {
     setActiveTab(tab);
@@ -61,16 +59,15 @@ export function CreateListingModal({ onClose, onListed }: Props) {
     setError("");
   }
 
-  const tabItems = activeTab === "flowers" ? flowers
-                 : activeTab === "seeds"   ? seeds
-                 :                          supplies;
+  const tabItems = activeTab === "flowers"     ? flowers
+                 : activeTab === "consumables" ? consumables
+                 :                               gearItems;
 
   const askPrice   = parseInt(askPriceStr, 10);
   const validPrice = !isNaN(askPrice) && askPrice >= 1;
   const fee        = validPrice ? Math.max(1, Math.floor(askPrice * LISTING_FEE_PCT)) : 0;
 
-  const isSuppliesTab = activeTab === "supplies";
-  const selectedItem  = selectedIdx !== null ? tabItems[selectedIdx] : null;
+  const selectedItem = selectedIdx !== null ? tabItems[selectedIdx] : null;
 
   async function handleList() {
     if (selectedIdx === null || !validPrice) return;
@@ -78,17 +75,21 @@ export function CreateListingModal({ onClose, onListed }: Props) {
     setError("");
 
     try {
-      if (isSuppliesTab) {
-        const supply = supplies[selectedIdx];
-        if (supply.kind === "fertilizer") {
-          const result = await edgeMarketplaceCreateFertilizerListing(supply.type, askPrice);
+      if (activeTab === "consumables") {
+        const item = consumables[selectedIdx] as ConsumableItem;
+        if (item.kind === "fertilizer") {
+          const result = await edgeMarketplaceCreateFertilizerListing(item.type, askPrice);
           update({ ...state, coins: result.coins, fertilizers: result.fertilizers! });
         } else {
-          const result = await edgeMarketplaceCreateGearListing(supply.gearType, askPrice);
-          update({ ...state, coins: result.coins, gearInventory: result.gearInventory! });
+          const result = await edgeMarketplaceCreateConsumableListing(item.id, askPrice);
+          update({ ...state, coins: result.coins, consumables: result.consumables ?? state.consumables });
         }
+      } else if (activeTab === "gear") {
+        const gear = gearItems[selectedIdx];
+        const result = await edgeMarketplaceCreateGearListing(gear.gearType, askPrice);
+        update({ ...state, coins: result.coins, gearInventory: result.gearInventory! });
       } else {
-        const invItem = (activeTab === "flowers" ? flowers : seeds)[selectedIdx];
+        const invItem = flowers[selectedIdx];
         const result = await edgeMarketplaceCreateListing(
           invItem.speciesId,
           invItem.mutation,
@@ -107,23 +108,26 @@ export function CreateListingModal({ onClose, onListed }: Props) {
   // Button label
   let btnLabel = "Select an item and set a price";
   if (selectedItem && validPrice) {
-    if (isSuppliesTab) {
-      const supply = selectedItem as SupplyItem;
-      const name = supply.kind === "fertilizer"
-        ? FERTILIZERS[supply.type].name
-        : GEAR_CATALOG[supply.gearType].name;
+    if (activeTab === "consumables") {
+      const item = selectedItem as ConsumableItem;
+      const name = item.kind === "fertilizer"
+        ? FERTILIZERS[item.type].name
+        : CONSUMABLE_RECIPE_MAP[item.id as ConsumableId]?.name ?? item.id;
+      btnLabel = `List ${name} for ${formatCoins(askPrice)} 🟡`;
+    } else if (activeTab === "gear") {
+      const name = GEAR_CATALOG[(selectedItem as { gearType: GearType }).gearType]?.name ?? "item";
       btnLabel = `List ${name} for ${formatCoins(askPrice)} 🟡`;
     } else {
       const inv = selectedItem as { speciesId: string; isSeed?: boolean };
       const name = getFlower(inv.speciesId)?.name ?? "item";
-      btnLabel = `List ${name}${inv.isSeed ? " Seed" : ""} for ${formatCoins(askPrice)} 🟡`;
+      btnLabel = `List ${name} for ${formatCoins(askPrice)} 🟡`;
     }
   }
 
-  const TAB_CONFIG: { id: Tab; label: string; emoji: string; count: number }[] = [
-    { id: "flowers",  label: "Flowers",  emoji: "🌸", count: flowers.length  },
-    { id: "seeds",    label: "Seeds",    emoji: "🌱", count: seeds.length    },
-    { id: "supplies", label: "Supplies", emoji: "🧪", count: supplies.length },
+  const TAB_CONFIG: { id: Tab; emoji: string; count: number }[] = [
+    { id: "flowers",     emoji: "🌸", count: flowers.length     },
+    { id: "consumables", emoji: "🧪", count: consumables.length },
+    { id: "gear",        emoji: "⚙️", count: gearItems.length   },
   ];
 
   return (
@@ -154,7 +158,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
 
         {/* ── Tabs — always visible ── */}
         <div className="flex gap-1.5">
-          {TAB_CONFIG.map(({ id, label, emoji, count }) => (
+          {TAB_CONFIG.map(({ id, emoji, count }) => (
             <button
               key={id}
               onClick={() => switchTab(id)}
@@ -164,7 +168,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
                   : "bg-background border border-border text-muted-foreground hover:border-primary/40"
               }`}
             >
-              {emoji} {label}
+              {emoji}
               <span className={`ml-1 font-mono text-[10px] ${activeTab === id ? "opacity-75" : "opacity-50"}`}>
                 ({count})
               </span>
@@ -176,63 +180,81 @@ export function CreateListingModal({ onClose, onListed }: Props) {
         {tabItems.length === 0 ? (
           <div className="min-h-[18vh] flex flex-col items-center justify-center space-y-1">
             <p className="text-2xl">
-              {activeTab === "flowers" ? "🌸" : activeTab === "seeds" ? "🌱" : "🧪"}
+              {activeTab === "flowers" ? "🌸" : activeTab === "consumables" ? "🧪" : "⚙️"}
             </p>
             <p className="text-sm text-muted-foreground">
               {activeTab === "flowers"     ? "No flowers to list."
-               : activeTab === "seeds"    ? "No seeds to list."
-               : "No fertilizers to list."}
+               : activeTab === "consumables" ? "No consumables to list."
+               : "No gear to list."}
             </p>
-            {activeTab !== "supplies" && (
-              <p className="text-xs text-muted-foreground">Harvest flowers or buy seeds first!</p>
+            {activeTab === "flowers" && (
+              <p className="text-xs text-muted-foreground">Harvest flowers first!</p>
             )}
           </div>
         ) : (
           <div className="overflow-y-auto min-h-[18vh] max-h-[35vh] space-y-1.5 pr-0.5">
 
-            {/* Supplies tab — fertilizers + gear */}
-            {activeTab === "supplies" && supplies.map((supply, idx) => {
+            {/* Consumables tab — fertilizers + alchemy consumables */}
+            {activeTab === "consumables" && consumables.map((item, idx) => {
               const selected = selectedIdx === idx;
-              const btnClass = `w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left ${
-                selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"
-              }`;
-
-              if (supply.kind === "fertilizer") {
-                const def = FERTILIZERS[supply.type];
+              if (item.kind === "fertilizer") {
+                const def = FERTILIZERS[item.type];
                 return (
-                  <button key={`fert-${supply.type}`} onClick={() => { setSelectedIdx(selected ? null : idx); setError(""); }} className={btnClass}>
+                  <button key={`fert-${item.type}`} onClick={() => { setSelectedIdx(selected ? null : idx); setError(""); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left ${selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"}`}>
                     <span className="text-2xl flex-shrink-0">{def.emoji}</span>
                     <div className="flex-1 min-w-0">
                       <p className={`text-sm font-medium ${def.color}`}>{def.name}</p>
                       <p className="text-xs text-muted-foreground font-mono">Fertilizer · {def.speedMultiplier}× speed</p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-xs text-muted-foreground">×{supply.quantity}</p>
+                      <p className="text-xs text-muted-foreground">×{item.quantity}</p>
                       <p className="text-[10px] text-muted-foreground/60">{formatCoins(def.shopPrice)} 🟡 shop</p>
                     </div>
                   </button>
                 );
               } else {
-                const def    = GEAR_CATALOG[supply.gearType];
-                const rarity = def ? RARITY_CONFIG[def.rarity] : null;
+                const recipe = CONSUMABLE_RECIPE_MAP[item.id as ConsumableId];
+                const rarityDef = recipe ? RARITY_CONFIG[recipe.rarity] : null;
                 return (
-                  <button key={`gear-${supply.gearType}`} onClick={() => { setSelectedIdx(selected ? null : idx); setError(""); }} className={btnClass}>
-                    <span className="text-2xl flex-shrink-0">{def?.emoji ?? "⚙️"}</span>
+                  <button key={`consumable-${item.id}`} onClick={() => { setSelectedIdx(selected ? null : idx); setError(""); }}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left ${selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"}`}>
+                    <span className="text-2xl flex-shrink-0">{recipe?.emoji ?? "🧪"}</span>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{def?.name ?? supply.gearType}</p>
-                      <p className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</p>
+                      <p className="text-sm font-medium">{recipe?.name ?? item.id}</p>
+                      <p className={`text-xs font-mono ${rarityDef?.color ?? "text-muted-foreground"}`}>{rarityDef?.label ?? recipe?.rarity}</p>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-xs text-muted-foreground">×{supply.quantity}</p>
-                      {def && <p className="text-[10px] text-muted-foreground/60">{formatCoins(def.shopPrice)} 🟡 shop</p>}
+                      <p className="text-xs text-muted-foreground">×{item.quantity}</p>
                     </div>
                   </button>
                 );
               }
             })}
 
-            {/* Flowers / Seeds tabs — inventory rows */}
-            {activeTab !== "supplies" && (activeTab === "flowers" ? flowers : seeds).map((item, idx) => {
+            {/* Gear tab */}
+            {activeTab === "gear" && gearItems.map((item, idx) => {
+              const def      = GEAR_CATALOG[item.gearType];
+              const rarity   = def ? RARITY_CONFIG[def.rarity] : null;
+              const selected = selectedIdx === idx;
+              return (
+                <button key={`gear-${item.gearType}`} onClick={() => { setSelectedIdx(selected ? null : idx); setError(""); }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all text-left ${selected ? "border-primary bg-primary/10" : "border-border bg-background hover:border-primary/40"}`}>
+                  <span className="text-2xl flex-shrink-0">{def?.emoji ?? "⚙️"}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">{def?.name ?? item.gearType}</p>
+                    <p className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</p>
+                  </div>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-xs text-muted-foreground">×{item.quantity}</p>
+                    {def && <p className="text-[10px] text-muted-foreground/60">{formatCoins(def.shopPrice)} 🟡 shop</p>}
+                  </div>
+                </button>
+              );
+            })}
+
+            {/* Flowers tab — inventory rows */}
+            {activeTab === "flowers" && flowers.map((item, idx) => {
               const species  = getFlower(item.speciesId);
               const mut      = item.mutation ? MUTATIONS[item.mutation as MutationType] : null;
               const rarity   = species ? RARITY_CONFIG[species.rarity] : null;

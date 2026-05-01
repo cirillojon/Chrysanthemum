@@ -7,6 +7,8 @@ import { FERTILIZERS } from "../data/upgrades";
 import type { FertilizerType } from "../data/upgrades";
 import { GEAR as GEAR_CATALOG } from "../data/gear";
 import type { GearType } from "../data/gear";
+import { CONSUMABLE_RECIPE_MAP } from "../data/consumables";
+import type { ConsumableId } from "../data/consumables";
 import { edgeMarketplaceCancel } from "../lib/edgeFunctions";
 
 interface MyListing {
@@ -99,6 +101,7 @@ export function MyListingsPage({ onRefreshNeeded }: Props) {
         inventory: result.inventory,
         ...(result.fertilizers   ? { fertilizers:   result.fertilizers   } : {}),
         ...(result.gearInventory ? { gearInventory: result.gearInventory } : {}),
+        ...(result.consumables   ? { consumables:   result.consumables   } : {}),
       });
       setListings((prev) =>
         prev.map((l) => l.id === listing.id ? { ...l, status: "cancelled" } : l)
@@ -195,27 +198,30 @@ function ActiveListingRow({
   cancelling: boolean;
   onCancel:   () => void;
 }) {
-  const isFertilizer = listing.species_id.startsWith("fert:");
-  const isGear       = listing.species_id.startsWith("gear:");
-  const fertDef      = isFertilizer ? FERTILIZERS[listing.species_id.replace("fert:", "") as FertilizerType] : null;
-  const gearDef      = isGear       ? GEAR_CATALOG[listing.species_id.replace("gear:", "") as GearType]      : null;
-  const species      = (isFertilizer || isGear) ? null : getFlower(listing.species_id);
-  const mut          = (!isFertilizer && !isGear && listing.mutation) ? MUTATIONS[listing.mutation as MutationType] : null;
-  const rarity       = species ? RARITY_CONFIG[species.rarity] : (isGear && gearDef) ? RARITY_CONFIG[gearDef.rarity] : null;
-  const expiring     = new Date(listing.expires_at).getTime() - Date.now() < 2 * 3_600_000;
+  const isFertilizer  = listing.species_id.startsWith("fert:");
+  const isGear        = listing.species_id.startsWith("gear:");
+  const isConsumable  = listing.species_id.startsWith("consumable:");
+  const fertDef       = isFertilizer ? FERTILIZERS[listing.species_id.replace("fert:", "") as FertilizerType]   : null;
+  const gearDef       = isGear       ? GEAR_CATALOG[listing.species_id.replace("gear:", "") as GearType]         : null;
+  const consumableRec = isConsumable ? CONSUMABLE_RECIPE_MAP[listing.species_id.replace("consumable:", "") as ConsumableId] : null;
+  const species       = (isFertilizer || isGear || isConsumable) ? null : getFlower(listing.species_id);
+  const mut           = (!isFertilizer && !isGear && !isConsumable && listing.mutation) ? MUTATIONS[listing.mutation as MutationType] : null;
+  const rarity        = species ? RARITY_CONFIG[species.rarity] : (isGear && gearDef) ? RARITY_CONFIG[gearDef.rarity] : (isConsumable && consumableRec) ? RARITY_CONFIG[consumableRec.rarity] : null;
+  const expiring      = new Date(listing.expires_at).getTime() - Date.now() < 2 * 3_600_000;
 
   return (
     <div className={`bg-card/60 border rounded-2xl p-4 space-y-3 transition-all ${rarity?.glow ?? ""} border-border`}>
       <div className="flex items-center gap-3">
         <div className="relative flex-shrink-0">
           <span className="text-3xl">
-            {isFertilizer ? (fertDef?.emoji ?? "🧪")
-             : isGear     ? (gearDef?.emoji  ?? "⚙️")
+            {isFertilizer  ? (fertDef?.emoji       ?? "🧪")
+             : isGear       ? (gearDef?.emoji        ?? "⚙️")
+             : isConsumable ? (consumableRec?.emoji  ?? "🧪")
              : listing.is_seed
                ? (species?.emoji.seed ?? "🌱")
                : (species?.emoji.bloom ?? "❓")}
           </span>
-          {!isFertilizer && !isGear && !listing.is_seed && mut && (
+          {!isFertilizer && !isGear && !isConsumable && !listing.is_seed && mut && (
             <span className="absolute -top-1 -right-1 text-sm">{mut.emoji}</span>
           )}
         </div>
@@ -230,6 +236,11 @@ function ActiveListingRow({
             ) : isGear ? (
               <>
                 <p className="text-sm font-bold">{gearDef?.name ?? listing.species_id}</p>
+                <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+              </>
+            ) : isConsumable ? (
+              <>
+                <p className="text-sm font-bold">{consumableRec?.name ?? listing.species_id}</p>
                 <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
               </>
             ) : (
@@ -272,25 +283,28 @@ function ActiveListingRow({
 // ── History row ────────────────────────────────────────────────────────────
 
 function HistoryListingRow({ listing }: { listing: MyListing }) {
-  const isFertilizer = listing.species_id.startsWith("fert:");
-  const isGear       = listing.species_id.startsWith("gear:");
-  const fertDef      = isFertilizer ? FERTILIZERS[listing.species_id.replace("fert:", "") as FertilizerType] : null;
-  const gearDef      = isGear       ? GEAR_CATALOG[listing.species_id.replace("gear:", "") as GearType]      : null;
-  const species      = (isFertilizer || isGear) ? null : getFlower(listing.species_id);
-  const mut          = (!isFertilizer && !isGear && listing.mutation) ? MUTATIONS[listing.mutation as MutationType] : null;
-  const rarity       = species ? RARITY_CONFIG[species.rarity] : (isGear && gearDef) ? RARITY_CONFIG[gearDef.rarity] : null;
+  const isFertilizer  = listing.species_id.startsWith("fert:");
+  const isGear        = listing.species_id.startsWith("gear:");
+  const isConsumable  = listing.species_id.startsWith("consumable:");
+  const fertDef       = isFertilizer ? FERTILIZERS[listing.species_id.replace("fert:", "") as FertilizerType]   : null;
+  const gearDef       = isGear       ? GEAR_CATALOG[listing.species_id.replace("gear:", "") as GearType]         : null;
+  const consumableRec = isConsumable ? CONSUMABLE_RECIPE_MAP[listing.species_id.replace("consumable:", "") as ConsumableId] : null;
+  const species       = (isFertilizer || isGear || isConsumable) ? null : getFlower(listing.species_id);
+  const mut           = (!isFertilizer && !isGear && !isConsumable && listing.mutation) ? MUTATIONS[listing.mutation as MutationType] : null;
+  const rarity        = species ? RARITY_CONFIG[species.rarity] : (isGear && gearDef) ? RARITY_CONFIG[gearDef.rarity] : (isConsumable && consumableRec) ? RARITY_CONFIG[consumableRec.rarity] : null;
 
   return (
     <div className="bg-card/40 border border-border/40 rounded-2xl px-4 py-3 flex items-center gap-3 opacity-70">
       <div className="relative flex-shrink-0">
         <span className="text-2xl">
-          {isFertilizer ? (fertDef?.emoji ?? "🧪")
-           : isGear     ? (gearDef?.emoji  ?? "⚙️")
+          {isFertilizer  ? (fertDef?.emoji       ?? "🧪")
+           : isGear       ? (gearDef?.emoji        ?? "⚙️")
+           : isConsumable ? (consumableRec?.emoji  ?? "🧪")
            : listing.is_seed
              ? (species?.emoji.seed ?? "🌱")
              : (species?.emoji.bloom ?? "❓")}
         </span>
-        {!isFertilizer && !isGear && !listing.is_seed && mut && (
+        {!isFertilizer && !isGear && !isConsumable && !listing.is_seed && mut && (
           <span className="absolute -top-1 -right-1 text-xs">{mut.emoji}</span>
         )}
       </div>
@@ -305,6 +319,11 @@ function HistoryListingRow({ listing }: { listing: MyListing }) {
           ) : isGear ? (
             <>
               <p className="text-sm font-semibold">{gearDef?.name ?? listing.species_id}</p>
+              <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
+            </>
+          ) : isConsumable ? (
+            <>
+              <p className="text-sm font-semibold">{consumableRec?.name ?? listing.species_id}</p>
               <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
             </>
           ) : (
