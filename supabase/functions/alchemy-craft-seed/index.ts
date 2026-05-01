@@ -176,10 +176,10 @@ const FLOWERS: { id: string; rarity: Rarity; types: string[] }[] = [
 type RarityWeight = [Rarity, number];
 
 const POUCH_RARITY_WEIGHTS: Record<number, RarityWeight[]> = {
-  1: [["rare",      78], ["legendary", 17], ["mythic",   5]],
-  2: [["legendary", 72], ["mythic",    20], ["exalted",  7], ["prismatic", 1]],
-  3: [["mythic",    68], ["exalted",   24], ["prismatic", 8]],
-  4: [["exalted",   72], ["prismatic", 28]],
+  1: [["rare",      95], ["legendary",  5]],
+  2: [["legendary", 95], ["mythic",     5]],
+  3: [["mythic",    95], ["exalted",    5]],
+  4: [["exalted",   95], ["prismatic",  5]],
   5: [["prismatic", 100]],
 };
 
