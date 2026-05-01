@@ -219,14 +219,18 @@ export function PlotTooltip({
     );
   }
 
+  // Shovel check — required to dig up any growing plant
+  const hasShovel = (state.consumables ?? []).some((c) => c.id === "shovel" && c.quantity > 0);
+
   function handleRemove() {
-    if (removing) return;
+    if (removing || !hasShovel) return;
     const cur = getState();
     const optimistic = removePlant(cur, row, col);
     if (!optimistic) return;
     setRemoving(true);
-    // Snapshot the cell for surgical rollback
-    const savedCell = cur.grid[row][col];
+    // Snapshot the cell + consumables for surgical rollback
+    const savedCell        = cur.grid[row][col];
+    const savedConsumables = cur.consumables;
     perform(
       optimistic,
       async () => {
@@ -251,6 +255,8 @@ export function PlotTooltip({
                 : i
             )
             .filter((i) => i.quantity > 0),
+          // Restore the shovel that was optimistically deducted
+          consumables: savedConsumables,
         }),
       }
     );
@@ -532,12 +538,21 @@ export function PlotTooltip({
           </div>
         )}
 
-        {/* Remove section — only for growing (non-bloomed) plants */}
+        {/* Remove section — only for growing (non-bloomed), non-pinned plants.
+            Pinned plants are protected; the pin must be removed first. */}
         {!isBloomed && (
           <div className="pt-1 border-t border-border">
-            {confirmRemove ? (
+            {plant.pinned ? (
+              <p className="text-[10px] text-muted-foreground">
+                📌 Remove Pin first to dig up
+              </p>
+            ) : !hasShovel ? (
+              <p className="text-[10px] text-muted-foreground">
+                🥄 Need a Shovel to dig up
+              </p>
+            ) : confirmRemove ? (
               <div className="space-y-1">
-                <p className="text-[10px] text-muted-foreground">Seed will be returned. Sure?</p>
+                <p className="text-[10px] text-muted-foreground">Uses 1 Shovel. Seed returned. Sure?</p>
                 <div className="flex gap-1.5">
                   <button
                     onClick={handleRemove}
@@ -559,7 +574,7 @@ export function PlotTooltip({
                 onClick={() => { setShowFertPicker(false); setConfirmRemove(true); }}
                 className="text-[10px] text-red-400 hover:text-red-300 transition-colors w-full text-left"
               >
-                🗑 Remove plant
+                🥄 Remove plant
               </button>
             )}
           </div>

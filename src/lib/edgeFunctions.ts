@@ -105,14 +105,15 @@ export function edgePlantBloom(row: number, col: number, speciesId: string, muta
 }
 
 export interface RemovePlantResult {
-  ok:        true;
-  grid:      GameState["grid"];
-  inventory: GameState["inventory"];
+  ok:          true;
+  grid:        GameState["grid"];
+  inventory:   GameState["inventory"];
+  consumables: GameState["consumables"];
   serverUpdatedAt: string;
 }
 
 export function edgeRemovePlant(row: number, col: number) {
-  return callEdge<RemovePlantResult>("remove-plant", { row, col });
+  return callEdge<RemovePlantResult>("remove-plant", { row, col, consumableId: "shovel" });
 }
 
 export interface UnpinPlantResult {

@@ -1210,6 +1210,8 @@ export function removePlant(
 ): GameState | null {
   const plot = state.grid[row]?.[col];
   if (!plot?.plant) return null;
+  // Pinned plants are protected — pin must be removed first
+  if (plot.plant.pinned) return null;
 
   const { speciesId } = plot.plant;
 
@@ -1228,7 +1230,12 @@ export function removePlant(
       )
     : [...state.inventory, { speciesId, quantity: 1, isSeed: true }];
 
-  return { ...state, grid: newGrid, inventory: newInventory };
+  // Deduct 1 shovel
+  const newConsumables = (state.consumables ?? [])
+    .map((c) => c.id === "shovel" ? { ...c, quantity: c.quantity - 1 } : c)
+    .filter((c) => c.quantity > 0);
+
+  return { ...state, grid: newGrid, inventory: newInventory, consumables: newConsumables };
 }
 
 /** Called every tick. Two jobs:

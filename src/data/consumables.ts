@@ -22,6 +22,7 @@ export type ConsumableId =
   | "magnifying_glass"
   | "garden_pin"
   | "ruler"
+  | "shovel"
   | "verdant_rush_1"     | "verdant_rush_2"     | "verdant_rush_3"     | "verdant_rush_4"     | "verdant_rush_5"
   | "forge_haste_1"      | "forge_haste_2"      | "forge_haste_3"      | "forge_haste_4"      | "forge_haste_5"
   | "resonance_draft_1"  | "resonance_draft_2"  | "resonance_draft_3"  | "resonance_draft_4"  | "resonance_draft_5"
@@ -362,6 +363,14 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     description: "Measure a plot — permanently displays its exact gear growth multiplier as a live badge.",
     cost: { kind: "essence", amounts: [{ type: "storm", amount: 2 }, { type: "arcane", amount: 2 }] },
     shopPrice: 20 },
+
+  // ── Shovel (non-tiered) — utility ────────────────────────────────────────
+  // Required to dig up a growing seed or sprout. Consumed on use; seed is
+  // returned to inventory. Does not apply to bloomed plants (harvest is free).
+  { id: "shovel", name: "Shovel", emoji: "🥄", tier: null, rarity: "common", category: "utility",
+    description: "Dig up a growing seed or sprout — returns the seed to your inventory.",
+    cost: { kind: "essence", amounts: [{ type: "grove", amount: 2 }] },
+    shopPrice: 10 },
 
   // ── Verdant Rush (I–V) — speed_boost ─────────────────────────────────────
   // Doubles growth speed for all garden plots for a limited time.

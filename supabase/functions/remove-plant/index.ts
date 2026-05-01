@@ -17,6 +17,7 @@ interface PlantedFlower {
   fertilizer:   string | null;
   bloomedAt?:   number;
   masteredBonus?: number;
+  pinned?:      boolean;
 }
 
 interface PlotCell {
@@ -29,6 +30,11 @@ interface InventoryItem {
   quantity:  number;
   mutation?: string;
   isSeed?:   boolean;
+}
+
+interface ConsumableItem {
+  id:       string;
+  quantity: number;
 }
 
 Deno.serve(async (req: Request) => {
@@ -62,7 +68,7 @@ Deno.serve(async (req: Request) => {
     );
 
     // ── Parse input ───────────────────────────────────────────────────────────
-    const { row, col } = await req.json() as { row: number; col: number };
+    const { row, col } = await req.json() as { row: number; col: number; consumableId?: string };
 
     if (typeof row !== "number" || typeof col !== "number") {
       return new Response(JSON.stringify({ error: "row and col required" }), {
@@ -75,7 +81,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("grid, inventory")
+        .select("grid, inventory, consumables")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -91,8 +97,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const grid      = saveResult.data.grid as PlotCell[][];
-    const inventory = (saveResult.data.inventory ?? []) as InventoryItem[];
+    const grid        = saveResult.data.grid as PlotCell[][];
+    const inventory   = (saveResult.data.inventory   ?? []) as InventoryItem[];
+    const consumables = (saveResult.data.consumables ?? []) as ConsumableItem[];
 
     // ── Validate plot ─────────────────────────────────────────────────────────
     const plot = grid[row]?.[col];
@@ -104,7 +111,7 @@ Deno.serve(async (req: Request) => {
     if (!plot.plant) {
       // Idempotent — plot already empty, nothing to do
       return new Response(
-        JSON.stringify({ ok: true, grid, inventory }),
+        JSON.stringify({ ok: true, grid, inventory, consumables }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -115,6 +122,24 @@ Deno.serve(async (req: Request) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
+    // Guard: pinned plants are protected — pin must be removed first
+    if (plot.plant.pinned) {
+      return new Response(JSON.stringify({ error: "Plant is pinned — remove the pin first" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    // Guard: require a shovel (deduct 1 from consumables)
+    const shovelIdx = consumables.findIndex((c) => c.id === "shovel" && c.quantity > 0);
+    if (shovelIdx === -1) {
+      return new Response(JSON.stringify({ error: "A Shovel is required to dig up a plant" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const newConsumables: ConsumableItem[] = consumables
+      .map((c, i) => i === shovelIdx ? { ...c, quantity: c.quantity - 1 } : c)
+      .filter((c) => c.quantity > 0);
 
     const { speciesId } = plot.plant;
 
@@ -138,7 +163,7 @@ Deno.serve(async (req: Request) => {
     // ── Write to DB ───────────────────────────────────────────────────────────
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
-      .update({ grid: newGrid, inventory: newInventory, updated_at: new Date().toISOString() })
+      .update({ grid: newGrid, inventory: newInventory, consumables: newConsumables, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .select("updated_at")
       .single();
@@ -160,7 +185,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return new Response(
-      JSON.stringify({ ok: true, grid: newGrid, inventory: newInventory, serverUpdatedAt: updateData.updated_at }),
+      JSON.stringify({ ok: true, grid: newGrid, inventory: newInventory, consumables: newConsumables, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

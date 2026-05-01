@@ -1014,6 +1014,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
   common: [
     { kind: "fertilizer", fertilizerType: "basic" },
     { kind: "consumable", consumableId: "magnifying_glass" },
+    { kind: "consumable", consumableId: "shovel" },
   ],
   uncommon: [
     { kind: "fertilizer", fertilizerType: "advanced" },

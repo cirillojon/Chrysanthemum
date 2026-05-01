@@ -506,6 +506,7 @@ const USAGE_CONTEXT: Record<string, string> = {
   magnifying_glass: "Use in Garden (tap a growing plant)",
   garden_pin:     "Use in Garden (tap a growing or bloomed plant)",
   ruler:          "Use in Garden (tap a growing plant)",
+  shovel:         "Required to dig up a growing plant (consumed on remove)",
   eclipse_tonic:  "Use below — advances all garden plants",
   wind_shear:     "Use in Supply Shop",
   slot_lock:      "Use in Supply Shop",
