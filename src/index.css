@@ -338,6 +338,69 @@
   pointer-events: none;
 }
 
+/* ── Active booster animations ─────────────────────────────────────────── */
+
+/* Verdant Rush: green ✦ sparkles drift upward + soft green background shimmer */
+@keyframes boost-verdant-rise {
+  0%   { transform: translateY(4px)    scale(1.0); opacity: 0;   }
+  12%  {                                            opacity: 0.9; }
+  88%  {                                            opacity: 0.5; }
+  100% { transform: translateY(-56px)  scale(0.3); opacity: 0;   }
+}
+@keyframes boost-verdant-pulse {
+  0%, 100% { opacity: 0.07; }
+  50%       { opacity: 0.18; }
+}
+.boost-verdant-spark {
+  animation: boost-verdant-rise 1.8s ease-out infinite;
+  position: absolute;
+  bottom: 2px;
+  font-size: 9px;
+  line-height: 1;
+  color: rgb(74, 222, 128); /* green-400 */
+  pointer-events: none;
+}
+.boost-verdant-glow {
+  animation: boost-verdant-pulse 2s ease-in-out infinite;
+  background: rgba(74, 222, 128, 1);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Forge Haste: amber ✦ sparks rise on in-progress crafting slots */
+@keyframes boost-forge-rise {
+  0%   { transform: translateY(2px)   scale(1.0); opacity: 0;   }
+  12%  {                                           opacity: 0.9; }
+  88%  {                                           opacity: 0.4; }
+  100% { transform: translateY(-44px) scale(0.4); opacity: 0;   }
+}
+.boost-forge-spark {
+  animation: boost-forge-rise 1.5s ease-out infinite;
+  position: absolute;
+  bottom: 4px;
+  font-size: 8px;
+  line-height: 1;
+  color: rgb(251, 146, 60); /* orange-400 */
+  pointer-events: none;
+}
+
+/* Resonance Draft: violet ✦ sparks rise on in-progress attunement slots */
+@keyframes boost-resonance-rise {
+  0%   { transform: translateY(2px)   scale(1.0); opacity: 0;   }
+  12%  {                                           opacity: 0.9; }
+  88%  {                                           opacity: 0.4; }
+  100% { transform: translateY(-44px) scale(0.4); opacity: 0;   }
+}
+.boost-resonance-spark {
+  animation: boost-resonance-rise 1.5s ease-out infinite;
+  position: absolute;
+  bottom: 4px;
+  font-size: 8px;
+  line-height: 1;
+  color: rgb(167, 139, 250); /* violet-400 */
+  pointer-events: none;
+}
+
 /* ── Cropsticks cross-breed source particle animations ─────────────────── */
 /* Small emerald dots drift from the infused plant towards the cropsticks.  */
 @keyframes cross-particle-right {

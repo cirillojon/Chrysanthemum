@@ -329,7 +329,7 @@ function CollectToast({ emoji, name, onDone }: { emoji: string; name: string; on
 // ── Crafting queue panel ──────────────────────────────────────────────────────
 
 function QueueEntryRow({
-  entry, now, onCollect, onCancel, isCollecting, isCanceling,
+  entry, now, onCollect, onCancel, isCollecting, isCanceling, isBoosted,
 }: {
   entry:        CraftingQueueEntry;
   now:          number;
@@ -337,6 +337,7 @@ function QueueEntryRow({
   onCancel:     (id: string) => void;
   isCollecting: boolean;
   isCanceling:  boolean;
+  isBoosted:    boolean;
 }) {
   const { emoji, name } = queueEntryDisplay(entry);
   const startedAt = new Date(entry.startedAt).getTime();
@@ -350,7 +351,15 @@ function QueueEntryRow({
   const qty       = entry.quantity && entry.quantity > 1 ? entry.quantity : 1;
 
   return (
-    <div className="rounded-xl border border-border bg-card/40 px-3 py-2 space-y-1.5">
+    <div className={`relative rounded-xl border bg-card/40 px-3 py-2 space-y-1.5 overflow-hidden ${isBoosted && !isDone ? "border-orange-500/50" : "border-border"}`}>
+      {/* Forge Haste sparks — visible while boost is active and craft is in-progress */}
+      {isBoosted && !isDone && (
+        <div className="absolute inset-0 pointer-events-none">
+          <span className="boost-forge-spark" style={{ left: "10%",  animationDelay: "-1.2s" }}>✦</span>
+          <span className="boost-forge-spark" style={{ left: "45%",  animationDelay: "-0.6s" }}>✦</span>
+          <span className="boost-forge-spark" style={{ left: "78%",  animationDelay: "0s"    }}>✦</span>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-lg leading-none shrink-0">{emoji}</span>
@@ -983,6 +992,7 @@ export function CraftingTab() {
   const craftingSlotCount = state.craftingSlotCount ?? 1;
   const slotsInUse        = craftingQueue.length;
   const slotsAvailable    = slotsInUse < craftingSlotCount;
+  const isForgeHasteActive = getBoostMultiplier(state.activeBoosts ?? [], "craft", now) > 1;
 
   const nextSlotUpgrade = CRAFTING_SLOT_UPGRADES.find((u) => u.slots > craftingSlotCount) ?? null;
 
@@ -1520,6 +1530,7 @@ export function CraftingTab() {
                 onCancel={handleCancel}
                 isCollecting={collectingId === qEntry.id}
                 isCanceling={cancelingId === qEntry.id}
+                isBoosted={isForgeHasteActive}
               />
             ) : (
               <EmptySlotRow key={`empty-${i}`} />

@@ -525,6 +525,16 @@ export function PlotTile({
           </div>
         )}
 
+        {/* Verdant Rush overlay — green sparkles while active growth boost is running */}
+        {settings.plotAnimations && boostMult > 1 && !isBloomed && (
+          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 boost-verdant-glow" />
+            <span className="boost-verdant-spark" style={{ left: "15%", animationDelay: "-1.3s" }}>✦</span>
+            <span className="boost-verdant-spark" style={{ left: "50%", animationDelay: "-0.6s" }}>✦</span>
+            <span className="boost-verdant-spark" style={{ left: "78%", animationDelay: "0s"    }}>✦</span>
+          </div>
+        )}
+
         {/* Crossbreed particle overlay — emerald dots drift toward adjacent cropsticks */}
         {settings.plotAnimations && !!crossbreedDirection && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
