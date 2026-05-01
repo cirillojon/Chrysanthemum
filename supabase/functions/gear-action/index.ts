@@ -65,6 +65,34 @@ const RECIPES_G: RecipeG[] = [
 ];
 
 const SPECIES_TYPES_G: Record<string, string[]> = {
+  // Common
+  quickgrass:    ["grove"],              dustweed:      ["zephyr","shadow"],
+  sprig:         ["grove"],             dewdrop:       ["tide"],
+  pebblebloom:   ["grove"],             ember_moss:    ["blaze","grove"],
+  dandelion:     ["grove","zephyr"],    clover:        ["grove","fairy"],
+  violet:        ["fairy","arcane"],    lemongrass:    ["grove","solar"],
+  daisy:         ["grove","fairy"],     honeywort:     ["grove","solar"],
+  buttercup:     ["fairy","solar"],     dawnpetal:     ["lunar","solar"],
+  poppy:         ["blaze","grove"],     chamomile:     ["grove","solar"],
+  marigold:      ["solar","grove"],     sunflower:     ["solar"],
+  coppercup:     ["grove"],             ivybell:       ["grove","tide"],
+  thornberry:    ["grove"],             saltmoss:      ["tide"],
+  ashpetal:      ["shadow","zephyr"],   snowdrift:     ["frost"],
+  // Uncommon
+  swiftbloom:    ["zephyr"],            shortcress:    ["grove"],
+  thornwhistle:  ["grove","blaze"],     starwort:      ["stellar"],
+  mintleaf:      ["grove","frost"],     tulip:         ["fairy","grove"],
+  inkbloom:      ["arcane","shadow"],   hyacinth:      ["blaze","fairy"],
+  snapdragon:    ["blaze","arcane"],    beebalm:       ["grove","solar"],
+  candleflower:  ["blaze","arcane"],    carnation:     ["fairy"],
+  ribbonweed:    ["fairy"],             hibiscus:      ["solar","blaze"],
+  wildberry:     ["grove"],             frostbell:     ["frost"],
+  bluebell:      ["fairy","tide"],      cherry_blossom:["fairy","grove"],
+  rose:          ["fairy"],             peacockflower: ["arcane","zephyr"],
+  bamboo_bloom:  ["grove","zephyr"],    hummingbloom:  ["zephyr","fairy"],
+  water_lily:    ["tide"],              lanternflower: ["blaze","arcane"],
+  dovebloom:     ["zephyr","fairy"],    coral_bells:   ["tide","fairy"],
+  sundew:        ["grove","shadow"],    bubblebloom:   ["tide","fairy"],
   // Rare
   flashpetal:      ["storm"],              rushwillow:      ["zephyr","tide"],
   sweetheart_lily: ["fairy"],              glassbell:       ["arcane","stellar"],
@@ -201,10 +229,13 @@ function tryActivateCropsticks(grid: GridCell[][], cropRow: number, cropCol: num
     nbrs.push({ r: nr, c: nc, types: nTypes, rarity: nRarity });
   }
 
-  // Pick the highest-tier recipe pair
+  // Need at least 2 infused neighbours to crossbreed
+  if (nbrs.length < 2) return grid;
+
+  // Pick highest-tier recipe pair; fall back to first available pair when no recipe.
   let bestPairTier = -1;
-  let sourceA: N | null = null;
-  let sourceB: N | null = null;
+  let sourceA: N = nbrs[0];
+  let sourceB: N = nbrs[1];
   for (let i = 0; i < nbrs.length; i++) {
     for (let j = i + 1; j < nbrs.length; j++) {
       const recipe = findBestRecipeG(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity);
@@ -215,7 +246,6 @@ function tryActivateCropsticks(grid: GridCell[][], cropRow: number, cropCol: num
       }
     }
   }
-  if (!sourceA || !sourceB) return grid;
 
   return grid.map((r, ri) =>
     r.map((p, ci) => {

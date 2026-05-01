@@ -912,10 +912,14 @@ export function stampCropsticksCycles(
       nbrs.push({ r: nr, c: nc, types: sp.types as FlowerType[], rarity: sp.rarity });
     }
 
-    // Check all pairs; keep the highest-tier recipe pair
+    // Need at least 2 infused neighbours to crossbreed
+    if (nbrs.length < 2) continue;
+
+    // Pick highest-tier recipe pair; fall back to first available pair when
+    // no recipe matches (tick will output the lower-rarity parent at completion).
     let bestPairTier = -1;
-    let sourceA: N | null = null;
-    let sourceB: N | null = null;
+    let sourceA: N = nbrs[0];
+    let sourceB: N = nbrs[1];
     for (let i = 0; i < nbrs.length; i++) {
       for (let j = i + 1; j < nbrs.length; j++) {
         const recipe = findCrossbreedRecipe(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity);
@@ -926,7 +930,6 @@ export function stampCropsticksCycles(
         }
       }
     }
-    if (!sourceA || !sourceB) continue;
 
     // Stamp the cropsticks + store source coords + clear infused on source plants
     g = g.map((r, ri) =>

@@ -751,27 +751,29 @@ function runCropsticks(save: Save, now: number): Save {
         const db = SPECIES_DATA[plantB.speciesId];
         const bestRecipe = da && db ? findBestRecipe(da.t, da.r, db.t, db.r) : null;
 
-        if (!bestRecipe) {
-          // Recipe no longer valid (shouldn't normally happen) — abort
-          const newGrid = cur.grid.map((row, r) =>
-            row.map((plot, c) =>
-              r === ri && c === ci && plot.gear
-                ? { ...plot, gear: clearStartedAt(plot.gear as PlacedGearWithProgress) }
-                : plot
-            )
-          );
-          cur = { ...cur, grid: newGrid };
-          continue;
-        }
+        let outputSpeciesId: string;
+        let newDiscovered: string[];
+        let newDiscoveredRecipes: string[];
 
-        // Recipe match → always produce the recipe output (no coin flip).
-        const outputSpeciesId = bestRecipe.outputSpeciesId;
-        const newDiscovered = cur.discovered.includes(outputSpeciesId)
-          ? cur.discovered
-          : [...cur.discovered, outputSpeciesId];
-        const newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
-          ? cur.discoveredRecipes
-          : [...cur.discoveredRecipes, bestRecipe.id];
+        if (bestRecipe) {
+          // Recipe match → always produce the recipe output.
+          outputSpeciesId = bestRecipe.outputSpeciesId;
+          newDiscovered = cur.discovered.includes(outputSpeciesId)
+            ? cur.discovered
+            : [...cur.discovered, outputSpeciesId];
+          newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+            ? cur.discoveredRecipes
+            : [...cur.discoveredRecipes, bestRecipe.id];
+        } else {
+          // No recipe match → lower-rarity parent; random when tied.
+          const tierA = da ? (RARITY_IDX[da.r] ?? 0) : 0;
+          const tierB = db ? (RARITY_IDX[db.r] ?? 0) : 0;
+          if (tierA < tierB)      outputSpeciesId = plantA.speciesId;
+          else if (tierB < tierA) outputSpeciesId = plantB.speciesId;
+          else                    outputSpeciesId = Math.random() < 0.5 ? plantA.speciesId : plantB.speciesId;
+          newDiscovered      = cur.discovered;
+          newDiscoveredRecipes = cur.discoveredRecipes;
+        }
 
         // Replace cropsticks cell with the seed; source plants' infused was
         // already cleared when the cycle started — nothing to change on them.
@@ -798,32 +800,9 @@ function runCropsticks(save: Save, now: number): Save {
         infusedNeighbors.push({ r: nr, c: nc, plant: plot.plant });
       }
 
-      // Try all pairs, pick the highest-tier recipe match
-      let bestRecipe: Recipe | null = null;
-      let bestA: Neighbor | null = null;
-      let bestB: Neighbor | null = null;
-
-      for (let i = 0; i < infusedNeighbors.length; i++) {
-        for (let j = i + 1; j < infusedNeighbors.length; j++) {
-          const a = infusedNeighbors[i];
-          const b = infusedNeighbors[j];
-          const da = SPECIES_DATA[a.plant.speciesId];
-          const db = SPECIES_DATA[b.plant.speciesId];
-          if (!da || !db) continue;
-          const recipe = findBestRecipe(da.t, da.r, db.t, db.r);
-          if (!recipe) continue;
-          if (!bestRecipe || recipe.tier > bestRecipe.tier) {
-            bestRecipe = recipe;
-            bestA = a;
-            bestB = b;
-          }
-        }
-      }
-
-      // ── No valid recipe pair → clear in-flight progress if any ───────────
-      if (!bestRecipe || !bestA || !bestB) {
+      // Need at least 2 infused neighbours to crossbreed
+      if (infusedNeighbors.length < 2) {
         if (startedAt != null) {
-          // Legacy stale cycle — pair became invalid
           const newGrid = cur.grid.map((row, r) =>
             row.map((plot, c) =>
               r === ri && c === ci && plot.gear
@@ -834,6 +813,28 @@ function runCropsticks(save: Save, now: number): Save {
           cur = { ...cur, grid: newGrid };
         }
         continue;
+      }
+
+      // Pick highest-tier recipe pair; fall back to first available pair when
+      // no recipe matches (lower-rarity parent is produced at completion).
+      let bestRecipe: Recipe | null = null;
+      let bestA: Neighbor = infusedNeighbors[0];
+      let bestB: Neighbor = infusedNeighbors[1];
+
+      for (let i = 0; i < infusedNeighbors.length; i++) {
+        for (let j = i + 1; j < infusedNeighbors.length; j++) {
+          const a = infusedNeighbors[i];
+          const b = infusedNeighbors[j];
+          const da = SPECIES_DATA[a.plant.speciesId];
+          const db = SPECIES_DATA[b.plant.speciesId];
+          if (!da || !db) continue;
+          const recipe = findBestRecipe(da.t, da.r, db.t, db.r);
+          if (recipe && (!bestRecipe || recipe.tier > bestRecipe.tier)) {
+            bestRecipe = recipe;
+            bestA = a;
+            bestB = b;
+          }
+        }
       }
 
       // ── Valid pair, no cycle yet → start one with stored source coords ────
@@ -870,15 +871,32 @@ function runCropsticks(save: Save, now: number): Save {
 
       const aR = bestA.r, aC = bestA.c;
       const bR = bestB.r, bC = bestB.c;
+      const daLeg = SPECIES_DATA[bestA.plant.speciesId];
+      const dbLeg = SPECIES_DATA[bestB.plant.speciesId];
 
-      // Recipe match → always produce the recipe output (no coin flip).
-      const outputSpeciesId = bestRecipe.outputSpeciesId;
-      const newDiscovered = cur.discovered.includes(outputSpeciesId)
-        ? cur.discovered
-        : [...cur.discovered, outputSpeciesId];
-      const newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
-        ? cur.discoveredRecipes
-        : [...cur.discoveredRecipes, bestRecipe.id];
+      let outputSpeciesId: string;
+      let newDiscovered: string[];
+      let newDiscoveredRecipes: string[];
+
+      if (bestRecipe) {
+        // Recipe match → always produce the recipe output.
+        outputSpeciesId = bestRecipe.outputSpeciesId;
+        newDiscovered = cur.discovered.includes(outputSpeciesId)
+          ? cur.discovered
+          : [...cur.discovered, outputSpeciesId];
+        newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+          ? cur.discoveredRecipes
+          : [...cur.discoveredRecipes, bestRecipe.id];
+      } else {
+        // No recipe → lower-rarity parent; random when tied.
+        const tierA = daLeg ? (RARITY_IDX[daLeg.r] ?? 0) : 0;
+        const tierB = dbLeg ? (RARITY_IDX[dbLeg.r] ?? 0) : 0;
+        if (tierA < tierB)      outputSpeciesId = bestA.plant.speciesId;
+        else if (tierB < tierA) outputSpeciesId = bestB.plant.speciesId;
+        else                    outputSpeciesId = Math.random() < 0.5 ? bestA.plant.speciesId : bestB.plant.speciesId;
+        newDiscovered      = cur.discovered;
+        newDiscoveredRecipes = cur.discoveredRecipes;
+      }
 
       // Clear infused from source plants + replace cropsticks cell with the seed
       const newGrid = cur.grid.map((row, r) =>
