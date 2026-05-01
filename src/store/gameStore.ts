@@ -1631,9 +1631,6 @@ export function tickFanMutations(
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
 
-      // Magnifying Glass lock — mutation state is frozen, skip all fan rolls
-      if (plot.plant.revealed) return plot;
-
       // Purity Vial blocks windstruck; fans can still strip existing mutations
       // but if plant has no mutation (or already windstruck) and is blocked,
       // skip windstruck application.
