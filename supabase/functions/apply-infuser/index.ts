@@ -193,8 +193,12 @@ const OFFSETS_CROSS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
 
 /** After infusing (row, col), scan its 4 neighbours for cropsticks gear.
  *  For each idle cropsticks, check all its cardinal neighbours for a valid
- *  infused+bloomed pair. If found, stamp crossbreedStartedAt immediately so
- *  the client sees the progress bar without waiting for the offline cron. */
+ *  infused+bloomed pair. If found:
+ *    - Stamp crossbreedStartedAt so the progress bar appears immediately.
+ *    - Store crossbreedSourceA/B coordinates so the tick can find the plants
+ *      at completion time without relying on the infused flag.
+ *    - Clear plant.infused on both source plants immediately (they no longer
+ *      need to be visually marked as "waiting"). */
 function tryStartCropsticksCycles(
   workingGrid: GridCell[][],
   plantRow: number,
@@ -211,39 +215,55 @@ function tryStartCropsticksCycles(
     if (gear.gearType !== "cropsticks") continue;
     if (gear.crossbreedStartedAt != null) continue; // already running
 
-    // Collect this cropsticks' infused+bloomed neighbours
-    type N = { types: string[]; rarity: string };
+    // Collect this cropsticks' infused+bloomed neighbours WITH coordinates
+    type N = { r: number; c: number; types: string[]; rarity: string };
     const nbrs: N[] = [];
     for (const [or, oc] of OFFSETS_CROSS) {
       const nr = cr + or;
       const nc = cc + oc;
       const nCell = g[nr]?.[nc];
-      if (!nCell?.plant || !nCell.plant.bloomedAt || !nCell.plant.infused) continue;
+      if (!nCell?.plant || (!nCell.plant.bloomedAt && nCell.plant.timePlanted !== 0) || !nCell.plant.infused) continue;
       const nRarity = SPECIES_RARITY[nCell.plant.speciesId];
       const nTypes  = SPECIES_TYPES[nCell.plant.speciesId];
       if (!nRarity || !nTypes) continue;
-      nbrs.push({ types: nTypes, rarity: nRarity });
+      nbrs.push({ r: nr, c: nc, types: nTypes, rarity: nRarity });
     }
 
-    // Check all pairs for a valid recipe
-    let found = false;
-    outer: for (let i = 0; i < nbrs.length; i++) {
+    // Check all pairs; keep the highest-tier recipe pair
+    let bestPairTier = -1;
+    let sourceA: N | null = null;
+    let sourceB: N | null = null;
+    for (let i = 0; i < nbrs.length; i++) {
       for (let j = i + 1; j < nbrs.length; j++) {
-        if (findBestRecipe(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity)) {
-          found = true;
-          break outer;
+        const recipe = findBestRecipe(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity);
+        if (recipe && recipe.tier > bestPairTier) {
+          bestPairTier = recipe.tier;
+          sourceA = nbrs[i];
+          sourceB = nbrs[j];
         }
       }
     }
-    if (!found) continue;
+    if (!sourceA || !sourceB) continue;
 
-    // Stamp crossbreedStartedAt on this cropsticks
+    // Stamp the cropsticks + store source coords + clear infused on source plants
     g = g.map((r, ri) =>
-      r.map((p, ci) =>
-        ri === cr && ci === cc && p.gear
-          ? { ...p, gear: { ...p.gear, crossbreedStartedAt: now } }
-          : p
-      )
+      r.map((p, ci) => {
+        if (ri === cr && ci === cc && p.gear) {
+          return {
+            ...p,
+            gear: {
+              ...p.gear,
+              crossbreedStartedAt: now,
+              crossbreedSourceA: { r: sourceA!.r, c: sourceA!.c },
+              crossbreedSourceB: { r: sourceB!.r, c: sourceB!.c },
+            },
+          };
+        }
+        if ((ri === sourceA!.r && ci === sourceA!.c) || (ri === sourceB!.r && ci === sourceB!.c)) {
+          if (p.plant) return { ...p, plant: { ...p.plant, infused: false } };
+        }
+        return p;
+      })
     );
   }
   return g;
@@ -252,7 +272,7 @@ function tryStartCropsticksCycles(
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 type InfuserItem = { rarity: string; quantity: number };
-type PlantData   = { speciesId: string; bloomedAt?: number; infused?: boolean; [key: string]: unknown };
+type PlantData   = { speciesId: string; timePlanted: number; bloomedAt?: number; infused?: boolean; [key: string]: unknown };
 type GridCell    = { id: string; plant: PlantData | null; gear?: unknown };
 
 // ── Handler ───────────────────────────────────────────────────────────────────
@@ -317,7 +337,9 @@ Deno.serve(async (req: Request) => {
 
     const plant = cell.plant;
 
-    if (!plant.bloomedAt)  return err("Plant has not bloomed yet");
+    // Accept if tick has stamped bloomedAt (grown plants), or timePlanted === 0
+    // (blooms placed directly from inventory — old records may lack bloomedAt).
+    if (!plant.bloomedAt && plant.timePlanted !== 0) return err("Plant has not bloomed yet");
     if (plant.infused)     return err("Plant is already infused");
 
     // ── Rarity match ──────────────────────────────────────────────────────────

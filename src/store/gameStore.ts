@@ -875,9 +875,11 @@ export function pruneExpiredGear(grid: Plot[][], now: number): Plot[][] {
  *
  * After infusing the plant at (row, col), scans its 4 cardinal neighbours for idle
  * cropsticks gear.  For each idle cropsticks whose cardinal neighbours now include
- * at least two infused+bloomed plants with a valid cross-breed recipe, stamps
- * crossbreedStartedAt = now so the progress bar appears immediately without waiting
- * for the offline cron.
+ * at least two infused+bloomed plants with a valid cross-breed recipe:
+ *   - Stamps crossbreedStartedAt so the progress bar appears immediately.
+ *   - Stores crossbreedSourceA/B so the tick can find the plants at completion
+ *     time without relying on the infused flag.
+ *   - Clears plant.infused on both source plants immediately.
  *
  * Cells that already have crossbreedStartedAt set are skipped (no double-start). */
 export function stampCropsticksCycles(
@@ -897,38 +899,54 @@ export function stampCropsticksCycles(
     if (cropCell.gear.gearType !== "cropsticks") continue;
     if (cropCell.gear.crossbreedStartedAt != null) continue; // already running
 
-    // Collect infused+bloomed cardinal neighbours of this cropsticks
-    type N = { types: FlowerType[]; rarity: Rarity };
+    // Collect infused+bloomed cardinal neighbours of this cropsticks WITH coordinates
+    type N = { r: number; c: number; types: FlowerType[]; rarity: Rarity };
     const nbrs: N[] = [];
     for (const [or, oc] of OFFSETS) {
       const nr = cr + or;
       const nc = cc + oc;
       const nPlant = g[nr]?.[nc]?.plant;
-      if (!nPlant || !nPlant.bloomedAt || !nPlant.infused) continue;
+      if (!nPlant || (!nPlant.bloomedAt && nPlant.timePlanted !== 0) || !nPlant.infused) continue;
       const sp = getFlower(nPlant.speciesId);
       if (!sp) continue;
-      nbrs.push({ types: sp.types as FlowerType[], rarity: sp.rarity });
+      nbrs.push({ r: nr, c: nc, types: sp.types as FlowerType[], rarity: sp.rarity });
     }
 
-    // Need at least 2 neighbours to form a pair
-    let found = false;
-    outer: for (let i = 0; i < nbrs.length; i++) {
+    // Check all pairs; keep the highest-tier recipe pair
+    let bestPairTier = -1;
+    let sourceA: N | null = null;
+    let sourceB: N | null = null;
+    for (let i = 0; i < nbrs.length; i++) {
       for (let j = i + 1; j < nbrs.length; j++) {
-        if (findCrossbreedRecipe(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity)) {
-          found = true;
-          break outer;
+        const recipe = findCrossbreedRecipe(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity);
+        if (recipe && recipe.tier > bestPairTier) {
+          bestPairTier = recipe.tier;
+          sourceA = nbrs[i];
+          sourceB = nbrs[j];
         }
       }
     }
-    if (!found) continue;
+    if (!sourceA || !sourceB) continue;
 
-    // Stamp crossbreedStartedAt on this cropsticks cell
+    // Stamp the cropsticks + store source coords + clear infused on source plants
     g = g.map((r, ri) =>
-      r.map((p, ci) =>
-        ri === cr && ci === cc && p.gear
-          ? { ...p, gear: { ...p.gear, crossbreedStartedAt: now } }
-          : p
-      )
+      r.map((p, ci) => {
+        if (ri === cr && ci === cc && p.gear) {
+          return {
+            ...p,
+            gear: {
+              ...p.gear,
+              crossbreedStartedAt: now,
+              crossbreedSourceA: { r: sourceA!.r, c: sourceA!.c },
+              crossbreedSourceB: { r: sourceB!.r, c: sourceB!.c },
+            },
+          };
+        }
+        if ((ri === sourceA!.r && ci === sourceA!.c) || (ri === sourceB!.r && ci === sourceB!.c)) {
+          if (p.plant) return { ...p, plant: { ...p.plant, infused: false } };
+        }
+        return p;
+      })
     );
   }
   return g;
@@ -1141,7 +1159,8 @@ export function plantBloom(
           ...p,
           plant: {
             speciesId,
-            timePlanted: 0, // epoch → always past bloom threshold
+            timePlanted: 0,   // epoch → always past bloom threshold
+            bloomedAt: Date.now(), // placed blooms are immediately at bloom stage
             fertilizer: null,
             ...(mutation ? { mutation } : {}),
             ...(mastered ? { masteredBonus: 1.25 } : {}),
@@ -2281,15 +2300,34 @@ export function placeGear(
   const invItem = state.gearInventory.find((g) => g.gearType === gearType);
   if (!invItem || invItem.quantity < 1) return null;
 
+  const now = Date.now();
   const placedGear: PlacedGear = direction
-    ? { gearType, placedAt: Date.now(), direction }
-    : { gearType, placedAt: Date.now() };
+    ? { gearType, placedAt: now, direction }
+    : { gearType, placedAt: now };
 
-  const newGrid = state.grid.map((r, ri) =>
+  let newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>
       ri === row && ci === col ? { ...p, gear: placedGear } : p
     )
   );
+
+  // When placing cropsticks, immediately start the cycle if any adjacent pair
+  // of infused+bloomed plants matches a recipe — mirrors what apply-infuser does
+  // when infusing the second plant while cropsticks are already present.
+  if (gearType === "cropsticks") {
+    const OFFSETS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (const [dr, dc] of OFFSETS) {
+      const nr = row + dr;
+      const nc = col + dc;
+      const nPlant = newGrid[nr]?.[nc]?.plant;
+      if (nPlant?.infused && (nPlant.bloomedAt || nPlant.timePlanted === 0)) {
+        // Call stampCropsticksCycles from the adjacent plant's position —
+        // it will scan back to find the cropsticks we just placed and start it.
+        newGrid = stampCropsticksCycles(newGrid, nr, nc, now);
+        break; // stampCropsticksCycles already considers all 4 neighbours of the cropsticks
+      }
+    }
+  }
 
   const newGearInv = state.gearInventory
     .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)

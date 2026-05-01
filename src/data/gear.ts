@@ -59,11 +59,17 @@ export interface PlacedGear {
    *  neighbors; cleared on completion or when the pair becomes invalid.
    *  Drives a deterministic progress bar instead of the old hourly RNG roll. */
   crossbreedStartedAt?: number;
+  /** Cropsticks only — grid coordinates of the two source plants that started
+   *  the current cycle. Stored when the cycle begins so the infused flag can
+   *  be cleared immediately from source plants (they no longer visually show
+   *  "waiting") while the tick can still find them by position at completion. */
+  crossbreedSourceA?: { r: number; c: number };
+  crossbreedSourceB?: { r: number; c: number };
 }
 
-/** How long a cropsticks cross-breed takes (1 hour). Mirrored in the
- *  tick-offline-gardens cron. */
-export const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1000;
+/** How long a cropsticks cross-breed takes. Mirrored in the
+ *  tick-offline-gardens cron. TODO: revert to 60 * 60 * 1000 (1 hour) after testing. */
+export const CROPSTICKS_BREED_DURATION_MS = 20 * 1000; // TESTING: 20 seconds
 
 // ── Cropsticks cross-breed recipes ─────────────────────────────────────────
 // Mirrors the RECIPES array in apply-infuser and tick-offline-gardens edge functions.

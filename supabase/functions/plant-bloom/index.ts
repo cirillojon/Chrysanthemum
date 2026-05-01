@@ -114,9 +114,11 @@ Deno.serve(async (req: Request) => {
     const discovered = (save.discovered ?? []) as string[];
     const mastered   = isSpeciesMastered(discovered, speciesId);
 
+    const now = Date.now();
     const newPlant = {
       speciesId,
-      timePlanted: 0,
+      timePlanted: 0,          // epoch → always past bloom threshold
+      bloomedAt:   now,        // placed blooms are immediately at bloom stage
       fertilizer:  null,
       ...(mutation ? { mutation } : {}),
       ...(mastered ? { masteredBonus: 1.25 } : {}),

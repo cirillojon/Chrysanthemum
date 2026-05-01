@@ -82,7 +82,7 @@ export function PlotTile({
   cellSize = "w-16 h-16",
   showGrowthDebug = false,
 }: Props) {
-  const { perform, getState, activeWeather } = useGame();
+  const { perform, getState, activeWeather, reloadFromCloud } = useGame();
   const { settings } = useSettings();
   const now    = Date.now();
   const plant  = plot.plant;
@@ -117,11 +117,22 @@ export function PlotTile({
   const [, forceTick] = useState(0);
   const cropsticksActive =
     plot.gear?.gearType === "cropsticks" && plot.gear.crossbreedStartedAt != null;
+  const cropsticksComplete =
+    cropsticksActive &&
+    (now - (plot.gear!.crossbreedStartedAt as number)) >= CROPSTICKS_BREED_DURATION_MS;
   useEffect(() => {
     if (!cropsticksActive) return;
     const id = setInterval(() => forceTick((n) => (n + 1) & 0xffff), 1_000);
     return () => clearInterval(id);
   }, [cropsticksActive]);
+  // When the progress bar hits 100%, poll the server every 10 s until the tick
+  // has replaced the cropsticks with a seed (cropsticksActive becomes false).
+  useEffect(() => {
+    if (!cropsticksComplete) return;
+    reloadFromCloud();
+    const id = setInterval(() => reloadFromCloud(), 10_000);
+    return () => clearInterval(id);
+  }, [cropsticksComplete]);
   const tileRef       = useRef<HTMLDivElement>(null);
   const harvestingRef = useRef(false);
 

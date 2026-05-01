@@ -497,7 +497,7 @@ function rollWeatherMutations(
 // seed exactly 1 hour later. Replaces the old per-tick RNG roll so the UI
 // can render a progress bar with predictable arrival time.
 
-const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1000; // 1 hour
+const CROPSTICKS_BREED_DURATION_MS = 20 * 1000; // TESTING: 20 seconds — TODO revert to 60 * 60 * 1000
 
 const RARITY_IDX: Record<string, number> = {
   common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
@@ -713,17 +713,88 @@ function runCropsticks(save: Save, now: number): Save {
 
   for (let ri = 0; ri < rows; ri++) {
     for (let ci = 0; ci < cols; ci++) {
-      const gear = cur.grid[ri][ci].gear;
-      if (!gear || gear.gearType !== "cropsticks") continue;
+      const rawGear = cur.grid[ri][ci].gear;
+      if (!rawGear || rawGear.gearType !== "cropsticks") continue;
 
-      // Collect infused bloomed neighbors in 4 cardinal directions
+      const gear      = rawGear as PlacedGearWithProgress;
+      const startedAt = gear.crossbreedStartedAt;
+      const storedA   = gear.crossbreedSourceA;
+      const storedB   = gear.crossbreedSourceB;
+
+      // ── In-progress cycle with stored source coordinates (v2.4+ path) ───
+      // Infused flag was already cleared when the cycle started; locate the
+      // source plants purely by stored grid coordinates.
+      if (startedAt != null && storedA && storedB) {
+        const plantA = cur.grid[storedA.r]?.[storedA.c]?.plant;
+        const plantB = cur.grid[storedB.r]?.[storedB.c]?.plant;
+
+        // Source plants must still exist and be bloomed (bloomedAt set, or timePlanted===0 for placed blooms).
+        const aIsBloomed = plantA && (plantA.bloomedAt || plantA.timePlanted === 0);
+        const bIsBloomed = plantB && (plantB.bloomedAt || plantB.timePlanted === 0);
+        if (!aIsBloomed || !bIsBloomed) {
+          const newGrid = cur.grid.map((row, r) =>
+            row.map((plot, c) =>
+              r === ri && c === ci && plot.gear
+                ? { ...plot, gear: clearStartedAt(plot.gear as PlacedGearWithProgress) }
+                : plot
+            )
+          );
+          cur = { ...cur, grid: newGrid };
+          continue;
+        }
+
+        // Not done yet — wait
+        if (now - startedAt < CROPSTICKS_BREED_DURATION_MS) continue;
+
+        // ── Complete ──────────────────────────────────────────────────────
+        const da = SPECIES_DATA[plantA.speciesId];
+        const db = SPECIES_DATA[plantB.speciesId];
+        const bestRecipe = da && db ? findBestRecipe(da.t, da.r, db.t, db.r) : null;
+
+        if (!bestRecipe) {
+          // Recipe no longer valid (shouldn't normally happen) — abort
+          const newGrid = cur.grid.map((row, r) =>
+            row.map((plot, c) =>
+              r === ri && c === ci && plot.gear
+                ? { ...plot, gear: clearStartedAt(plot.gear as PlacedGearWithProgress) }
+                : plot
+            )
+          );
+          cur = { ...cur, grid: newGrid };
+          continue;
+        }
+
+        // Recipe match → always produce the recipe output (no coin flip).
+        const outputSpeciesId = bestRecipe.outputSpeciesId;
+        const newDiscovered = cur.discovered.includes(outputSpeciesId)
+          ? cur.discovered
+          : [...cur.discovered, outputSpeciesId];
+        const newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+          ? cur.discoveredRecipes
+          : [...cur.discoveredRecipes, bestRecipe.id];
+
+        // Replace cropsticks cell with the seed; source plants' infused was
+        // already cleared when the cycle started — nothing to change on them.
+        const newGrid = cur.grid.map((row, r) =>
+          row.map((plot, c) => {
+            if (r === ri && c === ci) {
+              return { ...plot, gear: null, plant: { speciesId: outputSpeciesId, timePlanted: now } };
+            }
+            return plot;
+          })
+        );
+        cur = { ...cur, grid: newGrid, discovered: newDiscovered, discoveredRecipes: newDiscoveredRecipes };
+        continue;
+      }
+
+      // ── Scan for infused neighbors (new-cycle start OR legacy in-progress) ─
       type Neighbor = { r: number; c: number; plant: Plant };
       const infusedNeighbors: Neighbor[] = [];
       for (const [dr, dc] of OFFSETS_CROSS) {
         const nr = ri + dr;
         const nc = ci + dc;
         const plot = cur.grid[nr]?.[nc];
-        if (!plot?.plant || !plot.plant.bloomedAt || !plot.plant.infused) continue;
+        if (!plot?.plant || (!plot.plant.bloomedAt && plot.plant.timePlanted !== 0) || !plot.plant.infused) continue;
         infusedNeighbors.push({ r: nr, c: nc, plant: plot.plant });
       }
 
@@ -749,16 +820,14 @@ function runCropsticks(save: Save, now: number): Save {
         }
       }
 
-      const startedAt: number | undefined = (gear as PlacedGearWithProgress).crossbreedStartedAt;
-
-      // ── No valid recipe pair → clear in-flight progress, if any ──────────
+      // ── No valid recipe pair → clear in-flight progress if any ───────────
       if (!bestRecipe || !bestA || !bestB) {
         if (startedAt != null) {
-          // Stale cycle — pair became invalid (neighbor harvested / un-infused).
+          // Legacy stale cycle — pair became invalid
           const newGrid = cur.grid.map((row, r) =>
             row.map((plot, c) =>
               r === ri && c === ci && plot.gear
-                ? { ...plot, gear: clearStartedAt(plot.gear) }
+                ? { ...plot, gear: clearStartedAt(plot.gear as PlacedGearWithProgress) }
                 : plot
             )
           );
@@ -767,51 +836,49 @@ function runCropsticks(save: Save, now: number): Save {
         continue;
       }
 
-      // ── Valid pair, no cycle yet → start one ─────────────────────────────
+      // ── Valid pair, no cycle yet → start one with stored source coords ────
       if (startedAt == null) {
+        const aR = bestA.r, aC = bestA.c;
+        const bR = bestB.r, bC = bestB.c;
         const newGrid = cur.grid.map((row, r) =>
-          row.map((plot, c) =>
-            r === ri && c === ci && plot.gear
-              ? { ...plot, gear: { ...plot.gear, crossbreedStartedAt: now } }
-              : plot
-          )
+          row.map((plot, c) => {
+            if (r === ri && c === ci && plot.gear) {
+              return {
+                ...plot,
+                gear: {
+                  ...plot.gear,
+                  crossbreedStartedAt: now,
+                  crossbreedSourceA: { r: aR, c: aC },
+                  crossbreedSourceB: { r: bR, c: bC },
+                },
+              };
+            }
+            // Clear infused immediately on the source plants
+            if ((r === aR && c === aC) || (r === bR && c === bC)) {
+              if (plot.plant) return { ...plot, plant: { ...plot.plant, infused: false } };
+            }
+            return plot;
+          })
         );
         cur = { ...cur, grid: newGrid };
         continue;
       }
 
-      // ── Cycle in progress — wait for completion ─────────────────────────
+      // ── Legacy: cycle in progress (no stored coords) + pair still valid ──
+      // This handles saves created before v2.4. Complete if time has elapsed.
       if (now - startedAt < CROPSTICKS_BREED_DURATION_MS) continue;
 
-      // ── Complete: 50% success roll — replace cropsticks cell with a seed ──
-      const da = SPECIES_DATA[bestA.plant.speciesId]!;
-      const db = SPECIES_DATA[bestB.plant.speciesId]!;
       const aR = bestA.r, aC = bestA.c;
       const bR = bestB.r, bC = bestB.c;
-      const success = Math.random() < 0.5;
 
-      let outputSpeciesId: string;
-      let newDiscovered: string[];
-      let newDiscoveredRecipes: string[];
-
-      if (success) {
-        outputSpeciesId = bestRecipe.outputSpeciesId;
-        newDiscovered = cur.discovered.includes(outputSpeciesId)
-          ? cur.discovered
-          : [...cur.discovered, outputSpeciesId];
-        newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
-          ? cur.discoveredRecipes
-          : [...cur.discoveredRecipes, bestRecipe.id];
-      } else {
-        // Fallback: lowest-rarity parent; random when tied
-        const tierA = RARITY_IDX[da.r] ?? 0;
-        const tierB = RARITY_IDX[db.r] ?? 0;
-        if (tierA < tierB)      outputSpeciesId = bestA.plant.speciesId;
-        else if (tierB < tierA) outputSpeciesId = bestB.plant.speciesId;
-        else                    outputSpeciesId = Math.random() < 0.5 ? bestA.plant.speciesId : bestB.plant.speciesId;
-        newDiscovered      = cur.discovered;
-        newDiscoveredRecipes = cur.discoveredRecipes;
-      }
+      // Recipe match → always produce the recipe output (no coin flip).
+      const outputSpeciesId = bestRecipe.outputSpeciesId;
+      const newDiscovered = cur.discovered.includes(outputSpeciesId)
+        ? cur.discovered
+        : [...cur.discovered, outputSpeciesId];
+      const newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+        ? cur.discoveredRecipes
+        : [...cur.discoveredRecipes, bestRecipe.id];
 
       // Clear infused from source plants + replace cropsticks cell with the seed
       const newGrid = cur.grid.map((row, r) =>
@@ -834,11 +901,18 @@ function runCropsticks(save: Save, now: number): Save {
   return cur;
 }
 
-// Type-helper: PlacedGear may carry `crossbreedStartedAt` on cropsticks.
-type PlacedGearWithProgress = { gearType: string; crossbreedStartedAt?: number };
+// Type-helper: PlacedGear may carry crossbreed fields on cropsticks.
+type PlacedGearWithProgress = {
+  gearType: string;
+  crossbreedStartedAt?: number;
+  crossbreedSourceA?: { r: number; c: number };
+  crossbreedSourceB?: { r: number; c: number };
+};
 function clearStartedAt(gear: PlacedGearWithProgress) {
   const next = { ...gear };
   delete next.crossbreedStartedAt;
+  delete next.crossbreedSourceA;
+  delete next.crossbreedSourceB;
   return next;
 }
 
@@ -914,7 +988,13 @@ Deno.serve(async (req: Request) => {
         flatGrid.some(plot => plot.plant && hasBloom(plot.plant, now, weatherMult));
       const hasCropsticks = flatGrid.some(plot => plot.gear?.gearType === "cropsticks");
       const hasInfusedBloomed = flatGrid.some(plot => plot.plant?.infused && plot.plant?.bloomedAt);
-      if (!hasActiveGear && !hasBloomedForMutation && !(hasCropsticks && hasInfusedBloomed)) continue;
+      // Also process saves where a cropsticks cycle is already in progress
+      // (stored coords path — source plants are no longer marked infused).
+      const hasCropsticksCycleActive = flatGrid.some(plot =>
+        plot.gear?.gearType === "cropsticks" &&
+        (plot.gear as PlacedGearWithProgress).crossbreedStartedAt != null
+      );
+      if (!hasActiveGear && !hasBloomedForMutation && !(hasCropsticks && hasInfusedBloomed) && !hasCropsticksCycleActive) continue;
 
       const original: Save = {
         user_id:           raw.user_id,

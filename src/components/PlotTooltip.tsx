@@ -309,9 +309,19 @@ export function PlotTooltip({
             <p className="text-[10px] text-muted-foreground font-mono">🔎 No mutation (locked)</p>
           )}
           {/* Active consumable flags */}
-          {plant.infused && (
-            <p className="text-[10px] font-mono text-emerald-400">💉 Infused · awaiting Cropsticks</p>
-          )}
+          {plant.infused && (() => {
+            const crossbreedActive = (
+              [[row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]] as [number, number][]
+            ).some(([r, c]) => {
+              const g = state.grid[r]?.[c]?.gear;
+              return g?.gearType === "cropsticks" && g.crossbreedStartedAt != null;
+            });
+            return (
+              <p className="text-[10px] font-mono text-emerald-400">
+                {crossbreedActive ? "💉 Cross-breeding…" : "💉 Infused · awaiting Cropsticks"}
+              </p>
+            );
+          })()}
           {plant.heirloomActive && (
             <p className="text-[10px] font-mono text-emerald-400">🔮 Heirloom Charm active</p>
           )}
@@ -357,7 +367,7 @@ export function PlotTooltip({
                   </button>
                 );
               })}
-              {isBloomed && !plant.infused && matchingInfuser && (() => {
+              {isBloomed && (!!plant.bloomedAt || plant.timePlanted === 0) && !plant.infused && matchingInfuser && (() => {
                 const tier  = RARITY_TIER[matchingInfuser.rarity as keyof typeof RARITY_TIER] ?? 1;
                 const roman = ROMAN[tier as 1|2|3|4|5];
                 return (

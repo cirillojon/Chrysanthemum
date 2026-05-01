@@ -297,6 +297,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
 
   // Plant cells adjacent to active cropsticks, mapped to the direction their
   // particle should travel (toward the cropsticks).
+  // Uses stored crossbreedSourceA/B coordinates so particles keep flowing even
+  // after plant.infused is cleared at cycle-start.
   const crossbreedSourceCells = useMemo(() => {
     const map = new Map<string, "up" | "down" | "left" | "right">();
     const OFFSETS: [number, number, "up" | "down" | "left" | "right"][] = [
@@ -310,11 +312,28 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
         const gear = state.grid[ri][ci].gear;
         if (!gear || gear.gearType !== "cropsticks") continue;
         if (gear.crossbreedStartedAt == null) continue;
+
+        // Prefer stored source coordinates (set when infused is cleared at cycle start)
+        if (gear.crossbreedSourceA && gear.crossbreedSourceB) {
+          const sources = [gear.crossbreedSourceA, gear.crossbreedSourceB];
+          for (const { r: sr, c: sc } of sources) {
+            if (!state.grid[sr]?.[sc]?.plant) continue;
+            for (const [dr, dc, dir] of OFFSETS) {
+              if (ri + dr === sr && ci + dc === sc) {
+                map.set(`${sr}-${sc}`, dir);
+                break;
+              }
+            }
+          }
+          continue;
+        }
+
+        // Fallback: legacy cycles where infused flag is still set on the plants
         for (const [dr, dc, dir] of OFFSETS) {
           const nr = ri + dr;
           const nc = ci + dc;
           const plant = state.grid[nr]?.[nc]?.plant;
-          if (!plant || !plant.bloomedAt || !plant.infused) continue;
+          if (!plant || !plant.infused) continue;
           map.set(`${nr}-${nc}`, dir);
         }
       }
