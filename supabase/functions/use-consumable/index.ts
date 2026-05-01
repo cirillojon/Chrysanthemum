@@ -452,12 +452,12 @@ Deno.serve(async (req: Request) => {
         updatedPlant = { ...updatedPlant, heirloomActive: true };
 
       // ── Purity Vial ─────────────────────────────────────────────────────────
+      // Removes the current mutation from the plant. Requires one to be present.
       } else if (consumableId.startsWith("purity_vial_")) {
+        if (!plant.mutation) return err("This plant has no mutation to remove");
         updatedPlant = {
           ...updatedPlant,
-          mutationBlocked: true,
-          forcedMutation:  undefined,
-          mutationBoost:   undefined,
+          mutation: undefined,
         };
 
       // ── Giant Vial ──────────────────────────────────────────────────────────

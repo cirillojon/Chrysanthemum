@@ -44,7 +44,7 @@ export interface PlantedFlower {
   infused?: boolean; // kept as "infused" in DB/persistence; displayed as "Attuned" in UI
   /** Set by Heirloom Charm — harvest returns the seed to inventory instead of consuming it */
   heirloomActive?: boolean;
-  /** Set by Purity Vial — harvest clears any mutation and does not roll a new one */
+  /** Legacy: set by old Purity Vial behaviour — harvest clears any mutation. No longer written by new code; kept for save compatibility. */
   mutationBlocked?: boolean;
   /** Set by Giant Vial — harvest forces Giant mutation regardless of weather roll */
   forcedMutation?: "giant";
@@ -2628,7 +2628,9 @@ export function applyPlantConsumable(
   } else if (consumableId.startsWith("heirloom_charm_")) {
     updatedPlant = { ...updatedPlant, heirloomActive: true };
   } else if (consumableId.startsWith("purity_vial_")) {
-    updatedPlant = { ...updatedPlant, mutationBlocked: true, mutation: undefined, forcedMutation: undefined, mutationBoost: undefined };
+    // Purity Vial: removes the current mutation. Requires one to be present.
+    if (!plant.mutation) return null;
+    updatedPlant = { ...updatedPlant, mutation: undefined };
   } else if (consumableId.startsWith("giant_vial_")) {
     updatedPlant = { ...updatedPlant, forcedMutation: "giant", mutationBlocked: undefined };
   } else if (consumableId.startsWith("frost_vial_"))  {

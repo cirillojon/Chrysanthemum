@@ -205,19 +205,19 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
 
   // ── Purity Vial (I–V) — mutation_boost ───────────────────────────────────
   { id: "purity_vial_1", name: "Purity Vial I",   emoji: "🧼", tier: 1, rarity: "rare",      category: "mutation_boost",
-    description: `Shields a ${r(1)} plant from receiving any mutation on its next harvest.`,
+    description: `Removes the current mutation from a ${r(1)} or lower plant.`,
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "frost", amount: 4 }] } },
   { id: "purity_vial_2", name: "Purity Vial II",  emoji: "🧼", tier: 2, rarity: "legendary", category: "mutation_boost",
-    description: `Shields a ${r(2)} plant from receiving any mutation on its next harvest.`,
+    description: `Removes the current mutation from a ${r(2)} or lower plant.`,
     cost: { kind: "consumable", id: "purity_vial_1", quantity: 2 } },
   { id: "purity_vial_3", name: "Purity Vial III", emoji: "🧼", tier: 3, rarity: "mythic",    category: "mutation_boost",
-    description: `Shields a ${r(3)} plant from receiving any mutation on its next harvest.`,
+    description: `Removes the current mutation from a ${r(3)} or lower plant.`,
     cost: { kind: "consumable", id: "purity_vial_2", quantity: 2 } },
   { id: "purity_vial_4", name: "Purity Vial IV",  emoji: "🧼", tier: 4, rarity: "exalted",   category: "mutation_boost",
-    description: `Shields a ${r(4)} plant from receiving any mutation on its next harvest.`,
+    description: `Removes the current mutation from a ${r(4)} or lower plant.`,
     cost: { kind: "consumable", id: "purity_vial_3", quantity: 2 } },
   { id: "purity_vial_5", name: "Purity Vial V",   emoji: "🧼", tier: 5, rarity: "prismatic", category: "mutation_boost",
-    description: `Shields a ${r(5)} plant from receiving any mutation on its next harvest.`,
+    description: `Removes the current mutation from a ${r(5)} or lower plant.`,
     cost: { kind: "consumable", id: "purity_vial_4", quantity: 2 } },
 
   // ── Giant Vial (I–V) — mutation_boost ────────────────────────────────────

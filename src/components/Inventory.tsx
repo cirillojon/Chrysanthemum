@@ -497,7 +497,7 @@ function GearInventoryRow({ item }: { item: GearInventoryItem }) {
 const USAGE_CONTEXT: Record<string, string> = {
   bloom_burst:    "Use in Garden (tap a plant)",
   heirloom_charm: "Use in Garden (tap a bloomed plant)",
-  purity_vial:    "Use in Garden (tap a plant)",
+  purity_vial:    "Use in Garden (tap a plant that has a mutation)",
   giant_vial:     "Use in Garden (tap a plant)",
   frost_vial:     "Use in Garden (tap a plant)",
   ember_vial:     "Use in Garden (tap a plant)",

@@ -325,13 +325,10 @@ export function PlotTooltip({
           {plant.heirloomActive && (
             <p className="text-[10px] font-mono text-emerald-400">🔮 Heirloom Charm active</p>
           )}
-          {plant.mutationBlocked && (
-            <p className="text-[10px] font-mono text-sky-400">🫧 Purity Shield active</p>
-          )}
           {plant.forcedMutation === "giant" && (
             <p className="text-[10px] font-mono text-violet-400">🧬 Giant Force active</p>
           )}
-          {plant.mutationBoost && !plant.mutationBlocked && (
+          {plant.mutationBoost && (
             <p className="text-[10px] font-mono text-amber-400">
               Boost: {plant.mutationBoost.mutation} ×{plant.mutationBoost.multiplier}
             </p>
