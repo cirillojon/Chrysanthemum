@@ -45,6 +45,8 @@ interface Props {
   isHighlighted?:  boolean;
   /** True when this cell is covered by at least one active regular (growth) sprinkler. */
   isUnderSprinkler?: boolean;
+  /** True when this cell is covered by an active Aqueduct (displayed instead of sprinkler 💧). */
+  isUnderAqueduct?: boolean;
   /** Mutation sprinklers covering this cell — emoji for display, label for tooltip. */
   sprinklerMutations?: { emoji: string; label: string }[];
   /** True when this cell is within a scarecrow's radius. */
@@ -84,7 +86,7 @@ export function PlotTile({
   plot, row, col,
   onEmptyClick, onHarvest, onHarvestStart, onHarvestEnd, harvestPending,
   isSelected, isHighlighted,
-  isUnderSprinkler, sprinklerMutations = [],
+  isUnderSprinkler, isUnderAqueduct, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
   isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, balanceScaleSide, isUnderAutoPlanter, isUnderAegis,
   crossbreedDirection, isCrossBreeding = false,
@@ -373,6 +375,7 @@ export function PlotTile({
           isCrossBreeding={isCrossBreeding}
           gearGrowthMultiplier={gearMult}
           isUnderSprinkler={isUnderSprinkler}
+          isUnderAqueduct={isUnderAqueduct}
           sprinklerMutations={sprinklerMutations}
           isUnderGrowLamp={isUnderGrowLamp}
           isUnderScarecrow={isUnderScarecrow}
@@ -411,12 +414,20 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis) && (
+        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || isUnderAqueduct || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
             {/* Sprinkler: 💧 drops falling */}
-            {isUnderSprinkler && (
+            {isUnderSprinkler && !isUnderAqueduct && (
+              <>
+                <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "74%", animationDelay: "0s"    }}>💧</span>
+              </>
+            )}
+            {/* Aqueduct: 💧 drops falling (same water animation, takes priority over sprinkler) */}
+            {isUnderAqueduct && (
               <>
                 <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
                 <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
@@ -551,9 +562,10 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis || plant.infused || plant.revealed || plant.showMultiplier) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || isUnderAqueduct || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis || plant.infused || plant.revealed || plant.showMultiplier) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
-            {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
+            {isUnderAqueduct && <span className="text-[9px]" title="Under aqueduct">⛲</span>}
+            {isUnderSprinkler && !isUnderAqueduct && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map(({ emoji, label }, i) => (
               <span key={i} className="text-[9px]" title={label}>{emoji}</span>
             ))}

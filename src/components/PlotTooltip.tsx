@@ -36,6 +36,8 @@ interface Props {
   isUnderLawnmower?:     boolean;
   /** "boost" (3×) or "slow" (0.5×) when covered by an active Balance Scale. */
   balanceScaleSide?:     "boost" | "slow";
+  /** True when this cell is covered by an active Aqueduct (displayed instead of sprinkler 💧). */
+  isUnderAqueduct?:      boolean;
   /** True when this cell is shielded by an active Aegis. */
   isUnderAegis?:         boolean;
 }
@@ -57,7 +59,7 @@ function formatMs(ms: number): string {
 export function PlotTooltip({
   plant, row, col, onClose, onHarvestRequest, isCrossBreeding = false,
   gearGrowthMultiplier = 1.0,
-  isUnderSprinkler, sprinklerMutations = [],
+  isUnderSprinkler, isUnderAqueduct, sprinklerMutations = [],
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell, isUnderLawnmower,
   balanceScaleSide, isUnderAegis,
 }: Props) {
@@ -448,7 +450,7 @@ export function PlotTooltip({
         )}
 
         {/* Active gear effects */}
-        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis) && (
+        {(isUnderSprinkler || isUnderAqueduct || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis) && (
           <div className="pt-1 border-t border-border space-y-1">
             <p className="text-[10px] text-muted-foreground">Active gear</p>
 
@@ -461,7 +463,12 @@ export function PlotTooltip({
                   <span className="relative">Grow lamp</span>
                 </span>
               )}
-              {isUnderSprinkler && (
+              {isUnderAqueduct && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-400/10 border border-blue-400/20 text-[10px] text-blue-300">
+                  <span>⛲</span><span>Aqueduct</span>
+                </span>
+              )}
+              {isUnderSprinkler && !isUnderAqueduct && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-blue-400/10 border border-blue-400/20 text-[10px] text-blue-300">
                   <span>💧</span><span>Sprinkler</span>
                 </span>
@@ -508,7 +515,7 @@ export function PlotTooltip({
               )}
               {isUnderAegis && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-sky-400/10 border border-sky-400/30 text-[10px] text-sky-300">
-                  <span>🛡️</span><span>Aegis — weather mutations blocked</span>
+                  <span>🛡️</span><span>Aegis</span>
                 </span>
               )}
             </div>

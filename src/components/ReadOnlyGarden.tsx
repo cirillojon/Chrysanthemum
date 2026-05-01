@@ -58,8 +58,9 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   }, []);
 
   // Compute gear coverage in one pass
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, balanceScaleCells, autoPlanterKeys, aegisKeys } = useMemo(() => {
+  const { regularSprinklerKeys, aqueductKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, balanceScaleCells, autoPlanterKeys, aegisKeys } = useMemo(() => {
     const regular      = new Set<string>();
+    const aqueduct     = new Set<string>();
     const mutation     = new Map<string, string[]>();
     const scarecrow    = new Set<string>();
     const composter    = new Set<string>();
@@ -77,8 +78,10 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
         const def      = GEAR[g.gearType];
         const affected = getAffectedCells(g.gearType, ri, ci, rows, farmSize, g.direction);
         const keys     = affected.map(([r, c]) => `${r}-${c}`);
-        if (def.category === "sprinkler_regular" || def.passiveSubtype === "aqueduct") {
+        if (def.category === "sprinkler_regular" && def.passiveSubtype !== "aqueduct") {
           keys.forEach((k) => regular.add(k));
+        } else if (def.passiveSubtype === "aqueduct") {
+          keys.forEach((k) => aqueduct.add(k));
         } else if (def.category === "sprinkler_mutation" && def.mutationType) {
           const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
           keys.forEach((k) => {
@@ -115,7 +118,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
         }
       }
     }
-    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, balanceScaleCells: balanceScale, autoPlanterKeys: autoPlanter, aegisKeys: aegis };
+    return { regularSprinklerKeys: regular, aqueductKeys: aqueduct, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, balanceScaleCells: balanceScale, autoPlanterKeys: autoPlanter, aegisKeys: aegis };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid, farmSize, rows]);
 
@@ -271,6 +274,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           const hasFert   = !!plant.fertilizer;
 
           const underSprinkler   = regularSprinklerKeys.has(cellKey);
+          const underAqueduct    = aqueductKeys.has(cellKey);
           const mutEmojis        = mutationSprinklerMap.get(cellKey) ?? [];
           const underScarecrow   = scarecrowKeys.has(cellKey);
           const underComposter   = composterKeys.has(cellKey);
@@ -305,10 +309,17 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               title={isBloomed ? `${species?.name} — bloomed` : "??? — growing"}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || !!balanceScaleSide || underFan || underAegis) && (
+              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || underAqueduct || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || !!balanceScaleSide || underFan || underAegis) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
                   {underGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
-                  {underSprinkler && (
+                  {underSprinkler && !underAqueduct && (
+                    <>
+                      <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
+                      <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
+                      <span className="gear-drop" style={{ left: "74%", animationDelay: "0s"    }}>💧</span>
+                    </>
+                  )}
+                  {underAqueduct && (
                     <>
                       <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
                       <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
@@ -430,9 +441,10 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || !!balanceScaleSide || underAegis || plant.infused || plant.revealed) && (
+              {settings.plotGearIndicator && (underSprinkler || underAqueduct || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || !!balanceScaleSide || underAegis || plant.infused || plant.revealed) && (
                 <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2"}`}>
-                  {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
+                  {underAqueduct && <span className="text-[9px]" title="Under aqueduct">⛲</span>}
+                  {underSprinkler && !underAqueduct && <span className="text-[9px]" title="Under sprinkler">💧</span>}
                   {mutEmojis.map((emoji, i) => (
                     <span key={i} className="text-[9px]" title="Mutation sprinkler">{emoji}</span>
                   ))}
