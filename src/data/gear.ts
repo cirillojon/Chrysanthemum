@@ -37,6 +37,9 @@ export type PassiveGearType =
   | "lawnmower_uncommon"
   | "lawnmower_rare"
   | "lawnmower_legendary"
+  | "aqueduct_uncommon"
+  | "aqueduct_rare"
+  | "aqueduct_legendary"
   | "balance_scale_legendary"
   | "balance_scale_mythic"
   | "balance_scale_exalted"
@@ -46,7 +49,7 @@ export type PassiveGearType =
 export type GearType = SprinklerGearType | PassiveGearType;
 
 export type GearCategory  = "sprinkler_regular" | "sprinkler_mutation" | "passive";
-export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis" | "lawnmower" | "balance_scale";
+export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis" | "lawnmower" | "balance_scale" | "aqueduct";
 
 /** Which way a Fan or Aegis is pointing — set at placement time */
 export type FanDirection = "up" | "down" | "left" | "right";
@@ -695,6 +698,52 @@ export const GEAR: Record<GearType, GearDefinition> = {
     fanRange:       4,
   },
 
+  // ── Aqueduct ──────────────────────────────────────────────────────────────
+  // Directional growth sprinkler that shoots in a line both in front of and
+  // behind itself along the chosen axis. Direction picker sets the axis.
+
+  aqueduct_uncommon: {
+    id:             "aqueduct_uncommon",
+    name:           "Aqueduct I",
+    description:    "Boosts growth 1.5× in a line — 1 cell in front and 1 behind along the chosen axis. Lasts 2 hours.",
+    emoji:          "⛲",
+    rarity:         "uncommon",
+    shopPrice:      6_000,
+    category:       "passive",
+    passiveSubtype: "aqueduct",
+    durationMs:     DURATION_2H,
+    fanRange:       1,
+    growthMultiplier: 1.5,
+  },
+
+  aqueduct_rare: {
+    id:             "aqueduct_rare",
+    name:           "Aqueduct II",
+    description:    "Boosts growth 1.75× in a line — 2 cells in front and 2 behind along the chosen axis. Lasts 4 hours.",
+    emoji:          "⛲",
+    rarity:         "rare",
+    shopPrice:      40_000,
+    category:       "passive",
+    passiveSubtype: "aqueduct",
+    durationMs:     DURATION_4H,
+    fanRange:       2,
+    growthMultiplier: 1.75,
+  },
+
+  aqueduct_legendary: {
+    id:             "aqueduct_legendary",
+    name:           "Aqueduct III",
+    description:    "Boosts growth 2× in a line — 3 cells in front and 3 behind along the chosen axis. Lasts 8 hours.",
+    emoji:          "⛲",
+    rarity:         "legendary",
+    shopPrice:      180_000,
+    category:       "passive",
+    passiveSubtype: "aqueduct",
+    durationMs:     DURATION_8H,
+    fanRange:       3,
+    growthMultiplier: 2.0,
+  },
+
   // ── Balance Scale ─────────────────────────────────────────────────────────
   // Points in a player-chosen direction. The chosen arm gives a 3× growth boost;
   // the opposite arm gives a 0.5× penalty. The active side FLIPS every hour.
@@ -814,6 +863,22 @@ export function getAffectedCells(
       .filter(([r, c]) => r >= 0 && r < gridRows && c >= 0 && c < gridCols);
   }
 
+  // Aqueduct: bidirectional line — shoots in the chosen direction AND its opposite.
+  // Choosing "right" or "left" covers the full horizontal axis; "up" or "down" covers vertical.
+  if (def.passiveSubtype === "aqueduct" && def.fanRange) {
+    if (!direction) return []; // direction required
+    const range = def.fanRange;
+    const offsets: [number, number][] = [];
+    const isHoriz = direction === "left" || direction === "right";
+    for (let i = 1; i <= range; i++) {
+      if (isHoriz) { offsets.push([0,  i]); offsets.push([0, -i]); }
+      else          { offsets.push([-i, 0]); offsets.push([ i, 0]); }
+    }
+    return offsets
+      .map(([dr, dc]): [number, number] => [gearRow + dr, gearCol + dc])
+      .filter(([r, c]) => r >= 0 && r < gridRows && c >= 0 && c < gridCols);
+  }
+
   // Fan / Aegis / Lawnmower: compute a line of cells in the chosen direction
   if ((def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower") && def.fanRange) {
     if (!direction) return []; // direction required
@@ -918,6 +983,10 @@ export function isBalanceScale(def: GearDefinition): boolean {
   return def.passiveSubtype === "balance_scale";
 }
 
+export function isAqueduct(def: GearDefinition): boolean {
+  return def.passiveSubtype === "aqueduct";
+}
+
 export function isHarvestBell(def: GearDefinition): boolean {
   return def.passiveSubtype === "harvest_bell";
 }
@@ -954,6 +1023,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "harvest_bell_uncommon" },
     { kind: "gear", gearType: "lawnmower_uncommon" },
     { kind: "gear", gearType: "aegis_uncommon" },
+    { kind: "gear", gearType: "aqueduct_uncommon" },
     { kind: "consumable", consumableId: "ruler" },
   ],
   rare: [
@@ -966,6 +1036,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "harvest_bell_rare" },
     { kind: "gear", gearType: "lawnmower_rare" },
     { kind: "gear", gearType: "aegis_rare" },
+    { kind: "gear", gearType: "aqueduct_rare" },
     { kind: "consumable", consumableId: "bloom_burst_1" },
     { kind: "consumable", consumableId: "heirloom_charm_1" },
     { kind: "consumable", consumableId: "purity_vial_1" },
@@ -994,6 +1065,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "harvest_bell_legendary" },
     { kind: "gear", gearType: "lawnmower_legendary" },
     { kind: "gear", gearType: "aegis_legendary" },
+    { kind: "gear", gearType: "aqueduct_legendary" },
     { kind: "gear", gearType: "balance_scale_legendary" },
     { kind: "gear", gearType: "cropsticks" },
     { kind: "consumable", consumableId: "bloom_burst_2" },

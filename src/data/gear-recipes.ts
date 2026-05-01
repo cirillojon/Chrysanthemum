@@ -233,6 +233,26 @@ export const GEAR_RECIPES: GearRecipe[] = [
     durationMs:     DL,
   },
 
+  // ── Aqueduct (I–III) ──────────────────────────────────────────────────────
+  {
+    outputGearType: "aqueduct_uncommon",
+    ingredients:    [E("tide", 4), E("zephyr", 2)],
+    coinCost:       2_000,
+    durationMs:     DU,
+  },
+  {
+    outputGearType: "aqueduct_rare",
+    ingredients:    [G("aqueduct_uncommon")],
+    coinCost:       12_000,
+    durationMs:     DR,
+  },
+  {
+    outputGearType: "aqueduct_legendary",
+    ingredients:    [G("aqueduct_rare")],
+    coinCost:       60_000,
+    durationMs:     DL,
+  },
+
   // ── Balance Scale (I–III) ─────────────────────────────────────────────────
   {
     outputGearType: "balance_scale_legendary",

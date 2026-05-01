@@ -269,7 +269,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
           const def     = GEAR[g.gearType];
           const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize, g.direction);
           const keys    = affected.map(([r, c]) => `${r}-${c}`);
-          if (def.category === "sprinkler_regular") {
+          if (def.category === "sprinkler_regular" || def.passiveSubtype === "aqueduct") {
             keys.forEach((k) => regular.add(k));
           } else if (def.category === "sprinkler_mutation" && def.mutationType) {
             const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
@@ -409,7 +409,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   function handleGearSelect(gearType: GearType) {
     if (!selectedPlot) return;
     const def = GEAR[gearType];
-    if (def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower") {
+    if (def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower" || def.passiveSubtype === "aqueduct") {
       // Directional gear needs a direction — show direction picker first
       setPendingFan({ gearType, row: selectedPlot.row, col: selectedPlot.col });
       setSelectedPlot(null);
@@ -703,6 +703,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 }}
                 onClose={() => setPendingFan(null)}
                 emoji={GEAR[pendingFan.gearType].emoji}
+                bidirectional={GEAR[pendingFan.gearType].passiveSubtype === "aqueduct"}
               />
             </div>
           </div>
@@ -743,57 +744,83 @@ function FanDirectionPicker({
   onDirection,
   onClose,
   emoji = "💨",
+  bidirectional = false,
 }: {
   onDirection: (dir: FanDirection) => void;
   onClose: () => void;
   emoji?: string;
+  bidirectional?: boolean;
 }) {
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 w-64 shadow-xl z-50 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">Choose a direction</p>
+        <p className="text-sm font-semibold">{bidirectional ? "Choose an axis" : "Choose a direction"}</p>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
       </div>
-      <p className="text-xs text-muted-foreground">Choose which direction it faces.</p>
-      <div className="grid grid-cols-3 gap-2">
-        {/* Top row: just Up */}
-        <div />
-        <button
-          onClick={() => onDirection("up")}
-          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
-        >
-          <span className="text-lg font-bold leading-none">↑</span>
-          <span className="text-[10px] text-muted-foreground">Up</span>
-        </button>
-        <div />
-        {/* Middle row: Left, gear emoji, Right */}
-        <button
-          onClick={() => onDirection("left")}
-          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
-        >
-          <span className="text-lg font-bold leading-none">←</span>
-          <span className="text-[10px] text-muted-foreground">Left</span>
-        </button>
-        <div className="flex items-center justify-center text-2xl">{emoji}</div>
-        <button
-          onClick={() => onDirection("right")}
-          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
-        >
-          <span className="text-lg font-bold leading-none">→</span>
-          <span className="text-[10px] text-muted-foreground">Right</span>
-        </button>
-        {/* Bottom row: just Down */}
-        <div />
-        <button
-          onClick={() => onDirection("down")}
-          className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
-        >
-          <span className="text-lg font-bold leading-none">↓</span>
-          <span className="text-[10px] text-muted-foreground">Down</span>
-        </button>
-        <div />
-      </div>
+      <p className="text-xs text-muted-foreground">
+        {bidirectional
+          ? "Flows in both directions along the chosen axis."
+          : "Choose which direction it faces."}
+      </p>
+
+      {bidirectional ? (
+        <div className="grid grid-cols-2 gap-2">
+          <button
+            onClick={() => onDirection("right")}
+            className="flex flex-col items-center justify-center gap-0.5 py-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">←→</span>
+            <span className="text-[10px] text-muted-foreground">Horizontal</span>
+          </button>
+          <button
+            onClick={() => onDirection("up")}
+            className="flex flex-col items-center justify-center gap-0.5 py-3 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">↑↓</span>
+            <span className="text-[10px] text-muted-foreground">Vertical</span>
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-3 gap-2">
+          {/* Top row: just Up */}
+          <div />
+          <button
+            onClick={() => onDirection("up")}
+            className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">↑</span>
+            <span className="text-[10px] text-muted-foreground">Up</span>
+          </button>
+          <div />
+          {/* Middle row: Left, gear emoji, Right */}
+          <button
+            onClick={() => onDirection("left")}
+            className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">←</span>
+            <span className="text-[10px] text-muted-foreground">Left</span>
+          </button>
+          <div className="flex items-center justify-center text-2xl">{emoji}</div>
+          <button
+            onClick={() => onDirection("right")}
+            className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">→</span>
+            <span className="text-[10px] text-muted-foreground">Right</span>
+          </button>
+          {/* Bottom row: just Down */}
+          <div />
+          <button
+            onClick={() => onDirection("down")}
+            className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
+          >
+            <span className="text-lg font-bold leading-none">↓</span>
+            <span className="text-[10px] text-muted-foreground">Down</span>
+          </button>
+          <div />
+        </div>
+      )}
     </div>
   );
 }

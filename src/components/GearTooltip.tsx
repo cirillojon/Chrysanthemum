@@ -149,7 +149,7 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
     );
   }
 
-  const isDirectional = def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower";
+  const isDirectional = def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower" || def.passiveSubtype === "aqueduct";
 
   // Balance Scale: which side is currently boosting?
   const balanceScalePhase = def.passiveSubtype === "balance_scale"
@@ -188,7 +188,7 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
         <p className="text-[10px] text-muted-foreground leading-snug">{def.description}</p>
 
         {/* Directional gear picker (fan, aegis, lawnmower) */}
-        {isDirectional && (
+        {isDirectional && def.passiveSubtype !== "aqueduct" && (
           <div className="pt-1 border-t border-border space-y-1.5">
             <p className="text-[10px] text-muted-foreground">Direction</p>
             <div className="grid grid-cols-3 gap-1">
@@ -229,6 +229,31 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
                 }`}
               >↓</button>
               <div />
+            </div>
+          </div>
+        )}
+
+        {/* Aqueduct: 2-button axis picker (bidirectional — left=right, up=down) */}
+        {def.passiveSubtype === "aqueduct" && (
+          <div className="pt-1 border-t border-border space-y-1.5">
+            <p className="text-[10px] text-muted-foreground">Axis</p>
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                onClick={() => handleFanDirection("right")}
+                className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
+                  gear.direction === "left" || gear.direction === "right"
+                    ? "bg-primary/20 border border-primary/40 text-primary"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                }`}
+              >←→</button>
+              <button
+                onClick={() => handleFanDirection("up")}
+                className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${
+                  gear.direction === "up" || gear.direction === "down"
+                    ? "bg-primary/20 border border-primary/40 text-primary"
+                    : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
+                }`}
+              >↑↓</button>
             </div>
           </div>
         )}

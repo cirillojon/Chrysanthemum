@@ -76,7 +76,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
         const def      = GEAR[g.gearType];
         const affected = getAffectedCells(g.gearType, ri, ci, rows, farmSize, g.direction);
         const keys     = affected.map(([r, c]) => `${r}-${c}`);
-        if (def.category === "sprinkler_regular") {
+        if (def.category === "sprinkler_regular" || def.passiveSubtype === "aqueduct") {
           keys.forEach((k) => regular.add(k));
         } else if (def.category === "sprinkler_mutation" && def.mutationType) {
           const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";

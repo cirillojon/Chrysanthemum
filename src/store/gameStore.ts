@@ -16,7 +16,7 @@ import {
 import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
-  isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isLawnmower, isBalanceScale, isAutoPlanter,
+  isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isLawnmower, isBalanceScale, isAqueduct, isAutoPlanter,
   rollComposterFertilizer, findCrossbreedRecipe,
   SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
   type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
@@ -984,8 +984,8 @@ export function getPassiveGrowthMultiplier(
   let balanceScaleBoostMult = 1.0;
   let balanceScaleSlowMult  = 1.0;
   for (const { def, sourceRow, sourceCol, placedGear } of sources) {
-    // Regular sprinkler: take the highest multiplier across all covering sprinklers
-    if (isRegularSprinkler(def) && def.growthMultiplier) {
+    // Regular sprinkler / Aqueduct: take the highest multiplier across all covering sources
+    if ((isRegularSprinkler(def) || isAqueduct(def)) && def.growthMultiplier) {
       bestSprinkler = Math.max(bestSprinkler, def.growthMultiplier);
     }
     // Grow lamp: only active at night — stacks multiplicatively with the sprinkler
@@ -2347,7 +2347,7 @@ export function placeGear(
   return { ...state, grid: newGrid, gearInventory: newGearInv };
 }
 
-/** Updates the direction of a directional gear (fan, aegis, lawnmower) placed at (row, col). */
+/** Updates the direction of a directional gear (fan, aegis, lawnmower, aqueduct) placed at (row, col). */
 export function setFanDirection(
   state: GameState,
   row: number,
@@ -2357,7 +2357,7 @@ export function setFanDirection(
   const plot = state.grid[row]?.[col];
   if (!plot?.gear) return null;
   const def = GEAR[plot.gear.gearType];
-  if (def.passiveSubtype !== "fan" && def.passiveSubtype !== "aegis" && def.passiveSubtype !== "lawnmower") return null;
+  if (def.passiveSubtype !== "fan" && def.passiveSubtype !== "aegis" && def.passiveSubtype !== "lawnmower" && def.passiveSubtype !== "aqueduct") return null;
 
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>
