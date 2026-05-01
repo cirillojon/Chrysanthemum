@@ -2,7 +2,7 @@ import { useState, useRef, useLayoutEffect, useEffect } from "react";
 import { GEAR, isGearExpired, CROPSTICKS_BREED_DURATION_MS, type PlacedGear, type FanDirection } from "../data/gear";
 import { MUTATIONS, RARITY_CONFIG } from "../data/flowers";
 import { FERTILIZERS } from "../data/upgrades";
-import { removeGear, collectFromComposter, setFanDirection } from "../store/gameStore";
+import { removeGear, collectFromComposter, setFanDirection, stampStageTransitions } from "../store/gameStore";
 import { useGame } from "../store/GameContext";
 import { edgeRemoveGear, edgeCollectFromComposter, edgeSetFanDirection } from "../lib/edgeFunctions";
 
@@ -26,7 +26,7 @@ function formatMs(ms: number): string {
 }
 
 export function GearTooltip({ gear, row, col, onClose }: Props) {
-  const { state, perform } = useGame();
+  const { state, perform, getState, activeWeather } = useGame();
   const [nudge,   setNudge]   = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [, setTick] = useState(0);
@@ -77,7 +77,14 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
   const maxStorage  = def.maxStorage ?? 10;
 
   function handleRemove() {
-    const optimistic = removeGear(state, row, col);
+    // Force-stamp any pending stage transitions before the gear change so that
+    // bloomedAt / sproutedAt are permanently written at the current multiplier.
+    // Without this, a plant that visually shows "bloom" via 3x extrapolation but
+    // hasn't been ticked yet would revert to "sprout" the moment the sprinkler
+    // is removed and the multiplier drops back to 1x.
+    const cur     = getState();
+    const stamped = stampStageTransitions(cur, Date.now(), activeWeather, true);
+    const optimistic = removeGear(stamped, row, col);
     if (!optimistic) return;
     const savedGear = gear; // captured at click time
     perform(

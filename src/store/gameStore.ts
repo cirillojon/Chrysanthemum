@@ -1058,6 +1058,9 @@ export function getCurrentStage(
 
   if (gMs >= seedMs + species.growthTime.sprout) return "bloom";
   if (gMs >= seedMs)                              return "sprout";
+  // sproutedAt is a permanent timestamp — once stamped the plant has already
+  // crossed the seed→sprout threshold and must never appear to revert.
+  if (plant.sproutedAt !== undefined)             return "sprout";
   return "seed";
 }
 
@@ -1249,7 +1252,11 @@ export function removePlant(
 export function stampStageTransitions(
   state: GameState,
   now: number,
-  weatherType: WeatherType = "clear"
+  weatherType: WeatherType = "clear",
+  /** Bypass the 100 ms anti-loop guard — use when force-stamping before a
+   *  gear change so in-progress bloom transitions are permanently recorded
+   *  at the current multipliers before they can change. */
+  force = false,
 ): GameState {
   const MIN_TICK_MS = 100;
   let changed = false;
@@ -1281,7 +1288,7 @@ export function stampStageTransitions(
 
       if (plant.growthMs !== undefined && plant.lastTickAt !== undefined) {
         const delta = Math.max(0, now - plant.lastTickAt);
-        if (delta < MIN_TICK_MS) return plot; // too soon — skip to prevent render loop
+        if (!force && delta < MIN_TICK_MS) return plot; // too soon — skip to prevent render loop
         newGrowthMs = plant.growthMs + delta * multiplier;
       } else {
         if (plant.sproutedAt !== undefined) {
