@@ -1631,22 +1631,28 @@ export function tickFanMutations(
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
 
+      // Magnifying Glass lock — mutation state is frozen, skip all fan rolls
+      if (plot.plant.revealed) return plot;
+
       // Purity Vial blocks windstruck; fans can still strip existing mutations
-      // but if plant has no mutation and is blocked, skip windstruck application
+      // but if plant has no mutation (or already windstruck) and is blocked,
+      // skip windstruck application.
       const sources = getGearAffectingCell(state.grid, ri, ci, now);
 
       for (const { def } of sources) {
         if (!isFan(def) || !def.fanStripChancePerTick) continue;
         if (Math.random() < def.fanStripChancePerTick) {
-          if (typeof plot.plant.mutation === "string") {
-            // Strip the mutation (set to null — marks "Giant already tried")
+          const mut = plot.plant.mutation;
+          if (typeof mut === "string" && mut !== "windstruck") {
+            // Strip any mutation except Windstruck
             changed = true;
             return { ...plot, plant: { ...plot.plant, mutation: null } };
-          } else if (!plot.plant.mutationBlocked) {
-            // No mutation — apply Windstruck (blocked by Purity Vial)
+          } else if (!mut && !plot.plant.mutationBlocked) {
+            // No mutation at all — apply Windstruck (blocked by Purity Vial)
             changed = true;
             return { ...plot, plant: { ...plot.plant, mutation: "windstruck" as MutationType } };
           }
+          // Plant already has Windstruck — fan does nothing
         }
       }
 
