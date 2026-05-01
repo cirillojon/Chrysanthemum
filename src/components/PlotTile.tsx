@@ -99,13 +99,10 @@ export function PlotTile({
 
   const rarity     = species ? RARITY_CONFIG[species.rarity] : null;
   const isBloomed  = stage === "bloom";
-  // A plant is "identified" (species known) if:
-  //   - bloomed → species must be in the player's discovered codex (harvested before)
-  //   - growing → player used a Magnifying Glass on this tile (plant.revealed)
+  // A plant is "identified" (species known) if it's already in the codex (harvested
+  // before) OR the player used a Magnifying Glass on this specific tile.
   const isIdentified = plant
-    ? (isBloomed
-        ? state.discovered.includes(plant.speciesId)
-        : !!plant.revealed)
+    ? (state.discovered.includes(plant.speciesId) || !!plant.revealed)
     : false;
   const hasFert    = !!plant?.fertilizer;
 
