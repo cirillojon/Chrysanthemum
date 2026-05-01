@@ -1148,7 +1148,7 @@ export function CraftingTab() {
     const newQueue = (cur.craftingQueue ?? []).filter((e) => e.id !== craftId);
 
     // Build optimistic delivery based on kind (×qty for bulk crafts)
-    let optimistic: Partial<GameState> = { craftingQueue: newQueue };
+    const optimistic: Partial<GameState> = { craftingQueue: newQueue };
 
     if (kind === "gear") {
       const gearInv = cur.gearInventory ?? [];

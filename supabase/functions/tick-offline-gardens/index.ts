@@ -268,7 +268,7 @@ function buildShieldCoverage(grid: Plot[][], now: number): Map<string, CoverageE
 // Per cron run, for each bloomed plant under a Scarecrow with an existing
 // string mutation, rolls the converted-to-per-minute strip chance. On hit
 // sets `mutation = null` (matches client convention; Giant-tried marker).
-function rollScarecrowStrip(grid: Plot[][], coverage: Map<string, CoverageEntry>, now: number): { grid: Plot[][]; changed: boolean } {
+function rollScarecrowStrip(grid: Plot[][], coverage: Map<string, CoverageEntry>, _now: number): { grid: Plot[][]; changed: boolean } {
   let changed = false;
   const next = grid.map((row, ri) => row.map((plot, ci) => {
     if (!plot.plant || !plot.plant.bloomedAt) return plot;

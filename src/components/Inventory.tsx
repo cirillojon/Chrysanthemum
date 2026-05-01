@@ -12,7 +12,7 @@ import { edgeSellAll, edgeUseEclipseTonic, edgeAlchemyCraftSeed, edgeActivateBoo
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";
-import { CONSUMABLE_RECIPE_MAP, ROMAN, type ConsumableId } from "../data/consumables";
+import { CONSUMABLE_RECIPE_MAP, type ConsumableId } from "../data/consumables";
 
 type Tab = 0 | 1 | 2 | 3 | 4;
 const TAB_LABELS = ["Seeds", "Blooms", "Supplies", "Consumables", "Essences"] as const;
@@ -446,7 +446,7 @@ function EssenceInventoryRow({
     ? "rainbow-tile border"
     : `bg-card/60 border ${borderColor}`;
   const bg   = isUniversal ? "" : bgColor; // bgColor would conflict with rainbow-tile's animated bg
-  const accent = isUniversal ? "rainbow-text" : color;
+  const _accent = isUniversal ? "rainbow-text" : color;
   return (
     <div
       key={type}
