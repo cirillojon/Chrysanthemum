@@ -7,13 +7,16 @@ import {
   getGearAffectingCell,
   getMaxSupplyRarity,
   isAegis,
+  isAqueduct,
   isAutoPlanter,
+  isBalanceScale,
   isComposter,
   isCropsticks,
   isFan,
   isGearExpired,
   isGrowLamp,
   isHarvestBell,
+  isLawnmower,
   isMutationSprinkler,
   isRarityUnlocked,
   isRegularSprinkler,
@@ -107,6 +110,9 @@ describe("GEAR catalog (regression)", () => {
         isAutoPlanter(def),
         isAegis(def),
         isCropsticks(def),
+        isLawnmower(def),
+        isBalanceScale(def),
+        isAqueduct(def),
       ];
       expect(flags.filter(Boolean).length, `${id} should match exactly one predicate`).toBe(1);
     }

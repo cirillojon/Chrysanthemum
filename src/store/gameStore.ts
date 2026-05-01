@@ -1215,6 +1215,11 @@ export function removePlant(
   if (!plot?.plant) return null;
   // Pinned plants are protected — pin must be removed first
   if (plot.plant.pinned) return null;
+  // Bloomed plants must be harvested, not removed
+  if (plot.plant.bloomedAt) return null;
+  // Shovel required — bail early if none available
+  const shovelIdx = (state.consumables ?? []).findIndex((c) => c.id === "shovel" && c.quantity > 0);
+  if (shovelIdx === -1) return null;
 
   const { speciesId } = plot.plant;
 
@@ -1235,7 +1240,7 @@ export function removePlant(
 
   // Deduct 1 shovel
   const newConsumables = (state.consumables ?? [])
-    .map((c) => c.id === "shovel" ? { ...c, quantity: c.quantity - 1 } : c)
+    .map((c, i) => i === shovelIdx ? { ...c, quantity: c.quantity - 1 } : c)
     .filter((c) => c.quantity > 0);
 
   return { ...state, grid: newGrid, inventory: newInventory, consumables: newConsumables };

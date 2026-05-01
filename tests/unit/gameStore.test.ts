@@ -4,6 +4,7 @@ import {
   codexKey,
   defaultState,
   FORECAST_SLOT_COSTS,
+  getCurrentStage,
   getSpeciesCompletion,
   getTotalCodexEntries,
   harvestPlant,
@@ -15,6 +16,7 @@ import {
   removePlant,
   resizeGrid,
   sellFlower,
+  stampStageTransitions,
   type GameState,
   type PlantedFlower,
 } from "../../src/store/gameStore";
@@ -161,8 +163,10 @@ describe("plantSeed (regression)", () => {
   });
 
   it("removePlant returns seed to inventory and clears the plot", () => {
+    // Shovel is required since v2.3.0 — include one in consumables.
     const s = baseState({
-      inventory: [{ speciesId: fastFlower.id, quantity: 1, isSeed: true }],
+      inventory:   [{ speciesId: fastFlower.id, quantity: 1, isSeed: true }],
+      consumables: [{ id: "shovel" as const, quantity: 1 }],
     });
     const planted = plantSeed(s, 0, 0, fastFlower.id)!;
     const removed = removePlant(planted, 0, 0)!;
@@ -233,5 +237,127 @@ describe("sellFlower (regression)", () => {
       inventory: [{ speciesId: fastFlower.id, quantity: 1, isSeed: false }],
     });
     expect(sellFlower(s, fastFlower.id, 5)).toBeNull();
+  });
+});
+
+// ── removePlant — shovel requirement (v2.3.0) ────────────────────────────────
+
+describe("removePlant — shovel requirement (v2.3.0 regression)", () => {
+  function plantedState(extraConsumables: { id: "shovel"; quantity: number }[] = []) {
+    const s = baseState({
+      inventory:   [{ speciesId: fastFlower.id, quantity: 1, isSeed: true }],
+      consumables: extraConsumables,
+    });
+    return plantSeed(s, 0, 0, fastFlower.id)!;
+  }
+
+  it("returns null when the consumables list has no shovel", () => {
+    const planted = plantedState([]); // no shovel
+    expect(removePlant(planted, 0, 0)).toBeNull();
+  });
+
+  it("returns null when shovel quantity is zero", () => {
+    const planted = plantedState([{ id: "shovel", quantity: 0 }]);
+    expect(removePlant(planted, 0, 0)).toBeNull();
+  });
+
+  it("deducts exactly one shovel on success", () => {
+    const planted = plantedState([{ id: "shovel", quantity: 3 }]);
+    const removed = removePlant(planted, 0, 0)!;
+    expect(removed.consumables.find((c) => c.id === "shovel")?.quantity).toBe(2);
+  });
+
+  it("removes the consumable entry entirely when the last shovel is used", () => {
+    const planted = plantedState([{ id: "shovel", quantity: 1 }]);
+    const removed = removePlant(planted, 0, 0)!;
+    expect(removed.consumables.find((c) => c.id === "shovel")).toBeUndefined();
+  });
+
+  it("returns null for a pinned plant even with a shovel present", () => {
+    const planted = plantedState([{ id: "shovel", quantity: 1 }]);
+    planted.grid[0][0].plant!.pinned = true;
+    expect(removePlant(planted, 0, 0)).toBeNull();
+  });
+
+  it("returns null for a bloomed plant even with a shovel present", () => {
+    const s = baseState({ consumables: [{ id: "shovel" as const, quantity: 1 }] });
+    s.grid[0][0].plant = bloomedPlant(fastFlower.id);
+    expect(removePlant(s, 0, 0)).toBeNull();
+  });
+});
+
+// ── getCurrentStage — sproutedAt floor (v2.3.0 regression) ──────────────────
+
+describe("getCurrentStage — sproutedAt floor (v2.3.0 regression)", () => {
+  it("returns 'sprout' when sproutedAt is stamped even if growthMs is below seedMs", () => {
+    // This guards against stage reverting to 'seed' if growthMs is somehow
+    // stale/below-threshold — once sproutedAt is permanently written the stage
+    // must never go backwards.
+    const species = fastFlower;
+    const seedMs  = species.growthTime.seed;
+    const now     = Date.now();
+    const plant: PlantedFlower = {
+      speciesId:  species.id,
+      timePlanted: now - 1_000_000,
+      fertilizer:  null,
+      sproutedAt:  now - 5_000,
+      // growthMs below seedMs and lastTickAt = now so delta = 0 → computeGrowthMs returns < seedMs
+      growthMs:    seedMs - 1,
+      lastTickAt:  now,
+    };
+    expect(getCurrentStage(plant, now)).toBe("sprout");
+  });
+
+  it("still returns 'bloom' when bloomedAt is stamped regardless of growthMs", () => {
+    const now   = Date.now();
+    const plant: PlantedFlower = {
+      speciesId:   fastFlower.id,
+      timePlanted: now - 1_000_000,
+      fertilizer:  null,
+      bloomedAt:   now - 1_000,
+      growthMs:    0,   // deliberately wrong — bloomedAt flag takes priority
+      lastTickAt:  now,
+    };
+    expect(getCurrentStage(plant, now)).toBe("bloom");
+  });
+});
+
+// ── stampStageTransitions — force param (v2.3.0 regression) ─────────────────
+
+describe("stampStageTransitions — force param (v2.3.0 regression)", () => {
+  it("without force=true, skips stamping when delta < 100 ms (anti-loop guard)", () => {
+    const species  = fastFlower;
+    const totalMs  = species.growthTime.seed + species.growthTime.sprout;
+    const now      = Date.now();
+    const s        = baseState();
+    s.grid[0][0].plant = {
+      speciesId:   species.id,
+      timePlanted: now - totalMs - 5_000,
+      fertilizer:  null,
+      sproutedAt:  now - 3_000,
+      growthMs:    totalMs + 100,  // past bloom threshold
+      lastTickAt:  now - 50,       // delta = ~50ms < 100ms guard
+    };
+    const s1 = stampStageTransitions(s, now, "clear", false);
+    // Guard fires → bloomedAt NOT stamped
+    expect(s1.grid[0][0].plant?.bloomedAt).toBeUndefined();
+  });
+
+  it("with force=true, bypasses the 100 ms guard and stamps bloomedAt immediately", () => {
+    const species  = fastFlower;
+    const totalMs  = species.growthTime.seed + species.growthTime.sprout;
+    const now      = Date.now();
+    const s        = baseState();
+    s.grid[0][0].plant = {
+      speciesId:   species.id,
+      timePlanted: now - totalMs - 5_000,
+      fertilizer:  null,
+      sproutedAt:  now - 3_000,
+      growthMs:    totalMs + 100,  // past bloom threshold
+      lastTickAt:  now - 50,       // delta = ~50ms — would normally be skipped
+    };
+    const s2 = stampStageTransitions(s, now, "clear", true);
+    // Guard bypassed → bloomedAt IS stamped
+    expect(s2.grid[0][0].plant?.bloomedAt).toBeDefined();
   });
 });

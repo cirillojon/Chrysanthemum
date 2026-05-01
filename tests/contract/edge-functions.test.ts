@@ -50,6 +50,21 @@ describe("Supabase edge function contract (regression)", () => {
     expect(fns.length).toBeGreaterThan(0);
   });
 
+  // ── apply-fertilizer-specific contract (v2.3.0) ───────────────────────────
+  describe("apply-fertilizer — v2.3.0 bloom guard", () => {
+    const fertSrc = readFileSync(join(FUNCTIONS_DIR, "apply-fertilizer", "index.ts"), "utf8");
+
+    it("rejects fertilizer on a bloomed plant (checks bloomedAt field)", () => {
+      // The edge function must guard against fertilizing a bloom — the client
+      // also hides the button, but the server is the authoritative gate.
+      expect(fertSrc).toMatch(/bloomedAt/);
+    });
+
+    it("returns a 400 with a descriptive error for bloomed plants", () => {
+      expect(fertSrc).toMatch(/Cannot apply fertilizer to a bloomed plant/);
+    });
+  });
+
   // ── harvest-specific contract ──────────────────────────────────────────────
   describe("harvest — v2.2.4 coin-policy contract", () => {
     const harvestSrc = readFileSync(join(FUNCTIONS_DIR, "harvest", "index.ts"), "utf8");

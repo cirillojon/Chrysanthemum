@@ -506,4 +506,30 @@ describe("applyFertilizer (regression)", () => {
     });
     expect(applyFertilizer(s0, 0, 0, "basic")).toBeNull();
   });
+
+  it("returns null if the plant is already bloomed (v2.3.0 regression)", () => {
+    // Fertilizer must only be applicable to seeds and sprouts — never to blooms.
+    const s0 = baseState({
+      grid: [
+        [
+          {
+            id: "0-0",
+            plant: {
+              speciesId:   fastFlower.id,
+              timePlanted: Date.now() - 10_000_000,
+              fertilizer:  null,
+              bloomedAt:   Date.now() - 1_000,
+              growthMs:    9_999_999_999,
+              lastTickAt:  Date.now() - 1_000,
+            },
+            gear: null,
+          },
+        ],
+      ],
+      farmRows: 1,
+      farmSize: 1,
+      fertilizers: [{ type: "basic", quantity: 2 }],
+    });
+    expect(applyFertilizer(s0, 0, 0, "basic")).toBeNull();
+  });
 });

@@ -72,6 +72,7 @@ const REQUIRED_EXPORTS = [
   "edgeMarketplaceCreateListing",
   "edgeMarketplaceCreateFertilizerListing",
   "edgeMarketplaceCreateGearListing",
+  "edgeMarketplaceCreateConsumableListing",
   "edgeMarketplaceUpgradeSlots",
   "edgeMarketplaceBuy",
   "edgeMarketplaceCancel",
