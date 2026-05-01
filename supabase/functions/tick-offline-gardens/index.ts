@@ -499,7 +499,7 @@ function rollWeatherMutations(
 // seed exactly 1 hour later. Replaces the old per-tick RNG roll so the UI
 // can render a progress bar with predictable arrival time.
 
-const CROPSTICKS_BREED_DURATION_MS = 20 * 1000; // TESTING: 20 seconds — TODO revert to 60 * 60 * 1000
+const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1_000; // 1 hour
 
 const RARITY_IDX: Record<string, number> = {
   common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,

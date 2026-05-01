@@ -68,8 +68,8 @@ export interface PlacedGear {
 }
 
 /** How long a cropsticks cross-breed takes. Mirrored in the
- *  tick-offline-gardens cron. TODO: revert to 60 * 60 * 1000 (1 hour) after testing. */
-export const CROPSTICKS_BREED_DURATION_MS = 20 * 1000; // TESTING: 20 seconds
+ *  tick-offline-gardens cron. */
+export const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1_000; // 1 hour
 
 // ── Cropsticks cross-breed recipes ─────────────────────────────────────────
 // Mirrors the RECIPES array in apply-infuser and tick-offline-gardens edge functions.
