@@ -59,6 +59,10 @@ interface Props {
   fanDirection?: FanDirection;
   /** True when this cell is within a harvest bell's radius. */
   isUnderHarvestBell?: boolean;
+  /** True when this cell is within a lawnmower's range. */
+  isUnderLawnmower?: boolean;
+  /** Direction the lawnmower covering this cell is facing. */
+  lawnmowerDirection?: FanDirection;
   /** True when this cell is within an auto-planter's radius. */
   isUnderAutoPlanter?: boolean;
   /** Direction a crossbreed particle should travel (toward the active cropsticks). */
@@ -78,7 +82,7 @@ export function PlotTile({
   isSelected, isHighlighted,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
-  isUnderFan, fanDirection, isUnderHarvestBell, isUnderAutoPlanter,
+  isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, isUnderAutoPlanter,
   crossbreedDirection, isCrossBreeding = false,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
@@ -371,6 +375,7 @@ export function PlotTile({
           isUnderComposter={isUnderComposter}
           isUnderFan={isUnderFan}
           isUnderHarvestBell={isUnderHarvestBell}
+          isUnderLawnmower={isUnderLawnmower}
         />
       )}
 
@@ -400,7 +405,7 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell) && (
+        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -448,6 +453,16 @@ export function PlotTile({
                 <span className="gear-bell" style={{ left: "74%", animationDelay: "0s"    }}>🔔</span>
               </>
             )}
+            {/* Lawnmower: 🍃 clippings tumble in the mower's direction */}
+            {isUnderLawnmower && (() => {
+              const dir   = lawnmowerDirection ?? "right";
+              const cls   = `gear-mow-${dir}`;
+              const horiz = dir === "left" || dir === "right";
+              const axis  = horiz ? "top" : "left";
+              return (["18%", "50%", "76%"] as const).map((pos, i) => (
+                <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.6 - 1.2}s` }}>🍃</span>
+              ));
+            })()}
             {/* Fan: 💨 gusts drifting in the fan's direction */}
             {isUnderFan && (() => {
               const dir  = fanDirection ?? "right";
@@ -507,7 +522,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || plant.infused || plant.revealed) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || plant.infused || plant.revealed) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map(({ emoji, label }, i) => (
@@ -518,6 +533,7 @@ export function PlotTile({
             {isUnderGrowLamp && <span className="text-[9px]" title="Under grow lamp">💡</span>}
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
+            {isUnderLawnmower && <span className="text-[9px]" title="Lawnmower — directional auto-harvest">🦼</span>}
             {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
             {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
           </div>

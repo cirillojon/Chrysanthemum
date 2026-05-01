@@ -249,7 +249,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   }, [highlightSource, state.farmRows, state.farmSize, state.grid]);
 
   // Per-cell gear coverage — used for plant indicator icons
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, autoPlantCoveredCells } =
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, lawnmowerCoveredCells, autoPlantCoveredCells } =
     useMemo(() => {
       const regular  = new Set<string>();
       const mutation = new Map<string, { emoji: string; label: string }[]>(); // cellKey → unique mutation sprinklers
@@ -258,6 +258,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const growLamp  = new Set<string>();
       const fan        = new Map<string, FanDirection>();
       const harvestBell  = new Set<string>();
+      const lawnmower    = new Map<string, FanDirection>();
       const autoPlanter  = new Set<string>();
       const now = Date.now();
       for (let ri = 0; ri < state.grid.length; ri++) {
@@ -288,12 +289,15 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             keys.forEach((k) => fan.set(k, dir));
           } else if (def.passiveSubtype === "harvest_bell") {
             keys.forEach((k) => harvestBell.add(k));
+          } else if (def.passiveSubtype === "lawnmower") {
+            const dir = g.direction ?? "right";
+            keys.forEach((k) => lawnmower.set(k, dir));
           } else if (def.passiveSubtype === "auto_planter") {
             keys.forEach((k) => autoPlanter.add(k));
           }
         }
       }
-      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, autoPlantCoveredCells: autoPlanter };
+      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, lawnmowerCoveredCells: lawnmower, autoPlantCoveredCells: autoPlanter };
     }, [state.grid, state.farmRows, state.farmSize]);
 
   // Plant cells adjacent to active cropsticks, mapped to the direction their
@@ -394,8 +398,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   function handleGearSelect(gearType: GearType) {
     if (!selectedPlot) return;
     const def = GEAR[gearType];
-    if (def.passiveSubtype === "fan") {
-      // Fan needs a direction — show direction picker first
+    if (def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower") {
+      // Directional gear needs a direction — show direction picker first
       setPendingFan({ gearType, row: selectedPlot.row, col: selectedPlot.col });
       setSelectedPlot(null);
       return;
@@ -642,6 +646,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 isUnderFan={fanCoveredCells.has(`${row}-${col}`)}
                 fanDirection={fanCoveredCells.get(`${row}-${col}`)}
                 isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
+                isUnderLawnmower={lawnmowerCoveredCells.has(`${row}-${col}`)}
+                lawnmowerDirection={lawnmowerCoveredCells.get(`${row}-${col}`)}
                 isUnderAutoPlanter={autoPlantCoveredCells.has(`${row}-${col}`)}
                 crossbreedDirection={crossbreedSourceCells.get(`${row}-${col}`)}
                 isCrossBreeding={crossbreedSourceCells.has(`${row}-${col}`)}
@@ -684,6 +690,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                   setPendingFan(null);
                 }}
                 onClose={() => setPendingFan(null)}
+                emoji={GEAR[pendingFan.gearType].emoji}
               />
             </div>
           </div>
@@ -718,23 +725,25 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   );
 }
 
-// ── Fan direction picker ───────────────────────────────────────────────────
+// ── Direction picker (fan, aegis, lawnmower) ──────────────────────────────
 
 function FanDirectionPicker({
   onDirection,
   onClose,
+  emoji = "💨",
 }: {
   onDirection: (dir: FanDirection) => void;
   onClose: () => void;
+  emoji?: string;
 }) {
 
   return (
     <div className="bg-card border border-border rounded-xl p-4 w-64 shadow-xl z-50 space-y-3">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-semibold">Which way does it blow?</p>
+        <p className="text-sm font-semibold">Choose a direction</p>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground text-xs">✕</button>
       </div>
-      <p className="text-xs text-muted-foreground">Choose the direction the fan faces.</p>
+      <p className="text-xs text-muted-foreground">Choose which direction it faces.</p>
       <div className="grid grid-cols-3 gap-2">
         {/* Top row: just Up */}
         <div />
@@ -746,7 +755,7 @@ function FanDirectionPicker({
           <span className="text-[10px] text-muted-foreground">Up</span>
         </button>
         <div />
-        {/* Middle row: Left, Fan, Right */}
+        {/* Middle row: Left, gear emoji, Right */}
         <button
           onClick={() => onDirection("left")}
           className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"
@@ -754,7 +763,7 @@ function FanDirectionPicker({
           <span className="text-lg font-bold leading-none">←</span>
           <span className="text-[10px] text-muted-foreground">Left</span>
         </button>
-        <div className="flex items-center justify-center text-2xl">💨</div>
+        <div className="flex items-center justify-center text-2xl">{emoji}</div>
         <button
           onClick={() => onDirection("right")}
           className="flex flex-col items-center justify-center gap-0.5 py-2 rounded-lg border border-border hover:border-primary/50 hover:bg-primary/10 transition-all"

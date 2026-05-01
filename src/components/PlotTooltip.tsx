@@ -33,6 +33,7 @@ interface Props {
   isUnderComposter?:     boolean;
   isUnderFan?:           boolean;
   isUnderHarvestBell?:   boolean;
+  isUnderLawnmower?:     boolean;
 }
 
 function formatMs(ms: number): string {
@@ -53,7 +54,7 @@ export function PlotTooltip({
   plant, row, col, onClose, onHarvestRequest, isCrossBreeding = false,
   gearGrowthMultiplier = 1.0,
   isUnderSprinkler, sprinklerMutations = [],
-  isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell,
+  isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell, isUnderLawnmower,
 }: Props) {
   const { state, getState, perform, update, activeWeather } = useGame();
   const [showFertPicker,    setShowFertPicker]    = useState(false);
@@ -416,7 +417,7 @@ export function PlotTooltip({
         )}
 
         {/* Active gear effects */}
-        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell) && (
+        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell || isUnderLawnmower) && (
           <div className="pt-1 border-t border-border space-y-1">
             <p className="text-[10px] text-muted-foreground">Active gear</p>
 
@@ -457,6 +458,11 @@ export function PlotTooltip({
               {isUnderHarvestBell && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-yellow-400/10 border border-yellow-400/20 text-[10px] text-yellow-300">
                   <span>🔔</span><span>Harvest Bell</span>
+                </span>
+              )}
+              {isUnderLawnmower && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-400/10 border border-green-400/20 text-[10px] text-green-300">
+                  <span>🦼</span><span>Lawnmower</span>
                 </span>
               )}
             </div>

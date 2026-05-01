@@ -213,6 +213,26 @@ export const GEAR_RECIPES: GearRecipe[] = [
     durationMs:     DL,
   },
 
+  // ── Lawnmower (I–III) ────────────────────────────────────────────────────
+  {
+    outputGearType: "lawnmower_uncommon",
+    ingredients:    [E("grove", 2), E("solar", 2)],
+    coinCost:       200,
+    durationMs:     DU,
+  },
+  {
+    outputGearType: "lawnmower_rare",
+    ingredients:    [G("lawnmower_uncommon")],
+    coinCost:       1_500,
+    durationMs:     DR,
+  },
+  {
+    outputGearType: "lawnmower_legendary",
+    ingredients:    [G("lawnmower_rare")],
+    coinCost:       7_000,
+    durationMs:     DL,
+  },
+
   // ── Aegis (I–III) ────────────────────────────────────────────────────────
   {
     outputGearType: "aegis_uncommon",

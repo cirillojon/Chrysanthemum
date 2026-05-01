@@ -249,6 +249,45 @@
 .gear-wind-up    { animation-name: gear-wind-up;    bottom: 0; }
 .gear-wind-down  { animation-name: gear-wind-down;  top:    0; }
 
+/* Lawnmower: 🍃 clippings tumble in the mower's facing direction */
+@keyframes gear-mow-right {
+  0%   { transform: translateX(0)     rotate(0deg);   opacity: 0;   }
+  10%  {                                               opacity: 0.8; }
+  80%  {                                               opacity: 0.4; }
+  100% { transform: translateX(60px)  rotate(200deg); opacity: 0;   }
+}
+@keyframes gear-mow-left {
+  0%   { transform: translateX(0)     rotate(0deg);    opacity: 0;   }
+  10%  {                                                opacity: 0.8; }
+  80%  {                                                opacity: 0.4; }
+  100% { transform: translateX(-60px) rotate(-200deg); opacity: 0;   }
+}
+@keyframes gear-mow-up {
+  0%   { transform: translateY(0)     rotate(0deg);    opacity: 0;   }
+  10%  {                                                opacity: 0.8; }
+  80%  {                                                opacity: 0.4; }
+  100% { transform: translateY(-60px) rotate(-200deg); opacity: 0;   }
+}
+@keyframes gear-mow-down {
+  0%   { transform: translateY(0)    rotate(0deg);   opacity: 0;   }
+  10%  {                                              opacity: 0.8; }
+  80%  {                                              opacity: 0.4; }
+  100% { transform: translateY(60px) rotate(200deg); opacity: 0;   }
+}
+.gear-mow-right, .gear-mow-left, .gear-mow-up, .gear-mow-down {
+  animation-duration: 1.8s;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+  position: absolute;
+  font-size: 9px;
+  line-height: 1;
+  pointer-events: none;
+}
+.gear-mow-right { animation-name: gear-mow-right; left:   0; }
+.gear-mow-left  { animation-name: gear-mow-left;  right:  0; }
+.gear-mow-up    { animation-name: gear-mow-up;    bottom: 2px; }
+.gear-mow-down  { animation-name: gear-mow-down;  top:    0; }
+
 /* ── Cropsticks cross-breed source particle animations ─────────────────── */
 /* Small emerald dots drift from the infused plant towards the cropsticks.  */
 @keyframes cross-particle-right {

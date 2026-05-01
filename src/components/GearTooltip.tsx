@@ -149,7 +149,7 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
     );
   }
 
-  const isFan = def.passiveSubtype === "fan";
+  const isDirectional = def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower";
 
   return (
     <div
@@ -182,8 +182,8 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
         {/* Description */}
         <p className="text-[10px] text-muted-foreground leading-snug">{def.description}</p>
 
-        {/* Fan direction picker */}
-        {isFan && (
+        {/* Directional gear picker (fan, aegis, lawnmower) */}
+        {isDirectional && (
           <div className="pt-1 border-t border-border space-y-1.5">
             <p className="text-[10px] text-muted-foreground">Direction</p>
             <div className="grid grid-cols-3 gap-1">
@@ -205,7 +205,7 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
                     : "bg-white/5 border border-white/10 text-muted-foreground hover:border-primary/30 hover:text-foreground"
                 }`}
               >←</button>
-              <div className="flex items-center justify-center text-base">💨</div>
+              <div className="flex items-center justify-center text-base">{def.emoji}</div>
               <button
                 onClick={() => handleFanDirection("right")}
                 className={`py-1 rounded-lg text-xs font-bold transition-all text-center ${

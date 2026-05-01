@@ -58,7 +58,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   }, []);
 
   // Compute gear coverage in one pass
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, autoPlanterKeys } = useMemo(() => {
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, autoPlanterKeys } = useMemo(() => {
     const regular      = new Set<string>();
     const mutation     = new Map<string, string[]>();
     const scarecrow    = new Set<string>();
@@ -66,6 +66,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
     const growLamp     = new Set<string>();
     const fan          = new Map<string, FanDirection>();
     const harvestBell  = new Set<string>();
+    const lawnmower    = new Map<string, FanDirection>();
     const autoPlanter  = new Set<string>();
     for (let ri = 0; ri < grid.length; ri++) {
       for (let ci = 0; ci < grid[ri].length; ci++) {
@@ -94,12 +95,15 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           keys.forEach((k) => fan.set(k, dir));
         } else if (def.passiveSubtype === "harvest_bell") {
           keys.forEach((k) => harvestBell.add(k));
+        } else if (def.passiveSubtype === "lawnmower") {
+          const dir = g.direction ?? "right";
+          keys.forEach((k) => lawnmower.set(k, dir));
         } else if (def.passiveSubtype === "auto_planter") {
           keys.forEach((k) => autoPlanter.add(k));
         }
       }
     }
-    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, autoPlanterKeys: autoPlanter };
+    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, autoPlanterKeys: autoPlanter };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid, farmSize, rows]);
 
@@ -261,8 +265,10 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           const underGrowLamp    = growLampKeys.has(cellKey);
           const underFan         = fanCoveredCells.has(cellKey);
           const fanDirection     = fanCoveredCells.get(cellKey);
-          const underHarvestBell = harvestBellKeys.has(cellKey);
-          const underAutoPlanter = autoPlanterKeys.has(cellKey);
+          const underHarvestBell  = harvestBellKeys.has(cellKey);
+          const underLawnmower    = lawnmowerCells.has(cellKey);
+          const lawnmowerDir      = lawnmowerCells.get(cellKey);
+          const underAutoPlanter  = autoPlanterKeys.has(cellKey);
 
           const crossbreedDirection = crossbreedSourceCells.get(cellKey);
           const prismaticStyle: React.CSSProperties | undefined =
@@ -285,7 +291,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               title={isBloomed ? `${species?.name} — bloomed` : "??? — growing"}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underFan) && (
+              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || underFan) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
                   {underGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
                   {underSprinkler && (
@@ -335,6 +341,15 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                       <span className="gear-bell" style={{ left: "74%", animationDelay: "0s"    }}>🔔</span>
                     </>
                   )}
+                  {underLawnmower && (() => {
+                    const dir   = lawnmowerDir ?? "right";
+                    const cls   = `gear-mow-${dir}`;
+                    const horiz = dir === "left" || dir === "right";
+                    const axis  = horiz ? "top" : "left";
+                    return (["18%", "50%", "76%"] as const).map((pos, li) => (
+                      <span key={li} className={cls} style={{ [axis]: pos, animationDelay: `${li * 0.6 - 1.2}s` }}>🍃</span>
+                    ));
+                  })()}
                 </div>
               )}
 

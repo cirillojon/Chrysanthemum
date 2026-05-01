@@ -16,7 +16,7 @@ import {
 import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
-  isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
+  isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isLawnmower, isAutoPlanter,
   rollComposterFertilizer, findCrossbreedRecipe,
   SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
   type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
@@ -1635,12 +1635,12 @@ export function tickHarvestBells(
       if (!bellPlot.gear) continue;
 
       const def = GEAR[bellPlot.gear.gearType];
-      if (!isHarvestBell(def)) continue;
+      if (!isHarvestBell(def) && !isLawnmower(def)) continue;
       if (isGearExpired(bellPlot.gear, now)) continue;
 
       const gridRows = updated.grid.length;
       const gridCols = updated.grid[0]?.length ?? 0;
-      const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols);
+      const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols, bellPlot.gear.direction);
 
       for (const [ar, ac] of affected) {
         if (ar === ri && ac === ci) continue; // never process bell's own cell
@@ -1677,12 +1677,12 @@ export function findHarvestBellTargets(
       const bellPlot = state.grid[ri][ci];
       if (!bellPlot.gear) continue;
       const def = GEAR[bellPlot.gear.gearType];
-      if (!isHarvestBell(def)) continue;
+      if (!isHarvestBell(def) && !isLawnmower(def)) continue;
       if (isGearExpired(bellPlot.gear, now)) continue;
 
       const gridRows = state.grid.length;
       const gridCols = state.grid[0]?.length ?? 0;
-      const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols);
+      const affected = getAffectedCells(bellPlot.gear.gearType, ri, ci, gridRows, gridCols, bellPlot.gear.direction);
 
       for (const [ar, ac] of affected) {
         if (ar === ri && ac === ci) continue;
@@ -2329,7 +2329,7 @@ export function placeGear(
   return { ...state, grid: newGrid, gearInventory: newGearInv };
 }
 
-/** Updates the direction of a fan placed at (row, col). No-op if no fan is there. */
+/** Updates the direction of a directional gear (fan, aegis, lawnmower) placed at (row, col). */
 export function setFanDirection(
   state: GameState,
   row: number,
@@ -2339,7 +2339,7 @@ export function setFanDirection(
   const plot = state.grid[row]?.[col];
   if (!plot?.gear) return null;
   const def = GEAR[plot.gear.gearType];
-  if (def.passiveSubtype !== "fan") return null;
+  if (def.passiveSubtype !== "fan" && def.passiveSubtype !== "aegis" && def.passiveSubtype !== "lawnmower") return null;
 
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>

@@ -34,13 +34,16 @@ export type PassiveGearType =
   | "aegis_uncommon"
   | "aegis_rare"
   | "aegis_legendary"
+  | "lawnmower_uncommon"
+  | "lawnmower_rare"
+  | "lawnmower_legendary"
   | "auto_planter_prismatic"
   | "cropsticks";
 
 export type GearType = SprinklerGearType | PassiveGearType;
 
 export type GearCategory  = "sprinkler_regular" | "sprinkler_mutation" | "passive";
-export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis";
+export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis" | "lawnmower";
 
 /** Which way a Fan or Aegis is pointing — set at placement time */
 export type FanDirection = "up" | "down" | "left" | "right";
@@ -646,6 +649,49 @@ export const GEAR: Record<GearType, GearDefinition> = {
     fanRange:       4,
   },
 
+  // ── Lawnmower ────────────────────────────────────────────────────────────
+  // Points in a player-chosen direction. Automatically harvests bloomed plants
+  // in the line ahead — works even while offline.
+
+  lawnmower_uncommon: {
+    id:             "lawnmower_uncommon",
+    name:           "Lawnmower I",
+    description:    "Harvests bloomed plants in a line of 2 in a chosen direction, even while offline. Lasts 2 hours.",
+    emoji:          "🦼",
+    rarity:         "uncommon",
+    shopPrice:      800,
+    category:       "passive",
+    passiveSubtype: "lawnmower",
+    durationMs:     DURATION_2H,
+    fanRange:       2,
+  },
+
+  lawnmower_rare: {
+    id:             "lawnmower_rare",
+    name:           "Lawnmower II",
+    description:    "Harvests bloomed plants in a line of 3 in a chosen direction, even while offline. Lasts 4 hours.",
+    emoji:          "🦼",
+    rarity:         "rare",
+    shopPrice:      5_000,
+    category:       "passive",
+    passiveSubtype: "lawnmower",
+    durationMs:     DURATION_4H,
+    fanRange:       3,
+  },
+
+  lawnmower_legendary: {
+    id:             "lawnmower_legendary",
+    name:           "Lawnmower III",
+    description:    "Harvests bloomed plants in a line of 4 in a chosen direction, even while offline. Lasts 8 hours.",
+    emoji:          "🦼",
+    rarity:         "legendary",
+    shopPrice:      36_000,
+    category:       "passive",
+    passiveSubtype: "lawnmower",
+    durationMs:     DURATION_8H,
+    fanRange:       4,
+  },
+
   // ── Auto-Planter ─────────────────────────────────────────────────────────
   // Automatically plants seeds from the player's inventory into empty cells
   // within a 5×5 area — works even while offline.
@@ -707,8 +753,8 @@ export function getAffectedCells(
 ): [number, number][] {
   const def = GEAR[gearType];
 
-  // Fan / Aegis: compute a line of cells in the chosen direction
-  if ((def.passiveSubtype === "fan" || def.passiveSubtype === "aegis") && def.fanRange) {
+  // Fan / Aegis / Lawnmower: compute a line of cells in the chosen direction
+  if ((def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower") && def.fanRange) {
     if (!direction) return []; // direction required
     const range = def.fanRange;
     const offsets: [number, number][] = [];
@@ -803,6 +849,10 @@ export function isAegis(def: GearDefinition): boolean {
   return def.passiveSubtype === "aegis";
 }
 
+export function isLawnmower(def: GearDefinition): boolean {
+  return def.passiveSubtype === "lawnmower";
+}
+
 export function isHarvestBell(def: GearDefinition): boolean {
   return def.passiveSubtype === "harvest_bell";
 }
@@ -837,6 +887,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "composter_uncommon" },
     { kind: "gear", gearType: "fan_uncommon" },
     { kind: "gear", gearType: "harvest_bell_uncommon" },
+    { kind: "gear", gearType: "lawnmower_uncommon" },
     { kind: "gear", gearType: "aegis_uncommon" },
   ],
   rare: [
@@ -847,6 +898,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "composter_rare" },
     { kind: "gear", gearType: "fan_rare" },
     { kind: "gear", gearType: "harvest_bell_rare" },
+    { kind: "gear", gearType: "lawnmower_rare" },
     { kind: "gear", gearType: "aegis_rare" },
     { kind: "consumable", consumableId: "bloom_burst_1" },
     { kind: "consumable", consumableId: "heirloom_charm_1" },
@@ -874,6 +926,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "composter_legendary" },
     { kind: "gear", gearType: "fan_legendary" },
     { kind: "gear", gearType: "harvest_bell_legendary" },
+    { kind: "gear", gearType: "lawnmower_legendary" },
     { kind: "gear", gearType: "aegis_legendary" },
     { kind: "gear", gearType: "cropsticks" },
     { kind: "consumable", consumableId: "bloom_burst_2" },

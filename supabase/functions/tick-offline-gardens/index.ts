@@ -114,7 +114,7 @@ const OFFSETS_DIAMOND: [number, number][] = [
 
 // ── Gear definitions ───────────────────────────────────────────────────────
 interface GearDef {
-  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis";
+  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis" | "lawnmower";
   /** Radius offsets for radial gear (harvest bell, auto-planter, scarecrow). */
   offsets?: [number, number][];
   /** Line-of-sight cell count for directional gear (aegis). */
@@ -135,6 +135,10 @@ const GEAR_DEFS: Record<string, GearDef> = {
   aegis_uncommon:         { subtype: "aegis", fanRange: 2, durationMs: 2 * 60 * 60 * 1_000 },
   aegis_rare:             { subtype: "aegis", fanRange: 3, durationMs: 4 * 60 * 60 * 1_000 },
   aegis_legendary:        { subtype: "aegis", fanRange: 4, durationMs: 8 * 60 * 60 * 1_000 },
+  // Lawnmower — directional harvest bell
+  lawnmower_uncommon:     { subtype: "lawnmower", fanRange: 2, durationMs: 2 * 60 * 60 * 1_000 },
+  lawnmower_rare:         { subtype: "lawnmower", fanRange: 3, durationMs: 4 * 60 * 60 * 1_000 },
+  lawnmower_legendary:    { subtype: "lawnmower", fanRange: 4, durationMs: 8 * 60 * 60 * 1_000 },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -313,10 +317,10 @@ function runHarvestBells(save: Save, now: number): Save {
       const gear = cur.grid[ri][ci].gear;
       if (!gear) continue;
       const def = GEAR_DEFS[gear.gearType];
-      if (!def || def.subtype !== "harvest_bell") continue;
+      if (!def || (def.subtype !== "harvest_bell" && def.subtype !== "lawnmower")) continue;
       if (isExpired(gear, now)) continue;
 
-      for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols)) {
+      for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols, gear.direction)) {
         const targetPlot = cur.grid[ar]?.[ac];
         if (!targetPlot?.plant) continue;
         // Only harvest plants with bloomedAt stamped AND past the 5-second grace

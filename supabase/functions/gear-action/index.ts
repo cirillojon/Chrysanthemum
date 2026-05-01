@@ -522,7 +522,7 @@ Deno.serve(async (req: Request) => {
       return json({ ok: true, grid, fertilizers, serverUpdatedAt: ud.updated_at });
     }
 
-    // ── set_direction (fan) ───────────────────────────────────────────────────
+    // ── set_direction (fan / aegis / lawnmower) ──────────────────────────────
     if (action === "set_direction") {
       const { direction } = body;
       if (!direction) return err("direction required");
