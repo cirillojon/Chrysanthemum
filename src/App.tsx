@@ -1,4 +1,10 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+
+function formatCoins(n: number): string {
+  if (n >= 1_000_000) return `${Math.floor(n / 1_000_000)}m`;
+  if (n >= 1_000)     return `${Math.floor(n / 1_000)}k`;
+  return n.toString();
+}
 import { useSwipe } from "./hooks/useSwipe";
 import { Garden } from "./components/Garden";
 import { Shop } from "./components/Shop";
@@ -653,7 +659,7 @@ function AppInner() {
               />
             </button>
             <ActiveBoostsHUD activeBoosts={state.activeBoosts} />
-            <span className="text-sm font-mono">🟡 {state.coins.toLocaleString()}</span>
+            <span className="text-sm font-mono" title={state.coins.toLocaleString()}>🟡 {formatCoins(state.coins)}</span>
             {!authLoading && (
               user ? (
                 <div className="flex items-center gap-2">
