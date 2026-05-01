@@ -151,10 +151,10 @@ export function computeTier(effectiveEssence: number): 1 | 2 | 3 | 4 {
 // ── Duration formula (mirrors src/data/gear-recipes.ts attunementDurationMs) ─
 
 const ATTUNEMENT_TIER_BASE_MS: Record<1 | 2 | 3 | 4, number> = {
-  1: 10  * 60_000,
-  2: 30  * 60_000,
-  3: 60  * 60_000,
-  4: 180 * 60_000,
+  1: 5  * 60_000,  //  5 min
+  2: 15 * 60_000,  // 15 min
+  3: 30 * 60_000,  // 30 min
+  4: 90 * 60_000,  //  1h 30m
 };
 
 const ATTUNEMENT_RARITY_MULT: Record<string, number> = {
