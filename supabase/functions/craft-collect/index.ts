@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("essences, gear_inventory, consumables, infusers, crafting_queue, updated_at")
+        .select("essences, gear_inventory, consumables, infusers, fertilizers, crafting_queue, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -72,6 +72,7 @@ Deno.serve(async (req: Request) => {
     let gearInventory = (save.gear_inventory ?? []) as { gearType: string; quantity: number }[];
     let consumables   = (save.consumables    ?? []) as { id: string; quantity: number }[];
     let infusers      = (save.infusers       ?? []) as { rarity: string; quantity: number }[];
+    let fertilizers   = (save.fertilizers   ?? []) as { type: string; quantity: number }[];
 
     // ── Find entry ────────────────────────────────────────────────────────────
     const entry = craftingQueue.find((e) => e.id === craftId);
@@ -103,6 +104,15 @@ Deno.serve(async (req: Request) => {
       gearInventory = idx >= 0
         ? gearInventory.map((g, i) => i === idx ? { ...g, quantity: g.quantity + qty } : g)
         : [...gearInventory, { gearType: outputId, quantity: qty }];
+
+    } else if (kind === "consumable" && outputId.startsWith("fertilizer_")) {
+      // Fertilizer crafts are queued as kind="consumable" but delivered to the
+      // fertilizers array (not consumables) — extract the fertilizer type.
+      const fertType = outputId.replace("fertilizer_", "");
+      const idx = fertilizers.findIndex((f) => f.type === fertType);
+      fertilizers = idx >= 0
+        ? fertilizers.map((f, i) => i === idx ? { ...f, quantity: f.quantity + qty } : f)
+        : [...fertilizers, { type: fertType, quantity: qty }];
 
     } else if (kind === "consumable") {
       const idx = consumables.findIndex((c) => c.id === outputId);
@@ -136,6 +146,7 @@ Deno.serve(async (req: Request) => {
         gear_inventory: gearInventory,
         consumables,
         infusers,
+        fertilizers,
         crafting_queue: newQueue,
         updated_at:     new Date().toISOString(),
       })
@@ -162,6 +173,7 @@ Deno.serve(async (req: Request) => {
       gearInventory,
       consumables,
       infusers,
+      fertilizers,
       serverUpdatedAt: updateData.updated_at,
     });
 

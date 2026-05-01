@@ -20,12 +20,13 @@ export interface GearRecipe {
 // ── Craft duration tiers (ms) ──────────────────────────────────────────────
 
 export const CRAFT_DURATION_MS = {
-  uncommon:  3 * 60_000,             //  3 min
-  rare:      10  * 60_000,          // 10 min
-  legendary: 45  * 60_000,          // 45 min
-  mythic:    2.5 * 60 * 60_000,     //  2.5 hr
-  exalted:   6   * 60 * 60_000,     //  6 hr
-  prismatic: 12  * 60 * 60_000,     // 12 hr
+  common:    1   * 60_000,           //  1 min
+  uncommon:  3   * 60_000,           //  3 min
+  rare:      10  * 60_000,           // 10 min
+  legendary: 45  * 60_000,           // 45 min
+  mythic:    2.5 * 60 * 60_000,      //  2.5 hr
+  exalted:   6   * 60 * 60_000,      //  6 hr
+  prismatic: 12  * 60 * 60_000,      // 12 hr
 } as const;
 
 const DU = CRAFT_DURATION_MS.uncommon;

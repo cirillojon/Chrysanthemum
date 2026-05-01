@@ -142,7 +142,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, essences, gear_inventory, consumables, infusers, crafting_queue, crafting_slot_count, active_boosts, updated_at")
+        .select("coins, essences, gear_inventory, consumables, infusers, fertilizers, crafting_queue, crafting_slot_count, active_boosts, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -160,6 +160,7 @@ Deno.serve(async (req: Request) => {
     let gearInventory = (save.gear_inventory ?? []) as { gearType: string; quantity: number }[];
     let consumables   = (save.consumables    ?? []) as { id: string; quantity: number }[];
     let infusers      = (save.infusers       ?? []) as { rarity: string; quantity: number }[];
+    let fertilizers   = (save.fertilizers   ?? []) as { type: string; quantity: number }[];
     const craftingQueue     = (save.crafting_queue     ?? []) as Record<string, unknown>[];
     const craftingSlotCount = (save.crafting_slot_count ?? 1) as number;
 
@@ -295,15 +296,31 @@ Deno.serve(async (req: Request) => {
         return cost ? { ...e, amount: e.amount - cost.amount } : e;
       }).filter((e) => e.amount > 0);
 
-      // Validate + deduct consumable costs
-      for (const { id, quantity: need } of consumableCostList) {
+      // Split consumable costs: regular vs fertilizer (fertilizer_* IDs live in
+      // the fertilizers array, not the consumables array).
+      const regularConsumableCosts  = consumableCostList.filter((c) => !c.id.startsWith("fertilizer_"));
+      const fertilizerIngredCosts   = consumableCostList.filter((c) =>  c.id.startsWith("fertilizer_"));
+
+      // Validate + deduct regular consumable costs
+      for (const { id, quantity: need } of regularConsumableCosts) {
         const have = consumables.find((c) => c.id === id)?.quantity ?? 0;
         if (have < need) return err(`Not enough ${id} (need ${need}, have ${have})`);
       }
       consumables = consumables.map((c) => {
-        const cost = consumableCostList.find((x) => x.id === c.id);
+        const cost = regularConsumableCosts.find((x) => x.id === c.id);
         return cost ? { ...c, quantity: c.quantity - cost.quantity } : c;
       }).filter((c) => c.quantity > 0);
+
+      // Validate + deduct fertilizer ingredient costs
+      for (const { id, quantity: need } of fertilizerIngredCosts) {
+        const fertType = id.replace("fertilizer_", "");
+        const have = fertilizers.find((f) => f.type === fertType)?.quantity ?? 0;
+        if (have < need) return err(`Not enough ${id} (need ${need}, have ${have})`);
+      }
+      fertilizers = fertilizers.map((f) => {
+        const cost = fertilizerIngredCosts.find((c) => c.id.replace("fertilizer_", "") === f.type);
+        return cost ? { ...f, quantity: f.quantity - cost.quantity } : f;
+      }).filter((f) => f.quantity > 0);
 
       // Validate + deduct attunement costs (infusers)
       for (const { rarity, quantity: need } of attunementCostList) {
@@ -371,6 +388,7 @@ Deno.serve(async (req: Request) => {
         gear_inventory: gearInventory,
         consumables,
         infusers,
+        fertilizers,
         crafting_queue: newQueue,
         updated_at:     new Date().toISOString(),
       })
@@ -397,6 +415,7 @@ Deno.serve(async (req: Request) => {
       gearInventory,
       consumables,
       infusers,
+      fertilizers,
       craftingQueue:   newQueue,
       serverUpdatedAt: updateData.updated_at,
     });

@@ -96,7 +96,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, essences, gear_inventory, consumables, infusers, crafting_queue, updated_at")
+        .select("coins, essences, gear_inventory, consumables, infusers, fertilizers, crafting_queue, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -130,6 +130,7 @@ Deno.serve(async (req: Request) => {
     let gearInventory = (save.gear_inventory ?? []) as { gearType: string; quantity: number }[];
     let consumables   = (save.consumables    ?? []) as { id: string; quantity: number }[];
     let infusers      = (save.infusers       ?? []) as { rarity: string; quantity: number }[];
+    let fertilizers   = (save.fertilizers   ?? []) as { type: string; quantity: number }[];
 
     // ── Find entry ────────────────────────────────────────────────────────────
     const entry = craftingQueue.find((e) => e.id === craftId);
@@ -163,10 +164,19 @@ Deno.serve(async (req: Request) => {
           : [...gearInventory, { gearType, quantity }];
       }
       for (const { id, quantity } of (entry.consumableCosts ?? [])) {
-        const idx = consumables.findIndex((c) => c.id === id);
-        consumables = idx >= 0
-          ? consumables.map((c, i) => i === idx ? { ...c, quantity: c.quantity + quantity } : c)
-          : [...consumables, { id, quantity }];
+        if (id.startsWith("fertilizer_")) {
+          // Fertilizer ingredient costs live in the fertilizers array
+          const fertType = id.replace("fertilizer_", "");
+          const idx = fertilizers.findIndex((f) => f.type === fertType);
+          fertilizers = idx >= 0
+            ? fertilizers.map((f, i) => i === idx ? { ...f, quantity: f.quantity + quantity } : f)
+            : [...fertilizers, { type: fertType, quantity }];
+        } else {
+          const idx = consumables.findIndex((c) => c.id === id);
+          consumables = idx >= 0
+            ? consumables.map((c, i) => i === idx ? { ...c, quantity: c.quantity + quantity } : c)
+            : [...consumables, { id, quantity }];
+        }
       }
       for (const { rarity, quantity } of (entry.attunementCosts ?? [])) {
         const idx = infusers.findIndex((inf) => inf.rarity === rarity);
@@ -210,6 +220,7 @@ Deno.serve(async (req: Request) => {
         gear_inventory: gearInventory,
         consumables,
         infusers,
+        fertilizers,
         crafting_queue: newQueue,
         updated_at:     new Date().toISOString(),
       })
@@ -237,6 +248,7 @@ Deno.serve(async (req: Request) => {
       gearInventory,
       consumables,
       infusers,
+      fertilizers,
       serverUpdatedAt: updateData.updated_at,
     });
 

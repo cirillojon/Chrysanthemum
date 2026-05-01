@@ -23,7 +23,8 @@ export type ConsumableId =
   | "garden_pin"
   | "verdant_rush_1"     | "verdant_rush_2"     | "verdant_rush_3"     | "verdant_rush_4"     | "verdant_rush_5"
   | "forge_haste_1"      | "forge_haste_2"      | "forge_haste_3"      | "forge_haste_4"      | "forge_haste_5"
-  | "resonance_draft_1"  | "resonance_draft_2"  | "resonance_draft_3"  | "resonance_draft_4"  | "resonance_draft_5";
+  | "resonance_draft_1"  | "resonance_draft_2"  | "resonance_draft_3"  | "resonance_draft_4"  | "resonance_draft_5"
+  | "fertilizer_basic" | "fertilizer_advanced" | "fertilizer_premium" | "fertilizer_elite" | "fertilizer_miracle";
 
 export interface ConsumableItem {
   id:       ConsumableId;
@@ -42,7 +43,7 @@ export type AttunementCost =
   | { kind: "essence";    amounts: EssenceCostEntry[] }
   | { kind: "attunement"; tier: 1 | 2 | 3 | 4; quantity: number };
 
-export type ConsumableCategory = "growth" | "mutation_boost" | "utility" | "seed_pouch" | "speed_boost";
+export type ConsumableCategory = "growth" | "mutation_boost" | "utility" | "seed_pouch" | "speed_boost" | "fertilizer";
 
 export interface ConsumableRecipe {
   id:           ConsumableId;
@@ -118,6 +119,7 @@ const CONSUMABLE_CATEGORY_MULT: Record<ConsumableCategory, number> = {
   mutation_boost: 1.5,
   speed_boost:    2.0,
   seed_pouch:     1.0, // not in supply pool, here for completeness
+  fertilizer:     1.0, // crafted only, not in supply pool
 };
 
 /** Supply-shop price for a consumable. Crafting is cheaper because the
@@ -402,6 +404,25 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     description: "Doubles attunement speed for all active attunement slots for 24 hours.",
     cost: { kind: "consumable", id: "resonance_draft_4", quantity: 2 } },
 
+  // ── Fertilizers (I–V) — fertilizer ───────────────────────────────────────
+  // Crafted via the Crafting Tab. Delivered to the fertilizers DB array, not
+  // consumables — delivery routing is handled in craft-collect/index.ts.
+  { id: "fertilizer_basic",   name: "Basic Fertilizer",   emoji: "🦴", tier: 1, rarity: "common",    category: "fertilizer",
+    description: "Speeds growth by 1.1×.",
+    cost: { kind: "essence", amounts: [{ type: "grove", amount: 2 }] } },
+  { id: "fertilizer_advanced",name: "Advanced Fertilizer", emoji: "🥣", tier: 2, rarity: "uncommon",  category: "fertilizer",
+    description: "Speeds growth by 1.25×.",
+    cost: { kind: "consumable", id: "fertilizer_basic", quantity: 2 } },
+  { id: "fertilizer_premium", name: "Premium Fertilizer",  emoji: "🧪", tier: 3, rarity: "rare",      category: "fertilizer",
+    description: "Speeds growth by 1.5×.",
+    cost: { kind: "consumable", id: "fertilizer_advanced", quantity: 2 } },
+  { id: "fertilizer_elite",   name: "Elite Fertilizer",    emoji: "⚗️", tier: 4, rarity: "legendary", category: "fertilizer",
+    description: "Speeds growth by 1.75×.",
+    cost: { kind: "consumable", id: "fertilizer_premium", quantity: 2 } },
+  { id: "fertilizer_miracle", name: "Miracle Fertilizer",  emoji: "💫", tier: 5, rarity: "mythic",    category: "fertilizer",
+    description: "Speeds growth by 2×.",
+    cost: { kind: "consumable", id: "fertilizer_elite", quantity: 2 } },
+
   // ── Wind Shear (non-tiered) — utility ─────────────────────────────────────
   { id: "wind_shear", name: "Wind Shear", emoji: "🌀", tier: null, rarity: "mythic", category: "utility",
     description: "Refreshes your supply shop immediately, bypassing the cooldown. 1-hour cooldown between uses.",
@@ -477,12 +498,18 @@ export function canCraftConsumable(
   recipe:      ConsumableRecipe,
   essences:    { type: string; amount: number }[],
   consumables: ConsumableItem[],
+  fertilizers?: { type: string; quantity: number }[],
 ): boolean {
   const { cost } = recipe;
   if (cost.kind === "essence") {
     return cost.amounts.every(({ type, amount }) =>
       (essences.find((e) => e.type === type)?.amount ?? 0) >= amount
     );
+  }
+  // Fertilizer ingredients live in the fertilizers array, not consumables
+  if ((cost.id as string).startsWith("fertilizer_")) {
+    const fertType = (cost.id as string).replace("fertilizer_", "");
+    return ((fertilizers ?? []).find((f) => f.type === fertType)?.quantity ?? 0) >= cost.quantity;
   }
   return (consumables.find((c) => c.id === cost.id)?.quantity ?? 0) >= cost.quantity;
 }

@@ -386,6 +386,7 @@ export interface CraftStartResult {
   gearInventory:   GameState["gearInventory"];
   consumables:     GameState["consumables"];
   infusers:        GameState["infusers"];
+  fertilizers?:    GameState["fertilizers"];
   craftingQueue:   GameState["craftingQueue"];
   serverUpdatedAt: string;
 }
@@ -397,6 +398,7 @@ export interface CraftCollectResult {
   gearInventory:   GameState["gearInventory"];
   consumables:     GameState["consumables"];
   infusers:        GameState["infusers"];
+  fertilizers?:    GameState["fertilizers"];
   serverUpdatedAt: string;
 }
 
@@ -408,6 +410,7 @@ export interface CraftCancelResult {
   gearInventory:   GameState["gearInventory"];
   consumables:     GameState["consumables"];
   infusers:        GameState["infusers"];
+  fertilizers?:    GameState["fertilizers"];
   serverUpdatedAt: string;
 }
 

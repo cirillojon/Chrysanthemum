@@ -11,6 +11,7 @@ import {
   TIER_RARITIES,
   type ConsumableId,
 } from "../data/consumables";
+import { FERTILIZERS } from "../data/upgrades";
 import { RARITY_CONFIG, FLOWER_TYPES, type Rarity } from "../data/flowers";
 import type { FlowerType } from "../data/flowers";
 import {
@@ -144,6 +145,7 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
   const gearInv    = state.gearInventory ?? [];
   const consum     = state.consumables   ?? [];
   const infusers   = state.infusers      ?? [];
+  const ferts      = state.fertilizers   ?? [];
   // All crafts go into the queue — a slot must be free
   const slotsAvail = (state.craftingQueue?.length ?? 0) < (state.craftingSlotCount ?? 1);
 
@@ -171,6 +173,12 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
   if (filter === "all" || filter === "consumables") {
     for (const recipe of CONSUMABLE_RECIPES) {
       if (recipe.category === "seed_pouch") continue;
+      // Fertilizers are delivered to state.fertilizers — use that for owned count
+      const isFertilizer = recipe.category === "fertilizer";
+      const fertType = isFertilizer ? recipe.id.replace("fertilizer_", "") : null;
+      const owned = isFertilizer
+        ? (ferts.find((f) => f.type === fertType)?.quantity ?? 0)
+        : (consum.find((c) => c.id === recipe.id)?.quantity ?? 0);
       entries.push({
         id:          `consumable:${recipe.id}`,
         kind:        "consumable",
@@ -179,8 +187,8 @@ function buildEntries(state: GameState, filter: CraftFilter): CraftEntry[] {
         rarity:      recipe.rarity,
         description: recipe.description,
         tier:        recipe.tier,
-        owned:       consum.find((c) => c.id === recipe.id)?.quantity ?? 0,
-        canCraft:    slotsAvail && canCraftConsumable(recipe, essences, consum),
+        owned,
+        canCraft:    slotsAvail && canCraftConsumable(recipe, essences, consum, ferts),
       });
     }
 
@@ -463,6 +471,7 @@ function maxCraftableQuantity(entry: CraftEntry, state: GameState): number {
   const gearInv  = state.gearInventory ?? [];
   const consum   = state.consumables   ?? [];
   const infusers = state.infusers      ?? [];
+  const ferts    = state.fertilizers   ?? [];
 
   let cap = MAX_BULK_QUANTITY;
   const limit = (have: number, need: number) => {
@@ -493,6 +502,9 @@ function maxCraftableQuantity(entry: CraftEntry, state: GameState): number {
       for (const { type, amount } of cost.amounts) {
         limit(essences.find((e) => e.type === type)?.amount ?? 0, amount);
       }
+    } else if ((cost.id as string).startsWith("fertilizer_")) {
+      const fertType = (cost.id as string).replace("fertilizer_", "");
+      limit(ferts.find((f) => f.type === fertType)?.quantity ?? 0, cost.quantity);
     } else {
       limit(consum.find((c) => c.id === cost.id)?.quantity ?? 0, cost.quantity);
     }
@@ -536,6 +548,7 @@ function CraftPopup({
   const gearInv   = state.gearInventory ?? [];
   const consum    = state.consumables   ?? [];
   const infusers  = state.infusers      ?? [];
+  const ferts     = state.fertilizers   ?? [];
   const rc = RARITY_CONFIG[entry.rarity];
 
   const gearType   = entry.kind === "gear" ? entry.id.replace("gear:", "") : null;
@@ -614,6 +627,18 @@ function CraftPopup({
               const need  = amount * quantity;
               return <IngredientRow key={type} emoji={cfg.emoji} label={label} need={need} have={have} enough={have >= need} {...essenceChip(type)} />;
             })}
+          </div>
+        );
+      } else if ((cost.id as string).startsWith("fertilizer_")) {
+        // Fertilizer ingredient: check state.fertilizers for stock
+        const fertType = (cost.id as string).replace("fertilizer_", "") as keyof typeof FERTILIZERS;
+        const fertDef  = FERTILIZERS[fertType];
+        const have     = ferts.find((f) => f.type === fertType)?.quantity ?? 0;
+        const need     = cost.quantity * quantity;
+        const srcRec   = CONSUMABLE_RECIPE_MAP[cost.id as ConsumableId];
+        ingredientsSection = (
+          <div className="space-y-1">
+            <IngredientRow emoji={fertDef?.emoji ?? "🌱"} label={fertDef?.name ?? cost.id} need={need} have={have} enough={have >= need} {...(srcRec ? rarityChip(srcRec.rarity) : { color: "text-muted-foreground", border: "border-border", bg: "bg-card/60" })} />
           </div>
         );
       } else {
@@ -854,7 +879,7 @@ export function CraftingTab() {
     if (!search.trim()) return all;
     return all.filter((e) => e.name.toLowerCase().includes(search.trim().toLowerCase()));
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.essences, state.gearInventory, state.consumables, state.infusers,
+  }, [state.essences, state.gearInventory, state.consumables, state.infusers, state.fertilizers,
       state.coins, state.craftingQueue, state.craftingSlotCount, filter, search]);
 
   const liveSelected = selected
@@ -1016,15 +1041,24 @@ export function CraftingTab() {
         const essenceCosts    = baseEssenceCosts.map((c)    => ({ type: c.type, amount: c.amount * qty }));
         const consumableCosts = baseConsumableCosts.map((c) => ({ id: c.id,     quantity: c.quantity * qty }));
 
+        // Split consumable costs into regular vs fertilizer for optimistic deduction
+        const fertilizerCosts = consumableCosts.filter((c) => c.id.startsWith("fertilizer_"));
+        const regularCosts    = consumableCosts.filter((c) => !c.id.startsWith("fertilizer_"));
+
         // Optimistic deductions
-        let essences = [...(cur.essences    ?? [])];
-        let consum   = [...(cur.consumables ?? [])];
+        let essences = [...(cur.essences      ?? [])];
+        let consum   = [...(cur.consumables   ?? [])];
+        let fertsOpt = [...(cur.fertilizers   ?? [])];
 
         for (const { type, amount } of essenceCosts) {
           essences = essences.map((e) => e.type === type ? { ...e, amount: e.amount - amount } : e).filter((e) => e.amount > 0);
         }
-        for (const { id: cid, quantity } of consumableCosts) {
+        for (const { id: cid, quantity } of regularCosts) {
           consum = consum.map((c) => c.id === cid ? { ...c, quantity: c.quantity - quantity } : c).filter((c) => c.quantity > 0);
+        }
+        for (const { id: cid, quantity } of fertilizerCosts) {
+          const fType = cid.replace("fertilizer_", "");
+          fertsOpt = fertsOpt.map((f) => f.type === fType ? { ...f, quantity: f.quantity - quantity } : f).filter((f) => f.quantity > 0);
         }
 
         const tempEntry: CraftingQueueEntry = {
@@ -1042,7 +1076,7 @@ export function CraftingTab() {
         };
 
         await perform(
-          { ...cur, essences, consumables: consum, craftingQueue: [...(cur.craftingQueue ?? []), tempEntry] },
+          { ...cur, essences, consumables: consum, fertilizers: fertsOpt, craftingQueue: [...(cur.craftingQueue ?? []), tempEntry] },
           () => edgeCraftStart("consumable", id, baseDurationMs, { essenceCosts: baseEssenceCosts, consumableCosts: baseConsumableCosts }, qty),
           (res) => {
             const fresh = getState();
@@ -1053,6 +1087,7 @@ export function CraftingTab() {
               gearInventory:   res.gearInventory,
               consumables:     res.consumables,
               infusers:        res.infusers,
+              ...(res.fertilizers !== undefined && { fertilizers: res.fertilizers }),
               craftingQueue:   res.craftingQueue,
               serverUpdatedAt: res.serverUpdatedAt,
             });
@@ -1156,6 +1191,14 @@ export function CraftingTab() {
       optimistic.gearInventory = idx >= 0
         ? gearInv.map((g, i) => i === idx ? { ...g, quantity: g.quantity + qty } : g)
         : [...gearInv, { gearType: outputId as GearType, quantity: qty }];
+    } else if (kind === "consumable" && outputId.startsWith("fertilizer_")) {
+      // Fertilizer crafts are delivered to state.fertilizers
+      const fertType = outputId.replace("fertilizer_", "");
+      const fertsArr = cur.fertilizers ?? [];
+      const idx      = fertsArr.findIndex((f) => f.type === fertType);
+      optimistic.fertilizers = idx >= 0
+        ? fertsArr.map((f, i) => i === idx ? { ...f, quantity: f.quantity + qty } : f)
+        : [...fertsArr, { type: fertType as import("../data/upgrades").FertilizerType, quantity: qty }];
     } else if (kind === "consumable") {
       const consum = cur.consumables ?? [];
       const idx    = consum.findIndex((c) => c.id === outputId);
@@ -1191,6 +1234,7 @@ export function CraftingTab() {
             gearInventory:   res.gearInventory,
             consumables:     res.consumables,
             infusers:        res.infusers,
+            ...(res.fertilizers !== undefined && { fertilizers: res.fertilizers }),
             serverUpdatedAt: res.serverUpdatedAt,
           });
           // Show collect notification
@@ -1217,10 +1261,11 @@ export function CraftingTab() {
     const newQueue = (cur.craftingQueue ?? []).filter((e) => e.id !== craftId);
 
     // Refund from stored ingredient costs
-    let essences = [...(cur.essences      ?? [])];
-    let gearInv  = [...(cur.gearInventory ?? [])];
-    let consum   = [...(cur.consumables   ?? [])];
-    let infusers = [...(cur.infusers      ?? [])];
+    let essences  = [...(cur.essences      ?? [])];
+    let gearInv   = [...(cur.gearInventory ?? [])];
+    let consum    = [...(cur.consumables   ?? [])];
+    let infusers  = [...(cur.infusers      ?? [])];
+    let fertsCanc = [...(cur.fertilizers   ?? [])];
 
     for (const { type, amount } of (entry.essenceCosts ?? [])) {
       const i = essences.findIndex((e) => e.type === type);
@@ -1235,10 +1280,19 @@ export function CraftingTab() {
         : [...gearInv, { gearType: gearType as GearType, quantity }];
     }
     for (const { id, quantity } of (entry.consumableCosts ?? [])) {
-      const i = consum.findIndex((c) => c.id === id);
-      consum = i >= 0
-        ? consum.map((c, j) => j === i ? { ...c, quantity: c.quantity + quantity } : c)
-        : [...consum, { id, quantity }];
+      if (id.startsWith("fertilizer_")) {
+        // Refund fertilizer ingredients to state.fertilizers
+        const fType = id.replace("fertilizer_", "");
+        const i = fertsCanc.findIndex((f) => f.type === fType);
+        fertsCanc = i >= 0
+          ? fertsCanc.map((f, j) => j === i ? { ...f, quantity: f.quantity + quantity } : f)
+          : [...fertsCanc, { type: fType as import("../data/upgrades").FertilizerType, quantity }];
+      } else {
+        const i = consum.findIndex((c) => c.id === id);
+        consum = i >= 0
+          ? consum.map((c, j) => j === i ? { ...c, quantity: c.quantity + quantity } : c)
+          : [...consum, { id, quantity }];
+      }
     }
     for (const { rarity, quantity } of (entry.attunementCosts ?? [])) {
       const i = infusers.findIndex((inf) => inf.rarity === rarity);
@@ -1256,7 +1310,7 @@ export function CraftingTab() {
 
     try {
       await perform(
-        { ...cur, coins: cur.coins + coinRefund, craftingQueue: newQueue, essences, gearInventory: gearInv, consumables: consum, infusers },
+        { ...cur, coins: cur.coins + coinRefund, craftingQueue: newQueue, essences, gearInventory: gearInv, consumables: consum, infusers, fertilizers: fertsCanc },
         () => edgeCraftCancel(craftId),
         (res) => {
           const fresh = getState();
@@ -1268,6 +1322,7 @@ export function CraftingTab() {
             gearInventory:   res.gearInventory,
             consumables:     res.consumables,
             infusers:        res.infusers,
+            ...(res.fertilizers !== undefined && { fertilizers: res.fertilizers }),
             serverUpdatedAt: res.serverUpdatedAt,
           });
         },
