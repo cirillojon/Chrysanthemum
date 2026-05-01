@@ -254,6 +254,7 @@ export interface MarketplaceListResult {
   inventory:      GameState["inventory"];
   fertilizers?:   GameState["fertilizers"];
   gearInventory?: GameState["gearInventory"];
+  consumables?:   GameState["consumables"];
   listingId:      string;
   serverUpdatedAt: string;
 }
@@ -274,11 +275,12 @@ export interface MarketplaceBuyResult {
 
 export interface ClaimMailResult {
   ok:             true;
-  kind:           "coins" | "flower" | "seed" | "fertilizer" | "gear";
+  kind:           "coins" | "flower" | "seed" | "fertilizer" | "gear" | "consumable";
   coins:          number;
   inventory:      GameState["inventory"];
   fertilizers:    GameState["fertilizers"];
   gearInventory:  GameState["gearInventory"];
+  consumables?:   GameState["consumables"];
   discovered:     GameState["discovered"];
   alreadyClaimed?: boolean;
   serverUpdatedAt: string;
@@ -289,6 +291,7 @@ export interface MarketplaceCancelResult {
   inventory:      GameState["inventory"];
   fertilizers?:   GameState["fertilizers"];
   gearInventory?: GameState["gearInventory"];
+  consumables?:   GameState["consumables"];
   serverUpdatedAt: string;
 }
 
@@ -327,6 +330,18 @@ export function edgeMarketplaceCreateGearListing(
     action:   "create_listing",
     isGear:   true,
     gearType,
+    askPrice,
+  });
+}
+
+export function edgeMarketplaceCreateConsumableListing(
+  consumableId: string,
+  askPrice: number,
+) {
+  return callEdge<MarketplaceListResult>("marketplace-list", {
+    action:       "create_listing",
+    isConsumable: true,
+    consumableId,
     askPrice,
   });
 }

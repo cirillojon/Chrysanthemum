@@ -10,13 +10,17 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface InventoryItem { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface InventoryItem  { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
+interface FertilizerItem { type: string; quantity: number; }
+interface GearItem       { gearType: string; quantity: number; }
+interface ConsumableItem { id: string; quantity: number; }
 
 interface ExpiredListing {
-  id: string;
-  seller_id: string;
+  id:         string;
+  seller_id:  string;
   species_id: string;
-  mutation: string | null;
+  mutation:   string | null;
+  is_seed:    boolean;
 }
 
 Deno.serve(async (req: Request) => {
@@ -42,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // ── Fetch all expired active listings ─────────────────────────────────────
     const { data: expired, error: fetchError } = await supabaseAdmin
       .from("marketplace_listings")
-      .select("id, seller_id, species_id, mutation")
+      .select("id, seller_id, species_id, mutation, is_seed")
       .eq("status", "active")
       .lt("expires_at", new Date().toISOString());
 
@@ -76,31 +80,60 @@ Deno.serve(async (req: Request) => {
     const returns = Object.entries(byseller).map(async ([sellerId, listings]) => {
       const { data: saveData } = await supabaseAdmin
         .from("game_saves")
-        .select("inventory")
+        .select("inventory, fertilizers, gear_inventory, consumables")
         .eq("user_id", sellerId)
         .single();
 
       if (!saveData) return;
 
-      let inventory = [...(saveData.inventory ?? []) as InventoryItem[]];
+      let inventory     = [...(saveData.inventory     ?? []) as InventoryItem[]];
+      let fertilizers   = [...(saveData.fertilizers   ?? []) as FertilizerItem[]];
+      let gearInventory = [...(saveData.gear_inventory ?? []) as GearItem[]];
+      let consumables   = [...(saveData.consumables   ?? []) as ConsumableItem[]];
 
       for (const listing of listings) {
-        const mutation = listing.mutation ?? undefined;
-        const existing = inventory.find(
-          (i) => i.speciesId === listing.species_id && i.mutation === mutation && !i.isSeed
-        );
-        inventory = existing
-          ? inventory.map((i) =>
-              i.speciesId === listing.species_id && i.mutation === mutation && !i.isSeed
-                ? { ...i, quantity: i.quantity + 1 }
-                : i
-            )
-          : [...inventory, { speciesId: listing.species_id, quantity: 1, mutation, isSeed: false }];
+        const speciesId    = listing.species_id;
+        const isFertilizer = speciesId.startsWith("fert:");
+        const isGear       = speciesId.startsWith("gear:");
+        const isConsumable = speciesId.startsWith("consumable:");
+
+        if (isFertilizer) {
+          const fertType = speciesId.replace("fert:", "");
+          const existing = fertilizers.find((f) => f.type === fertType);
+          fertilizers = existing
+            ? fertilizers.map((f) => f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f)
+            : [...fertilizers, { type: fertType, quantity: 1 }];
+        } else if (isGear) {
+          const gearType = speciesId.replace("gear:", "");
+          const existing = gearInventory.find((g) => g.gearType === gearType);
+          gearInventory = existing
+            ? gearInventory.map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g)
+            : [...gearInventory, { gearType, quantity: 1 }];
+        } else if (isConsumable) {
+          const consumableId = speciesId.replace("consumable:", "");
+          const existing = consumables.find((c) => c.id === consumableId);
+          consumables = existing
+            ? consumables.map((c) => c.id === consumableId ? { ...c, quantity: c.quantity + 1 } : c)
+            : [...consumables, { id: consumableId, quantity: 1 }];
+        } else {
+          const mutation = listing.mutation ?? undefined;
+          const isSeed   = listing.is_seed ?? false;
+          const existing = inventory.find(
+            (i) => i.speciesId === speciesId && i.mutation === mutation && (i.isSeed ?? false) === isSeed
+          );
+          inventory = existing
+            ? inventory.map((i) =>
+                i.speciesId === speciesId && i.mutation === mutation && (i.isSeed ?? false) === isSeed
+                  ? { ...i, quantity: i.quantity + 1 }
+                  : i
+              )
+            : [...inventory, { speciesId, quantity: 1, mutation, isSeed }];
+        }
       }
 
       await supabaseAdmin
         .from("game_saves")
-        .update({ inventory, updated_at: new Date().toISOString() })
+        .update({ inventory, fertilizers, gear_inventory: gearInventory, consumables, updated_at: new Date().toISOString() })
         .eq("user_id", sellerId);
     });
 

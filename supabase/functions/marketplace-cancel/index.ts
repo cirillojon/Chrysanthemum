@@ -14,6 +14,7 @@ function b64url(s: string): string {
 interface InventoryItem  { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
 interface FertilizerItem { type: string; quantity: number; }
 interface GearItem       { gearType: string; quantity: number; }
+interface ConsumableItem { id: string; quantity: number; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -57,7 +58,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("inventory, fertilizers, gear_inventory")
+        .select("inventory, fertilizers, gear_inventory, consumables")
         .eq("user_id", userId)
         .single(),
       supabaseAdmin
@@ -96,13 +97,15 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    let inventory    = [...(saveResult.data.inventory ?? []) as InventoryItem[]];
-    let fertilizers  = [...(saveResult.data.fertilizers ?? []) as FertilizerItem[]];
+    let inventory     = [...(saveResult.data.inventory ?? []) as InventoryItem[]];
+    let fertilizers   = [...(saveResult.data.fertilizers ?? []) as FertilizerItem[]];
     let gearInventory = [...(saveResult.data.gear_inventory ?? []) as GearItem[]];
+    let consumables   = [...(saveResult.data.consumables ?? []) as ConsumableItem[]];
 
     const speciesId    = listing.species_id as string;
     const isFertilizer = speciesId.startsWith("fert:");
     const isGear       = speciesId.startsWith("gear:");
+    const isConsumable = speciesId.startsWith("consumable:");
 
     if (isFertilizer) {
       // Return fertilizer to fertilizers array
@@ -122,6 +125,15 @@ Deno.serve(async (req: Request) => {
             g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g
           )
         : [...gearInventory, { gearType, quantity: 1 }];
+    } else if (isConsumable) {
+      // Return consumable to consumables array
+      const consumableId = speciesId.replace("consumable:", "");
+      const existing = consumables.find((c) => c.id === consumableId);
+      consumables = existing
+        ? consumables.map((c) =>
+            c.id === consumableId ? { ...c, quantity: c.quantity + 1 } : c
+          )
+        : [...consumables, { id: consumableId, quantity: 1 }];
     } else {
       // Return flower/seed to inventory
       const mutation = listing.mutation ?? undefined;
@@ -154,7 +166,7 @@ Deno.serve(async (req: Request) => {
     // Return item to save
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
-      .update({ inventory, fertilizers, gear_inventory: gearInventory, updated_at: new Date().toISOString() })
+      .update({ inventory, fertilizers, gear_inventory: gearInventory, consumables, updated_at: new Date().toISOString() })
       .eq("user_id", userId)
       .select("updated_at")
       .single();
@@ -167,7 +179,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, inventory, fertilizers, gearInventory, serverUpdatedAt: updateData.updated_at }),
+      JSON.stringify({ ok: true, inventory, fertilizers, gearInventory, consumables, serverUpdatedAt: updateData.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

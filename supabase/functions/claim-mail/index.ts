@@ -14,6 +14,7 @@ function b64url(s: string): string {
 interface InventoryItem  { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
 interface FertilizerItem { type: string; quantity: number; }
 interface GearItem       { gearType: string; quantity: number; }
+interface ConsumableItem { id: string; quantity: number; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -57,7 +58,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.from("mailbox").select("*").eq("id", mailId).single(),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, inventory, fertilizers, gear_inventory, discovered")
+        .select("coins, inventory, fertilizers, gear_inventory, consumables, discovered")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -97,6 +98,7 @@ Deno.serve(async (req: Request) => {
           inventory:     save.inventory     ?? [],
           fertilizers:   save.fertilizers   ?? [],
           gearInventory: save.gear_inventory ?? [],
+          consumables:   save.consumables   ?? [],
           discovered:    save.discovered    ?? [],
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -109,6 +111,7 @@ Deno.serve(async (req: Request) => {
     let inventory    = [...(save.inventory     ?? []) as InventoryItem[]];
     let fertilizers  = [...(save.fertilizers   ?? []) as FertilizerItem[]];
     let gearInventory = [...(save.gear_inventory ?? []) as GearItem[]];
+    let consumables  = [...(save.consumables   ?? []) as ConsumableItem[]];
     const discovered = [...(save.discovered    ?? []) as string[]];
 
     const kind      = mail.kind      as string;
@@ -136,6 +139,14 @@ Deno.serve(async (req: Request) => {
       gearInventory = existing
         ? gearInventory.map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g)
         : [...gearInventory, { gearType, quantity: 1 }];
+
+    } else if (kind === "consumable" && speciesId) {
+      // ── Consumable: strip prefix, add to consumables array ────────────────
+      const consumableId = speciesId.startsWith("consumable:") ? speciesId.replace("consumable:", "") : speciesId;
+      const existing = consumables.find((c) => c.id === consumableId);
+      consumables = existing
+        ? consumables.map((c) => c.id === consumableId ? { ...c, quantity: c.quantity + 1 } : c)
+        : [...consumables, { id: consumableId, quantity: 1 }];
 
     } else if ((kind === "flower" || kind === "seed") && speciesId) {
       // ── Flower / seed: add to inventory ──────────────────────────────────
@@ -171,6 +182,7 @@ Deno.serve(async (req: Request) => {
         inventory,
         fertilizers,
         gear_inventory: gearInventory,
+        consumables,
         discovered,
         updated_at:     new Date().toISOString(),
       }).eq("user_id", userId).select("updated_at").single(),
@@ -195,7 +207,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return new Response(
-      JSON.stringify({ ok: true, kind, coins, inventory, fertilizers, gearInventory, discovered, serverUpdatedAt: updateResult.data.updated_at }),
+      JSON.stringify({ ok: true, kind, coins, inventory, fertilizers, gearInventory, consumables, discovered, serverUpdatedAt: updateResult.data.updated_at }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

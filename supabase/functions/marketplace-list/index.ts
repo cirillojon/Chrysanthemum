@@ -95,6 +95,7 @@ const LISTING_DURATION_MS   = 48 * 60 * 60 * 1_000; // 48 hours
 interface InventoryItem  { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
 interface FertilizerItem { type: string; quantity: number; }
 interface GearItem       { gearType: string; quantity: number; }
+interface ConsumableItem { id: string; quantity: number; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
@@ -122,15 +123,17 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json() as {
-      action:          "create_listing" | "upgrade_slots";
-      speciesId?:      string;
-      mutation?:       string;
-      askPrice?:       number;
-      isSeed?:         boolean;
-      isFertilizer?:   boolean;
-      fertilizerType?: string;
-      isGear?:         boolean;
-      gearType?:       string;
+      action:           "create_listing" | "upgrade_slots";
+      speciesId?:       string;
+      mutation?:        string;
+      askPrice?:        number;
+      isSeed?:          boolean;
+      isFertilizer?:    boolean;
+      fertilizerType?:  string;
+      isGear?:          boolean;
+      gearType?:        string;
+      isConsumable?:    boolean;
+      consumableId?:    string;
     };
 
     const supabaseAdmin = createClient(
@@ -143,7 +146,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("coins, inventory, fertilizers, gear_inventory, marketplace_slots, updated_at")
+        .select("coins, inventory, fertilizers, gear_inventory, consumables, marketplace_slots, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -167,6 +170,7 @@ Deno.serve(async (req: Request) => {
     let newInventory      = [...(save.inventory ?? []) as InventoryItem[]];
     let newFertilizers    = [...(save.fertilizers ?? []) as FertilizerItem[]];
     let newGearInventory  = [...(save.gear_inventory ?? []) as GearItem[]];
+    let newConsumables    = [...(save.consumables ?? []) as ConsumableItem[]];
     let marketplaceSlots  = (save.marketplace_slots ?? 0) as number;
 
     // ── upgrade_slots ─────────────────────────────────────────────────────────
@@ -374,6 +378,74 @@ Deno.serve(async (req: Request) => {
 
         return new Response(
           JSON.stringify({ ok: true, coins, gearInventory: newGearInventory, inventory: newInventory, listingId: listing.id, serverUpdatedAt: updateData2.updated_at }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // ── Consumable listing ───────────────────────────────────────────────
+      if (body.isConsumable) {
+        const consumableId = body.consumableId;
+        if (!consumableId) {
+          return new Response(JSON.stringify({ error: "consumableId required" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const consumableIdx = newConsumables.findIndex((c) => c.id === consumableId);
+        if (consumableIdx === -1 || newConsumables[consumableIdx].quantity < 1) {
+          return new Response(JSON.stringify({ error: "Consumable not in inventory" }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        // Deduct one consumable
+        newConsumables = newConsumables
+          .map((c, i) => i === consumableIdx ? { ...c, quantity: c.quantity - 1 } : c)
+          .filter((c) => c.quantity > 0);
+
+        // Insert listing — encode consumable id as "consumable:<id>" in species_id
+        const { data: listing, error: insertError } = await supabaseAdmin
+          .from("marketplace_listings")
+          .insert({
+            seller_id:  userId,
+            species_id: `consumable:${consumableId}`,
+            mutation:   null,
+            is_seed:    false,
+            ask_price:  body.askPrice,
+            price:      body.askPrice,
+            base_value: 0,
+            fee_paid:   fee,
+            status:     "active",
+            expires_at: expiresAt,
+          })
+          .select("id")
+          .single();
+
+        if (insertError || !listing) {
+          console.error("consumable listing insert failed:", insertError);
+          return new Response(JSON.stringify({ error: "Failed to create listing" }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        const { data: updateDataC, error: updateErrorC } = await supabaseAdmin
+          .from("game_saves")
+          .update({ coins, consumables: newConsumables, updated_at: new Date().toISOString() })
+          .eq("user_id", userId)
+          .eq("updated_at", priorUpdatedAt)
+          .select("updated_at")
+          .single();
+
+        if (updateErrorC || !updateDataC) {
+          console.error("save update failed:", updateErrorC);
+          await supabaseAdmin.from("marketplace_listings").delete().eq("id", listing.id);
+          return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+            status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        return new Response(
+          JSON.stringify({ ok: true, coins, consumables: newConsumables, inventory: newInventory, listingId: listing.id, serverUpdatedAt: updateDataC.updated_at }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
