@@ -67,6 +67,8 @@ interface Props {
   balanceScaleSide?: "boost" | "slow";
   /** True when this cell is within an auto-planter's radius. */
   isUnderAutoPlanter?: boolean;
+  /** True when this cell is shielded by an active Aegis. */
+  isUnderAegis?: boolean;
   /** Direction a crossbreed particle should travel (toward the active cropsticks). */
   crossbreedDirection?: "up" | "down" | "left" | "right";
   /** True when this plant is actively serving as a Cropsticks cross-breed source — blocks manual harvest. */
@@ -84,7 +86,7 @@ export function PlotTile({
   isSelected, isHighlighted,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
-  isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, balanceScaleSide, isUnderAutoPlanter,
+  isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, balanceScaleSide, isUnderAutoPlanter, isUnderAegis,
   crossbreedDirection, isCrossBreeding = false,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
@@ -379,6 +381,7 @@ export function PlotTile({
           isUnderHarvestBell={isUnderHarvestBell}
           isUnderLawnmower={isUnderLawnmower}
           balanceScaleSide={balanceScaleSide}
+          isUnderAegis={isUnderAegis}
         />
       )}
 
@@ -408,7 +411,7 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide) && (
+        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -481,6 +484,14 @@ export function PlotTile({
                 <span className="gear-scale-slow" style={{ left: "76%", animationDelay: "0s"    }}>▾</span>
               </>
             )}
+            {/* Aegis: 🛡️ shields rising — weather mutations blocked */}
+            {isUnderAegis && (
+              <>
+                <span className="gear-aegis-shield" style={{ left: "15%", animationDelay: "-1.8s" }}>🛡️</span>
+                <span className="gear-aegis-shield" style={{ left: "50%", animationDelay: "-0.9s" }}>🛡️</span>
+                <span className="gear-aegis-shield" style={{ left: "76%", animationDelay: "0s"    }}>🛡️</span>
+              </>
+            )}
             {/* Fan: 💨 gusts drifting in the fan's direction */}
             {isUnderFan && (() => {
               const dir  = fanDirection ?? "right";
@@ -540,7 +551,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || plant.infused || plant.revealed || plant.showMultiplier) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis || plant.infused || plant.revealed || plant.showMultiplier) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map(({ emoji, label }, i) => (
@@ -552,6 +563,7 @@ export function PlotTile({
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
             {isUnderLawnmower && <span className="text-[9px]" title="Lawnmower — directional auto-harvest">🦼</span>}
+            {isUnderAegis && <span className="text-[9px]" title="Aegis — weather mutations blocked">🛡️</span>}
             {balanceScaleSide === "boost" && <span className="text-[9px]" title="Balance Scale — 3× growth boost">⚖️</span>}
             {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× growth penalty">⚖️</span>}
             {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}

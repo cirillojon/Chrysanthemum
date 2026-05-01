@@ -58,7 +58,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   }, []);
 
   // Compute gear coverage in one pass
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, balanceScaleCells, autoPlanterKeys } = useMemo(() => {
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, balanceScaleCells, autoPlanterKeys, aegisKeys } = useMemo(() => {
     const regular      = new Set<string>();
     const mutation     = new Map<string, string[]>();
     const scarecrow    = new Set<string>();
@@ -69,6 +69,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
     const lawnmower    = new Map<string, FanDirection>();
     const balanceScale = new Map<string, "boost" | "slow">();
     const autoPlanter  = new Set<string>();
+    const aegis        = new Set<string>();
     for (let ri = 0; ri < grid.length; ri++) {
       for (let ci = 0; ci < grid[ri].length; ci++) {
         const g = grid[ri][ci].gear;
@@ -109,10 +110,12 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           });
         } else if (def.passiveSubtype === "auto_planter") {
           keys.forEach((k) => autoPlanter.add(k));
+        } else if (def.passiveSubtype === "aegis") {
+          keys.forEach((k) => aegis.add(k));
         }
       }
     }
-    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, balanceScaleCells: balanceScale, autoPlanterKeys: autoPlanter };
+    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, balanceScaleCells: balanceScale, autoPlanterKeys: autoPlanter, aegisKeys: aegis };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid, farmSize, rows]);
 
@@ -279,6 +282,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           const lawnmowerDir      = lawnmowerCells.get(cellKey);
           const balanceScaleSide  = balanceScaleCells.get(cellKey) as "boost" | "slow" | undefined;
           const underAutoPlanter  = autoPlanterKeys.has(cellKey);
+          const underAegis        = aegisKeys.has(cellKey);
 
           const crossbreedDirection = crossbreedSourceCells.get(cellKey);
           const prismaticStyle: React.CSSProperties | undefined =
@@ -301,7 +305,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               title={isBloomed ? `${species?.name} — bloomed` : "??? — growing"}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || !!balanceScaleSide || underFan) && (
+              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || !!balanceScaleSide || underFan || underAegis) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
                   {underGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
                   {underSprinkler && (
@@ -374,6 +378,14 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                       <span className="gear-scale-slow" style={{ left: "76%", animationDelay: "0s"    }}>▾</span>
                     </>
                   )}
+                  {/* Aegis: 🛡️ shields rising — weather mutations blocked */}
+                  {underAegis && (
+                    <>
+                      <span className="gear-aegis-shield" style={{ left: "15%", animationDelay: "-1.8s" }}>🛡️</span>
+                      <span className="gear-aegis-shield" style={{ left: "50%", animationDelay: "-0.9s" }}>🛡️</span>
+                      <span className="gear-aegis-shield" style={{ left: "76%", animationDelay: "0s"    }}>🛡️</span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -418,7 +430,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || !!balanceScaleSide || plant.infused || plant.revealed) && (
+              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || !!balanceScaleSide || underAegis || plant.infused || plant.revealed) && (
                 <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2"}`}>
                   {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
                   {mutEmojis.map((emoji, i) => (
@@ -432,6 +444,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                   {underAutoPlanter && <span className="text-[9px]" title="Auto-planter active">🌱</span>}
                   {balanceScaleSide === "boost" && <span className="text-[9px]" title="Balance Scale — 3× boost">⚖️</span>}
                   {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× slow">⚖️</span>}
+                  {underAegis && <span className="text-[9px]" title="Aegis — weather mutations blocked">🛡️</span>}
                   {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
                   {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
                 </div>
