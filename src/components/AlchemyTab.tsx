@@ -55,7 +55,7 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
 
   return (
     <div className="bg-card/60 border border-border rounded-xl px-3 py-2.5">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+      <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
         You will receive
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -64,7 +64,7 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
           return (
             <span
               key={type}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
             >
               {cfg.emoji} {amount}
             </span>
@@ -318,12 +318,12 @@ export function AlchemyTab() {
 
           {/* Description + yield-rates trigger */}
           <div className="flex items-start justify-between gap-3">
-            <p className="text-[11px] text-muted-foreground flex-1">
+            <p className="text-xs text-muted-foreground flex-1">
               Sacrifice harvested flowers to extract their elemental essence. Higher rarity yields more essence.
             </p>
             <button
               onClick={() => setShowYieldModal(true)}
-              className="shrink-0 text-[10px] font-semibold px-2 py-1 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+              className="shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
               title="Show essence yield rates by rarity"
             >
               📊 Yield rates
@@ -332,7 +332,7 @@ export function AlchemyTab() {
 
           {/* Essence bank — always visible at top, shows all 12 + Universal */}
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
               Essence Bank
             </p>
             <EssenceBank essences={state.essences ?? []} />
@@ -347,7 +347,7 @@ export function AlchemyTab() {
 
           {/* Rarity filter tabs */}
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
               Filter by rarity
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -355,10 +355,10 @@ export function AlchemyTab() {
               <button
                 onClick={() => setActiveRarities([])}
                 className={`
-                  px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all duration-150
+                  px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
                   ${activeRarities.length === 0
-                    ? "border-foreground bg-foreground/10 text-foreground"
-                    : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                    ? "bg-primary/20 border border-primary/50 text-primary"
+                    : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
                   }
                 `}
               >
@@ -376,12 +376,12 @@ export function AlchemyTab() {
                     )}
                     disabled={!hasAny}
                     className={`
-                      px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all duration-150
+                      px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize
                       ${isActive
-                        ? `border-current bg-current/10 ${cfg.color}`
+                        ? `bg-primary/20 border border-primary/50 ${cfg.color}`
                         : hasAny
-                          ? `border-border text-muted-foreground hover:border-current hover:${cfg.color}`
-                          : "border-border/30 text-muted-foreground/30 cursor-not-allowed"
+                          ? "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                          : "bg-card/60 border border-border/30 text-muted-foreground/30 cursor-not-allowed"
                       }
                     `}
                   >
@@ -394,10 +394,22 @@ export function AlchemyTab() {
 
           {/* Type filter */}
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
               Filter by type
             </p>
             <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setActiveTypes([])}
+                className={`
+                  px-2.5 py-1 rounded-lg text-xs font-semibold transition-all
+                  ${activeTypes.length === 0
+                    ? "bg-foreground/10 border border-foreground/40 text-foreground"
+                    : "bg-card/60 border border-border text-muted-foreground hover:border-foreground/30"
+                  }
+                `}
+              >
+                All types
+              </button>
               {typeOrder.map((type) => {
                 const cfg      = FLOWER_TYPES[type];
                 const hasAny   = availableTypes.has(type);
@@ -410,12 +422,12 @@ export function AlchemyTab() {
                     )}
                     disabled={!hasAny}
                     className={`
-                      inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold transition-all duration-150
+                      inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all
                       ${isActive
-                        ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`
+                        ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color} border`
                         : hasAny
-                          ? `border-border text-muted-foreground hover:${cfg.bgColor} hover:${cfg.borderColor} hover:${cfg.color}`
-                          : "border-border/30 text-muted-foreground/30 cursor-not-allowed"
+                          ? "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                          : "bg-card/60 border border-border/30 text-muted-foreground/30 cursor-not-allowed"
                       }
                     `}
                   >
@@ -447,13 +459,13 @@ export function AlchemyTab() {
                 <div className="flex gap-2">
                   <button
                     onClick={handleSelectAll}
-                    className="text-[10px] text-primary hover:text-primary/80 font-semibold"
+                    className="text-xs text-primary hover:text-primary/80 font-semibold"
                   >
                     Select all
                   </button>
                   <button
                     onClick={() => { handleClearRarity(); }}
-                    className="text-[10px] text-muted-foreground hover:text-foreground"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     Clear selection
                   </button>
@@ -503,7 +515,7 @@ export function AlchemyTab() {
                           return (
                             <span
                               key={t}
-                              className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${tc.bgColor} ${tc.borderColor} ${tc.color}`}
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${tc.bgColor} ${tc.borderColor} ${tc.color}`}
                             >
                               {tc.emoji} {tc.name}
                             </span>
@@ -533,7 +545,7 @@ export function AlchemyTab() {
                         <button
                           onClick={() => setQty(item.speciesId, item.mutation as MutationType | undefined, avail)}
                           disabled={qty >= avail}
-                          className="ml-1 text-[9px] text-primary font-semibold disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="ml-1 text-xs text-primary font-semibold disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           Max
                         </button>
@@ -748,7 +760,7 @@ export function AlchemyTab() {
 
         return (
           <div className="flex flex-col gap-5">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Transform a base bloom into a mutated one by spending elemental essence and coins.
               Higher essence (especially matching the flower's type) unlocks rarer mutation pools.
               Attunements are <span className="text-foreground">time-gated</span> — start one in a slot, wait, then collect the result.
@@ -757,7 +769,7 @@ export function AlchemyTab() {
             {/* ── Attunement slots + queue ────────────────────────────────── */}
             <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-3">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">
                   Attunement Slots <span className="text-muted-foreground/60">· {attuneQueue.length}/{attuneSlots}</span>
                 </p>
                 {atMaxSlots && (
@@ -812,7 +824,7 @@ export function AlchemyTab() {
                               → ❓ Tier {tierLabel}
                             </span>
                           </p>
-                          <p className="text-[10px] text-muted-foreground">
+                          <p className="text-xs text-muted-foreground">
                             {isDone ? <span className="text-green-400 font-semibold">Ready to collect!</span> : fmt(remaining)}
                           </p>
                         </div>
@@ -821,14 +833,14 @@ export function AlchemyTab() {
                         {isDone && (
                           <button
                             onClick={() => handleCollectAttune(entry.id)}
-                            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-green-600/20 border border-green-500/40 text-green-400 hover:bg-green-600/30 transition"
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-600/20 border border-green-500/40 text-green-400 hover:bg-green-600/30 transition"
                           >
                             ✅ Collect
                           </button>
                         )}
                         <button
                           onClick={() => handleCancelAttune(entry.id)}
-                          className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-card/60 border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 transition"
+                          className="px-2 py-1 rounded-lg text-xs font-semibold bg-card/60 border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 transition"
                           title="Cancel (refunds the bloom, NOT the essence)"
                         >
                           ✕
@@ -863,7 +875,7 @@ export function AlchemyTab() {
                       Unlock attunement slot {nextSlotUpgrade.slots}
                     </p>
                   </div>
-                  <span className="text-[11px] font-mono text-amber-400">
+                  <span className="text-xs font-mono text-amber-400">
                     {nextSlotUpgrade.cost.toLocaleString()} 🟡
                   </span>
                 </button>
@@ -876,11 +888,11 @@ export function AlchemyTab() {
 
               {/* Bloom picker */}
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
                   Pick a base bloom
                 </p>
                 {attunableBlooms.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">No unmutated blooms in inventory.</p>
+                  <p className="text-xs text-muted-foreground">No unmutated blooms in inventory.</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {rarityOrder.flatMap((r) =>
@@ -899,7 +911,7 @@ export function AlchemyTab() {
                                 setAttuneQty(1);
                                 setAttuneError(null);
                               }}
-                              className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                              className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors ${
                                 isSelected
                                   ? `${rc.color} border-current bg-current/10`
                                   : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -919,14 +931,14 @@ export function AlchemyTab() {
               {/* Essence picker — only shown once a bloom is selected */}
               {attuneSpecies && (
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
                     Choose essence type
                     <span className="ml-1 normal-case">
                       (matching: {attuneSpecies.types.join(", ")})
                     </span>
                   </p>
                   {ownedEssences.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">No essence in bank.</p>
+                    <p className="text-xs text-muted-foreground">No essence in bank.</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {ownedEssences.map(({ type, amount }) => {
@@ -937,14 +949,14 @@ export function AlchemyTab() {
                           <button
                             key={type}
                             onClick={() => { setAttuneEssType(type); setAttuneQty(1); }}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors ${
                               isSelected
                                 ? `${cfg.color} border-current ${cfg.bgColor}`
                                 : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
                             }`}
                           >
                             {cfg.emoji} {cfg.name}
-                            {isMatch && <span className="text-[9px] text-primary ml-0.5">✦ match</span>}
+                            {isMatch && <span className="text-[10px] text-primary ml-0.5">✦ match</span>}
                             <span className="text-muted-foreground/60 ml-0.5">×{amount}</span>
                           </button>
                         );
@@ -970,7 +982,7 @@ export function AlchemyTab() {
                   <div className="space-y-3">
                     {/* Qty row */}
                     <div className="flex items-center gap-3">
-                      <span className="text-[11px] text-muted-foreground">Quantity</span>
+                      <span className="text-xs text-muted-foreground">Quantity</span>
                       <div className="flex items-center gap-1">
                         <button onClick={() => setAttuneQty((q) => Math.max(1, q - 1))} disabled={attuneQty <= 1}
                           className="w-6 h-6 rounded-md border border-border text-xs flex items-center justify-center hover:border-primary/50 disabled:opacity-30">−</button>
@@ -978,12 +990,12 @@ export function AlchemyTab() {
                         <button onClick={() => setAttuneQty((q) => Math.min(ownedAmt, q + 1))} disabled={attuneQty >= ownedAmt}
                           className="w-6 h-6 rounded-md border border-border text-xs flex items-center justify-center hover:border-primary/50 disabled:opacity-30">+</button>
                         <button onClick={() => setAttuneQty(ownedAmt)} disabled={attuneQty >= ownedAmt}
-                          className="ml-1 text-[9px] text-primary disabled:opacity-30">Max</button>
+                          className="ml-1 text-xs text-primary disabled:opacity-30">Max</button>
                       </div>
                     </div>
 
                     {/* Tier + cost summary */}
-                    <div className="rounded-lg bg-card/60 border border-border px-3 py-2 space-y-1 text-[11px]">
+                    <div className="rounded-lg bg-card/60 border border-border px-3 py-2 space-y-1 text-xs">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Effective essence</span>
                         <span className="font-mono">{effectiveEssence}</span>
@@ -1005,7 +1017,7 @@ export function AlchemyTab() {
 
                     {/* Duration preview */}
                     {previewDurMs > 0 && (
-                      <p className="text-[10px] text-muted-foreground text-right">
+                      <p className="text-xs text-muted-foreground text-right">
                         ⏱ Duration: <span className="text-foreground">{fmtDur(previewDurMs)}</span>
                         {!slotsAvailable && (
                           <span className="ml-2 text-amber-400">· no free slot</span>
@@ -1036,12 +1048,12 @@ export function AlchemyTab() {
             {/* ── Strip section ───────────────────────────────────────────── */}
             <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-4">
               <p className="text-xs font-semibold">✂️ Strip Mutation</p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Remove a mutation from a bloom, returning it to its base form. Costs coins.
               </p>
 
               {strippableBlooms.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">No mutated blooms in inventory.</p>
+                <p className="text-xs text-muted-foreground">No mutated blooms in inventory.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {rarityOrder.flatMap((r) =>
@@ -1059,7 +1071,7 @@ export function AlchemyTab() {
                               setStripMutation(isSelected ? null : (item.mutation ?? null));
                               setStripError(null);
                             }}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors ${
                               isSelected
                                 ? "border-primary text-primary bg-primary/10"
                                 : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -1078,7 +1090,7 @@ export function AlchemyTab() {
 
               {stripSpeciesId && stripMutation && (
                 <div className="space-y-2">
-                  <div className="rounded-lg bg-card/60 border border-border px-3 py-2 text-[11px] flex justify-between">
+                  <div className="rounded-lg bg-card/60 border border-border px-3 py-2 text-xs flex justify-between">
                     <span className="text-muted-foreground">Strip cost</span>
                     <span className={`font-mono ${state.coins >= stripGoldCost ? "" : "text-destructive"}`}>
                       {stripGoldCost.toLocaleString()} 🟡
@@ -1109,7 +1121,7 @@ export function AlchemyTab() {
               <span className="text-2xl">{mut?.emoji ?? "🌿"}</span>
               <div>
                 <p className="text-sm font-bold text-primary mb-0.5">Attunement complete!</p>
-                <p className={`text-[11px] font-semibold ${mut?.color ?? ""}`}>{mut?.name ?? attuneResult.mutation}</p>
+                <p className={`text-xs font-semibold ${mut?.color ?? ""}`}>{mut?.name ?? attuneResult.mutation}</p>
                 <p className={`text-[10px] ${TIER_COLOR[attuneResult.tier]}`}>Tier {attuneResult.tier} pool</p>
               </div>
             </div>
@@ -1124,7 +1136,7 @@ export function AlchemyTab() {
             <span className="text-2xl">✂️</span>
             <div>
               <p className="text-sm font-bold mb-0.5">Mutation stripped</p>
-              <p className="text-[11px] text-muted-foreground">Bloom returned to base form</p>
+              <p className="text-xs text-muted-foreground">Bloom returned to base form</p>
             </div>
           </div>
         </div>
@@ -1151,7 +1163,7 @@ export function AlchemyTab() {
                   return (
                     <span
                       key={type}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
                     >
                       {cfg.emoji} +{amount}
                     </span>
