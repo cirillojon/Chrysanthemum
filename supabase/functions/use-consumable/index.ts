@@ -382,8 +382,8 @@ Deno.serve(async (req: Request) => {
       if (!rarity) return err("Unknown species");
 
       // Validate consumable tier vs. plant rarity.
-      // Magnifying Glass has no tier suffix and works on any rarity — skip the gate.
-      if (consumableId !== "magnifying_glass") {
+      // Magnifying Glass and Garden Pin have no tier suffix and work on any rarity — skip the gate.
+      if (consumableId !== "magnifying_glass" && consumableId !== "garden_pin") {
         const tier = extractTier(consumableId);
         if (tier === null) return err("This consumable cannot be applied to a plant");
 
@@ -481,7 +481,7 @@ Deno.serve(async (req: Request) => {
       // ── Garden Pin ──────────────────────────────────────────────────────────
       // Shields the plot from auto-harvest (Harvest Bell, Auto-Planter).
       // Manual harvest still works. Permanent for the life of the plant.
-      } else if (consumableId.startsWith("garden_pin_")) {
+      } else if (consumableId === "garden_pin") {
         if (plant.pinned) return err("This plant is already pinned");
         updatedPlant = { ...updatedPlant, pinned: true };
 

@@ -2648,7 +2648,7 @@ export function applyPlantConsumable(
     if (plant.revealed) return null;
     if (plant.bloomedAt || plant.timePlanted === 0) return null; // already bloomed
     updatedPlant = { ...updatedPlant, revealed: true };
-  } else if (consumableId.startsWith("garden_pin_")) {
+  } else if (consumableId === "garden_pin") {
     // Shield the plot from auto-harvest (Harvest Bell, Auto-Planter).
     if (plant.pinned) return null;
     updatedPlant = { ...updatedPlant, pinned: true };

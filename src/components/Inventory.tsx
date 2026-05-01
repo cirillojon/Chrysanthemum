@@ -394,6 +394,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
 
     {pouchResult && (() => {
       const flower = getFlower(pouchResult.speciesId);
+      const rarity = flower ? RARITY_CONFIG[flower.rarity] : null;
       return (
         <div
           className={`
@@ -407,7 +408,9 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
             <div>
               <p className="text-sm font-bold text-primary mb-0.5">Pouch opened!</p>
               <p className="text-[11px] text-muted-foreground">
-                {flower?.name ?? pouchResult.speciesId} seed
+                New{" "}
+                <span className={rarity?.color ?? ""}>{rarity?.label ?? "Unknown"}</span>
+                {" "}seed
               </p>
             </div>
           </div>

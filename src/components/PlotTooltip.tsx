@@ -127,8 +127,8 @@ export function PlotTooltip({
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
     if (!recipe || recipe.tier === null) return false;
 
-    // Magnifying Glass bypasses the rarity gate — identification works on any species
-    if (c.id !== "magnifying_glass" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
+    // Magnifying Glass and Garden Pin bypass the rarity gate — they work on any species
+    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
@@ -137,7 +137,7 @@ export function PlotTooltip({
     // Magnifying Glass: only usable on non-bloomed, not-yet-revealed plants
     if (c.id === "magnifying_glass" && (plant.revealed || isBloomed)) return false;
     // Garden Pin: hide once the plant is already pinned
-    if (c.id.startsWith("garden_pin_") && plant.pinned) return false;
+    if (c.id === "garden_pin" && plant.pinned) return false;
     return true;
   });
 
