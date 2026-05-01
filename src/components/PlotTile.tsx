@@ -390,7 +390,7 @@ export function PlotTile({
 
       <button
         onClick={handleClick}
-        style={isBloomed && isIdentified && species?.rarity === "prismatic"
+        style={isBloomed && species?.rarity === "prismatic"
           ? { animation: "rainbow-border-cycle 3s linear infinite, rainbow-bg-cycle 3s linear infinite, rainbow-glow-cycle 3s linear infinite" }
           : undefined
         }
@@ -407,7 +407,7 @@ export function PlotTile({
         `}
         title={
           isBloomed
-            ? `${isIdentified ? species?.name : "???"} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
+            ? `${species?.name} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
             : open
             ? "Click to close"
             : `${isIdentified ? species?.name : "???"} — Click for options`
@@ -541,7 +541,7 @@ export function PlotTile({
         )}
 
         <span className="text-2xl leading-none">
-          {isIdentified ? (species?.emoji[stage!] ?? "🌱") : (isBloomed ? "❓" : "🌱")}
+          {(isIdentified || isBloomed) ? (species?.emoji[stage!] ?? "🌱") : "🌱"}
         </span>
 
         {/* Fertilizer indicator — top-left */}
@@ -632,7 +632,7 @@ export function PlotTile({
         ) : null}
 
         {/* Mutation emoji — bottom-right */}
-        {settings.plotMutationIndicator && isBloomed && isIdentified && (plant as PlantedFlower).mutation && (
+        {settings.plotMutationIndicator && isBloomed && (plant as PlantedFlower).mutation && (
           <span className="absolute -bottom-1 -right-1 text-sm leading-none">
             {MUTATIONS[(plant as PlantedFlower).mutation!].emoji}
           </span>

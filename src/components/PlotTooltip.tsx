@@ -148,8 +148,10 @@ export function PlotTooltip({
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
     // Heirloom Charm only works on bloomed plants
     if (c.id.startsWith("heirloom_charm_") && !isBloomed) return false;
-    // Magnifying Glass: only usable on non-bloomed, not-yet-revealed plants
-    if (c.id === "magnifying_glass" && (plant.revealed || isBloomed)) return false;
+    // Magnifying Glass: only usable when species is still unknown on this tile
+    // (blocks if: already revealed via mag glass, plant is bloomed and now visible,
+    //  or species already in codex so there's nothing left to reveal)
+    if (c.id === "magnifying_glass" && (plant.revealed || isBloomed || state.discovered.includes(plant.speciesId))) return false;
     // Garden Pin: hide once the plant is already pinned
     if (c.id === "garden_pin" && plant.pinned) return false;
     // Ruler: hide once already applied, or on a bloomed plant
