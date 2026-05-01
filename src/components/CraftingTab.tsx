@@ -369,14 +369,16 @@ function QueueEntryRow({
               {isCollecting ? "…" : "✅ Collect"}
             </button>
           )}
-          <button
-            onClick={() => onCancel(entry.id)}
-            disabled={isCollecting || isCanceling}
-            className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-card/60 border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition"
-            title="Cancel (refunds ingredients and coins)"
-          >
-            {isCanceling ? "…" : "✕"}
-          </button>
+          {!isDone && (
+            <button
+              onClick={() => onCancel(entry.id)}
+              disabled={isCollecting || isCanceling}
+              className="px-2 py-1 rounded-lg text-[10px] font-semibold bg-card/60 border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              title="Cancel (refunds ingredients and coins)"
+            >
+              {isCanceling ? "…" : "✕"}
+            </button>
+          )}
         </div>
       </div>
       {/* Progress bar — `now` ticks every 1s in discrete steps, so without a
