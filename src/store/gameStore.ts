@@ -990,19 +990,14 @@ export function getPassiveGrowthMultiplier(
     if (isGrowLamp(def) && night && def.nightMultiplier) {
       bestLamp = Math.max(bestLamp, def.nightMultiplier);
     }
-    // Balance scale: alternates 3× boost / 0.5× slow every hour.
-    // Phase 0 = chosen direction boosted; phase 1 = opposite boosted.
+    // Balance scale: always operates on the left/right axis.
+    // Phase 0 = left arm (dc < 0) boosted 3×; right arm (dc > 0) slowed 0.5×.
+    // Phase 1 = flipped.
     if (isBalanceScale(def) && def.fanRange) {
-      const phase = Math.floor((now - placedGear.placedAt) / 3_600_000) % 2;
-      const dr    = row - sourceRow;
-      const dc    = col - sourceCol;
-      const dir   = placedGear.direction ?? "right";
-      const inChosen =
-        (dir === "right" && dc > 0) ||
-        (dir === "left"  && dc < 0) ||
-        (dir === "down"  && dr > 0) ||
-        (dir === "up"    && dr < 0);
-      const isBoosted = phase === 0 ? inChosen : !inChosen;
+      const phase    = Math.floor(now / 3_600_000) % 2;
+      const dc       = col - sourceCol;
+      const inLeft   = dc < 0;
+      const isBoosted = phase === 0 ? inLeft : !inLeft;
       if (isBoosted) {
         balanceScaleBoostMult = Math.max(balanceScaleBoostMult, 3.0);
       } else {
@@ -2350,7 +2345,7 @@ export function placeGear(
   return { ...state, grid: newGrid, gearInventory: newGearInv };
 }
 
-/** Updates the direction of a directional gear (fan, aegis, lawnmower, balance_scale) placed at (row, col). */
+/** Updates the direction of a directional gear (fan, aegis, lawnmower) placed at (row, col). */
 export function setFanDirection(
   state: GameState,
   row: number,
@@ -2360,7 +2355,7 @@ export function setFanDirection(
   const plot = state.grid[row]?.[col];
   if (!plot?.gear) return null;
   const def = GEAR[plot.gear.gearType];
-  if (def.passiveSubtype !== "fan" && def.passiveSubtype !== "aegis" && def.passiveSubtype !== "lawnmower" && def.passiveSubtype !== "balance_scale") return null;
+  if (def.passiveSubtype !== "fan" && def.passiveSubtype !== "aegis" && def.passiveSubtype !== "lawnmower") return null;
 
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>

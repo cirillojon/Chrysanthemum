@@ -703,7 +703,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   balance_scale_legendary: {
     id:             "balance_scale_legendary",
     name:           "Balance Scale I",
-    description:    "Alternates every hour: 1 cell in the chosen direction grows 3× faster, 1 cell behind grows 0.5× slower. Lasts 8 hours.",
+    description:    "Alternates every hour: the left cell grows 3× faster while the right cell grows 0.5× slower — then swaps. Lasts 8 hours.",
     emoji:          "⚖️",
     rarity:         "legendary",
     shopPrice:      30_000,
@@ -716,7 +716,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   balance_scale_mythic: {
     id:             "balance_scale_mythic",
     name:           "Balance Scale II",
-    description:    "Alternates every hour: 2 cells in the chosen direction grow 3× faster, 2 cells behind grow 0.5× slower. Lasts 10 hours.",
+    description:    "Alternates every hour: the 2 left cells grow 3× faster while the 2 right cells grow 0.5× slower — then swaps. Lasts 10 hours.",
     emoji:          "⚖️",
     rarity:         "mythic",
     shopPrice:      200_000,
@@ -729,7 +729,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   balance_scale_exalted: {
     id:             "balance_scale_exalted",
     name:           "Balance Scale III",
-    description:    "Alternates every hour: 3 cells in the chosen direction grow 3× faster, 3 cells behind grow 0.5× slower. Lasts 12 hours.",
+    description:    "Alternates every hour: the 3 left cells grow 3× faster while the 3 right cells grow 0.5× slower — then swaps. Lasts 12 hours.",
     emoji:          "⚖️",
     rarity:         "exalted",
     shopPrice:      1_200_000,
@@ -800,18 +800,14 @@ export function getAffectedCells(
 ): [number, number][] {
   const def = GEAR[gearType];
 
-  // Balance Scale: covers cells in BOTH the chosen direction AND its opposite.
-  // The chosen direction is the "boost" arm in phase 0 (switches every hour).
+  // Balance Scale: always covers cells to the LEFT and RIGHT.
+  // Phase 0 = left arm boosted; phase 1 = right arm boosted. No direction picker.
   if (def.passiveSubtype === "balance_scale" && def.fanRange) {
-    if (!direction) return [];
     const range = def.fanRange;
     const offsets: [number, number][] = [];
     for (let i = 1; i <= range; i++) {
-      // Chosen direction
-      if (direction === "up")    { offsets.push([-i,  0]); offsets.push([ i,  0]); }
-      if (direction === "down")  { offsets.push([ i,  0]); offsets.push([-i,  0]); }
-      if (direction === "left")  { offsets.push([ 0, -i]); offsets.push([ 0,  i]); }
-      if (direction === "right") { offsets.push([ 0,  i]); offsets.push([ 0, -i]); }
+      offsets.push([0, -i]); // left arm
+      offsets.push([0,  i]); // right arm
     }
     return offsets
       .map(([dr, dc]): [number, number] => [gearRow + dr, gearCol + dc])

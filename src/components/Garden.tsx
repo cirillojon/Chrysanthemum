@@ -294,14 +294,13 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             const dir = g.direction ?? "right";
             keys.forEach((k) => lawnmower.set(k, dir));
           } else if (def.passiveSubtype === "balance_scale") {
-            const dir   = g.direction ?? "right";
-            const phase = Math.floor((now - g.placedAt) / 3_600_000) % 2;
+            // Phase synced to the real-world clock so it never flickers due to
+            // server/client clock skew or placedAt unit mismatches.
+            const phase  = Math.floor(now / 3_600_000) % 2;
             affected.forEach(([r, c]) => {
-              const dr = r - ri, dc = c - ci;
-              const inChosen =
-                (dir === "right" && dc > 0) || (dir === "left"  && dc < 0) ||
-                (dir === "down"  && dr > 0) || (dir === "up"    && dr < 0);
-              const isBoost = phase === 0 ? inChosen : !inChosen;
+              const dc      = c - ci;
+              const inLeft  = dc < 0;
+              const isBoost = phase === 0 ? inLeft : !inLeft;
               balanceScale.set(`${r}-${c}`, isBoost ? "boost" : "slow");
             });
           } else if (def.passiveSubtype === "auto_planter") {
@@ -410,7 +409,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   function handleGearSelect(gearType: GearType) {
     if (!selectedPlot) return;
     const def = GEAR[gearType];
-    if (def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower" || def.passiveSubtype === "balance_scale") {
+    if (def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower") {
       // Directional gear needs a direction — show direction picker first
       setPendingFan({ gearType, row: selectedPlot.row, col: selectedPlot.col });
       setSelectedPlot(null);
