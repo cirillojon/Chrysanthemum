@@ -572,10 +572,113 @@ function CraftPopup({
   // All crafts now go into the queue — slot availability applies to all kinds
   const canAct = slotsAvailable && entry.canCraft && quantity >= 1 && quantity <= maxAffordable;
 
+  // Compute which specific ingredients are short so the button label is actionable
+  const craftBlockReason = useMemo((): string => {
+    if (entry.canCraft) return "";
+    const missing: string[] = [];
+
+    if (entry.kind === "gear" && gearRecipe) {
+      const coinNeed = gearRecipe.coinCost * quantity;
+      if (state.coins < coinNeed)
+        missing.push(`${(coinNeed - state.coins).toLocaleString()} coins`);
+      for (const ing of gearRecipe.ingredients) {
+        if (ing.kind === "essence") {
+          const have = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
+          const need = ing.amount * quantity;
+          if (have < need) {
+            const cfg = FLOWER_TYPES[ing.essenceType as FlowerType];
+            missing.push(`${(need - have).toLocaleString()} ${cfg?.name ?? ing.essenceType} essence`);
+          }
+        } else if (ing.kind === "gear") {
+          const have = gearInv.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
+          const need = ing.quantity * quantity;
+          if (have < need)
+            missing.push(`${need - have} ${GEAR[ing.gearType].name}`);
+        } else if (ing.kind === "consumable") {
+          const have = consum.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
+          const need = ing.quantity * quantity;
+          if (have < need) {
+            const src = CONSUMABLE_RECIPE_MAP[ing.consumableId as ConsumableId];
+            missing.push(`${need - have} ${src?.name ?? ing.consumableId}`);
+          }
+        }
+      }
+    } else if (entry.kind === "consumable") {
+      const id     = entry.id.replace("consumable:", "") as ConsumableId;
+      const recipe = CONSUMABLE_RECIPE_MAP[id];
+      if (recipe) {
+        const cost = recipe.cost;
+        if (cost.kind === "essence") {
+          for (const { type, amount } of cost.amounts) {
+            const have = essences.find((e) => e.type === type)?.amount ?? 0;
+            const need = amount * quantity;
+            if (have < need) {
+              const isUni = type === "universal";
+              const cfg   = isUni ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
+              missing.push(`${(need - have).toLocaleString()} ${cfg.name} essence`);
+            }
+          }
+        } else if ((cost.id as string).startsWith("fertilizer_")) {
+          const fertType = (cost.id as string).replace("fertilizer_", "");
+          const have     = ferts.find((f) => f.type === fertType)?.quantity ?? 0;
+          const need     = cost.quantity * quantity;
+          if (have < need) {
+            const fertDef = FERTILIZERS[fertType as keyof typeof FERTILIZERS];
+            missing.push(`${need - have} ${fertDef?.name ?? fertType}`);
+          }
+        } else {
+          const have = consum.find((c) => c.id === cost.id)?.quantity ?? 0;
+          const need = cost.quantity * quantity;
+          if (have < need) {
+            const src = CONSUMABLE_RECIPE_MAP[cost.id as ConsumableId];
+            missing.push(`${need - have} ${src?.name ?? cost.id}`);
+          }
+        }
+      }
+    } else if (entry.kind === "attunement") {
+      const tier   = parseInt(entry.id.replace("attunement:", ""), 10) as 1|2|3|4|5;
+      const recipe = ATTUNEMENT_RECIPES.find((r) => r.tier === tier);
+      if (recipe) {
+        const cost = recipe.cost;
+        if (cost.kind === "essence") {
+          for (const { type, amount } of cost.amounts) {
+            const have = essences.find((e) => e.type === type)?.amount ?? 0;
+            const need = amount * quantity;
+            if (have < need) {
+              const isUni = type === "universal";
+              const cfg   = isUni ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
+              missing.push(`${(need - have).toLocaleString()} ${cfg.name} essence`);
+            }
+          }
+        } else {
+          const prevRarity = TIER_RARITIES[cost.tier as 1|2|3|4|5];
+          const have       = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
+          const need       = cost.quantity * quantity;
+          if (have < need)
+            missing.push(`${need - have} Infuser ${toRoman(cost.tier)}`);
+        }
+      }
+    } else if (entry.kind === "essence") {
+      for (const type of ALL_FLOWER_TYPES) {
+        const have = essences.find((e) => e.type === type)?.amount ?? 0;
+        const need = UNIVERSAL_ESSENCE_COST_PER_TYPE * quantity;
+        if (have < need) {
+          const cfg = FLOWER_TYPES[type];
+          missing.push(`${(need - have).toLocaleString()} ${cfg.name} essence`);
+        }
+      }
+    }
+
+    if (missing.length === 0) return "Missing ingredients";
+    if (missing.length === 1) return `Need ${missing[0]}`;
+    if (missing.length === 2) return `Need ${missing[0]} + ${missing[1]}`;
+    return `Need ${missing[0]} + ${missing.length - 1} more`;
+  }, [entry, gearRecipe, gearInv, essences, consum, ferts, infusers, quantity, state.coins]);
+
   let buttonLabel: string;
   if (isCrafting)           buttonLabel = "Starting…";
   else if (!slotsAvailable) buttonLabel = "No crafting slots available";
-  else if (!entry.canCraft) buttonLabel = "Missing ingredients or coins";
+  else if (!entry.canCraft) buttonLabel = craftBlockReason;
   else if (quantity > 1)    buttonLabel = `⏳ Craft ×${quantity}`;
   else                      buttonLabel = "⏳ Start Crafting";
 
