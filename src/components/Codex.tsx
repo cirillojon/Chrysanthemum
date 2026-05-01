@@ -13,17 +13,19 @@ type FilterRarity = Rarity | "all";
 type FilterStatus = "all" | "discovered" | "undiscovered";
 
 /** Format a growth-time millisecond duration for the codex stats panel.
- *  Mirrors the shop slot card's format so growth times read consistently. */
+ *  Shows d/h/m/s so times above 24 h read as days rather than raw hours. */
 function formatDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1_000);
-  const hours    = Math.floor(totalSec / 3_600);
-  const minutes  = Math.floor((totalSec % 3_600) / 60);
-  const seconds  = totalSec % 60;
-  if (hours > 0 && minutes > 0) return `${hours}hr ${minutes}m`;
-  if (hours > 0)                return `${hours}hr`;
-  if (minutes > 0 && seconds > 0) return `${minutes}m ${seconds}s`;
-  if (minutes > 0)              return `${minutes}m`;
-  return `${seconds}s`;
+  const days    = Math.floor(totalSec / 86_400);
+  const hours   = Math.floor((totalSec % 86_400) / 3_600);
+  const minutes = Math.floor((totalSec % 3_600) / 60);
+  const seconds = totalSec % 60;
+  const parts: string[] = [];
+  if (days    > 0) parts.push(`${days}d`);
+  if (hours   > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+  return parts.join(" ");
 }
 
 interface Props {
