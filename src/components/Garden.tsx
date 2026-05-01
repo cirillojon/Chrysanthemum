@@ -30,7 +30,7 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType) => void }) {
-  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, user, requestSignIn } = useGame();
+  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, saveGridNow, user, requestSignIn } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -58,11 +58,19 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const latest  = getState();                            // always the freshest state
     let next = stampStageTransitions(latest, now, weather);
     next = tickWeatherMutations(next, weather);
+    // Track whether a sprinkler tick newly mutated any plant so we can flush to
+    // the DB — the server's harvest function reads plant.mutation from the DB,
+    // and sprinkler mutations are purely client-side until cloud-saved.
+    const beforeSprinkler = next;
     next = tickSprinklerMutations(next, weather);
+    const sprinklerMutated = next !== beforeSprinkler;
     next = tickScarecrowStrip(next, weather);
     next = tickFanMutations(next, weather);
     next = assignBloomMutations(next, weather);
     if (next !== latest) update(next);
+    // Persist sprinkler mutations to the DB immediately so harvest sees them.
+    // saveGridNow is a no-op for guests and during loading — safe to fire and forget.
+    if (sprinklerMutated) saveGridNow();
 
     // Bell harvests — throttled to 1 per GEAR_ACTION_INTERVAL_MS to prevent server races
     const bellTargets = findHarvestBellTargets(next, weather);

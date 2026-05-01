@@ -106,6 +106,15 @@ export function PlotTile({
   const passiveMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
   const boostMult   = plant ? getBoostMultiplier(getState().activeBoosts, "growth", now) : 1.0;
   const gearMult    = passiveMult * boostMult;
+  // Full multiplier shown on the ruler badge — mirrors computeGrowthMs so the
+  // displayed number matches actual growth speed (gear × Verdant Rush × fert ×
+  // weather × mastered).
+  const rulerMult = plant ? (() => {
+    const fMult = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1;
+    const mMult = (plant as PlantedFlower).masteredBonus ?? 1;
+    const wMult = WEATHER[activeWeather as WeatherType]?.growthMultiplier ?? 1;
+    return gearMult * fMult * mMult * wMult;
+  })() : gearMult;
   const stage    = plant ? getCurrentStage(plant, now, activeWeather, gearMult) : null;
   const progress = plant ? getStageProgress(plant, now, activeWeather, gearMult) : 0;
 
@@ -580,7 +589,7 @@ export function PlotTile({
             {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× growth penalty">⚖️</span>}
             {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
             {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
-            {plant.showMultiplier && <span className="text-[9px]" title={`Ruler — ${gearMult.toFixed(2)}× total gear growth`}>📏</span>}
+            {plant.showMultiplier && <span className="text-[9px]" title={`Ruler — ${rulerMult.toFixed(2)}× total growth (gear × fert × weather × mastered)`}>📏</span>}
           </div>
         )}
 
@@ -588,7 +597,7 @@ export function PlotTile({
         {plant.showMultiplier && !isBloomed && (
           <div className="absolute top-0.5 inset-x-0 flex justify-center pointer-events-none z-10">
             <span className="bg-amber-500/20 border border-amber-500/25 rounded px-0.5 text-[7px] font-mono leading-tight text-amber-300 whitespace-nowrap">
-              {gearMult.toFixed(2)}×
+              {rulerMult.toFixed(2)}×
             </span>
           </div>
         )}
