@@ -14,7 +14,7 @@ import {
 
 const LISTING_FEE_PCT = 0.05;
 
-type Tab = "flowers" | "seeds" | "supplies";
+type Tab = "flowers" | "supplies";
 
 // A supply item is either a fertilizer or a gear item
 type SupplyItem =
@@ -42,7 +42,6 @@ export function CreateListingModal({ onClose, onListed }: Props) {
   const [error,       setError]       = useState("");
 
   const flowers  = state.inventory.filter((i) => i.quantity > 0 && !i.isSeed);
-  const seeds    = state.inventory.filter((i) => i.quantity > 0 && i.isSeed);
 
   // Merge fertilizers + gear into a single supplies list
   const supplies: SupplyItem[] = [
@@ -61,9 +60,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
     setError("");
   }
 
-  const tabItems = activeTab === "flowers" ? flowers
-                 : activeTab === "seeds"   ? seeds
-                 :                          supplies;
+  const tabItems = activeTab === "flowers" ? flowers : supplies;
 
   const askPrice   = parseInt(askPriceStr, 10);
   const validPrice = !isNaN(askPrice) && askPrice >= 1;
@@ -88,7 +85,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
           update({ ...state, coins: result.coins, gearInventory: result.gearInventory! });
         }
       } else {
-        const invItem = (activeTab === "flowers" ? flowers : seeds)[selectedIdx];
+        const invItem = flowers[selectedIdx];
         const result = await edgeMarketplaceCreateListing(
           invItem.speciesId,
           invItem.mutation,
@@ -122,7 +119,6 @@ export function CreateListingModal({ onClose, onListed }: Props) {
 
   const TAB_CONFIG: { id: Tab; label: string; emoji: string; count: number }[] = [
     { id: "flowers",  label: "Flowers",  emoji: "🌸", count: flowers.length  },
-    { id: "seeds",    label: "Seeds",    emoji: "🌱", count: seeds.length    },
     { id: "supplies", label: "Supplies", emoji: "🧪", count: supplies.length },
   ];
 
@@ -176,15 +172,13 @@ export function CreateListingModal({ onClose, onListed }: Props) {
         {tabItems.length === 0 ? (
           <div className="min-h-[18vh] flex flex-col items-center justify-center space-y-1">
             <p className="text-2xl">
-              {activeTab === "flowers" ? "🌸" : activeTab === "seeds" ? "🌱" : "🧪"}
+              {activeTab === "flowers" ? "🌸" : "🧪"}
             </p>
             <p className="text-sm text-muted-foreground">
-              {activeTab === "flowers"     ? "No flowers to list."
-               : activeTab === "seeds"    ? "No seeds to list."
-               : "No fertilizers to list."}
+              {activeTab === "flowers" ? "No flowers to list." : "No supplies to list."}
             </p>
-            {activeTab !== "supplies" && (
-              <p className="text-xs text-muted-foreground">Harvest flowers or buy seeds first!</p>
+            {activeTab === "flowers" && (
+              <p className="text-xs text-muted-foreground">Harvest flowers first!</p>
             )}
           </div>
         ) : (
@@ -231,8 +225,8 @@ export function CreateListingModal({ onClose, onListed }: Props) {
               }
             })}
 
-            {/* Flowers / Seeds tabs — inventory rows */}
-            {activeTab !== "supplies" && (activeTab === "flowers" ? flowers : seeds).map((item, idx) => {
+            {/* Flowers tab — inventory rows */}
+            {activeTab === "flowers" && flowers.map((item, idx) => {
               const species  = getFlower(item.speciesId);
               const mut      = item.mutation ? MUTATIONS[item.mutation as MutationType] : null;
               const rarity   = species ? RARITY_CONFIG[species.rarity] : null;
