@@ -72,8 +72,10 @@ function AppInner() {
   const { unreadCount: mailboxUnreadCount } = useMailbox(user?.id ?? null);
 
   const [tab, setTab]               = useState<Tab>("garden");
-  const [shopView,   setShopView]   = useState<ShopView>("seeds");
-  const [socialView, setSocialView] = useState<SocialView>("search");
+  const [shopView,      setShopView]      = useState<ShopView>("seeds");
+  const [socialView,    setSocialView]    = useState<SocialView>("search");
+  const [inventoryTab,  setInventoryTab]  = useState<0|1|2|3|4>(0);
+  const [alchemyView,   setAlchemyView]   = useState<"sacrifice"|"attune">("sacrifice");
   const [showBanner, setShowBanner] = useState(true);
   const [showForecast, setShowForecast] = useState(false);
   const [tabDir, setTabDir] = useState<"left" | "right" | null>(null);
@@ -302,7 +304,28 @@ function AppInner() {
       }
       setTabDir("left"); setSubDir(null);
       setTab("inventory");
+      setInventoryTab(0); // enter inventory at Seeds
       return;
+    }
+    if (tab === "inventory") {
+      if (inventoryTab < 4) {
+        setSubDir("left"); setTabDir(null);
+        setInventoryTab((inventoryTab + 1) as 0|1|2|3|4);
+        return;
+      }
+      // Last inventory tab → enter alchemy at first view
+      setTabDir("left"); setSubDir(null);
+      setTab("alchemy");
+      setAlchemyView("sacrifice");
+      return;
+    }
+    if (tab === "alchemy") {
+      if (alchemyView === "sacrifice") {
+        setSubDir("left"); setTabDir(null);
+        setAlchemyView("attune");
+        return;
+      }
+      // Last alchemy view → fall through to craft via main tab logic
     }
     if (tab === "social") {
       const idx = SOCIAL_VIEWS.indexOf(socialView);
@@ -325,7 +348,7 @@ function AppInner() {
       if (next === "shop")   setShopView("seeds");
       if (next === "social") setSocialView("search");
     }
-  }, [tab, shopView, socialView, profileUsername, user, profile]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, shopView, socialView, profileUsername, user, profile, inventoryTab, alchemyView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSwipeRight = useCallback(() => {
     if (tab === "social" && profileUsername) {
@@ -356,7 +379,25 @@ function AppInner() {
       setTab("garden");
       return;
     }
+    if (tab === "alchemy") {
+      if (alchemyView === "attune") {
+        setSubDir("right"); setTabDir(null);
+        setAlchemyView("sacrifice");
+        return;
+      }
+      // First alchemy view → enter inventory at last tab (Essences)
+      setTabDir("right"); setSubDir(null);
+      setTab("inventory");
+      setInventoryTab(4);
+      return;
+    }
     if (tab === "inventory") {
+      if (inventoryTab > 0) {
+        setSubDir("right"); setTabDir(null);
+        setInventoryTab((inventoryTab - 1) as 0|1|2|3|4);
+        return;
+      }
+      // First inventory tab → shop's last sub-tab
       setTabDir("right"); setSubDir(null);
       setTab("shop");
       setShopView("supply");
@@ -367,7 +408,7 @@ function AppInner() {
       setTabDir("right"); setSubDir(null);
       setTab(MAIN_TABS[idx - 1]);
     }
-  }, [tab, shopView, socialView, profileUsername]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tab, shopView, socialView, profileUsername, inventoryTab, alchemyView]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const swipeHandlers = useSwipe(handleSwipeLeft, handleSwipeRight);
 
@@ -771,6 +812,8 @@ function AppInner() {
               newSeeds={newSeeds}
               newBlooms={newBlooms}
               newSupplies={newSupplies}
+              activeTab={inventoryTab}
+              onTabChange={(t) => setInventoryTab(t)}
               onSubTabView={(subTab) => {
                 if (subTab === "seeds")    setNewSeeds(0);
                 if (subTab === "blooms")   setNewBlooms(0);
@@ -778,7 +821,7 @@ function AppInner() {
               }}
             />
           )}
-          {tab === "alchemy"     && <AlchemyTab />}
+          {tab === "alchemy"     && <AlchemyTab activeView={alchemyView} onViewChange={setAlchemyView} />}
           {tab === "craft"       && <CraftingTab />}
           {tab === "codex"       && <Codex unseenEntries={unseenCodex} markSeen={markCodexSeen} />}
           {tab === "social"    && (

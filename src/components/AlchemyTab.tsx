@@ -81,10 +81,19 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
 
 type AlchemyView = "sacrifice" | "attune";
 
-export function AlchemyTab() {
+interface AlchemyTabProps {
+  /** Controlled view — passed from App for swipe navigation. */
+  activeView?:  AlchemyView;
+  onViewChange?: (view: AlchemyView) => void;
+}
+
+export function AlchemyTab({ activeView, onViewChange }: AlchemyTabProps = {}) {
   const { state, perform, getState, update } = useGame();
 
-  const [view, setView]             = useState<AlchemyView>("sacrifice");
+  const [localView, setLocalView] = useState<AlchemyView>("sacrifice");
+  // Use controlled view when provided by parent (swipe), otherwise local state
+  const view    = activeView  ?? localView;
+  const setView = (v: AlchemyView) => { setLocalView(v); onViewChange?.(v); };
   const [selections, setSelections] = useState<SacrificeMap>(new Map());
   const [activeRarities, setActiveRarities] = useState<Rarity[]>([]);
   const [activeTypes,    setActiveTypes]    = useState<FlowerType[]>([]);

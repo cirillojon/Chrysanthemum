@@ -23,11 +23,17 @@ interface Props {
   newBlooms?:   number;
   newSupplies?: number;
   onSubTabView?: (subTab: "seeds" | "blooms" | "supplies") => void;
+  /** Controlled active tab — passed from App for swipe navigation. */
+  activeTab?:   Tab;
+  onTabChange?: (tab: Tab) => void;
 }
 
-export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView }: Props) {
+export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView, activeTab, onTabChange }: Props) {
   const { state, perform, getState, awaitHarvests, update } = useGame();
-  const [tab,                 setTab]                 = useState<Tab>(0);
+  const [localTab, setLocalTab] = useState<Tab>(0);
+  // Use controlled tab when provided by parent (swipe), otherwise local state
+  const tab    = activeTab  ?? localTab;
+  const setTab = (t: Tab) => { setLocalTab(t); onTabChange?.(t); };
   const [usingEclipse,        setUsingEclipse]        = useState<string | null>(null);
   const [openingPouch,        setOpeningPouch]        = useState<string | null>(null);
   const [activatingBoost,     setActivatingBoost]     = useState<string | null>(null);
