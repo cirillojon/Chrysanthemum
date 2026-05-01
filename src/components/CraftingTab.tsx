@@ -545,6 +545,14 @@ function CraftPopup({
   state:          GameState;
   slotsAvailable: boolean;
 }) {
+  // Lock body scroll while the popup is open so the underlying CraftingTab
+  // list doesn't jump when the sheet mounts / unmounts on mobile.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   const essences  = state.essences      ?? [];
   const gearInv   = state.gearInventory ?? [];
   const consum    = state.consumables   ?? [];
@@ -805,7 +813,7 @@ function CraftPopup({
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full sm:max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-y-auto max-h-[90dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

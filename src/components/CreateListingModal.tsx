@@ -293,7 +293,7 @@ export function CreateListingModal({ onClose, onListed }: Props) {
                   </div>
                   <div className="text-right flex-shrink-0">
                     <p className="text-xs text-muted-foreground">×{item.quantity}</p>
-                    <p className="text-[10px] text-muted-foreground/60">{formatCoins(species.sellValue)} 🟡 base</p>
+                    <p className="text-[10px] text-muted-foreground/60">{formatCoins(Math.floor(species.sellValue * (mut?.valueMultiplier ?? 1)))} 🟡 {mut ? "sell value" : "base"}</p>
                   </div>
                 </button>
               );
