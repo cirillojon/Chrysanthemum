@@ -2063,6 +2063,12 @@ export function mergeServerResult<T extends Partial<GameState>>(
               ...plot.plant,
               // Client-side mutation rolls are not in the DB yet — preserve them.
               mutation:   curPlot.plant.mutation,
+              // masteredBonus is set at plant time by plant-seed using DB's discovered.
+              // Prefer client value (set during optimistic update) so the icon and
+              // multiplier survive a server grid replacement even if the DB row was
+              // written before discovered was fully persisted (e.g. dev-panel fillCodex
+              // before saveToCloud included discovered).  Server value is the fallback.
+              masteredBonus: curPlot.plant.masteredBonus ?? (plot.plant as PlantedFlower).masteredBonus,
               // Client-computed progress fields — the server grid never carries these,
               // so the merge must copy them over or gear changes wipe all growth progress
               // (stampStageTransitions stamps bloomedAt before a removal, but the stamp

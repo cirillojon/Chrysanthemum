@@ -192,6 +192,11 @@ export async function saveToCloud(
     supply_shop:            state.supplyShop        ?? [],
     supply_slots:           state.supplySlots       ?? 2,
     last_supply_reset:      state.lastSupplyReset   ?? 0,
+    // Codex — must be persisted so plant-seed and harvest edge functions see
+    // the correct mastery state.  Omitting this caused fillCodex (dev panel)
+    // to write to client state only, leaving the DB at the old count and making
+    // plant-seed skip masteredBonus even after the codex was completed.
+    discovered:             state.discovered        ?? [],
     // Alchemy
     essences:               state.essences          ?? [],
     // Cross-breeding
