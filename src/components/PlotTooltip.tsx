@@ -258,9 +258,7 @@ export function PlotTooltip({
           <span className="text-xl">{!isIdentified ? (isBloomed ? "❓" : "🌱") : species.emoji[stage]}</span>
           <div className="flex-1 min-w-0">
             <p className="text-xs font-semibold leading-tight">{!isIdentified ? "???" : species.name}</p>
-            <p className={`text-[10px] font-mono ${isIdentified ? rarity.color : "text-muted-foreground"}`}>
-              {isIdentified ? rarity.label : "???"}
-            </p>
+            <p className={`text-[10px] font-mono ${rarity.color}`}>{rarity.label}</p>
             {isIdentified && <FlowerTypeBadges types={species.types} className="mt-1" />}
           </div>
           {/* Close button */}
