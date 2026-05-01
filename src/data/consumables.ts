@@ -59,6 +59,8 @@ export interface ConsumableRecipe {
   advanceHours?: number;
   /** Speed boost consumables: duration in ms the boost stays active */
   boostDurationMs?: number;
+  /** Override the auto-derived supply-shop price (e.g. for common-rarity items whose base would be 0) */
+  shopPrice?: number;
 }
 
 export interface AttunementRecipe {
@@ -126,6 +128,7 @@ const CONSUMABLE_CATEGORY_MULT: Record<ConsumableCategory, number> = {
  *  ingredient cost (essences / lower-tier consumables) is the only outlay,
  *  while the supply shop pays in raw coins at this premium. */
 export function consumableShopPrice(recipe: ConsumableRecipe): number {
+  if (recipe.shopPrice !== undefined) return recipe.shopPrice;
   const base = CONSUMABLE_BASE_BY_RARITY[recipe.rarity] ?? 0;
   const mult = CONSUMABLE_CATEGORY_MULT[recipe.category] ?? 1.0;
   return Math.round(base * mult);
@@ -340,7 +343,8 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // One-time use: reveals what species is growing in a seed or sprout tile.
   { id: "magnifying_glass", name: "Magnifying Glass", emoji: "🔍", tier: 1, rarity: "common", category: "utility",
     description: "Peek at an unidentified seed or sprout — reveals the species growing in that tile for you.",
-    cost: { kind: "essence", amounts: [{ type: "arcane", amount: 1 }, { type: "stellar", amount: 1 }] } },
+    cost: { kind: "essence", amounts: [{ type: "arcane", amount: 1 }, { type: "stellar", amount: 1 }] },
+    shopPrice: 15 },
 
   // ── Garden Pin (non-tiered) — utility ────────────────────────────────────
   // Pins a single plot — when bloomed, the plant is shielded from auto-harvest
