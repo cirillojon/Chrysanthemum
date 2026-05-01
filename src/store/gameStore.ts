@@ -56,6 +56,8 @@ export interface PlantedFlower {
   /** Set by Garden Pin — when bloomed, the plant is shielded from auto-harvest
    *  (Harvest Bell, Auto-Planter). Manual harvest still works. */
   pinned?: boolean;
+  /** Set by Ruler — permanently shows the live gear growth multiplier as a badge on this tile. */
+  showMultiplier?: boolean;
 }
 
 export interface Plot {
@@ -2670,6 +2672,11 @@ export function applyPlantConsumable(
     // Shield the plot from auto-harvest (Harvest Bell, Auto-Planter).
     if (plant.pinned) return null;
     updatedPlant = { ...updatedPlant, pinned: true };
+  } else if (consumableId === "ruler") {
+    // Permanently show the live gear growth multiplier badge on this tile.
+    if (plant.showMultiplier) return null;
+    if (plant.bloomedAt) return null; // already bloomed — no multiplier meaningful
+    updatedPlant = { ...updatedPlant, showMultiplier: true };
   }
 
   const newGrid = after.grid.map((r, ri) =>

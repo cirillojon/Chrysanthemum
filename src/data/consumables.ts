@@ -21,6 +21,7 @@ export type ConsumableId =
   | `seed_pouch_${"blaze"|"tide"|"grove"|"frost"|"storm"|"lunar"|"solar"|"fairy"|"shadow"|"arcane"|"stellar"|"zephyr"}_${1|2|3|4|5}`
   | "magnifying_glass"
   | "garden_pin"
+  | "ruler"
   | "verdant_rush_1"     | "verdant_rush_2"     | "verdant_rush_3"     | "verdant_rush_4"     | "verdant_rush_5"
   | "forge_haste_1"      | "forge_haste_2"      | "forge_haste_3"      | "forge_haste_4"      | "forge_haste_5"
   | "resonance_draft_1"  | "resonance_draft_2"  | "resonance_draft_3"  | "resonance_draft_4"  | "resonance_draft_5"
@@ -353,6 +354,14 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   { id: "garden_pin", name: "Garden Pin", emoji: "📌", tier: null, rarity: "rare", category: "utility",
     description: "Pins a plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.",
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "fairy", amount: 4 }] } },
+
+  // ── Ruler (non-tiered) — utility ─────────────────────────────────────────
+  // Permanently reveals the total gear growth multiplier on a single growing plot.
+  // Works on any rarity, like Magnifying Glass.
+  { id: "ruler", name: "Ruler", emoji: "📏", tier: null, rarity: "uncommon", category: "utility",
+    description: "Measure a plot — permanently displays its exact gear growth multiplier as a live badge.",
+    cost: { kind: "essence", amounts: [{ type: "storm", amount: 2 }, { type: "arcane", amount: 2 }] },
+    shopPrice: 20 },
 
   // ── Verdant Rush (I–V) — speed_boost ─────────────────────────────────────
   // Doubles growth speed for all garden plots for a limited time.

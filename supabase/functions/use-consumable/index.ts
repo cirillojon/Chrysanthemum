@@ -382,8 +382,8 @@ Deno.serve(async (req: Request) => {
       if (!rarity) return err("Unknown species");
 
       // Validate consumable tier vs. plant rarity.
-      // Magnifying Glass and Garden Pin have no tier suffix and work on any rarity — skip the gate.
-      if (consumableId !== "magnifying_glass" && consumableId !== "garden_pin") {
+      // Magnifying Glass, Garden Pin, and Ruler have no tier suffix and work on any rarity — skip the gate.
+      if (consumableId !== "magnifying_glass" && consumableId !== "garden_pin" && consumableId !== "ruler") {
         const tier = extractTier(consumableId);
         if (tier === null) return err("This consumable cannot be applied to a plant");
 
@@ -484,6 +484,14 @@ Deno.serve(async (req: Request) => {
       } else if (consumableId === "garden_pin") {
         if (plant.pinned) return err("This plant is already pinned");
         updatedPlant = { ...updatedPlant, pinned: true };
+
+      // ── Ruler ───────────────────────────────────────────────────────────────
+      // Permanently shows the live gear growth multiplier badge on this tile.
+      // Only meaningful on a growing (non-bloomed) plant.
+      } else if (consumableId === "ruler") {
+        if ((updatedPlant as Record<string, unknown>).showMultiplier) return err("Ruler already applied to this plant");
+        if (plant.bloomedAt) return err("Plant has already bloomed — no growth multiplier to display");
+        updatedPlant = { ...updatedPlant, showMultiplier: true };
 
       // ── Mutation vials (Frost, Ember, Storm, Moon, Golden, Rainbow) ──────────
       // Directly applies the mutation to the plant.

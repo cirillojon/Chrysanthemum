@@ -395,7 +395,6 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
     {pouchResult && (() => {
       const flower     = getFlower(pouchResult.speciesId);
       const rarity     = flower ? RARITY_CONFIG[flower.rarity] : null;
-      const discovered = state.discovered.includes(pouchResult.speciesId);
       return (
         <div
           className={`
@@ -405,13 +404,12 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           `}
         >
           <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
-            <span className="text-2xl">{discovered ? (flower?.emoji.seed ?? "🎁") : "❓"}</span>
+            <span className="text-2xl">❓</span>
             <div>
               <p className="text-sm font-bold text-primary mb-0.5">Pouch opened!</p>
               <p className="text-[11px] text-muted-foreground">
-                New{" "}
-                <span className={rarity?.color ?? ""}>{rarity?.label ?? "Unknown"}</span>
-                {" "}{discovered ? (flower?.name ?? pouchResult.speciesId) : "???"} seed
+                You received a{" "}
+                <span className={rarity?.color ?? ""}>{rarity?.label ?? "Unknown"} seed</span>
               </p>
             </div>
           </div>
@@ -505,6 +503,9 @@ const USAGE_CONTEXT: Record<string, string> = {
   moon_vial:      "Use in Garden (tap a plant)",
   golden_vial:    "Use in Garden (tap a plant)",
   rainbow_vial:   "Use in Garden (tap a plant)",
+  magnifying_glass: "Use in Garden (tap a growing plant)",
+  garden_pin:     "Use in Garden (tap a growing or bloomed plant)",
+  ruler:          "Use in Garden (tap a growing plant)",
   eclipse_tonic:  "Use below — advances all garden plants",
   wind_shear:     "Use in Supply Shop",
   slot_lock:      "Use in Supply Shop",

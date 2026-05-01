@@ -126,13 +126,19 @@ export function PlotTooltip({
   // higher-tier consumable works on lower-rarity plants (e.g. Mythic vial on
   // a Rare). Floor is still tier 1 (Rare), so Common/Uncommon plants stay
   // excluded.
+  // Null-tier utility consumables that are applied directly to a plant plot.
+  const NULL_TIER_PLANT_CONSUMABLES = new Set(["garden_pin", "ruler"]);
+
   const applicableConsumables = (state.consumables ?? []).filter((c) => {
     if (c.quantity <= 0) return false;
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
-    if (!recipe || recipe.tier === null) return false;
+    if (!recipe) return false;
+    // Allow null-tier plant utilities through; block all other null-tier items
+    // (seed pouches, speed boosts, etc. are handled elsewhere).
+    if (recipe.tier === null && !NULL_TIER_PLANT_CONSUMABLES.has(c.id)) return false;
 
-    // Magnifying Glass and Garden Pin bypass the rarity gate — they work on any species
-    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
+    // Magnifying Glass, Garden Pin, and Ruler bypass the rarity gate — they work on any species
+    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && c.id !== "ruler" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
@@ -142,6 +148,8 @@ export function PlotTooltip({
     if (c.id === "magnifying_glass" && (plant.revealed || isBloomed)) return false;
     // Garden Pin: hide once the plant is already pinned
     if (c.id === "garden_pin" && plant.pinned) return false;
+    // Ruler: hide once already applied, or on a bloomed plant
+    if (c.id === "ruler" && (plant.showMultiplier || isBloomed)) return false;
     return true;
   });
 

@@ -954,6 +954,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "harvest_bell_uncommon" },
     { kind: "gear", gearType: "lawnmower_uncommon" },
     { kind: "gear", gearType: "aegis_uncommon" },
+    { kind: "consumable", consumableId: "ruler" },
   ],
   rare: [
     { kind: "fertilizer", fertilizerType: "premium" },

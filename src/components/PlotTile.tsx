@@ -540,7 +540,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || plant.infused || plant.revealed) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || plant.infused || plant.revealed || plant.showMultiplier) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map(({ emoji, label }, i) => (
@@ -556,6 +556,16 @@ export function PlotTile({
             {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× growth penalty">⚖️</span>}
             {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
             {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
+            {plant.showMultiplier && <span className="text-[9px]" title={`Ruler — ${gearMult.toFixed(2)}× total gear growth`}>📏</span>}
+          </div>
+        )}
+
+        {/* Ruler multiplier badge — top-center, amber, permanent once applied */}
+        {plant.showMultiplier && !isBloomed && (
+          <div className="absolute top-0.5 inset-x-0 flex justify-center pointer-events-none z-10">
+            <span className="bg-amber-500/20 border border-amber-500/25 rounded px-0.5 text-[7px] font-mono leading-tight text-amber-300 whitespace-nowrap">
+              {gearMult.toFixed(2)}×
+            </span>
           </div>
         )}
 
