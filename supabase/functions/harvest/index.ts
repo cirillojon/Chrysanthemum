@@ -199,6 +199,41 @@ Deno.serve(async (req: Request) => {
       forcedMutation?:  string;
     };
 
+    // ── Cross-breed lock check ────────────────────────────────────────────────
+    // Prevent harvesting a plant that is actively serving as a cross-breed source
+    // for Cropsticks. Two detection paths:
+    //  A) crossbreedSourceA/B stored on a cropsticks cell points at this [row,col]
+    //     (the normal case — infused flag is cleared from the plant at cycle start)
+    //  B) plant.infused is still true AND an adjacent cropsticks cycle is active
+    //     (legacy/fallback: infused flag not yet cleared)
+    const isActiveCrossbreedSource = (() => {
+      type GearCell = { gear?: { gearType?: string; crossbreedStartedAt?: number; crossbreedSourceA?: { r: number; c: number }; crossbreedSourceB?: { r: number; c: number } } | null };
+      for (let ri = 0; ri < grid.length; ri++) {
+        for (let ci = 0; ci < grid[ri].length; ci++) {
+          const cellGear = (grid[ri][ci] as GearCell).gear;
+          if (!cellGear || cellGear.gearType !== "cropsticks" || cellGear.crossbreedStartedAt == null) continue;
+          if (
+            (cellGear.crossbreedSourceA?.r === row && cellGear.crossbreedSourceA?.c === col) ||
+            (cellGear.crossbreedSourceB?.r === row && cellGear.crossbreedSourceB?.c === col)
+          ) return true;
+        }
+      }
+      // Legacy path: infused flag still on plant
+      if ((plant as { infused?: boolean }).infused) {
+        const OFFSETS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+        for (const [dr, dc] of OFFSETS) {
+          const adjGear = (grid[row + dr]?.[col + dc] as GearCell | undefined)?.gear;
+          if (adjGear?.gearType === "cropsticks" && adjGear.crossbreedStartedAt != null) return true;
+        }
+      }
+      return false;
+    })();
+    if (isActiveCrossbreedSource) {
+      return new Response(JSON.stringify({ error: "Plant is currently cross-breeding" }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── Server-side bloom check ───────────────────────────────────────────────
     const growthTimes = FLOWER_GROWTH_TIMES[plant.speciesId];
     if (!growthTimes) {

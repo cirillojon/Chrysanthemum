@@ -285,7 +285,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               title={isBloomed ? `${species?.name} — bloomed` : "??? — growing"}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-              {settings.plotAnimations && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underFan) && (
+              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underFan) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
                   {underGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
                   {underSprinkler && (

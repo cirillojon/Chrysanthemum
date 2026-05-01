@@ -22,6 +22,8 @@ interface Props {
   onClose?:              () => void;
   /** Called when the user clicks the Harvest button (for bloomed plants). */
   onHarvestRequest?:     () => void;
+  /** True when this plant is actively serving as a Cropsticks cross-breed source. */
+  isCrossBreeding?:      boolean;
   /** Combined sprinkler × grow-lamp growth multiplier for this cell. */
   gearGrowthMultiplier?: number;
   isUnderSprinkler?:     boolean;
@@ -48,7 +50,7 @@ function formatMs(ms: number): string {
 }
 
 export function PlotTooltip({
-  plant, row, col, onClose, onHarvestRequest,
+  plant, row, col, onClose, onHarvestRequest, isCrossBreeding = false,
   gearGrowthMultiplier = 1.0,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell,
@@ -392,7 +394,8 @@ export function PlotTooltip({
         {/* Bloomed / pinned actions — Harvest + Remove Pin + Attunement.
             Pinned plants surface "Remove Pin" instead of Harvest; the user must
             unpin first to actually take the bloom (pin is consumed). Unbloomed
-            pinned plants also get the button so a misplaced pin can be undone. */}
+            pinned plants also get the button so a misplaced pin can be undone.
+            Cross-breeding plants show a lock message instead of Harvest. */}
         {(isBloomed || plant.pinned) && (
           <div className="pt-1 border-t border-border space-y-1.5">
             {plant.pinned ? (
@@ -404,6 +407,10 @@ export function PlotTooltip({
               >
                 {unpinning ? "Removing…" : "📌 Remove Pin"}
               </button>
+            ) : isCrossBreeding ? (
+              <p className="text-[11px] text-emerald-400/80 font-mono text-center py-0.5">
+                🔗 Cross-breeding — harvest locked
+              </p>
             ) : onHarvestRequest && (
               <button
                 onClick={() => { onHarvestRequest(); onClose?.(); }}

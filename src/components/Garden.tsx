@@ -68,10 +68,11 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const bellTargets = findHarvestBellTargets(next, weather);
     const nowBell = Date.now();
     if (nowBell - lastBellActionRef.current >= GEAR_ACTION_INTERVAL_MS) {
-      // Skip attuned plants — they're marked for cross-breeding, not auto-harvest
+      // Skip plants that are infused (awaiting cross-breed) or are active Cropsticks sources
       const bellTarget = bellTargets.find(({ row, col }) =>
         !harvestingPlots.current.has(`${row}-${col}`) &&
-        !getState().grid[row]?.[col]?.plant?.infused
+        !getState().grid[row]?.[col]?.plant?.infused &&
+        !crossbreedSourceCells.has(`${row}-${col}`)
       );
       if (bellTarget) {
         const { row, col } = bellTarget;
@@ -438,8 +439,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     for (let ri = 0; ri < currentState.grid.length; ri++) {
       for (let ci = 0; ci < currentState.grid[ri].length; ci++) {
         const p = currentState.grid[ri][ci];
-        // Skip attuned plants — they're set up for cross-breeding and should not be auto-harvested
-        if (p.plant && !p.plant.infused && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom") {
+        // Skip cross-breeding plants — they're active Cropsticks sources and must not be harvested
+        if (p.plant && !crossbreedSourceCells.has(`${ri}-${ci}`) && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom") {
           bloomed.push({ row: ri, col: ci });
         }
       }
@@ -643,6 +644,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
                 isUnderAutoPlanter={autoPlantCoveredCells.has(`${row}-${col}`)}
                 crossbreedDirection={crossbreedSourceCells.get(`${row}-${col}`)}
+                isCrossBreeding={crossbreedSourceCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}

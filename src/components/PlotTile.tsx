@@ -63,6 +63,8 @@ interface Props {
   isUnderAutoPlanter?: boolean;
   /** Direction a crossbreed particle should travel (toward the active cropsticks). */
   crossbreedDirection?: "up" | "down" | "left" | "right";
+  /** True when this plant is actively serving as a Cropsticks cross-breed source — blocks manual harvest. */
+  isCrossBreeding?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -77,7 +79,7 @@ export function PlotTile({
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
   isUnderFan, fanDirection, isUnderHarvestBell, isUnderAutoPlanter,
-  crossbreedDirection,
+  crossbreedDirection, isCrossBreeding = false,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
   showGrowthDebug = false,
@@ -163,6 +165,7 @@ export function PlotTile({
 
   function handleHarvest() {
     if (!plant) return;
+    if (isCrossBreeding) return;
     if (harvestingRef.current) return;
     if (harvestPending?.()) return;
     const currentState = getState();
@@ -359,6 +362,7 @@ export function PlotTile({
           col={col}
           onClose={() => setOpen(false)}
           onHarvestRequest={isBloomed ? handleHarvest : undefined}
+          isCrossBreeding={isCrossBreeding}
           gearGrowthMultiplier={gearMult}
           isUnderSprinkler={isUnderSprinkler}
           sprinklerMutations={sprinklerMutations}
@@ -396,7 +400,7 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell) && (
+        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
