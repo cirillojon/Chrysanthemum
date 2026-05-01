@@ -647,6 +647,9 @@ function AppInner() {
                 isActive={weatherIsActive}
                 msLeft={weatherMsLeft}
                 period={dayPeriod}
+                suppressTime={(state.activeBoosts ?? []).some(
+                  (b) => new Date(b.expiresAt).getTime() > Date.now(),
+                )}
               />
             </button>
             <ActiveBoostsHUD activeBoosts={state.activeBoosts} />
