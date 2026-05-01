@@ -455,19 +455,24 @@ export function PlotTile({
         {/* Crossbreed particle overlay — emerald dots drift toward adjacent cropsticks */}
         {settings.plotAnimations && !!crossbreedDirection && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
-            {(["0s", "-0.55s", "-1.1s"] as const).map((delay, i) => (
-              <div
-                key={i}
-                className="cross-particle"
-                style={{
-                  animationName: `cross-particle-${crossbreedDirection}`,
-                  animationDuration: "1.4s",
-                  animationDelay: delay,
-                  left: `${20 + i * 22}%`,
-                  top: "42%",
-                }}
-              />
-            ))}
+            {(["0s", "-0.55s", "-1.1s"] as const).map((delay, i) => {
+              const horiz = crossbreedDirection === "left" || crossbreedDirection === "right";
+              return (
+                <div
+                  key={i}
+                  className="cross-particle"
+                  style={{
+                    animationName: `cross-particle-${crossbreedDirection}`,
+                    animationDuration: "1.4s",
+                    animationDelay: delay,
+                    // Spread perpendicular to the travel axis so the 3 dots
+                    // form distinct lanes rather than stacking on one line.
+                    left: horiz ? "42%" : `${20 + i * 22}%`,
+                    top:  horiz ? `${20 + i * 22}%` : "42%",
+                  }}
+                />
+              );
+            })}
           </div>
         )}
 
