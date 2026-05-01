@@ -328,11 +328,6 @@ export function PlotTooltip({
           {plant.forcedMutation === "giant" && (
             <p className="text-[10px] font-mono text-violet-400">🧬 Giant Force active</p>
           )}
-          {plant.mutationBoost && (
-            <p className="text-[10px] font-mono text-amber-400">
-              Boost: {plant.mutationBoost.mutation} ×{plant.mutationBoost.multiplier}
-            </p>
-          )}
         </div>
 
         {/* Plant-targeting consumables + infuser */}

@@ -485,16 +485,13 @@ Deno.serve(async (req: Request) => {
         if (plant.pinned) return err("This plant is already pinned");
         updatedPlant = { ...updatedPlant, pinned: true };
 
-      // ── Mutation-boost vials (Frost, Ember, Storm, Moon, Golden, Rainbow) ───
+      // ── Mutation vials (Frost, Ember, Storm, Moon, Golden, Rainbow) ──────────
+      // Directly applies the mutation to the plant.
       } else {
         const prefix   = consumableId.replace(/_\d+$/, ""); // e.g. "frost_vial"
         const mutation = VIAL_MUTATION[prefix];
         if (!mutation) return err(`Unknown plant consumable: ${consumableId}`);
-        updatedPlant = {
-          ...updatedPlant,
-          mutationBoost:   { mutation, multiplier: 5 },
-          mutationBlocked: undefined,
-        };
+        updatedPlant = { ...updatedPlant, mutation };
       }
 
       const newGrid = grid.map((r, ri) =>

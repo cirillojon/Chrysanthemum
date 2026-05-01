@@ -2633,18 +2633,18 @@ export function applyPlantConsumable(
     updatedPlant = { ...updatedPlant, mutation: undefined };
   } else if (consumableId.startsWith("giant_vial_")) {
     updatedPlant = { ...updatedPlant, forcedMutation: "giant", mutationBlocked: undefined };
-  } else if (consumableId.startsWith("frost_vial_"))  {
-    updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "frozen",   multiplier: 5 }, mutationBlocked: undefined };
-  } else if (consumableId.startsWith("ember_vial_"))  {
-    updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "scorched", multiplier: 5 }, mutationBlocked: undefined };
-  } else if (consumableId.startsWith("storm_vial_"))  {
-    updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "shocked",  multiplier: 5 }, mutationBlocked: undefined };
-  } else if (consumableId.startsWith("moon_vial_"))   {
-    updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "moonlit",  multiplier: 5 }, mutationBlocked: undefined };
-  } else if (consumableId.startsWith("golden_vial_")) {
-    updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "golden",   multiplier: 5 }, mutationBlocked: undefined };
+  } else if (consumableId.startsWith("frost_vial_"))   {
+    updatedPlant = { ...updatedPlant, mutation: "frozen"   };
+  } else if (consumableId.startsWith("ember_vial_"))   {
+    updatedPlant = { ...updatedPlant, mutation: "scorched" };
+  } else if (consumableId.startsWith("storm_vial_"))   {
+    updatedPlant = { ...updatedPlant, mutation: "shocked"  };
+  } else if (consumableId.startsWith("moon_vial_"))    {
+    updatedPlant = { ...updatedPlant, mutation: "moonlit"  };
+  } else if (consumableId.startsWith("golden_vial_"))  {
+    updatedPlant = { ...updatedPlant, mutation: "golden"   };
   } else if (consumableId.startsWith("rainbow_vial_")) {
-    updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "rainbow",  multiplier: 5 }, mutationBlocked: undefined };
+    updatedPlant = { ...updatedPlant, mutation: "rainbow"  };
   } else if (consumableId === "magnifying_glass") {
     // Reveal the species growing in this tile (seed/sprout only).
     if (plant.revealed) return null;
