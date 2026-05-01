@@ -125,6 +125,28 @@ describe("Supabase edge function contract (regression)", () => {
   }
 });
 
+// ── alchemy-sacrifice — v2.3.0 flower catalogue parity ───────────────────────
+
+describe("alchemy-sacrifice — v2.3.0 new flowers present in FLOWERS array", () => {
+  const serverSrc = readFileSync(join(FUNCTIONS_DIR, "alchemy-sacrifice", "index.ts"), "utf8");
+
+  // These 10 species were added in v2.3.0 but were initially missing from the
+  // edge function's FLOWERS catalogue, causing "Unknown species" 400 errors.
+  const newFlowers = [
+    "stormcap", "stardust",          // common
+    "moonstrike",                    // uncommon
+    "winterwood",                    // rare
+    "deeproot", "rimestorm", "solglow", // exalted
+    "islebloom", "moonrime", "shadowgale", // prismatic
+  ];
+
+  for (const id of newFlowers) {
+    it(`includes ${id} in the FLOWERS catalogue`, () => {
+      expect(serverSrc).toMatch(new RegExp(`id:\\s*["']${id}["']`));
+    });
+  }
+});
+
 // ── alchemy-sacrifice — yield rate parity (v2.3.1 regression) ───────────────
 
 describe("alchemy-sacrifice — ESSENCE_YIELD parity with client (v2.3.1 regression)", () => {
