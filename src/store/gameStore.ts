@@ -2668,20 +2668,34 @@ export function applyPlantConsumable(
     // Purity Vial: removes the current mutation. Requires one to be present.
     if (!plant.mutation) return null;
     updatedPlant = { ...updatedPlant, mutation: undefined };
-  } else if (consumableId.startsWith("giant_vial_")) {
-    updatedPlant = { ...updatedPlant, forcedMutation: "giant", mutationBlocked: undefined };
-  } else if (consumableId.startsWith("frost_vial_"))   {
-    updatedPlant = { ...updatedPlant, mutation: "frozen"   };
-  } else if (consumableId.startsWith("ember_vial_"))   {
-    updatedPlant = { ...updatedPlant, mutation: "scorched" };
-  } else if (consumableId.startsWith("storm_vial_"))   {
-    updatedPlant = { ...updatedPlant, mutation: "shocked"  };
-  } else if (consumableId.startsWith("moon_vial_"))    {
-    updatedPlant = { ...updatedPlant, mutation: "moonlit"  };
-  } else if (consumableId.startsWith("golden_vial_"))  {
-    updatedPlant = { ...updatedPlant, mutation: "golden"   };
-  } else if (consumableId.startsWith("rainbow_vial_")) {
-    updatedPlant = { ...updatedPlant, mutation: "rainbow"  };
+  } else if (
+    consumableId.startsWith("giant_vial_")   ||
+    consumableId.startsWith("frost_vial_")   ||
+    consumableId.startsWith("ember_vial_")   ||
+    consumableId.startsWith("storm_vial_")   ||
+    consumableId.startsWith("moon_vial_")    ||
+    consumableId.startsWith("golden_vial_")  ||
+    consumableId.startsWith("rainbow_vial_")
+  ) {
+    // Guard: mutation vials cannot overwrite an existing mutation on a bloom.
+    // The player must use a Purity Vial to clear the mutation first.
+    if (plant.bloomedAt && typeof plant.mutation === "string") return null;
+
+    if (consumableId.startsWith("giant_vial_")) {
+      updatedPlant = { ...updatedPlant, forcedMutation: "giant", mutationBlocked: undefined };
+    } else if (consumableId.startsWith("frost_vial_"))   {
+      updatedPlant = { ...updatedPlant, mutation: "frozen"   };
+    } else if (consumableId.startsWith("ember_vial_"))   {
+      updatedPlant = { ...updatedPlant, mutation: "scorched" };
+    } else if (consumableId.startsWith("storm_vial_"))   {
+      updatedPlant = { ...updatedPlant, mutation: "shocked"  };
+    } else if (consumableId.startsWith("moon_vial_"))    {
+      updatedPlant = { ...updatedPlant, mutation: "moonlit"  };
+    } else if (consumableId.startsWith("golden_vial_"))  {
+      updatedPlant = { ...updatedPlant, mutation: "golden"   };
+    } else if (consumableId.startsWith("rainbow_vial_")) {
+      updatedPlant = { ...updatedPlant, mutation: "rainbow"  };
+    }
   } else if (consumableId === "magnifying_glass") {
     // Reveal the species growing in this tile (seed/sprout only).
     if (plant.revealed) return null;

@@ -462,6 +462,10 @@ Deno.serve(async (req: Request) => {
 
       // ── Giant Vial ──────────────────────────────────────────────────────────
       } else if (consumableId.startsWith("giant_vial_")) {
+        // Guard: cannot overwrite an existing mutation on a bloom
+        if (stage === "bloom" && typeof plant.mutation === "string") {
+          return err("This bloom already has a mutation — use a Purity Vial to remove it first");
+        }
         updatedPlant = {
           ...updatedPlant,
           forcedMutation:  "giant",
@@ -499,6 +503,10 @@ Deno.serve(async (req: Request) => {
         const prefix   = consumableId.replace(/_\d+$/, ""); // e.g. "frost_vial"
         const mutation = VIAL_MUTATION[prefix];
         if (!mutation) return err(`Unknown plant consumable: ${consumableId}`);
+        // Guard: cannot overwrite an existing mutation on a bloom
+        if (stage === "bloom" && typeof plant.mutation === "string") {
+          return err("This bloom already has a mutation — use a Purity Vial to remove it first");
+        }
         updatedPlant = { ...updatedPlant, mutation };
       }
 

@@ -150,6 +150,18 @@ export function PlotTooltip({
     if (c.id === "garden_pin" && plant.pinned) return false;
     // Ruler: hide once already applied, or on a bloomed plant
     if (c.id === "ruler" && (plant.showMultiplier || isBloomed)) return false;
+    // Mutation vials: blocked when the bloom already carries a mutation.
+    // Player must use a Purity Vial to clear it first.
+    if (
+      (c.id.startsWith("giant_vial_")   ||
+       c.id.startsWith("frost_vial_")   ||
+       c.id.startsWith("ember_vial_")   ||
+       c.id.startsWith("storm_vial_")   ||
+       c.id.startsWith("moon_vial_")    ||
+       c.id.startsWith("golden_vial_")  ||
+       c.id.startsWith("rainbow_vial_")) &&
+      isBloomed && typeof plant.mutation === "string"
+    ) return false;
     return true;
   });
 
