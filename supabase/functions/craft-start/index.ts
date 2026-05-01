@@ -39,7 +39,7 @@ const G = (gearType: string, quantity = 2): GearIngredient => ({ kind: "gear", g
 const C = (consumableId: string, quantity: number): GearIngredient => ({ kind: "consumable", consumableId, quantity });
 
 const GEAR_RECIPES: GearRecipe[] = [
-  { outputGearType: "sprinkler_rare",        ingredients: [E("grove", 5), E("zephyr", 5)],                                                           coinCost: 400,     durationMs: DR },
+  { outputGearType: "sprinkler_rare",        ingredients: [E("grove", 2), E("zephyr", 2), E("tide", 4)],                                             coinCost: 400,     durationMs: DR },
   { outputGearType: "sprinkler_legendary",   ingredients: [G("sprinkler_rare")],                                                                      coinCost: 5_500,   durationMs: DL },
   { outputGearType: "sprinkler_mythic",      ingredients: [G("sprinkler_legendary")],                                                                  coinCost: 60_000,  durationMs: DM },
   { outputGearType: "sprinkler_exalted",     ingredients: [G("sprinkler_mythic")],                                                                     coinCost: 200_000, durationMs: DE },
@@ -49,10 +49,10 @@ const GEAR_RECIPES: GearRecipe[] = [
   { outputGearType: "sprinkler_lightning",   ingredients: [G("sprinkler_mythic", 1), C("storm_vial_3", 2)],                                            coinCost: 50_000,  durationMs: DM },
   { outputGearType: "sprinkler_lunar",       ingredients: [G("sprinkler_mythic", 1), C("moon_vial_3", 2)],                                             coinCost: 50_000,  durationMs: DM },
   { outputGearType: "sprinkler_midas",       ingredients: [G("sprinkler_exalted", 1), C("golden_vial_4", 2)],                                          coinCost: 200_000, durationMs: DE },
-  { outputGearType: "sprinkler_prism",       ingredients: [G("sprinkler_prismatic", 1), C("rainbow_vial_5", 2)],                                       coinCost: 800_000, durationMs: DP },
+  { outputGearType: "sprinkler_prism",       ingredients: [G("sprinkler_prismatic", 1), C("rainbow_vial_5", 2), C("magnifying_glass", 1)],            coinCost: 800_000, durationMs: DP },
   { outputGearType: "grow_lamp_uncommon",    ingredients: [E("solar", 4), E("grove", 4)],                                                             coinCost: 200,     durationMs: DU },
   { outputGearType: "grow_lamp_rare",        ingredients: [G("grow_lamp_uncommon")],                                                                   coinCost: 1_500,   durationMs: DR },
-  { outputGearType: "scarecrow_rare",        ingredients: [E("arcane", 5), E("storm", 5)],                                                            coinCost: 500,     durationMs: DR },
+  { outputGearType: "scarecrow_rare",        ingredients: [E("arcane", 2), E("storm", 2), E("shadow", 4)],                                           coinCost: 500,     durationMs: DR },
   { outputGearType: "scarecrow_legendary",   ingredients: [G("scarecrow_rare")],                                                                       coinCost: 7_000,   durationMs: DL },
   { outputGearType: "scarecrow_mythic",      ingredients: [G("scarecrow_legendary")],                                                                  coinCost: 65_000,  durationMs: DM },
   { outputGearType: "composter_uncommon",    ingredients: [E("grove", 4), E("solar", 4)],                                                             coinCost: 200,     durationMs: DU },
@@ -64,10 +64,10 @@ const GEAR_RECIPES: GearRecipe[] = [
   { outputGearType: "harvest_bell_uncommon", ingredients: [E("stellar", 4), E("fairy", 4)],                                                           coinCost: 300,     durationMs: DU },
   { outputGearType: "harvest_bell_rare",     ingredients: [G("harvest_bell_uncommon")],                                                                coinCost: 1_500,   durationMs: DR },
   { outputGearType: "harvest_bell_legendary",ingredients: [G("harvest_bell_rare")],                                                                    coinCost: 7_000,   durationMs: DL },
-  { outputGearType: "aegis_uncommon",        ingredients: [E("zephyr", 5), E("shadow", 3)],                                                           coinCost: 500,     durationMs: DU },
+  { outputGearType: "aegis_uncommon",        ingredients: [E("solar", 6), E("stellar", 2)],                                                          coinCost: 500,     durationMs: DU },
   { outputGearType: "aegis_rare",            ingredients: [G("aegis_uncommon")],                                                                       coinCost: 2_000,   durationMs: DR },
   { outputGearType: "aegis_legendary",       ingredients: [G("aegis_rare")],                                                                           coinCost: 15_000,  durationMs: DL },
-  { outputGearType: "cropsticks",            ingredients: [E("arcane", 4), E("stellar", 4), E("grove", 4)],                                           coinCost: 20_000,  durationMs: DL },
+  { outputGearType: "cropsticks",            ingredients: [E("grove", 4), E("tide", 4), E("arcane", 4), E("solar", 4)],                              coinCost: 20_000,  durationMs: DL },
   { outputGearType: "auto_planter_prismatic",ingredients: [G("sprinkler_prismatic", 1), G("harvest_bell_legendary", 1), E("universal", 10)],          coinCost: 500_000, durationMs: DP },
 ];
 

@@ -235,7 +235,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Frost Vial (I–V) — mutation_boost ────────────────────────────────────
   { id: "frost_vial_1", name: "Frost Vial I",   emoji: "🧊", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Significantly increases the Frozen mutation chance for a ${r(1)} plant.`,
-    cost: { kind: "essence", amounts: [{ type: "frost", amount: 6 }] } },
+    cost: { kind: "essence", amounts: [{ type: "frost", amount: 8 }] } },
   { id: "frost_vial_2", name: "Frost Vial II",  emoji: "🧊", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Significantly increases the Frozen mutation chance for a ${r(2)} plant.`,
     cost: { kind: "consumable", id: "frost_vial_1", quantity: 2 } },
@@ -252,7 +252,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Ember Vial (I–V) — mutation_boost ────────────────────────────────────
   { id: "ember_vial_1", name: "Ember Vial I",   emoji: "🔥", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Significantly increases the Scorched mutation chance for a ${r(1)} plant.`,
-    cost: { kind: "essence", amounts: [{ type: "blaze", amount: 6 }] } },
+    cost: { kind: "essence", amounts: [{ type: "blaze", amount: 8 }] } },
   { id: "ember_vial_2", name: "Ember Vial II",  emoji: "🔥", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Significantly increases the Scorched mutation chance for a ${r(2)} plant.`,
     cost: { kind: "consumable", id: "ember_vial_1", quantity: 2 } },
@@ -269,7 +269,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Storm Vial (I–V) — mutation_boost ────────────────────────────────────
   { id: "storm_vial_1", name: "Storm Vial I",   emoji: "⚡", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Significantly increases the Shocked mutation chance for a ${r(1)} plant.`,
-    cost: { kind: "essence", amounts: [{ type: "storm", amount: 6 }] } },
+    cost: { kind: "essence", amounts: [{ type: "storm", amount: 8 }] } },
   { id: "storm_vial_2", name: "Storm Vial II",  emoji: "⚡", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Significantly increases the Shocked mutation chance for a ${r(2)} plant.`,
     cost: { kind: "consumable", id: "storm_vial_1", quantity: 2 } },
@@ -286,7 +286,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Moon Vial (I–V) — mutation_boost ─────────────────────────────────────
   { id: "moon_vial_1", name: "Moon Vial I",   emoji: "🌙", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Significantly increases the Moonlit mutation chance for a ${r(1)} plant.`,
-    cost: { kind: "essence", amounts: [{ type: "lunar", amount: 6 }] } },
+    cost: { kind: "essence", amounts: [{ type: "lunar", amount: 8 }] } },
   { id: "moon_vial_2", name: "Moon Vial II",  emoji: "🌙", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Significantly increases the Moonlit mutation chance for a ${r(2)} plant.`,
     cost: { kind: "consumable", id: "moon_vial_1", quantity: 2 } },
@@ -336,9 +336,9 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
 
   // ── Magnifying Glass — utility ────────────────────────────────────────────
   // One-time use: reveals what species is growing in a seed or sprout tile.
-  { id: "magnifying_glass", name: "Magnifying Glass", emoji: "🔍", tier: 1, rarity: "rare", category: "utility",
+  { id: "magnifying_glass", name: "Magnifying Glass", emoji: "🔍", tier: 1, rarity: "common", category: "utility",
     description: "Peek at an unidentified seed or sprout — reveals the species growing in that tile for you.",
-    cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }] } },
+    cost: { kind: "essence", amounts: [{ type: "arcane", amount: 1 }, { type: "stellar", amount: 1 }] } },
 
   // ── Garden Pin (non-tiered) — utility ────────────────────────────────────
   // Pins a single plot — when bloomed, the plant is shielded from auto-harvest
@@ -346,7 +346,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // Works on any rarity, like Magnifying Glass.
   { id: "garden_pin", name: "Garden Pin", emoji: "📌", tier: null, rarity: "rare", category: "utility",
     description: "Pins a plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.",
-    cost: { kind: "essence", amounts: [{ type: "arcane", amount: 3 }, { type: "fairy", amount: 3 }] } },
+    cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "fairy", amount: 4 }] } },
 
   // ── Verdant Rush (I–V) — speed_boost ─────────────────────────────────────
   // Doubles growth speed for all garden plots for a limited time.
@@ -403,9 +403,9 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     cost: { kind: "consumable", id: "resonance_draft_4", quantity: 2 } },
 
   // ── Wind Shear (non-tiered) — utility ─────────────────────────────────────
-  { id: "wind_shear", name: "Wind Shear", emoji: "🌀", tier: null, rarity: "rare", category: "utility",
+  { id: "wind_shear", name: "Wind Shear", emoji: "🌀", tier: null, rarity: "mythic", category: "utility",
     description: "Refreshes your supply shop immediately, bypassing the cooldown. 1-hour cooldown between uses.",
-    cost: { kind: "essence", amounts: [{ type: "zephyr", amount: 6 }, { type: "storm", amount: 6 }] } },
+    cost: { kind: "essence", amounts: [{ type: "zephyr", amount: 16 }, { type: "storm", amount: 16 }] } },
 
   // ── Slot Lock (non-tiered) — utility ──────────────────────────────────────
   { id: "slot_lock", name: "Slot Lock", emoji: "📌", tier: null, rarity: "rare", category: "utility",
@@ -459,7 +459,7 @@ for (const t of TYPED_POUCH_TYPES) {
       category: "seed_pouch",
       description: `Open for a random ${r(tier)}+ ${label} seed.`,
       cost: tier === 1
-        ? { kind: "essence", amounts: [{ type: t as EssenceType, amount: 8 }] }
+        ? { kind: "essence", amounts: [{ type: t as EssenceType, amount: 16 }] }
         : { kind: "consumable", id: prevId!, quantity: 3 },
     });
   }

@@ -63,25 +63,25 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "giant_vial_4", cost: U("giant_vial_3", 2) },
   { id: "giant_vial_5", cost: U("giant_vial_4", 2) },
   // Frost Vial
-  { id: "frost_vial_1", cost: E([{ type: "frost", amount: 6 }]) },
+  { id: "frost_vial_1", cost: E([{ type: "frost", amount: 8 }]) },
   { id: "frost_vial_2", cost: U("frost_vial_1", 2) },
   { id: "frost_vial_3", cost: U("frost_vial_2", 2) },
   { id: "frost_vial_4", cost: U("frost_vial_3", 2) },
   { id: "frost_vial_5", cost: U("frost_vial_4", 2) },
   // Ember Vial
-  { id: "ember_vial_1", cost: E([{ type: "blaze", amount: 6 }]) },
+  { id: "ember_vial_1", cost: E([{ type: "blaze", amount: 8 }]) },
   { id: "ember_vial_2", cost: U("ember_vial_1", 2) },
   { id: "ember_vial_3", cost: U("ember_vial_2", 2) },
   { id: "ember_vial_4", cost: U("ember_vial_3", 2) },
   { id: "ember_vial_5", cost: U("ember_vial_4", 2) },
   // Storm Vial
-  { id: "storm_vial_1", cost: E([{ type: "storm", amount: 6 }]) },
+  { id: "storm_vial_1", cost: E([{ type: "storm", amount: 8 }]) },
   { id: "storm_vial_2", cost: U("storm_vial_1", 2) },
   { id: "storm_vial_3", cost: U("storm_vial_2", 2) },
   { id: "storm_vial_4", cost: U("storm_vial_3", 2) },
   { id: "storm_vial_5", cost: U("storm_vial_4", 2) },
   // Moon Vial
-  { id: "moon_vial_1", cost: E([{ type: "lunar", amount: 6 }]) },
+  { id: "moon_vial_1", cost: E([{ type: "lunar", amount: 8 }]) },
   { id: "moon_vial_2", cost: U("moon_vial_1", 2) },
   { id: "moon_vial_3", cost: U("moon_vial_2", 2) },
   { id: "moon_vial_4", cost: U("moon_vial_3", 2) },
@@ -99,7 +99,7 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "rainbow_vial_4", cost: U("rainbow_vial_3", 2) },
   { id: "rainbow_vial_5", cost: U("rainbow_vial_4", 2) },
   // Magnifying Glass
-  { id: "magnifying_glass", cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  { id: "magnifying_glass", cost: E([{ type: "arcane", amount: 1 }, { type: "stellar", amount: 1 }]) },
   // Verdant Rush
   { id: "verdant_rush_1", cost: E([{ type: "grove", amount: 4 }, { type: "zephyr", amount: 4 }]) },
   { id: "verdant_rush_2", cost: U("verdant_rush_1", 2) },
@@ -118,9 +118,10 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "resonance_draft_3", cost: U("resonance_draft_2", 2) },
   { id: "resonance_draft_4", cost: U("resonance_draft_3", 2) },
   { id: "resonance_draft_5", cost: U("resonance_draft_4", 2) },
-  // Wind Shear / Slot Lock (non-tiered)
-  { id: "wind_shear", cost: E([{ type: "zephyr", amount: 6 }, { type: "storm", amount: 6 }]) },
-  { id: "slot_lock",  cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  // Wind Shear / Slot Lock / Garden Pin (non-tiered)
+  { id: "wind_shear",      cost: E([{ type: "zephyr", amount: 16 }, { type: "storm", amount: 16 }]) },
+  { id: "slot_lock",       cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  { id: "garden_pin",      cost: E([{ type: "arcane", amount: 4 }, { type: "fairy",   amount: 4 }]) },
   // Generic Seed Pouches (I–V)
   { id: "seed_pouch_1", cost: E([{ type: "universal", amount: 1 }]) },
   { id: "seed_pouch_2", cost: U("seed_pouch_1", 3) },
@@ -135,7 +136,7 @@ for (const t of ["blaze","tide","grove","frost","storm","lunar","solar","fairy",
     CONSUMABLE_RECIPES.push({
       id: `seed_pouch_${t}_${tier}`,
       cost: tier === 1
-        ? E([{ type: t, amount: 8 }])
+        ? E([{ type: t, amount: 16 }])
         : U(`seed_pouch_${t}_${tier - 1}`, 3),
     });
   }

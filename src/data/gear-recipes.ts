@@ -51,7 +51,7 @@ export const GEAR_RECIPES: GearRecipe[] = [
   // ── Regular Sprinklers (I–V) ──────────────────────────────────────────────
   {
     outputGearType: "sprinkler_rare",
-    ingredients:    [E("grove", 5), E("zephyr", 5)],
+    ingredients:    [E("grove", 2), E("zephyr", 2), E("tide", 4)],
     coinCost:       400,
     durationMs:     DR,
   },
@@ -113,7 +113,7 @@ export const GEAR_RECIPES: GearRecipe[] = [
   },
   { // Kaleidoscope (Rainbow) — prismatic
     outputGearType: "sprinkler_prism",
-    ingredients:    [G("sprinkler_prismatic", 1), C("rainbow_vial_5", 2)],
+    ingredients:    [G("sprinkler_prismatic", 1), C("rainbow_vial_5", 2), C("magnifying_glass", 1)],
     coinCost:       800_000,
     durationMs:     DP,
   },
@@ -135,7 +135,7 @@ export const GEAR_RECIPES: GearRecipe[] = [
   // ── Scarecrow (I–III) ─────────────────────────────────────────────────────
   {
     outputGearType: "scarecrow_rare",
-    ingredients:    [E("arcane", 5), E("storm", 5)],
+    ingredients:    [E("arcane", 2), E("storm", 2), E("shadow", 4)],
     coinCost:       500,
     durationMs:     DR,
   },
@@ -215,7 +215,7 @@ export const GEAR_RECIPES: GearRecipe[] = [
   // ── Aegis (I–III) ────────────────────────────────────────────────────────
   {
     outputGearType: "aegis_uncommon",
-    ingredients:    [E("zephyr", 5), E("shadow", 3)],
+    ingredients:    [E("solar", 6), E("stellar", 2)],
     coinCost:       500,
     durationMs:     DU,
   },
@@ -235,7 +235,7 @@ export const GEAR_RECIPES: GearRecipe[] = [
   // ── Cropsticks (legendary) ────────────────────────────────────────────────
   {
     outputGearType: "cropsticks",
-    ingredients:    [E("arcane", 4), E("stellar", 4), E("grove", 4)],
+    ingredients:    [E("grove", 4), E("tide", 4), E("arcane", 4), E("solar", 4)],
     coinCost:       20_000,
     durationMs:     DL,
   },
