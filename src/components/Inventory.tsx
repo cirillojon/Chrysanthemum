@@ -51,9 +51,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const bloomCount       = blooms.reduce((s, i) => s + i.quantity, 0);
   const supplyCount      = fertilizers.reduce((s, f) => s + f.quantity, 0)
                          + gearItems.reduce((s, g) => s + g.quantity, 0);
-  const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0);
-  const essenceItems     = (state.essences ?? []).filter((e) => e.amount > 0);
-  const essenceCount     = essenceItems.reduce((s, e) => s + e.amount, 0);
+
 
   const totalBloomValue = blooms.reduce((sum, item) => {
     const species = getFlower(item.speciesId);
