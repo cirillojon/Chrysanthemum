@@ -124,3 +124,17 @@ describe("Supabase edge function contract (regression)", () => {
     });
   }
 });
+
+// ── use-consumable — v2.3.0 mutation vial guard ──────────────────────────────
+
+describe("use-consumable — v2.3.0 mutation vial guard", () => {
+  const src = readFileSync(join(FUNCTIONS_DIR, "use-consumable", "index.ts"), "utf8");
+
+  it("checks for an existing mutation before applying a mutation vial", () => {
+    expect(src).toMatch(/plant\.mutation/);
+  });
+
+  it("returns a descriptive error message when the bloom already has a mutation", () => {
+    expect(src).toMatch(/Purity Vial/);
+  });
+});

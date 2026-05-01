@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyPlantConsumable,
   buyWeatherForecastSlot,
   codexKey,
   defaultState,
@@ -359,5 +360,75 @@ describe("stampStageTransitions — force param (v2.3.0 regression)", () => {
     const s2 = stampStageTransitions(s, now, "clear", true);
     // Guard bypassed → bloomedAt IS stamped
     expect(s2.grid[0][0].plant?.bloomedAt).toBeDefined();
+  });
+});
+
+// ── applyPlantConsumable — mutation vial guard (v2.3.0 regression) ───────────
+
+describe("applyPlantConsumable — mutation vial guard (v2.3.0 regression)", () => {
+  const MUTATION_VIAL_IDS = [
+    "frost_vial_1",
+    "ember_vial_1",
+    "storm_vial_1",
+    "moon_vial_1",
+    "golden_vial_1",
+    "rainbow_vial_1",
+    "giant_vial_1",
+  ] as const;
+
+  function stateWithBloomed(mutation: PlantedFlower["mutation"], vialId: string): GameState {
+    const s = baseState({
+      grid: [[{
+        id: "0-0",
+        plant: bloomedPlant(fastFlower.id, mutation as keyof typeof MUTATIONS | undefined),
+        gear: null,
+      }]],
+      farmRows: 1,
+      farmSize: 1,
+      consumables: [{ id: vialId as never, quantity: 2 }],
+    });
+    return s;
+  }
+
+  it("blocks all mutation vials when the bloomed plant already has a mutation", () => {
+    for (const vialId of MUTATION_VIAL_IDS) {
+      const s = stateWithBloomed("frozen", vialId);
+      expect(
+        applyPlantConsumable(s, 0, 0, vialId),
+        `${vialId} should return null when bloom has a mutation`,
+      ).toBeNull();
+    }
+  });
+
+  it("allows mutation vials on a bloomed plant with no mutation (mutation === undefined)", () => {
+    // Unrolled bloom (mutation field not set) — vial should be permitted
+    for (const vialId of MUTATION_VIAL_IDS) {
+      const s = stateWithBloomed(undefined, vialId);
+      const result = applyPlantConsumable(s, 0, 0, vialId);
+      expect(result, `${vialId} should be allowed on bloom with no mutation`).not.toBeNull();
+    }
+  });
+
+  it("allows mutation vials on a bloomed plant whose mutation rolled null (blocked by cron)", () => {
+    // mutation === null means the cron rolled no mutation — vials may still apply
+    for (const vialId of MUTATION_VIAL_IDS) {
+      const s = stateWithBloomed(null as unknown as undefined, vialId);
+      const result = applyPlantConsumable(s, 0, 0, vialId);
+      expect(result, `${vialId} should be allowed when mutation is null`).not.toBeNull();
+    }
+  });
+
+  it("purity vial is NOT blocked (it is the remedy, not subject to the guard)", () => {
+    const s = baseState({
+      grid: [[{
+        id: "0-0",
+        plant: bloomedPlant(fastFlower.id, "frozen"),
+        gear: null,
+      }]],
+      farmRows: 1,
+      farmSize: 1,
+      consumables: [{ id: "purity_vial_1" as never, quantity: 1 }],
+    });
+    expect(applyPlantConsumable(s, 0, 0, "purity_vial_1")).not.toBeNull();
   });
 });

@@ -156,6 +156,17 @@ Throttle to **Slow 4G** (DevTools → Network → Throttling) for these.
 
 ---
 
+### I4. Mutation Vials — blocked on blooms that already have a mutation
+
+| # | Action | Expected |
+|---|--------|----------|
+| I12 | Have a **shocked** bloom (or any mutated bloom). Open its tooltip with a Frost Vial in inventory. | Frost Vial (and all other mutation vials) **do not appear** in the consumable picker |
+| I13 | Same bloom — have a **Purity Vial** in inventory. | Purity Vial **does** appear and is usable |
+| I14 | Apply Purity Vial to clear the mutation. Re-open tooltip with a mutation vial. | Mutation vial now **appears** and can be applied |
+| I15 | DevTools → Network: manually POST to `use-consumable` with a mutation vial targeting a bloomed plant that has a mutation. | Server returns **400** `"This bloom already has a mutation — use a Purity Vial to remove it first"` |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```
