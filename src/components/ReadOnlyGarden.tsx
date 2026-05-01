@@ -19,7 +19,7 @@ const WEATHER_MUT_LABEL: Partial<Record<WeatherType, string>> = {
   tornado:         "windstruck",
   thunderstorm:    "→⚡ shocked",
 };
-import { GEAR, isGearExpired, getAffectedCells } from "../data/gear";
+import { GEAR, isGearExpired, getAffectedCells, CROPSTICKS_BREED_DURATION_MS } from "../data/gear";
 import type { FanDirection } from "../data/gear";
 import type React from "react";
 
@@ -103,6 +103,42 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid, farmSize, rows]);
 
+  // Plant cells that are feeding an active cropsticks cycle — mapped to the
+  // direction their particle should travel (toward the cropsticks).
+  const crossbreedSourceCells = useMemo(() => {
+    const map = new Map<string, "up" | "down" | "left" | "right">();
+    const OFFSETS: [number, number, "up" | "down" | "left" | "right"][] = [
+      [-1, 0, "down"],
+      [ 1, 0, "up"  ],
+      [ 0,-1, "right"],
+      [ 0, 1, "left" ],
+    ];
+    for (let ri = 0; ri < grid.length; ri++) {
+      for (let ci = 0; ci < grid[ri].length; ci++) {
+        const g = grid[ri][ci].gear;
+        if (!g || g.gearType !== "cropsticks") continue;
+        if (g.crossbreedStartedAt == null) continue;
+        // Prefer stored source coordinates
+        if (g.crossbreedSourceA && g.crossbreedSourceB) {
+          for (const { r: sr, c: sc } of [g.crossbreedSourceA, g.crossbreedSourceB]) {
+            if (!grid[sr]?.[sc]?.plant) continue;
+            for (const [dr, dc, dir] of OFFSETS) {
+              if (ri + dr === sr && ci + dc === sc) { map.set(`${sr}-${sc}`, dir); break; }
+            }
+          }
+          continue;
+        }
+        // Fallback: legacy cycles with infused flag still set
+        for (const [dr, dc, dir] of OFFSETS) {
+          const nr = ri + dr; const nc = ci + dc;
+          const p = grid[nr]?.[nc]?.plant;
+          if (p?.infused) map.set(`${nr}-${nc}`, dir);
+        }
+      }
+    }
+    return map;
+  }, [grid]);
+
   return (
     <div className="flex flex-col items-center gap-3">
       <p className="text-xs font-mono text-muted-foreground tracking-wide uppercase">
@@ -171,6 +207,19 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                   </div>
                 )}
 
+                {/* Cropsticks crossbreed progress bar */}
+                {def.passiveSubtype === "cropsticks" && gear.crossbreedStartedAt != null && (() => {
+                  const cropProg = Math.min(1, Math.max(0, (now - (gear.crossbreedStartedAt as number)) / CROPSTICKS_BREED_DURATION_MS));
+                  return (
+                    <div
+                      className="absolute bottom-1 left-2 right-2 h-0.5 bg-border rounded-full overflow-hidden"
+                      title={`Cross-breeding · ${Math.floor(cropProg * 100)}%`}
+                    >
+                      <div className="h-full rounded-full bg-emerald-400" style={{ width: `${cropProg * 100}%` }} />
+                    </div>
+                  );
+                })()}
+
                 {/* Composter stored count */}
                 {def.passiveSubtype === "composter" && storedCount > 0 && (
                   <span className="absolute top-0.5 right-0.5 text-[9px] font-mono font-bold text-primary leading-none">
@@ -215,44 +264,52 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           const underHarvestBell = harvestBellKeys.has(cellKey);
           const underAutoPlanter = autoPlanterKeys.has(cellKey);
 
+          const crossbreedDirection = crossbreedSourceCells.get(cellKey);
+          const prismaticStyle: React.CSSProperties | undefined =
+            isBloomed && species?.rarity === "prismatic"
+              ? { animation: "rainbow-border-cycle 3s linear infinite, rainbow-bg-cycle 3s linear infinite, rainbow-glow-cycle 3s linear infinite" }
+              : undefined;
+
           return (
             <div
               key={plot.id}
+              style={prismaticStyle}
               className={`
                 relative w-14 h-14 rounded-xl border-2 flex flex-col items-center justify-center
                 ${isBloomed
                   ? `${rarity?.borderBloom ?? "border-primary/50"} ${rarity?.bgBloom ?? "bg-primary/10"} ${rarity?.glow ?? ""}`
                   : `${rarity?.borderGrowing ?? "border-border/60"} bg-card/60`
                 }
+                ${plant.infused ? "ring-2 ring-emerald-400/60" : ""}
               `}
-              title={`${species?.name} — ${stage}`}
+              title={isBloomed ? `${species?.name} — bloomed` : "??? — growing"}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-              {settings.plotAnimations && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underFan) && (
+              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underFan) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
                   {underGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
                   {underSprinkler && (
                     <>
-                      <span className="gear-drop" style={{ left: "15%", animationDelay: "0s"   }}>💧</span>
-                      <span className="gear-drop" style={{ left: "48%", animationDelay: "0.6s" }}>💧</span>
-                      <span className="gear-drop" style={{ left: "74%", animationDelay: "1.2s" }}>💧</span>
+                      <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
+                      <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
+                      <span className="gear-drop" style={{ left: "74%", animationDelay: "0s"    }}>💧</span>
                     </>
                   )}
                   {mutEmojis.flatMap((emoji, mi) => [
-                    <span key={`m${mi}a`} className="gear-float" style={{ left: `${16 + mi * 28}%`, animationDelay: `${mi * 0.5}s`       }}>{emoji}</span>,
-                    <span key={`m${mi}b`} className="gear-float" style={{ left: `${40 + mi * 28}%`, animationDelay: `${mi * 0.5 + 1.1}s` }}>{emoji}</span>,
+                    <span key={`m${mi}a`} className="gear-float" style={{ left: `${16 + mi * 28}%`, animationDelay: `${mi * 0.5 - 2}s`   }}>{emoji}</span>,
+                    <span key={`m${mi}b`} className="gear-float" style={{ left: `${40 + mi * 28}%`, animationDelay: `${mi * 0.5 - 0.9}s` }}>{emoji}</span>,
                   ])}
                   {underScarecrow && (
                     <>
-                      <span className="gear-bird" style={{ left: "10%", animationDelay: "0s"   }}>🐦</span>
-                      <span className="gear-bird" style={{ left: "52%", animationDelay: "1.5s" }}>🐦</span>
+                      <span className="gear-bird" style={{ left: "10%", animationDelay: "-1.5s" }}>🐦</span>
+                      <span className="gear-bird" style={{ left: "52%", animationDelay: "0s"    }}>🐦</span>
                     </>
                   )}
                   {underComposter && (
                     <>
-                      <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "0s"    }}>✦</span>
-                      <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "0.75s" }}>✦</span>
-                      <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "1.5s"  }}>✦</span>
+                      <span className="gear-compost-spark" style={{ left: "18%", animationDelay: "-1.5s"  }}>✦</span>
+                      <span className="gear-compost-spark" style={{ left: "50%", animationDelay: "-0.75s" }}>✦</span>
+                      <span className="gear-compost-spark" style={{ left: "76%", animationDelay: "0s"     }}>✦</span>
                     </>
                   )}
                   {underFan && (() => {
@@ -261,28 +318,50 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                     const horiz = dir === "left" || dir === "right";
                     const axis  = horiz ? "top" : "left";
                     return (["18%", "50%", "76%"] as const).map((pos, fi) => (
-                      <span key={fi} className={cls} style={{ [axis]: pos, animationDelay: `${fi * 0.65}s` }}>💨</span>
+                      <span key={fi} className={cls} style={{ [axis]: pos, animationDelay: `${fi * 0.65 - 1.3}s` }}>💨</span>
                     ));
                   })()}
                   {underAutoPlanter && (
                     <>
-                      <span className="gear-planter-seed" style={{ left: "20%", animationDelay: "0s"   }}>🌱</span>
-                      <span className="gear-planter-seed" style={{ left: "52%", animationDelay: "0.8s" }}>🌱</span>
-                      <span className="gear-planter-seed" style={{ left: "76%", animationDelay: "1.6s" }}>🌱</span>
+                      <span className="gear-planter-seed" style={{ left: "20%", animationDelay: "-1.6s" }}>🌱</span>
+                      <span className="gear-planter-seed" style={{ left: "52%", animationDelay: "-0.8s" }}>🌱</span>
+                      <span className="gear-planter-seed" style={{ left: "76%", animationDelay: "0s"    }}>🌱</span>
                     </>
                   )}
                   {underHarvestBell && (
                     <>
-                      <span className="gear-bell" style={{ left: "18%", animationDelay: "0s"   }}>🔔</span>
-                      <span className="gear-bell" style={{ left: "52%", animationDelay: "1.1s" }}>🔔</span>
-                      <span className="gear-bell" style={{ left: "74%", animationDelay: "2.2s" }}>🔔</span>
+                      <span className="gear-bell" style={{ left: "18%", animationDelay: "-2.2s" }}>🔔</span>
+                      <span className="gear-bell" style={{ left: "52%", animationDelay: "-1.1s" }}>🔔</span>
+                      <span className="gear-bell" style={{ left: "74%", animationDelay: "0s"    }}>🔔</span>
                     </>
                   )}
                 </div>
               )}
 
+              {/* Crossbreed particle overlay — emerald dots drift toward adjacent cropsticks */}
+              {settings.plotAnimations && !!crossbreedDirection && (
+                <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+                  {(["0s", "-0.55s", "-1.1s"] as const).map((delay, i) => {
+                    const horiz = crossbreedDirection === "left" || crossbreedDirection === "right";
+                    return (
+                      <div
+                        key={i}
+                        className="cross-particle"
+                        style={{
+                          animationName: `cross-particle-${crossbreedDirection}`,
+                          animationDuration: "1.4s",
+                          animationDelay: delay,
+                          left: horiz ? "42%" : `${20 + i * 22}%`,
+                          top:  horiz ? `${20 + i * 22}%` : "42%",
+                        }}
+                      />
+                    );
+                  })}
+                </div>
+              )}
+
               <span className="text-xl leading-none">
-                {species?.emoji[stage!] ?? "🌱"}
+                {isBloomed ? (species?.emoji[stage!] ?? "🌸") : "🌱"}
               </span>
 
               {/* Fertilizer — top-left */}
@@ -300,7 +379,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter) && (
+              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || plant.infused || plant.revealed) && (
                 <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2"}`}>
                   {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
                   {mutEmojis.map((emoji, i) => (
@@ -312,6 +391,8 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                   {underFan && <span className="text-[9px]" title="In fan range">💨</span>}
                   {underHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
                   {underAutoPlanter && <span className="text-[9px]" title="Auto-planter active">🌱</span>}
+                  {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
+                  {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
                 </div>
               )}
 
@@ -342,10 +423,14 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                 );
               })()}
 
-              {/* Bloom pulse */}
-              {isBloomed && (
+              {/* Top-right: pin badge overrides bloom pulse */}
+              {plant.pinned ? (
+                <span className="absolute -top-1 -right-1 text-sm leading-none" title="Pinned — auto-harvest blocked">
+                  📌
+                </span>
+              ) : isBloomed ? (
                 <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-primary rounded-full animate-pulse" />
-              )}
+              ) : null}
 
               {/* Mutation emoji */}
               {settings.plotMutationIndicator && mut && (

@@ -29,6 +29,8 @@ import type { ForecastEntry } from "../hooks/useWeather";
 import { useTimeOfDay } from "../hooks/useTimeOfDay";
 import type { TimeOfDay } from "../hooks/useTimeOfDay";
 import type { WeatherType } from "../data/weather";
+import { queueEntryDisplay } from "../lib/craftDisplay";
+import { getFlower } from "../data/flowers";
 
 interface GameContextValue {
   state: GameState;
@@ -63,6 +65,13 @@ interface GameContextValue {
   clearSupplyNotification: () => void;
   gearExpiry: { gearType: string } | null;
   clearGearExpiry: () => void;
+  /** Stack of craft entries that just transitioned from in-progress → ready
+   *  during this session. App renders one CraftCompletionBanner per entry. */
+  craftCompletions: { id: string; emoji: string; name: string }[];
+  dismissCraftCompletion: (id: string) => void;
+  /** Same shape as craftCompletions but for the alchemy attunement queue. */
+  attunementCompletions: { id: string; emoji: string; name: string }[];
+  dismissAttunementCompletion: (id: string) => void;
   user: User | null;
   profile: CloudProfile | null;
   authLoading: boolean;
@@ -72,6 +81,14 @@ interface GameContextValue {
   needsUsername: boolean;
   completeUsername: (username: string) => void;
   isStaleTab: boolean;
+  /** When non-null, App renders the SignInPromptModal. Components call
+   *  `requestSignIn()` instead of `signInWithGoogle()` directly so guests
+   *  see a friendly prompt before being kicked to the OAuth flow. */
+  signInPromptReason: string | null;
+  /** Open the sign-in prompt. Optional `reason` is shown as a contextual
+   *  second line on the modal (e.g. "to buy seeds", "to upgrade your farm"). */
+  requestSignIn: (reason?: string) => void;
+  dismissSignInPrompt: () => void;
   // Weather
   activeWeather: WeatherType;
   weatherMsLeft: number;
@@ -91,6 +108,8 @@ const EMPTY_SUMMARY: OfflineSummary = {
   readyToHarvest: 0,
   shopRestocked: false,
   supplyRestocked: false,
+  craftsReady: 0,
+  attunementsReady: 0,
 };
 
 // Reject local saves whose lastSaved is more than 1 s in the future.
@@ -107,10 +126,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [shopJustRestocked,   setShopJustRestocked]   = useState(false);
   const [supplyJustRestocked, setSupplyJustRestocked] = useState(false);
   const [gearExpiry, setGearExpiry]                   = useState<{ gearType: string } | null>(null);
+  const [craftCompletions, setCraftCompletions]       = useState<{ id: string; emoji: string; name: string }[]>([]);
+  const [attunementCompletions, setAttunementCompletions] = useState<{ id: string; emoji: string; name: string }[]>([]);
   const [user, setUser]                         = useState<User | null>(null);
   const [profile, setProfile]                   = useState<CloudProfile | null>(null);
   const [authLoading, setAuthLoading]           = useState(true);
   const [needsUsername, setNeedsUsername]       = useState(false);
+  const [signInPromptReason, setSignInPromptReason] = useState<string | null>(null);
 
   const saveEnabled         = useRef(false);
   const isLoading           = useRef(false);
@@ -118,6 +140,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const initialSessionFired = useRef(false);
   const stateRef            = useRef(state);
   const tabId               = useRef(crypto.randomUUID());
+  // Craft completion banners — track which queue ids we've observed in-progress
+  // (so already-done entries on initial load don't fire a banner) and which
+  // we've already fired a banner for (so each transition fires exactly once).
+  const craftSeenInProgress = useRef<Set<string>>(new Set());
+  const craftFiredCompleted = useRef<Set<string>>(new Set());
+  // Same machinery for the alchemy attunement queue.
+  const attuneSeenInProgress = useRef<Set<string>>(new Set());
+  const attuneFiredCompleted = useRef<Set<string>>(new Set());
   // Incremented on every sign-out so in-flight loadUserSession calls know to discard their results.
   const loadGen             = useRef(0);
   const [isStaleTab, setIsStaleTab] = useState(false);
@@ -309,6 +339,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           localStorage.removeItem("chrysanthemum_save");
           setState(defaultState());
           setOfflineSummary(EMPTY_SUMMARY);
+          // Reset craft completion tracking so stale ids from the prior session
+          // don't suppress banners after sign-in.
+          craftSeenInProgress.current.clear();
+          craftFiredCompleted.current.clear();
+          attuneSeenInProgress.current.clear();
+          attuneFiredCompleted.current.clear();
+          setCraftCompletions([]);
           setTimeout(() => { saveEnabled.current = true; }, 500);
           setAuthLoading(false);
           return;
@@ -408,6 +445,59 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (prunedGrid !== next.grid) {
           if (expired.length > 0) setGearExpiry({ gearType: expired[0].gearType });
           next = { ...next, grid: prunedGrid };
+        }
+
+        // ── Craft completion detection ─────────────────────────────────────
+        // Fire a banner once per entry that transitions in-progress → done
+        // during this session. Already-completed entries observed on first
+        // load go straight into "fired" so they don't pop banners on refresh —
+        // the navbar badge (B6) is the right surface for that.
+        const newCompletions: { id: string; emoji: string; name: string }[] = [];
+        for (const entry of next.craftingQueue ?? []) {
+          if (craftFiredCompleted.current.has(entry.id)) continue;
+          const doneAt = new Date(entry.startedAt).getTime() + entry.durationMs;
+          const isDone = tickNow >= doneAt;
+          if (isDone) {
+            if (craftSeenInProgress.current.has(entry.id)) {
+              // Genuine transition — fire banner.
+              const { emoji, name } = queueEntryDisplay(entry);
+              newCompletions.push({ id: entry.id, emoji, name });
+            }
+            // Either way, never fire again for this id.
+            craftFiredCompleted.current.add(entry.id);
+          } else {
+            craftSeenInProgress.current.add(entry.id);
+          }
+        }
+        if (newCompletions.length > 0) {
+          setCraftCompletions((prev) => [...prev, ...newCompletions]);
+        }
+
+        // ── Attunement completion detection (mirrors craft logic) ─────────
+        const newAttuneCompletions: { id: string; emoji: string; name: string }[] = [];
+        for (const entry of next.attunementQueue ?? []) {
+          if (attuneFiredCompleted.current.has(entry.id)) continue;
+          const doneAt = new Date(entry.startedAt).getTime() + entry.durationMs;
+          const isDone = tickNow >= doneAt;
+          if (isDone) {
+            if (attuneSeenInProgress.current.has(entry.id)) {
+              // Look up the species emoji + name. We don't reveal the rolled
+              // mutation here (server only rolls on collect) — banner just
+              // says "Attunement ready: <flower>".
+              const flower = getFlower(entry.speciesId);
+              newAttuneCompletions.push({
+                id:    entry.id,
+                emoji: flower?.emoji.bloom ?? "🌸",
+                name:  flower?.name ?? entry.speciesId,
+              });
+            }
+            attuneFiredCompleted.current.add(entry.id);
+          } else {
+            attuneSeenInProgress.current.add(entry.id);
+          }
+        }
+        if (newAttuneCompletions.length > 0) {
+          setAttunementCompletions((prev) => [...prev, ...newAttuneCompletions]);
         }
 
         return next;
@@ -543,11 +633,20 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       shopJustRestocked,   clearShopNotification:   () => setShopJustRestocked(false),
       supplyJustRestocked, clearSupplyNotification: () => setSupplyJustRestocked(false),
       gearExpiry, clearGearExpiry: () => setGearExpiry(null),
+      craftCompletions,
+      dismissCraftCompletion: (id: string) =>
+        setCraftCompletions((prev) => prev.filter((c) => c.id !== id)),
+      attunementCompletions,
+      dismissAttunementCompletion: (id: string) =>
+        setAttunementCompletions((prev) => prev.filter((c) => c.id !== id)),
       user, profile, authLoading,
       signInWithGoogle, signOut,
       refreshProfile,
       needsUsername, completeUsername,
       isStaleTab,
+      signInPromptReason,
+      requestSignIn:       (reason?: string) => setSignInPromptReason(reason ?? ""),
+      dismissSignInPrompt: () => setSignInPromptReason(null),
       activeWeather,
       weatherMsLeft,
       weatherMsUntilNext,

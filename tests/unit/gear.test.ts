@@ -212,12 +212,14 @@ describe("getGearAffectingCell (regression)", () => {
 });
 
 describe("Supply pools and rarity gating (regression)", () => {
-  it("every supply pool entry references a known fertilizer or gear type", () => {
+  it("every supply pool entry references a known fertilizer, gear, or consumable type", () => {
     for (const items of Object.values(SUPPLY_POOLS)) {
       if (!items) continue;
       for (const item of items) {
         if (item.kind === "gear") {
           expect(GEAR[item.gearType], `unknown gear ${item.gearType}`).toBeDefined();
+        } else if (item.kind === "consumable") {
+          expect(item.consumableId, `consumable item missing id`).toBeTruthy();
         } else {
           expect(item.fertilizerType).toBeTruthy();
         }

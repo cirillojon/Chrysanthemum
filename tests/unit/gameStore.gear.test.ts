@@ -1,8 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   applyFertilizer,
-  botanyConvert,
-  botanyConvertAll,
   buyAllFertilizer,
   buyAllFromShop,
   buyFertilizer,
@@ -276,70 +274,6 @@ describe("upgrade actions (regression)", () => {
     expect(s1.supplySlots).toBe(3);
     expect(s1.supplyShop.length).toBe(1);
     expect(s1.supplyShop[0].isEmpty).toBe(true);
-  });
-});
-
-// ── Botany conversions ────────────────────────────────────────────────────
-
-describe("botanyConvert / botanyConvertAll (regression)", () => {
-  // quickgrass is common, so requires 3 to convert
-  it("botanyConvert succeeds with the exact required count and produces an uncommon seed", () => {
-    const s0 = baseState({
-      inventory: [{ speciesId: fastFlower.id, quantity: 3, isSeed: false }],
-    });
-    const result = botanyConvert(s0, [
-      { speciesId: fastFlower.id },
-      { speciesId: fastFlower.id },
-      { speciesId: fastFlower.id },
-    ]);
-    expect(result).not.toBeNull();
-    const outSpecies = FLOWERS.find((f) => f.id === result!.outputSpeciesId);
-    expect(outSpecies?.rarity).toBe("uncommon");
-    // Seed appears in inventory
-    expect(result!.state.inventory.find((i) => i.speciesId === outSpecies!.id && i.isSeed)?.quantity).toBe(1);
-    // Source flowers consumed
-    expect(result!.state.inventory.find((i) => i.speciesId === fastFlower.id && !i.isSeed)).toBeUndefined();
-  });
-
-  it("botanyConvert returns null with fewer than required selections", () => {
-    const s0 = baseState({
-      inventory: [{ speciesId: fastFlower.id, quantity: 3, isSeed: false }],
-    });
-    expect(
-      botanyConvert(s0, [{ speciesId: fastFlower.id }, { speciesId: fastFlower.id }]),
-    ).toBeNull();
-  });
-
-  it("botanyConvert returns null when inventory is insufficient", () => {
-    const s0 = baseState({
-      inventory: [{ speciesId: fastFlower.id, quantity: 1, isSeed: false }],
-    });
-    expect(
-      botanyConvert(s0, [
-        { speciesId: fastFlower.id },
-        { speciesId: fastFlower.id },
-        { speciesId: fastFlower.id },
-      ]),
-    ).toBeNull();
-  });
-
-  it("botanyConvertAll converts repeatedly until below the required count", () => {
-    const s0 = baseState({
-      inventory: [{ speciesId: fastFlower.id, quantity: 7, isSeed: false }],
-    });
-    const result = botanyConvertAll(s0, "common")!;
-    expect(result).not.toBeNull();
-    // 7 / 3 = 2 conversions, leaving 1
-    expect(result.outputSpeciesIds.length).toBe(2);
-    const remaining = result.state.inventory.find((i) => i.speciesId === fastFlower.id && !i.isSeed);
-    expect(remaining?.quantity).toBe(1);
-  });
-
-  it("botanyConvertAll returns null when nothing can be converted", () => {
-    const s0 = baseState({
-      inventory: [{ speciesId: fastFlower.id, quantity: 1, isSeed: false }],
-    });
-    expect(botanyConvertAll(s0, "common")).toBeNull();
   });
 });
 

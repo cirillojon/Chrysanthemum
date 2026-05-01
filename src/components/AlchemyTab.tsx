@@ -1,22 +1,21 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useGame } from "../store/GameContext";
 import { FLOWER_TYPES, RARITY_CONFIG, getFlower, MUTATIONS } from "../data/flowers";
 import {
-  ESSENCE_YIELD, calculateEssenceYield, mergeEssences,
-  UNIVERSAL_ESSENCE_DISPLAY, UNIVERSAL_ESSENCE_COST_PER_TYPE,
-  universalEssenceCraftable, ALL_FLOWER_TYPES,
+  calculateEssenceYield, mergeEssences,
+  UNIVERSAL_ESSENCE_DISPLAY,
 } from "../data/essences";
-import {
-  CONSUMABLE_RECIPES, CONSUMABLE_RECIPE_MAP, ATTUNEMENT_RECIPES,
-  canCraftConsumable, canCraftAttunement,
-  applyCraftConsumable, applyCraftAttunement,
-  TIER_RARITIES, ROMAN,
-  type ConsumableId, type ConsumableCategory,
-} from "../data/consumables";
+import { EssenceBank } from "./EssenceBank";
+import { YieldTableModal } from "./YieldTableModal";
+import { ROMAN } from "../data/consumables";
 import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
-import { edgeAlchemySacrifice, edgeCraftUniversalEssence, edgeAlchemyCraft, edgeAlchemyAttune, edgeAlchemyStrip, edgeCraftGear } from "../lib/edgeFunctions";
-import { GEAR_RECIPES, canCraftGear, type GearIngredient, type GearRecipe } from "../data/gear-recipes";
-import { GEAR, type GearType } from "../data/gear";
+import {
+  edgeAlchemySacrifice, edgeAlchemyStrip,
+  edgeAttuneStart, edgeAttuneCollect, edgeAttuneCancel, edgeUpgradeAttunementSlots,
+} from "../lib/edgeFunctions";
+import {
+  MAX_ATTUNEMENT_SLOTS, getNextAttunementSlotUpgrade, attunementDurationMs,
+} from "../data/gear-recipes";
 import type { MutationType, Rarity, FlowerType } from "../data/flowers";
 import type { EssenceItem } from "../data/essences";
 
@@ -33,48 +32,8 @@ function parseKey(key: string): { speciesId: string; mutation?: MutationType } {
   return { speciesId, mutation: (mutStr || undefined) as MutationType | undefined };
 }
 
-// ── Sub-component: Essence wallet ─────────────────────────────────────────
-
-function EssenceWallet({ essences }: { essences: EssenceItem[] }) {
-  if (essences.length === 0) {
-    return (
-      <div className="text-center py-4 text-xs text-muted-foreground">
-        No essences yet — sacrifice flowers to earn them.
-      </div>
-    );
-  }
-
-  const flowerTypeOrder = Object.keys(FLOWER_TYPES);
-
-  // Flower essences first (by FLOWER_TYPES order), then universal last
-  const sorted = [...essences].sort((a, b) => {
-    if (a.type === "universal") return 1;
-    if (b.type === "universal") return -1;
-    return flowerTypeOrder.indexOf(a.type) - flowerTypeOrder.indexOf(b.type);
-  });
-
-  return (
-    <div className="grid grid-cols-4 sm:grid-cols-5 gap-1.5">
-      {sorted.map(({ type, amount }) => {
-        const cfg = type === "universal"
-          ? UNIVERSAL_ESSENCE_DISPLAY
-          : FLOWER_TYPES[type as FlowerType];
-        return (
-          <div
-            key={type}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border text-xs ${cfg.bgColor} ${cfg.borderColor}`}
-          >
-            <span className="text-sm shrink-0">{cfg.emoji}</span>
-            <div className="min-w-0">
-              <p className={`font-semibold leading-none ${cfg.color}`}>{amount}</p>
-              <p className="text-[10px] text-muted-foreground leading-none mt-0.5 truncate">{cfg.name}</p>
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
+// EssenceWallet replaced by the shared EssenceBank component (shows all 12
+// + Universal even at 0). See src/components/EssenceBank.tsx.
 
 // ── Sub-component: Sacrifice preview strip ────────────────────────────────
 
@@ -96,7 +55,7 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
 
   return (
     <div className="bg-card/60 border border-border rounded-xl px-3 py-2.5">
-      <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+      <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
         You will receive
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -105,7 +64,7 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
           return (
             <span
               key={type}
-              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
+              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
             >
               {cfg.emoji} {amount}
             </span>
@@ -116,459 +75,11 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
   );
 }
 
-// ── CraftView component ───────────────────────────────────────────────────
 
-// ── Typed pouch type labels ────────────────────────────────────────────────
-
-const TYPED_POUCH_TYPES = [
-  "blaze", "tide", "grove", "frost", "storm", "lunar",
-  "solar", "fairy", "shadow", "arcane", "stellar", "zephyr",
-] as const;
-type TypedPouchType = typeof TYPED_POUCH_TYPES[number];
-
-// ── CraftView props ────────────────────────────────────────────────────────
-
-interface CraftViewProps {
-  essences:      EssenceItem[];
-  consumables:   { id: string; quantity: number }[];
-  infusers:      { rarity: string; quantity: number }[];
-  gearInventory: { gearType: string; quantity: number }[];
-  craftingItemId:   string | null;
-  itemCraftError:   string | null;
-  craftingGearType: string | null;
-  gearCraftError:   string | null;
-  onCraft:       (craftType: "consumable" | "attunement", id: string) => void;
-  onCraftGear:   (outputGearType: string) => void;
-}
-
-function CostChips({
-  cost,
-  essences,
-  consumables,
-  infusers,
-}: {
-  cost: { kind: string; amounts?: { type: string; amount: number }[]; id?: string; quantity?: number; tier?: number };
-  essences:    { type: string; amount: number }[];
-  consumables: { id: string; quantity: number }[];
-  infusers:    { rarity: string; quantity: number }[];
-}) {
-  if (cost.kind === "essence" && cost.amounts) {
-    return (
-      <div className="flex flex-wrap gap-1">
-        {cost.amounts.map(({ type, amount }) => {
-          const have = essences.find((e) => e.type === type)?.amount ?? 0;
-          const ok   = have >= amount;
-          const cfg  = type === "universal" ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
-          return (
-            <span
-              key={type}
-              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[10px] font-medium
-                ${ok ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}` : "bg-border/10 border-border/40 text-muted-foreground/50"}`}
-            >
-              {cfg.emoji} {amount}
-              {!ok && <span className="text-[9px] opacity-60"> ({have})</span>}
-            </span>
-          );
-        })}
-      </div>
-    );
-  }
-  if (cost.kind === "consumable" && cost.id) {
-    const recipe = CONSUMABLE_RECIPE_MAP[cost.id as ConsumableId];
-    const have   = consumables.find((c) => c.id === cost.id)?.quantity ?? 0;
-    const ok     = have >= (cost.quantity ?? 2);
-    return (
-      <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}>
-        {recipe?.emoji ?? "?"} ×{cost.quantity} {recipe?.name ?? cost.id}
-        <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
-      </span>
-    );
-  }
-  if (cost.kind === "attunement" && cost.tier != null) {
-    const prevRarity = TIER_RARITIES[cost.tier as 1 | 2 | 3 | 4 | 5];
-    const have = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
-    const ok   = have >= (cost.quantity ?? 2);
-    return (
-      <span className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}>
-        🥢 ×{cost.quantity} Attunement {ROMAN[cost.tier as 1 | 2 | 3 | 4 | 5]}
-        <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
-      </span>
-    );
-  }
-  return null;
-}
-
-function RecipeCard({
-  emoji, name, rarity, description, owned, canAfford, isCrafting, cost,
-  essences, consumables, infusers, onCraft,
-}: {
-  emoji: string; name: string; rarity: Rarity; description: string;
-  owned: number; canAfford: boolean; isCrafting: boolean;
-  cost: Parameters<typeof CostChips>[0]["cost"];
-  essences: CraftViewProps["essences"]; consumables: CraftViewProps["consumables"];
-  infusers: CraftViewProps["infusers"]; onCraft: () => void;
-}) {
-  const rc = RARITY_CONFIG[rarity];
-  return (
-    <div className={`rounded-xl border p-3 transition-colors ${canAfford ? "border-border bg-card/60" : "border-border/40 bg-card/20 opacity-60"}`}>
-      <div className="flex items-start gap-2.5 mb-2">
-        <span className="text-xl mt-0.5 shrink-0">{emoji}</span>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold flex items-center gap-1.5 flex-wrap">
-            {name}
-            <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${rc.color} border-current bg-current/10`}>
-              {rc.label}
-            </span>
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{description}</p>
-        </div>
-      </div>
-
-      <CostChips cost={cost} essences={essences} consumables={consumables} infusers={infusers} />
-
-      <div className="flex items-center justify-between mt-2.5">
-        <span className="text-[10px] text-muted-foreground">Owned: <span className="text-foreground font-semibold">{owned}</span></span>
-        <button
-          onClick={onCraft}
-          disabled={!canAfford || isCrafting}
-          className="px-3 py-1 rounded-lg text-[11px] font-semibold border transition-colors
-            disabled:opacity-40 disabled:cursor-not-allowed
-            border-primary/50 text-primary hover:bg-primary/10 enabled:hover:scale-[1.02]"
-        >
-          {isCrafting ? "…" : "Craft"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Gear ingredient chips (multi-ingredient) ──────────────────────────────
-
-function GearIngredientChips({
-  ingredients,
-  essences,
-  gearInventory,
-  consumables,
-}: {
-  ingredients:   GearIngredient[];
-  essences:      { type: string; amount: number }[];
-  gearInventory: { gearType: string; quantity: number }[];
-  consumables:   { id: string; quantity: number }[];
-}) {
-  return (
-    <div className="flex flex-wrap gap-1">
-      {ingredients.map((ing, i) => {
-        if (ing.kind === "essence") {
-          const have = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
-          const ok   = have >= ing.amount;
-          const cfg  = ing.essenceType === "universal"
-            ? UNIVERSAL_ESSENCE_DISPLAY
-            : FLOWER_TYPES[ing.essenceType as FlowerType];
-          return (
-            <span
-              key={i}
-              className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[10px] font-medium
-                ${ok ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}` : "bg-border/10 border-border/40 text-muted-foreground/50"}`}
-            >
-              {cfg.emoji} {ing.amount}
-              {!ok && <span className="text-[9px] opacity-60"> ({have})</span>}
-            </span>
-          );
-        }
-        if (ing.kind === "gear") {
-          const def  = GEAR[ing.gearType as GearType];
-          const have = gearInventory.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
-          const ok   = have >= ing.quantity;
-          const rc   = def ? RARITY_CONFIG[def.rarity] : null;
-          return (
-            <span
-              key={i}
-              className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}
-            >
-              <span className={rc ? rc.color : ""}>{def?.emoji ?? "⚙️"}</span>
-              ×{ing.quantity} {def?.name ?? ing.gearType}
-              <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
-            </span>
-          );
-        }
-        // consumable
-        const recipe = CONSUMABLE_RECIPE_MAP[ing.consumableId as ConsumableId];
-        const have   = consumables.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
-        const ok     = have >= ing.quantity;
-        return (
-          <span
-            key={i}
-            className={`inline-flex items-center gap-1 text-[10px] font-medium ${ok ? "text-foreground" : "text-muted-foreground/50"}`}
-          >
-            {recipe?.emoji ?? "🧪"} ×{ing.quantity} {recipe?.name ?? ing.consumableId}
-            <span className={`text-[9px] ${ok ? "text-muted-foreground" : "text-muted-foreground/40"}`}>({have} owned)</span>
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Gear recipe card ──────────────────────────────────────────────────────────
-
-function GearRecipeCard({
-  recipe,
-  essences,
-  gearInventory,
-  consumables,
-  isCrafting,
-  onCraft,
-}: {
-  recipe:        GearRecipe;
-  essences:      { type: string; amount: number }[];
-  gearInventory: { gearType: string; quantity: number }[];
-  consumables:   { id: string; quantity: number }[];
-  isCrafting:    boolean;
-  onCraft:       () => void;
-}) {
-  const def      = GEAR[recipe.outputGearType as GearType];
-  const rc       = RARITY_CONFIG[def.rarity];
-  const affordable = canCraftGear(recipe, essences, gearInventory, consumables);
-  const owned    = gearInventory.find((g) => g.gearType === recipe.outputGearType)?.quantity ?? 0;
-
-  return (
-    <div className={`rounded-xl border p-3 transition-colors ${affordable ? "border-border bg-card/60" : "border-border/40 bg-card/20 opacity-60"}`}>
-      <div className="flex items-start gap-2.5 mb-2">
-        <span className="text-xl mt-0.5 shrink-0">{def.emoji}</span>
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold flex items-center gap-1.5 flex-wrap">
-            {def.name}
-            <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${rc.color} border-current bg-current/10`}>
-              {rc.label}
-            </span>
-          </p>
-          <p className="text-[10px] text-muted-foreground mt-0.5 leading-snug">{def.description}</p>
-        </div>
-      </div>
-
-      <GearIngredientChips
-        ingredients={recipe.ingredients}
-        essences={essences}
-        gearInventory={gearInventory}
-        consumables={consumables}
-      />
-
-      <div className="flex items-center justify-between mt-2.5">
-        <span className="text-[10px] text-muted-foreground">
-          Owned: <span className="text-foreground font-semibold">{owned}</span>
-        </span>
-        <button
-          onClick={onCraft}
-          disabled={!affordable || isCrafting}
-          className="px-3 py-1 rounded-lg text-[11px] font-semibold border transition-colors
-            disabled:opacity-40 disabled:cursor-not-allowed
-            border-primary/50 text-primary hover:bg-primary/10 enabled:hover:scale-[1.02]"
-        >
-          {isCrafting ? "…" : "⚒️ Craft"}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Gear sub-categories ───────────────────────────────────────────────────────
-
-type GearSubCat = "sprinkler" | "mutation" | "passive";
-
-const GEAR_SUB_CATS: { id: GearSubCat; label: string; emoji: string }[] = [
-  { id: "sprinkler", label: "Sprinklers", emoji: "🚿" },
-  { id: "mutation",  label: "Mutation",   emoji: "🧪" },
-  { id: "passive",   label: "Passive",    emoji: "⚙️" },
-];
-
-function gearSubCat(gearType: GearType): GearSubCat {
-  const cat = GEAR[gearType].category;
-  if (cat === "sprinkler_regular")  return "sprinkler";
-  if (cat === "sprinkler_mutation") return "mutation";
-  return "passive";
-}
-
-const CRAFT_CATEGORIES: { id: ConsumableCategory | "attunement" | "gear"; label: string; emoji: string }[] = [
-  { id: "attunement",     label: "Attunements",     emoji: "🥢" },
-  { id: "gear",           label: "Gear",             emoji: "⚒️" },
-  { id: "growth",         label: "Growth",          emoji: "🌱" },
-  { id: "mutation_boost", label: "Mutation Boosts",  emoji: "🧪" },
-  { id: "utility",        label: "Utility",          emoji: "⚙️" },
-  { id: "seed_pouch",     label: "Seed Pouches",     emoji: "🎁" },
-];
-
-function CraftView({
-  essences, consumables, infusers, gearInventory,
-  craftingItemId, itemCraftError,
-  craftingGearType, gearCraftError,
-  onCraft, onCraftGear,
-}: CraftViewProps) {
-  // For the Seed Pouches category: which type sub-filter is selected
-  const [pouchType, setPouchType] = useState<"generic" | TypedPouchType>("generic");
-  // For the Gear category: which gear sub-category is selected
-  const [gearCat, setGearCat] = useState<GearSubCat>("sprinkler");
-
-  const pouchTypeLabel = useCallback((t: "generic" | TypedPouchType): string => {
-    if (t === "generic") return "Generic";
-    return FLOWER_TYPES[t as FlowerType]?.name ?? t;
-  }, []);
-
-  return (
-    <div className="flex flex-col gap-5">
-      <p className="text-[11px] text-muted-foreground">
-        Craft consumables, attunements, and gear from your essence bank. Tier I items cost essence; higher tiers upgrade from 2 of the previous tier.
-      </p>
-
-      {(itemCraftError || gearCraftError) && (
-        <div className="bg-destructive/10 border border-destructive/40 rounded-xl px-3 py-2 text-xs text-destructive">
-          {itemCraftError ?? gearCraftError}
-        </div>
-      )}
-
-      {CRAFT_CATEGORIES.map(({ id: catId, label, emoji: catEmoji }) => {
-        const isAttunement = catId === "attunement";
-        const isPouchCat   = catId === "seed_pouch";
-        const isGearCat    = catId === "gear";
-
-        // ── Gear category ───────────────────────────────────────────────────
-        if (isGearCat) {
-          const gearRecipes = GEAR_RECIPES.filter(
-            (r) => gearSubCat(r.outputGearType as GearType) === gearCat,
-          );
-          return (
-            <div key={catId}>
-              <p className="text-xs font-semibold mb-2">{catEmoji} {label}</p>
-              {/* Gear sub-cat tabs */}
-              <div className="flex gap-1.5 mb-3">
-                {GEAR_SUB_CATS.map((sc) => (
-                  <button
-                    key={sc.id}
-                    onClick={() => setGearCat(sc.id)}
-                    className={`
-                      flex-1 py-1 rounded-lg border text-[10px] font-semibold transition-all
-                      ${gearCat === sc.id
-                        ? "bg-primary/20 border-primary/50 text-primary"
-                        : "border-border text-muted-foreground hover:border-primary/30"
-                      }
-                    `}
-                  >
-                    {sc.emoji} {sc.label}
-                  </button>
-                ))}
-              </div>
-              <div className="grid grid-cols-1 gap-2">
-                {gearRecipes.map((r) => (
-                  <GearRecipeCard
-                    key={r.outputGearType}
-                    recipe={r}
-                    essences={essences}
-                    gearInventory={gearInventory}
-                    consumables={consumables}
-                    isCrafting={craftingGearType === r.outputGearType}
-                    onCraft={() => onCraftGear(r.outputGearType)}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        }
-
-        // ── Consumable / attunement categories ──────────────────────────────
-        const cards = isAttunement
-          ? ATTUNEMENT_RECIPES.map((recipe) => {
-              const owned      = infusers.find((i) => i.rarity === recipe.rarity)?.quantity ?? 0;
-              const affordable = canCraftAttunement(recipe, essences, infusers);
-              return (
-                <RecipeCard
-                  key={`attunement-${recipe.tier}`}
-                  emoji="🥢"
-                  name={recipe.name}
-                  rarity={recipe.rarity}
-                  description={recipe.description}
-                  owned={owned}
-                  canAfford={affordable}
-                  isCrafting={craftingItemId === String(recipe.tier)}
-                  cost={recipe.cost as Parameters<typeof CostChips>[0]["cost"]}
-                  essences={essences}
-                  consumables={consumables}
-                  infusers={infusers}
-                  onCraft={() => onCraft("attunement", String(recipe.tier))}
-                />
-              );
-            })
-          : CONSUMABLE_RECIPES
-              .filter((r) => {
-                if (r.category !== catId) return false;
-                if (!isPouchCat) return true;
-                if (pouchType === "generic") return /^seed_pouch_[1-5]$/.test(r.id);
-                return r.id.startsWith(`seed_pouch_${pouchType}_`);
-              })
-              .map((recipe) => {
-                const owned      = consumables.find((c) => c.id === recipe.id)?.quantity ?? 0;
-                const affordable = canCraftConsumable(recipe, essences, consumables);
-                return (
-                  <RecipeCard
-                    key={recipe.id}
-                    emoji={recipe.emoji}
-                    name={recipe.name}
-                    rarity={recipe.rarity}
-                    description={recipe.description}
-                    owned={owned}
-                    canAfford={affordable}
-                    isCrafting={craftingItemId === recipe.id}
-                    cost={recipe.cost as Parameters<typeof CostChips>[0]["cost"]}
-                    essences={essences}
-                    consumables={consumables}
-                    infusers={infusers}
-                    onCraft={() => onCraft("consumable", recipe.id)}
-                  />
-                );
-              });
-
-        return (
-          <div key={catId}>
-            <p className="text-xs font-semibold mb-2">{catEmoji} {label}</p>
-
-            {/* Seed Pouch type selector */}
-            {isPouchCat && (
-              <div className="flex flex-wrap gap-1 mb-3">
-                {(["generic", ...TYPED_POUCH_TYPES] as const).map((t) => {
-                  const cfg = t !== "generic" ? FLOWER_TYPES[t as FlowerType] : null;
-                  const isActive = pouchType === t;
-                  return (
-                    <button
-                      key={t}
-                      onClick={() => setPouchType(t)}
-                      className={`
-                        inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-semibold transition-all duration-150
-                        ${isActive
-                          ? cfg
-                            ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`
-                            : "border-foreground bg-foreground/10 text-foreground"
-                          : "border-border text-muted-foreground hover:border-foreground/50 hover:text-foreground"
-                        }
-                      `}
-                    >
-                      {cfg ? `${cfg.emoji} ` : "🎁 "}{pouchTypeLabel(t)}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="grid grid-cols-1 gap-2">
-              {cards}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ── Main AlchemyTab component ─────────────────────────────────────────────
 
-type AlchemyView = "sacrifice" | "essences" | "craft" | "attune";
+type AlchemyView = "sacrifice" | "attune";
 
 export function AlchemyTab() {
   const { state, perform, getState, update } = useGame();
@@ -581,23 +92,9 @@ export function AlchemyTab() {
   const [error,          setError]          = useState<string | null>(null);
   const [success,        setSuccess]        = useState<EssenceItem[] | null>(null);
   const [successVisible, setSuccessVisible] = useState(false);
-
-  // Universal Essence craft panel state
-  const [craftQty,      setCraftQty]      = useState(1);
-  const [crafting,      setCrafting]      = useState(false);
-  const [craftError,    setCraftError]    = useState<string | null>(null);
-  const [craftSuccess,  setCraftSuccess]  = useState<number | null>(null);
-  const [craftSuccessVisible, setCraftSuccessVisible] = useState(false);
-
-  // Consumable / attunement craft state
-  const [craftingItemId,        setCraftingItemId]        = useState<string | null>(null);
-  const [itemCraftError,        setItemCraftError]        = useState<string | null>(null);
-  const [itemCraftSuccess,      setItemCraftSuccess]      = useState<{ name: string; emoji: string } | null>(null);
-  const [itemCraftSuccessVisible, setItemCraftSuccessVisible] = useState(false);
-
-  // Gear craft state
-  const [craftingGearType, setCraftingGearType] = useState<string | null>(null);
-  const [gearCraftError,   setGearCraftError]   = useState<string | null>(null);
+  // Yield-rates modal — opened from a button on the Sacrifice view, replaces
+  // the standalone "Essences" view that used to host the yield table inline.
+  const [showYieldModal, setShowYieldModal] = useState(false);
 
   // Attune view state
   const [attuneSpeciesId,  setAttuneSpeciesId]  = useState<string | null>(null);
@@ -615,6 +112,13 @@ export function AlchemyTab() {
   const [stripSuccess,     setStripSuccess]     = useState(false);
   const [stripSuccessVisible, setStripSuccessVisible] = useState(false);
 
+  // Tick once a second for the attunement queue progress bars.
+  const [attuneNow, setAttuneNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setAttuneNow(Date.now()), 1_000);
+    return () => clearInterval(id);
+  }, []);
+
   // Auto-dismiss success toast
   useEffect(() => {
     if (!success) return;
@@ -625,17 +129,6 @@ export function AlchemyTab() {
     }, 3_000);
     return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
   }, [success]);
-
-  // Auto-dismiss craft success
-  useEffect(() => {
-    if (!craftSuccess) return;
-    const frame = requestAnimationFrame(() => setCraftSuccessVisible(true));
-    const timer = setTimeout(() => {
-      setCraftSuccessVisible(false);
-      setTimeout(() => setCraftSuccess(null), 400);
-    }, 3_000);
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
-  }, [craftSuccess]);
 
   // Auto-dismiss attune result
   useEffect(() => {
@@ -793,289 +286,57 @@ export function AlchemyTab() {
     setSacrificing(false);
   }
 
-  // Auto-dismiss item craft success toast
-  useEffect(() => {
-    if (!itemCraftSuccess) return;
-    const frame = requestAnimationFrame(() => setItemCraftSuccessVisible(true));
-    const timer = setTimeout(() => {
-      setItemCraftSuccessVisible(false);
-      setTimeout(() => setItemCraftSuccess(null), 400);
-    }, 2_500);
-    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
-  }, [itemCraftSuccess]);
-
-  async function handleCraftItem(craftType: "consumable" | "attunement", id: string) {
-    if (craftingItemId) return;
-    setCraftingItemId(id);
-    setItemCraftError(null);
-
-    const cur = getState();
-    const essences    = cur.essences    ?? [];
-    const consumables = cur.consumables ?? [];
-    const infusers    = cur.infusers    ?? [];
-
-    let optimistic: typeof cur | null = null;
-    let displayName = "";
-    let displayEmoji = "";
-
-    if (craftType === "consumable") {
-      const recipe = CONSUMABLE_RECIPE_MAP[id as ConsumableId];
-      if (!recipe) { setItemCraftError("Unknown recipe."); setCraftingItemId(null); return; }
-      const result = applyCraftConsumable(recipe, essences, consumables);
-      if (!result) { setItemCraftError("Not enough ingredients."); setCraftingItemId(null); return; }
-      optimistic = { ...cur, essences: result.essences, consumables: result.consumables };
-      displayName  = recipe.name;
-      displayEmoji = recipe.emoji;
-    } else {
-      const tier   = parseInt(id, 10) as 1 | 2 | 3 | 4 | 5;
-      const recipe = ATTUNEMENT_RECIPES.find((r) => r.tier === tier);
-      if (!recipe) { setItemCraftError("Unknown attunement tier."); setCraftingItemId(null); return; }
-      const result = applyCraftAttunement(recipe, essences, infusers);
-      if (!result) { setItemCraftError("Not enough ingredients."); setCraftingItemId(null); return; }
-      optimistic = { ...cur, essences: result.essences, infusers: result.attunements };
-      displayName  = recipe.name;
-      displayEmoji = "🥢";
-    }
-
-    try {
-      perform(
-        optimistic!,
-        () => edgeAlchemyCraft(craftType, id),
-        (res) => {
-          const fresh = getState();
-          update({ ...fresh, essences: res.essences, consumables: res.consumables, infusers: res.infusers, serverUpdatedAt: res.serverUpdatedAt });
-          setItemCraftSuccess({ name: displayName, emoji: displayEmoji });
-        },
-      );
-    } catch (e: unknown) {
-      setItemCraftError(e instanceof Error ? e.message : "Craft failed.");
-    } finally {
-      setCraftingItemId(null);
-    }
-  }
-
-  async function handleCraftGear(outputGearType: string) {
-    if (craftingGearType) return;
-    setCraftingGearType(outputGearType);
-    setGearCraftError(null);
-
-    const recipe = GEAR_RECIPES.find((r) => r.outputGearType === outputGearType);
-    if (!recipe) { setCraftingGearType(null); return; }
-
-    const cur = getState();
-
-    // Build optimistic state: deduct all ingredients, add crafted gear
-    let essences      = [...(cur.essences      ?? [])];
-    let gearInventory = [...(cur.gearInventory ?? [])];
-    let consumables   = [...(cur.consumables   ?? [])];
-
-    for (const ing of recipe.ingredients) {
-      if (ing.kind === "essence") {
-        essences = essences
-          .map((e) => e.type === ing.essenceType ? { ...e, amount: e.amount - ing.amount } : e)
-          .filter((e) => e.amount > 0);
-      } else if (ing.kind === "gear") {
-        gearInventory = gearInventory
-          .map((g) => g.gearType === ing.gearType ? { ...g, quantity: g.quantity - ing.quantity } : g)
-          .filter((g) => g.quantity > 0);
-      } else {
-        consumables = consumables
-          .map((c) => c.id === ing.consumableId ? { ...c, quantity: c.quantity - ing.quantity } : c)
-          .filter((c) => c.quantity > 0);
-      }
-    }
-    const idx = gearInventory.findIndex((g) => g.gearType === outputGearType);
-    gearInventory = idx >= 0
-      ? gearInventory.map((g, i) => i === idx ? { ...g, quantity: g.quantity + 1 } : g)
-      : [...gearInventory, { gearType: outputGearType as GearType, quantity: 1 }];
-
-    const optimistic = { ...cur, essences, gearInventory, consumables };
-
-    try {
-      await perform(
-        optimistic,
-        () => edgeCraftGear(outputGearType),
-        (result) => {
-          const fresh = getState();
-          update({
-            ...fresh,
-            essences:      result.essences,
-            gearInventory: result.gearInventory,
-            consumables:   result.consumables,
-            serverUpdatedAt: result.serverUpdatedAt,
-          });
-        },
-      );
-    } catch (e: unknown) {
-      setGearCraftError(e instanceof Error ? e.message : "Craft failed — please retry.");
-    } finally {
-      setCraftingGearType(null);
-    }
-  }
-
-  // Universal Essence craftable count
-  const universalCraftable = universalEssenceCraftable(state.essences ?? []);
-
-  async function handleCraftUniversal() {
-    if (crafting || craftQty <= 0 || craftQty > universalCraftable) return;
-    setCrafting(true);
-    setCraftError(null);
-    try {
-      const res = await edgeCraftUniversalEssence(craftQty);
-      const cur = getState();
-      update({ ...cur, essences: res.essences, serverUpdatedAt: res.serverUpdatedAt });
-      setCraftSuccess(craftQty);
-      setCraftQty(1);
-    } catch (e: unknown) {
-      setCraftError(e instanceof Error ? e.message : "Craft failed — please try again.");
-    } finally {
-      setCrafting(false);
-    }
-  }
-
   // ── Render ──────────────────────────────────────────────────────────────
 
   return (
     <div className="flex flex-col gap-5">
 
-      {/* Tab switcher: Sacrifice | Essences | Craft */}
-      <div className="flex rounded-xl border border-border bg-card/40 p-0.5 gap-0.5">
-        {(["sacrifice", "essences", "craft", "attune"] as AlchemyView[]).map((v) => (
+      {/* Tab switcher: Sacrifice | Attune */}
+      <div className="flex gap-2">
+        {(["sacrifice", "attune"] as AlchemyView[]).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
-            className={`
-              flex-1 py-1.5 rounded-[10px] text-xs font-semibold text-center capitalize transition-all duration-150
+            className={`flex-1 py-2 rounded-xl text-xs font-semibold text-center transition-all duration-150
               ${view === v
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "bg-primary/20 border border-primary/50 text-primary"
+                : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
               }
             `}
           >
-            {v === "sacrifice" ? "⚗️ Sacrifice" : v === "essences" ? "✨ Essences" : v === "craft" ? "🔨 Craft" : "🌿 Attune"}
+            {v === "sacrifice" ? "⚗️ Sacrifice" : "🌿 Attune"}
           </button>
         ))}
       </div>
 
-      {/* ── ESSENCES view ── */}
-      {view === "essences" && (
-        <div className="flex flex-col gap-4">
-          <div>
-            <p className="text-xs font-semibold mb-0.5">Essence Bank</p>
-            <p className="text-[11px] text-muted-foreground">
-              Essences are earned by sacrificing flowers. Combine all 12 elemental essences into a Universal Essence for cross-breeding recipes.
-            </p>
-          </div>
-          <EssenceWallet essences={state.essences ?? []} />
-
-          {/* Universal Essence craft panel */}
-          <div className="rounded-xl border border-slate-200/20 bg-slate-200/5 px-4 py-3 space-y-3">
-            <div>
-              <p className="text-xs font-semibold text-slate-200">✦ Craft Universal Essence</p>
-              <p className="text-[10px] text-muted-foreground mt-0.5">
-                Costs {UNIVERSAL_ESSENCE_COST_PER_TYPE} of each elemental essence per craft.
-              </p>
-            </div>
-
-            {/* Ingredient chips — all 12 types */}
-            <div className="flex flex-wrap gap-1">
-              {ALL_FLOWER_TYPES.map((type) => {
-                const cfg  = FLOWER_TYPES[type];
-                const have = (state.essences ?? []).find((e) => e.type === type)?.amount ?? 0;
-                const need = UNIVERSAL_ESSENCE_COST_PER_TYPE * craftQty;
-                const ok   = have >= need;
-                return (
-                  <span
-                    key={type}
-                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[10px] font-medium
-                      ${ok ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}` : "bg-border/10 border-border/40 text-muted-foreground/50"}`}
-                  >
-                    {cfg.emoji} {have}/{need}
-                  </span>
-                );
-              })}
-            </div>
-
-            {/* Craftable count + qty selector + button */}
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-muted-foreground">
-                Craftable: <span className="text-slate-200 font-semibold">{universalCraftable}</span>
-              </span>
-              <div className="flex items-center gap-1 ml-auto">
-                <button
-                  onClick={() => setCraftQty((q) => Math.max(1, q - 1))}
-                  disabled={craftQty <= 1}
-                  className="w-6 h-6 rounded-md border border-border text-muted-foreground text-xs flex items-center justify-center hover:border-primary/50 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  −
-                </button>
-                <span className="w-6 text-center text-xs font-mono text-foreground">{craftQty}</span>
-                <button
-                  onClick={() => setCraftQty((q) => Math.min(universalCraftable, q + 1))}
-                  disabled={craftQty >= universalCraftable}
-                  className="w-6 h-6 rounded-md border border-border text-muted-foreground text-xs flex items-center justify-center hover:border-primary/50 hover:text-foreground disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                >
-                  +
-                </button>
-                <button
-                  onClick={() => setCraftQty(universalCraftable)}
-                  disabled={craftQty >= universalCraftable || universalCraftable === 0}
-                  className="ml-1 text-[9px] text-primary font-semibold disabled:opacity-30 disabled:cursor-not-allowed"
-                >
-                  Max
-                </button>
-              </div>
-              <button
-                onClick={handleCraftUniversal}
-                disabled={crafting || universalCraftable === 0}
-                className="px-3 py-1.5 rounded-lg bg-slate-200/10 border border-slate-200/25 text-slate-200 text-xs font-semibold hover:bg-slate-200/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                {crafting ? "Crafting…" : "Craft"}
-              </button>
-            </div>
-
-            {craftError && (
-              <p className="text-[10px] text-destructive">{craftError}</p>
-            )}
-          </div>
-
-          <div className="rounded-xl border border-border bg-card/40 px-4 py-3">
-            <p className="text-xs font-semibold mb-2">Essence Yield Table</p>
-            <div className="space-y-1">
-              {rarityOrder.map((rarity) => {
-                const cfg = RARITY_CONFIG[rarity];
-                return (
-                  <div key={rarity} className="flex items-center justify-between text-xs">
-                    <span className={cfg.color}>{cfg.label}</span>
-                    <span className="text-muted-foreground font-mono">
-                      {ESSENCE_YIELD[rarity]} per flower
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ── Yield-rates modal (opened from Sacrifice header button) ───────── */}
+      {showYieldModal && <YieldTableModal onClose={() => setShowYieldModal(false)} />}
 
       {/* ── SACRIFICE view ── */}
       {view === "sacrifice" && (
         <div className="flex flex-col gap-4">
 
-          {/* Description */}
-          <p className="text-[11px] text-muted-foreground">
-            Sacrifice harvested flowers to extract their elemental essence. Higher rarity yields more essence.
-          </p>
+          {/* Description + yield-rates trigger */}
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-xs text-muted-foreground flex-1">
+              Sacrifice harvested flowers to extract their elemental essence. Higher rarity yields more essence.
+            </p>
+            <button
+              onClick={() => setShowYieldModal(true)}
+              className="shrink-0 text-xs font-semibold px-2 py-1 rounded-lg border border-border text-muted-foreground hover:text-foreground hover:border-foreground/40 transition-colors"
+              title="Show essence yield rates by rarity"
+            >
+              📊 Yield rates
+            </button>
+          </div>
 
-          {/* Essence bank — always visible at top */}
-          {(state.essences ?? []).length > 0 && (
-            <div>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
-                Essence Bank
-              </p>
-              <EssenceWallet essences={state.essences ?? []} />
-            </div>
-          )}
+          {/* Essence bank — always visible at top, shows all 12 + Universal */}
+          <div>
+            <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
+              Essence Bank
+            </p>
+            <EssenceBank essences={state.essences ?? []} />
+          </div>
 
           {/* Error banner */}
           {error && (
@@ -1086,7 +347,7 @@ export function AlchemyTab() {
 
           {/* Rarity filter tabs */}
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
               Filter by rarity
             </p>
             <div className="flex flex-wrap gap-1.5">
@@ -1094,10 +355,10 @@ export function AlchemyTab() {
               <button
                 onClick={() => setActiveRarities([])}
                 className={`
-                  px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all duration-150
+                  px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
                   ${activeRarities.length === 0
-                    ? "border-foreground bg-foreground/10 text-foreground"
-                    : "border-border text-muted-foreground hover:border-foreground hover:text-foreground"
+                    ? "bg-primary/20 border border-primary/50 text-primary"
+                    : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
                   }
                 `}
               >
@@ -1115,12 +376,12 @@ export function AlchemyTab() {
                     )}
                     disabled={!hasAny}
                     className={`
-                      px-2.5 py-1 rounded-full border text-[11px] font-semibold transition-all duration-150
+                      px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize
                       ${isActive
-                        ? `border-current bg-current/10 ${cfg.color}`
+                        ? `bg-primary/20 border border-primary/50 ${cfg.color}`
                         : hasAny
-                          ? `border-border text-muted-foreground hover:border-current hover:${cfg.color}`
-                          : "border-border/30 text-muted-foreground/30 cursor-not-allowed"
+                          ? "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                          : "bg-card/60 border border-border/30 text-muted-foreground/30 cursor-not-allowed"
                       }
                     `}
                   >
@@ -1133,10 +394,22 @@ export function AlchemyTab() {
 
           {/* Type filter */}
           <div>
-            <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+            <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
               Filter by type
             </p>
             <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={() => setActiveTypes([])}
+                className={`
+                  px-2.5 py-1 rounded-lg text-xs font-semibold transition-all
+                  ${activeTypes.length === 0
+                    ? "bg-foreground/10 border border-foreground/40 text-foreground"
+                    : "bg-card/60 border border-border text-muted-foreground hover:border-foreground/30"
+                  }
+                `}
+              >
+                All types
+              </button>
               {typeOrder.map((type) => {
                 const cfg      = FLOWER_TYPES[type];
                 const hasAny   = availableTypes.has(type);
@@ -1149,12 +422,12 @@ export function AlchemyTab() {
                     )}
                     disabled={!hasAny}
                     className={`
-                      inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold transition-all duration-150
+                      inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold transition-all
                       ${isActive
-                        ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`
+                        ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color} border`
                         : hasAny
-                          ? `border-border text-muted-foreground hover:${cfg.bgColor} hover:${cfg.borderColor} hover:${cfg.color}`
-                          : "border-border/30 text-muted-foreground/30 cursor-not-allowed"
+                          ? "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                          : "bg-card/60 border border-border/30 text-muted-foreground/30 cursor-not-allowed"
                       }
                     `}
                   >
@@ -1186,13 +459,13 @@ export function AlchemyTab() {
                 <div className="flex gap-2">
                   <button
                     onClick={handleSelectAll}
-                    className="text-[10px] text-primary hover:text-primary/80 font-semibold"
+                    className="text-xs text-primary hover:text-primary/80 font-semibold"
                   >
                     Select all
                   </button>
                   <button
                     onClick={() => { handleClearRarity(); }}
-                    className="text-[10px] text-muted-foreground hover:text-foreground"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     Clear selection
                   </button>
@@ -1242,7 +515,7 @@ export function AlchemyTab() {
                           return (
                             <span
                               key={t}
-                              className={`text-[9px] px-1.5 py-0.5 rounded-full border font-medium ${tc.bgColor} ${tc.borderColor} ${tc.color}`}
+                              className={`text-[10px] px-1.5 py-0.5 rounded-full border font-medium ${tc.bgColor} ${tc.borderColor} ${tc.color}`}
                             >
                               {tc.emoji} {tc.name}
                             </span>
@@ -1272,7 +545,7 @@ export function AlchemyTab() {
                         <button
                           onClick={() => setQty(item.speciesId, item.mutation as MutationType | undefined, avail)}
                           disabled={qty >= avail}
-                          className="ml-1 text-[9px] text-primary font-semibold disabled:opacity-30 disabled:cursor-not-allowed"
+                          className="ml-1 text-xs text-primary font-semibold disabled:opacity-30 disabled:cursor-not-allowed"
                         >
                           Max
                         </button>
@@ -1318,22 +591,6 @@ export function AlchemyTab() {
           )}
 
         </div>
-      )}
-
-      {/* ── CRAFT view ── */}
-      {view === "craft" && (
-        <CraftView
-          essences={state.essences ?? []}
-          consumables={state.consumables ?? []}
-          infusers={state.infusers ?? []}
-          gearInventory={state.gearInventory ?? []}
-          craftingItemId={craftingItemId}
-          itemCraftError={itemCraftError}
-          craftingGearType={craftingGearType}
-          gearCraftError={gearCraftError}
-          onCraft={handleCraftItem}
-          onCraftGear={handleCraftGear}
-        />
       )}
 
       {/* ── ATTUNE view ── */}
@@ -1402,17 +659,18 @@ export function AlchemyTab() {
           setAttuneError(null);
           setAttuning(true);
           try {
-            const res = await edgeAlchemyAttune(attuneSpeciesId, attuneEssType, attuneQty);
+            // v2.3: starts a time-gated queue entry instead of resolving instantly.
+            // Result modal only fires on collect.
+            const res = await edgeAttuneStart(attuneSpeciesId, attuneEssType, attuneQty);
             const cur = getState();
             update({
               ...cur,
-              inventory:  res.inventory,
-              essences:   res.essences,
-              coins:      res.coins,
-              discovered: res.discovered,
+              coins:           res.coins,
+              inventory:       res.inventory,
+              essences:        res.essences,
+              attunementQueue: res.attunementQueue,
               serverUpdatedAt: res.serverUpdatedAt,
             });
-            setAttuneResult({ mutation: res.mutation, tier: res.tier });
             setAttuneSpeciesId(null);
             setAttuneEssType(null);
             setAttuneQty(1);
@@ -1446,12 +704,183 @@ export function AlchemyTab() {
           }
         }
 
+        // ── Attunement queue handlers (v2.3) ────────────────────────────────
+        async function handleCollectAttune(id: string) {
+          try {
+            const res = await edgeAttuneCollect(id);
+            const cur = getState();
+            update({
+              ...cur,
+              inventory:       res.inventory,
+              discovered:      res.discovered,
+              attunementQueue: res.attunementQueue,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+            setAttuneResult({ mutation: res.mutation, tier: res.tier });
+          } catch (e) {
+            setAttuneError(e instanceof Error ? e.message : "Collect failed");
+          }
+        }
+        async function handleCancelAttune(id: string) {
+          try {
+            const res = await edgeAttuneCancel(id);
+            const cur = getState();
+            update({
+              ...cur,
+              inventory:       res.inventory,
+              attunementQueue: res.attunementQueue,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+          } catch (e) {
+            setAttuneError(e instanceof Error ? e.message : "Cancel failed");
+          }
+        }
+        async function handleUpgradeAttuneSlots() {
+          try {
+            const res = await edgeUpgradeAttunementSlots();
+            const cur = getState();
+            update({
+              ...cur,
+              coins:           res.coins,
+              attunementSlots: res.attunement_slots,
+              serverUpdatedAt: res.serverUpdatedAt,
+            });
+          } catch (e) {
+            setAttuneError(e instanceof Error ? e.message : "Upgrade failed");
+          }
+        }
+
+        // ── Attunement queue derived state ──────────────────────────────────
+        const attuneSlots    = state.attunementSlots ?? 0;
+        const attuneQueue    = state.attunementQueue ?? [];
+        const slotsAvailable = attuneSlots > 0 && attuneQueue.length < attuneSlots;
+        const nextSlotUpgrade = getNextAttunementSlotUpgrade(attuneSlots);
+        const canAffordSlot   = nextSlotUpgrade ? state.coins >= nextSlotUpgrade.cost : false;
+        const atMaxSlots      = attuneSlots >= MAX_ATTUNEMENT_SLOTS;
+
         return (
           <div className="flex flex-col gap-5">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Transform a base bloom into a mutated one by spending elemental essence and coins.
               Higher essence (especially matching the flower's type) unlocks rarer mutation pools.
+              Attunements are <span className="text-foreground">time-gated</span> — start one in a slot, wait, then collect the result.
             </p>
+
+            {/* ── Attunement slots + queue ────────────────────────────────── */}
+            <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest">
+                  Attunement Slots <span className="text-muted-foreground/60">· {attuneQueue.length}/{attuneSlots}</span>
+                </p>
+                {atMaxSlots && (
+                  <p className="text-[10px] text-amber-400/60 shrink-0">Max slots</p>
+                )}
+              </div>
+
+              {/* Slot rows */}
+              {Array.from({ length: Math.max(attuneSlots, 1) }).map((_, i) => {
+                const entry = attuneQueue[i];
+                if (!entry && attuneSlots === 0 && i === 0) {
+                  return (
+                    <div key={`locked-${i}`} className="rounded-xl border border-dashed border-border/60 bg-card/20 px-3 py-2 min-h-[3rem] flex items-center gap-2">
+                      <span className="text-lg leading-none shrink-0 opacity-30">🔒</span>
+                      <p className="text-xs text-muted-foreground italic">Buy your first attunement slot to start</p>
+                    </div>
+                  );
+                }
+                if (!entry) {
+                  return (
+                    <div key={`empty-${i}`} className="rounded-xl border border-dashed border-border/60 bg-card/20 px-3 py-2 min-h-[3rem] flex items-center gap-2">
+                      <span className="text-lg leading-none shrink-0 opacity-30">🌿</span>
+                      <p className="text-xs text-muted-foreground italic">Empty slot</p>
+                    </div>
+                  );
+                }
+                const flower = getFlower(entry.speciesId);
+                const startedMs = new Date(entry.startedAt).getTime();
+                const elapsed   = attuneNow - startedMs;
+                const progress  = Math.max(0, Math.min(elapsed / entry.durationMs, 1));
+                const isDone    = progress >= 1;
+                const remaining = Math.max(entry.durationMs - elapsed, 0);
+                const fmt = (ms: number) => {
+                  if (ms <= 0) return "Done!";
+                  const s = Math.ceil(ms / 1000);
+                  if (s < 60) return `${s}s`;
+                  const m = Math.floor(s / 60);
+                  if (m < 60) return `${m}m ${s % 60}s`;
+                  const h = Math.floor(m / 60);
+                  return `${h}h ${m % 60}m`;
+                };
+                const tierLabel = ROMAN[entry.tier as 1|2|3|4|5] ?? entry.tier;
+                return (
+                  <div key={entry.id} className="rounded-xl border border-border bg-card/40 px-3 py-2 space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-lg leading-none shrink-0">{flower?.emoji.bloom ?? "🌸"}</span>
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-foreground truncate">
+                            {flower?.name ?? entry.speciesId}
+                            <span className="ml-1.5 text-[10px] font-mono text-muted-foreground">
+                              → ❓ Tier {tierLabel}
+                            </span>
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {isDone ? <span className="text-green-400 font-semibold">Ready to collect!</span> : fmt(remaining)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {isDone && (
+                          <button
+                            onClick={() => handleCollectAttune(entry.id)}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-green-600/20 border border-green-500/40 text-green-400 hover:bg-green-600/30 transition"
+                          >
+                            ✅ Collect
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleCancelAttune(entry.id)}
+                          className="px-2 py-1 rounded-lg text-xs font-semibold bg-card/60 border border-border text-muted-foreground hover:text-red-400 hover:border-red-500/40 transition"
+                          title="Cancel (refunds the bloom, NOT the essence)"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-card/60 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${isDone ? "bg-green-500" : "bg-amber-500"}`}
+                        style={{ width: `${progress * 100}%`, transition: "width 1s linear, background-color 500ms" }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Slot upgrade button */}
+              {!atMaxSlots && nextSlotUpgrade && (
+                <button
+                  onClick={handleUpgradeAttuneSlots}
+                  disabled={!canAffordSlot}
+                  className={`
+                    w-full rounded-xl border border-dashed border-amber-600/40 bg-amber-500/5
+                    hover:bg-amber-500/10 hover:border-amber-400/60
+                    px-3 py-2 min-h-[3rem] flex items-center justify-between gap-2
+                    transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                  `}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg leading-none shrink-0 opacity-70">➕</span>
+                    <p className="text-xs font-semibold text-amber-400">
+                      Unlock attunement slot {nextSlotUpgrade.slots}
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono text-amber-400">
+                    {nextSlotUpgrade.cost.toLocaleString()} 🟡
+                  </span>
+                </button>
+              )}
+            </div>
 
             {/* ── Attune section ─────────────────────────────────────────── */}
             <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-4">
@@ -1459,11 +888,11 @@ export function AlchemyTab() {
 
               {/* Bloom picker */}
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+                <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
                   Pick a base bloom
                 </p>
                 {attunableBlooms.length === 0 ? (
-                  <p className="text-[11px] text-muted-foreground">No unmutated blooms in inventory.</p>
+                  <p className="text-xs text-muted-foreground">No unmutated blooms in inventory.</p>
                 ) : (
                   <div className="flex flex-wrap gap-1.5">
                     {rarityOrder.flatMap((r) =>
@@ -1482,7 +911,7 @@ export function AlchemyTab() {
                                 setAttuneQty(1);
                                 setAttuneError(null);
                               }}
-                              className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                              className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors ${
                                 isSelected
                                   ? `${rc.color} border-current bg-current/10`
                                   : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -1502,14 +931,14 @@ export function AlchemyTab() {
               {/* Essence picker — only shown once a bloom is selected */}
               {attuneSpecies && (
                 <div>
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-widest mb-2">
+                  <p className="text-xs text-muted-foreground uppercase tracking-widest mb-2">
                     Choose essence type
                     <span className="ml-1 normal-case">
                       (matching: {attuneSpecies.types.join(", ")})
                     </span>
                   </p>
                   {ownedEssences.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">No essence in bank.</p>
+                    <p className="text-xs text-muted-foreground">No essence in bank.</p>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {ownedEssences.map(({ type, amount }) => {
@@ -1520,14 +949,14 @@ export function AlchemyTab() {
                           <button
                             key={type}
                             onClick={() => { setAttuneEssType(type); setAttuneQty(1); }}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors ${
                               isSelected
                                 ? `${cfg.color} border-current ${cfg.bgColor}`
                                 : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
                             }`}
                           >
                             {cfg.emoji} {cfg.name}
-                            {isMatch && <span className="text-[9px] text-primary ml-0.5">✦ match</span>}
+                            {isMatch && <span className="text-[10px] text-primary ml-0.5">✦ match</span>}
                             <span className="text-muted-foreground/60 ml-0.5">×{amount}</span>
                           </button>
                         );
@@ -1541,12 +970,19 @@ export function AlchemyTab() {
               {attuneSpecies && attuneEssType && (() => {
                 const ownedAmt = ownedEssences.find((e) => e.type === attuneEssType)?.amount ?? 0;
                 const canAfford = state.coins >= goldCostPreview;
-                const canAttune = ownedAmt >= attuneQty && canAfford;
+                const canAttune = ownedAmt >= attuneQty && canAfford && slotsAvailable;
+                const previewDurMs = attuneRarity ? attunementDurationMs(tierPreview, attuneRarity) : 0;
+                const fmtDur = (ms: number) => {
+                  const m = Math.round(ms / 60_000);
+                  if (m < 60) return `${m} min`;
+                  const h = Math.floor(m / 60);
+                  return `${h}h ${m % 60}m`;
+                };
                 return (
                   <div className="space-y-3">
                     {/* Qty row */}
                     <div className="flex items-center gap-3">
-                      <span className="text-[11px] text-muted-foreground">Quantity</span>
+                      <span className="text-xs text-muted-foreground">Quantity</span>
                       <div className="flex items-center gap-1">
                         <button onClick={() => setAttuneQty((q) => Math.max(1, q - 1))} disabled={attuneQty <= 1}
                           className="w-6 h-6 rounded-md border border-border text-xs flex items-center justify-center hover:border-primary/50 disabled:opacity-30">−</button>
@@ -1554,12 +990,12 @@ export function AlchemyTab() {
                         <button onClick={() => setAttuneQty((q) => Math.min(ownedAmt, q + 1))} disabled={attuneQty >= ownedAmt}
                           className="w-6 h-6 rounded-md border border-border text-xs flex items-center justify-center hover:border-primary/50 disabled:opacity-30">+</button>
                         <button onClick={() => setAttuneQty(ownedAmt)} disabled={attuneQty >= ownedAmt}
-                          className="ml-1 text-[9px] text-primary disabled:opacity-30">Max</button>
+                          className="ml-1 text-xs text-primary disabled:opacity-30">Max</button>
                       </div>
                     </div>
 
                     {/* Tier + cost summary */}
-                    <div className="rounded-lg bg-card/60 border border-border px-3 py-2 space-y-1 text-[11px]">
+                    <div className="rounded-lg bg-card/60 border border-border px-3 py-2 space-y-1 text-xs">
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Effective essence</span>
                         <span className="font-mono">{effectiveEssence}</span>
@@ -1579,6 +1015,16 @@ export function AlchemyTab() {
                       </div>
                     </div>
 
+                    {/* Duration preview */}
+                    {previewDurMs > 0 && (
+                      <p className="text-xs text-muted-foreground text-right">
+                        ⏱ Duration: <span className="text-foreground">{fmtDur(previewDurMs)}</span>
+                        {!slotsAvailable && (
+                          <span className="ml-2 text-amber-400">· no free slot</span>
+                        )}
+                      </p>
+                    )}
+
                     {attuneError && (
                       <p className="text-xs text-destructive">{attuneError}</p>
                     )}
@@ -1588,7 +1034,11 @@ export function AlchemyTab() {
                       disabled={attuning || !canAttune}
                       className="w-full py-2 rounded-xl bg-primary/20 border border-primary/50 text-primary text-sm font-semibold hover:bg-primary/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-center"
                     >
-                      {attuning ? "Attuning…" : "🌿 Attune"}
+                      {attuning
+                        ? "Starting…"
+                        : !slotsAvailable
+                          ? attuneSlots === 0 ? "Buy a slot to start" : "All slots in use"
+                          : "🌿 Start Attune"}
                     </button>
                   </div>
                 );
@@ -1598,12 +1048,12 @@ export function AlchemyTab() {
             {/* ── Strip section ───────────────────────────────────────────── */}
             <div className="rounded-xl border border-border bg-card/40 px-4 py-3 space-y-4">
               <p className="text-xs font-semibold">✂️ Strip Mutation</p>
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 Remove a mutation from a bloom, returning it to its base form. Costs coins.
               </p>
 
               {strippableBlooms.length === 0 ? (
-                <p className="text-[11px] text-muted-foreground">No mutated blooms in inventory.</p>
+                <p className="text-xs text-muted-foreground">No mutated blooms in inventory.</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {rarityOrder.flatMap((r) =>
@@ -1621,7 +1071,7 @@ export function AlchemyTab() {
                               setStripMutation(isSelected ? null : (item.mutation ?? null));
                               setStripError(null);
                             }}
-                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-[11px] transition-colors ${
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs transition-colors ${
                               isSelected
                                 ? "border-primary text-primary bg-primary/10"
                                 : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
@@ -1640,7 +1090,7 @@ export function AlchemyTab() {
 
               {stripSpeciesId && stripMutation && (
                 <div className="space-y-2">
-                  <div className="rounded-lg bg-card/60 border border-border px-3 py-2 text-[11px] flex justify-between">
+                  <div className="rounded-lg bg-card/60 border border-border px-3 py-2 text-xs flex justify-between">
                     <span className="text-muted-foreground">Strip cost</span>
                     <span className={`font-mono ${state.coins >= stripGoldCost ? "" : "text-destructive"}`}>
                       {stripGoldCost.toLocaleString()} 🟡
@@ -1671,7 +1121,7 @@ export function AlchemyTab() {
               <span className="text-2xl">{mut?.emoji ?? "🌿"}</span>
               <div>
                 <p className="text-sm font-bold text-primary mb-0.5">Attunement complete!</p>
-                <p className={`text-[11px] font-semibold ${mut?.color ?? ""}`}>{mut?.name ?? attuneResult.mutation}</p>
+                <p className={`text-xs font-semibold ${mut?.color ?? ""}`}>{mut?.name ?? attuneResult.mutation}</p>
                 <p className={`text-[10px] ${TIER_COLOR[attuneResult.tier]}`}>Tier {attuneResult.tier} pool</p>
               </div>
             </div>
@@ -1686,45 +1136,7 @@ export function AlchemyTab() {
             <span className="text-2xl">✂️</span>
             <div>
               <p className="text-sm font-bold mb-0.5">Mutation stripped</p>
-              <p className="text-[11px] text-muted-foreground">Bloom returned to base form</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Item craft success toast ── */}
-      {itemCraftSuccess && (
-        <div
-          className={`
-            fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none
-            transition-all duration-400
-            ${itemCraftSuccessVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
-          `}
-        >
-          <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-56">
-            <span className="text-2xl">{itemCraftSuccess.emoji}</span>
-            <div>
-              <p className="text-sm font-bold text-primary mb-0.5">Crafted!</p>
-              <p className="text-[11px] text-muted-foreground">{itemCraftSuccess.name}</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Universal Essence craft success toast ── */}
-      {craftSuccess && (
-        <div
-          className={`
-            fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none
-            transition-all duration-400
-            ${craftSuccessVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"}
-          `}
-        >
-          <div className="flex items-center gap-3 bg-card border border-slate-200/30 rounded-2xl px-5 py-4 shadow-2xl min-w-64">
-            <span className="text-2xl">✦</span>
-            <div>
-              <p className="text-sm font-bold text-slate-200 mb-0.5">Crafted!</p>
-              <p className="text-[11px] text-muted-foreground">+{craftSuccess} Universal Essence</p>
+              <p className="text-xs text-muted-foreground">Bloom returned to base form</p>
             </div>
           </div>
         </div>
@@ -1751,7 +1163,7 @@ export function AlchemyTab() {
                   return (
                     <span
                       key={type}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-xs font-semibold ${cfg.bgColor} ${cfg.borderColor} ${cfg.color}`}
                     >
                       {cfg.emoji} +{amount}
                     </span>

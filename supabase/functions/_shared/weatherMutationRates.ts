@@ -5,22 +5,25 @@
 // ⚠️  Keep in sync with src/data/weatherMutationRates.ts (frontend copy).
 //     Supabase bundler cannot reach outside supabase/functions/, so both files
 //     must exist. When changing rates, update both.
+// All rates halved from their original v2.2 values to make weather mutations
+// feel rarer / more special — getting "Wet" on every rain felt like noise
+// rather than an event. ⚠️ Keep in sync with the client copy.
 export const WEATHER_MUT_CHANCE_PER_TICK: Record<string, number> = {
-  rain:            0.001,    // ~70% over 20-min event
-  heatwave:        0.00057,  // ~40% over 15-min event
-  cold_front:      0.00057,  // ~40% over 15-min event
-  star_shower:     0.000213, // ~20% over 17.5-min event
-  prismatic_skies: 0.000248, // ~20% over 15-min event
-  golden_hour:     0.000248, // ~20% over 15-min event
-  tornado:         0.002,    // ~70% over 10-min event (600 ticks)
+  rain:            0.0005,   // ~45% over 20-min event
+  heatwave:        0.000285, // ~23% over 15-min event
+  cold_front:      0.000285, // ~23% over 15-min event
+  star_shower:     0.000107, // ~11% over 17.5-min event
+  prismatic_skies: 0.000124, // ~11% over 15-min event
+  golden_hour:     0.000124, // ~11% over 15-min event
+  tornado:         0.001,    // ~45% over 10-min event (600 ticks)
 };
 
 // Thunderstorm two-step chain: unmutated → wet → shocked (no direct →shocked path)
-export const THUNDERSTORM_WET_CHANCE_PER_TICK     = 0.001;    // null/undefined → wet (~70% over 20 min)
-export const THUNDERSTORM_SHOCKED_CHANCE_PER_TICK = 0.000578; // wet → shocked (~50% over 20 min)
+export const THUNDERSTORM_WET_CHANCE_PER_TICK     = 0.0005;   // null/undefined → wet (~45% over 20 min)
+export const THUNDERSTORM_SHOCKED_CHANCE_PER_TICK = 0.000289; // wet → shocked (~30% over 20 min)
 
-// Moonlit at night outside star_shower (~15% over 10-hour night)
-export const MOONLIT_NIGHT_CHANCE_PER_TICK = 0.0000045;
+// Moonlit at night outside star_shower (~8% over 10-hour night)
+export const MOONLIT_NIGHT_CHANCE_PER_TICK = 0.00000225;
 
 /** Convert a per-tick (1-second) probability to an equivalent per-minute probability. */
 export function perMinChance(p: number): number {

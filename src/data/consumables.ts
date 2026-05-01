@@ -19,8 +19,8 @@ export type ConsumableId =
   | "slot_lock"
   | "seed_pouch_1"     | "seed_pouch_2"     | "seed_pouch_3"     | "seed_pouch_4"     | "seed_pouch_5"
   | `seed_pouch_${"blaze"|"tide"|"grove"|"frost"|"storm"|"lunar"|"solar"|"fairy"|"shadow"|"arcane"|"stellar"|"zephyr"}_${1|2|3|4|5}`
-  | "magnifying_glass_1" | "magnifying_glass_2" | "magnifying_glass_3" | "magnifying_glass_4" | "magnifying_glass_5"
-  | "garden_pin_1"       | "garden_pin_2"       | "garden_pin_3"       | "garden_pin_4"       | "garden_pin_5"
+  | "magnifying_glass"
+  | "garden_pin"
   | "verdant_rush_1"     | "verdant_rush_2"     | "verdant_rush_3"     | "verdant_rush_4"     | "verdant_rush_5"
   | "forge_haste_1"      | "forge_haste_2"      | "forge_haste_3"      | "forge_haste_4"      | "forge_haste_5"
   | "resonance_draft_1"  | "resonance_draft_2"  | "resonance_draft_3"  | "resonance_draft_4"  | "resonance_draft_5";
@@ -97,14 +97,50 @@ const RARITY_LABEL: Record<Rarity, string> = {
 
 function r(tier: 1 | 2 | 3 | 4 | 5) { return RARITY_LABEL[TIER_RARITIES[tier]]; }
 
-// ── Attunement Crystal recipes ─────────────────────────────────────────────
+// ── Supply shop pricing ────────────────────────────────────────────────────
+// Consumables in the supply shop are priced 2× per rarity tier (matches the
+// "needs 2× previous tier" crafting cost), plus a category multiplier for
+// items whose effects are unusually strong (mutation vials, speed boosts).
+
+const CONSUMABLE_BASE_BY_RARITY: Record<Rarity, number> = {
+  common:    0,
+  uncommon:  0,
+  rare:      2_000,
+  legendary: 8_000,
+  mythic:    40_000,
+  exalted:   200_000,
+  prismatic: 1_000_000,
+};
+
+const CONSUMABLE_CATEGORY_MULT: Record<ConsumableCategory, number> = {
+  growth:         1.0,
+  utility:        1.0,
+  mutation_boost: 1.5,
+  speed_boost:    2.0,
+  seed_pouch:     1.0, // not in supply pool, here for completeness
+};
+
+/** Supply-shop price for a consumable. Crafting is cheaper because the
+ *  ingredient cost (essences / lower-tier consumables) is the only outlay,
+ *  while the supply shop pays in raw coins at this premium. */
+export function consumableShopPrice(recipe: ConsumableRecipe): number {
+  const base = CONSUMABLE_BASE_BY_RARITY[recipe.rarity] ?? 0;
+  const mult = CONSUMABLE_CATEGORY_MULT[recipe.category] ?? 1.0;
+  return Math.round(base * mult);
+}
+
+// ── Infuser recipes (cross-breeding consumable) ──────────────────────────
+// Internal kind stays "attunement" for save-format stability — only the
+// user-facing names + descriptions changed in the v2.3 rename. The Alchemy
+// Attune view (essence-mutation) is the *other* mechanic that keeps the
+// "Attunement" name.
 
 export const ATTUNEMENT_RECIPES: AttunementRecipe[] = [
-  { tier: 1, rarity: "rare",      name: "Attunement I",   description: "Apply to a Rare bloomed flower to mark it as a cross-breeding participant.",      cost: { kind: "essence",    amounts: [{ type: "universal", amount: 2 }] } },
-  { tier: 2, rarity: "legendary", name: "Attunement II",  description: "Apply to a Legendary bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 1, quantity: 2 } },
-  { tier: 3, rarity: "mythic",    name: "Attunement III", description: "Apply to a Mythic bloomed flower to mark it as a cross-breeding participant.",    cost: { kind: "attunement", tier: 2, quantity: 2 } },
-  { tier: 4, rarity: "exalted",   name: "Attunement IV",  description: "Apply to an Exalted bloomed flower to mark it as a cross-breeding participant.",  cost: { kind: "attunement", tier: 3, quantity: 2 } },
-  { tier: 5, rarity: "prismatic", name: "Attunement V",   description: "Apply to a Prismatic bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 4, quantity: 2 } },
+  { tier: 1, rarity: "rare",      name: "Infuser I",   description: "Apply to a Rare bloomed flower to mark it as a cross-breeding participant.",      cost: { kind: "essence",    amounts: [{ type: "universal", amount: 2 }] } },
+  { tier: 2, rarity: "legendary", name: "Infuser II",  description: "Apply to a Legendary bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 1, quantity: 2 } },
+  { tier: 3, rarity: "mythic",    name: "Infuser III", description: "Apply to a Mythic bloomed flower to mark it as a cross-breeding participant.",    cost: { kind: "attunement", tier: 2, quantity: 2 } },
+  { tier: 4, rarity: "exalted",   name: "Infuser IV",  description: "Apply to an Exalted bloomed flower to mark it as a cross-breeding participant.",  cost: { kind: "attunement", tier: 3, quantity: 2 } },
+  { tier: 5, rarity: "prismatic", name: "Infuser V",   description: "Apply to a Prismatic bloomed flower to mark it as a cross-breeding participant.", cost: { kind: "attunement", tier: 4, quantity: 2 } },
 ];
 
 // ── Consumable recipes ─────────────────────────────────────────────────────
@@ -113,19 +149,19 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
 
   // ── Bloom Burst (I–V) — growth ────────────────────────────────────────────
   { id: "bloom_burst_1", name: "Bloom Burst I",   emoji: "🌱", tier: 1, rarity: "rare",      category: "growth",
-    description: `Advances a ${r(1)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(1)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "essence", amounts: [{ type: "solar", amount: 4 }, { type: "zephyr", amount: 4 }] } },
   { id: "bloom_burst_2", name: "Bloom Burst II",  emoji: "🌱", tier: 2, rarity: "legendary", category: "growth",
-    description: `Advances a ${r(2)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(2)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "consumable", id: "bloom_burst_1", quantity: 2 } },
   { id: "bloom_burst_3", name: "Bloom Burst III", emoji: "🌱", tier: 3, rarity: "mythic",    category: "growth",
-    description: `Advances a ${r(3)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(3)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "consumable", id: "bloom_burst_2", quantity: 2 } },
   { id: "bloom_burst_4", name: "Bloom Burst IV",  emoji: "🌱", tier: 4, rarity: "exalted",   category: "growth",
-    description: `Advances a ${r(4)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(4)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "consumable", id: "bloom_burst_3", quantity: 2 } },
   { id: "bloom_burst_5", name: "Bloom Burst V",   emoji: "🌱", tier: 5, rarity: "prismatic", category: "growth",
-    description: `Advances a ${r(5)} plant. Seeds sprout; sprouts advance halfway to bloom.`,
+    description: `Advances a ${r(5)} plant. Skips half the remaining seed time, or a quarter of the remaining sprout time.`,
     cost: { kind: "consumable", id: "bloom_burst_4", quantity: 2 } },
 
   // ── Heirloom Charm (I–V) — growth ────────────────────────────────────────
@@ -163,19 +199,19 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     cost: { kind: "consumable", id: "eclipse_tonic_4", quantity: 2 } },
 
   // ── Purity Vial (I–V) — mutation_boost ───────────────────────────────────
-  { id: "purity_vial_1", name: "Purity Vial I",   emoji: "🫧", tier: 1, rarity: "rare",      category: "mutation_boost",
+  { id: "purity_vial_1", name: "Purity Vial I",   emoji: "🧼", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Shields a ${r(1)} plant from receiving any mutation on its next harvest.`,
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "frost", amount: 4 }] } },
-  { id: "purity_vial_2", name: "Purity Vial II",  emoji: "🫧", tier: 2, rarity: "legendary", category: "mutation_boost",
+  { id: "purity_vial_2", name: "Purity Vial II",  emoji: "🧼", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Shields a ${r(2)} plant from receiving any mutation on its next harvest.`,
     cost: { kind: "consumable", id: "purity_vial_1", quantity: 2 } },
-  { id: "purity_vial_3", name: "Purity Vial III", emoji: "🫧", tier: 3, rarity: "mythic",    category: "mutation_boost",
+  { id: "purity_vial_3", name: "Purity Vial III", emoji: "🧼", tier: 3, rarity: "mythic",    category: "mutation_boost",
     description: `Shields a ${r(3)} plant from receiving any mutation on its next harvest.`,
     cost: { kind: "consumable", id: "purity_vial_2", quantity: 2 } },
-  { id: "purity_vial_4", name: "Purity Vial IV",  emoji: "🫧", tier: 4, rarity: "exalted",   category: "mutation_boost",
+  { id: "purity_vial_4", name: "Purity Vial IV",  emoji: "🧼", tier: 4, rarity: "exalted",   category: "mutation_boost",
     description: `Shields a ${r(4)} plant from receiving any mutation on its next harvest.`,
     cost: { kind: "consumable", id: "purity_vial_3", quantity: 2 } },
-  { id: "purity_vial_5", name: "Purity Vial V",   emoji: "🫧", tier: 5, rarity: "prismatic", category: "mutation_boost",
+  { id: "purity_vial_5", name: "Purity Vial V",   emoji: "🧼", tier: 5, rarity: "prismatic", category: "mutation_boost",
     description: `Shields a ${r(5)} plant from receiving any mutation on its next harvest.`,
     cost: { kind: "consumable", id: "purity_vial_4", quantity: 2 } },
 
@@ -298,42 +334,19 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     description: `Significantly increases the Rainbow mutation chance for a ${r(5)} plant.`,
     cost: { kind: "consumable", id: "rainbow_vial_4", quantity: 2 } },
 
-  // ── Magnifying Glass (I–V) — utility ─────────────────────────────────────
-  // One-time use: reveals hidden plot information (plant species, mutation, growth %).
-  { id: "magnifying_glass_1", name: "Magnifying Glass I",   emoji: "🔍", tier: 1, rarity: "rare",      category: "utility",
-    description: `Reveals all details of a ${r(1)} plot — species, mutation, and exact growth progress.`,
+  // ── Magnifying Glass — utility ────────────────────────────────────────────
+  // One-time use: reveals what species is growing in a seed or sprout tile.
+  { id: "magnifying_glass", name: "Magnifying Glass", emoji: "🔍", tier: 1, rarity: "rare", category: "utility",
+    description: "Peek at an unidentified seed or sprout — reveals the species growing in that tile for you.",
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }] } },
-  { id: "magnifying_glass_2", name: "Magnifying Glass II",  emoji: "🔍", tier: 2, rarity: "legendary", category: "utility",
-    description: `Reveals all details of a ${r(2)} plot — species, mutation, and exact growth progress.`,
-    cost: { kind: "consumable", id: "magnifying_glass_1", quantity: 2 } },
-  { id: "magnifying_glass_3", name: "Magnifying Glass III", emoji: "🔍", tier: 3, rarity: "mythic",    category: "utility",
-    description: `Reveals all details of a ${r(3)} plot — species, mutation, and exact growth progress.`,
-    cost: { kind: "consumable", id: "magnifying_glass_2", quantity: 2 } },
-  { id: "magnifying_glass_4", name: "Magnifying Glass IV",  emoji: "🔍", tier: 4, rarity: "exalted",   category: "utility",
-    description: `Reveals all details of a ${r(4)} plot — species, mutation, and exact growth progress.`,
-    cost: { kind: "consumable", id: "magnifying_glass_3", quantity: 2 } },
-  { id: "magnifying_glass_5", name: "Magnifying Glass V",   emoji: "🔍", tier: 5, rarity: "prismatic", category: "utility",
-    description: `Reveals all details of a ${r(5)} plot — species, mutation, and exact growth progress.`,
-    cost: { kind: "consumable", id: "magnifying_glass_4", quantity: 2 } },
 
-  // ── Garden Pin (I–V) — utility ───────────────────────────────────────────
+  // ── Garden Pin (non-tiered) — utility ────────────────────────────────────
   // Pins a single plot — when bloomed, the plant is shielded from auto-harvest
   // (Harvest Bell, Auto-Planter). Player can still manually harvest at will.
-  { id: "garden_pin_1", name: "Garden Pin I",   emoji: "📌", tier: 1, rarity: "rare",      category: "utility",
-    description: `Pins a ${r(1)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
+  // Works on any rarity, like Magnifying Glass.
+  { id: "garden_pin", name: "Garden Pin", emoji: "📌", tier: null, rarity: "rare", category: "utility",
+    description: "Pins a plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.",
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 3 }, { type: "fairy", amount: 3 }] } },
-  { id: "garden_pin_2", name: "Garden Pin II",  emoji: "📌", tier: 2, rarity: "legendary", category: "utility",
-    description: `Pins a ${r(2)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
-    cost: { kind: "consumable", id: "garden_pin_1", quantity: 2 } },
-  { id: "garden_pin_3", name: "Garden Pin III", emoji: "📌", tier: 3, rarity: "mythic",    category: "utility",
-    description: `Pins a ${r(3)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
-    cost: { kind: "consumable", id: "garden_pin_2", quantity: 2 } },
-  { id: "garden_pin_4", name: "Garden Pin IV",  emoji: "📌", tier: 4, rarity: "exalted",   category: "utility",
-    description: `Pins a ${r(4)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
-    cost: { kind: "consumable", id: "garden_pin_3", quantity: 2 } },
-  { id: "garden_pin_5", name: "Garden Pin V",   emoji: "📌", tier: 5, rarity: "prismatic", category: "utility",
-    description: `Pins a ${r(5)} plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.`,
-    cost: { kind: "consumable", id: "garden_pin_4", quantity: 2 } },
 
   // ── Verdant Rush (I–V) — speed_boost ─────────────────────────────────────
   // Doubles growth speed for all garden plots for a limited time.
@@ -405,16 +418,16 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     cost: { kind: "essence", amounts: [{ type: "universal", amount: 1 }] } },
   { id: "seed_pouch_2", name: "Seed Pouch II",  emoji: "🎁", tier: 2, rarity: "legendary", category: "seed_pouch",
     description: `Open from your inventory for a random ${r(2)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_1", quantity: 2 } },
+    cost: { kind: "consumable", id: "seed_pouch_1", quantity: 3 } },
   { id: "seed_pouch_3", name: "Seed Pouch III", emoji: "🎁", tier: 3, rarity: "mythic",    category: "seed_pouch",
     description: `Open from your inventory for a random ${r(3)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_2", quantity: 2 } },
+    cost: { kind: "consumable", id: "seed_pouch_2", quantity: 3 } },
   { id: "seed_pouch_4", name: "Seed Pouch IV",  emoji: "🎁", tier: 4, rarity: "exalted",   category: "seed_pouch",
     description: `Open from your inventory for a random ${r(4)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_3", quantity: 2 } },
+    cost: { kind: "consumable", id: "seed_pouch_3", quantity: 3 } },
   { id: "seed_pouch_5", name: "Seed Pouch V",   emoji: "🎁", tier: 5, rarity: "prismatic", category: "seed_pouch",
     description: `Open from your inventory for a random ${r(5)} seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_4", quantity: 2 } },
+    cost: { kind: "consumable", id: "seed_pouch_4", quantity: 3 } },
 ];
 
 // ── Typed Seed Pouches (per-type I–V) ─────────────────────────────────────
@@ -446,8 +459,8 @@ for (const t of TYPED_POUCH_TYPES) {
       category: "seed_pouch",
       description: `Open for a random ${r(tier)}+ ${label} seed.`,
       cost: tier === 1
-        ? { kind: "essence", amounts: [{ type: t as EssenceType, amount: 6 }] }
-        : { kind: "consumable", id: prevId!, quantity: 2 },
+        ? { kind: "essence", amounts: [{ type: t as EssenceType, amount: 8 }] }
+        : { kind: "consumable", id: prevId!, quantity: 3 },
     });
   }
 }

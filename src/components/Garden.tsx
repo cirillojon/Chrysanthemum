@@ -30,7 +30,7 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType) => void }) {
-  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud } = useGame();
+  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, user, requestSignIn } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -68,10 +68,11 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const bellTargets = findHarvestBellTargets(next, weather);
     const nowBell = Date.now();
     if (nowBell - lastBellActionRef.current >= GEAR_ACTION_INTERVAL_MS) {
-      // Skip attuned plants — they're marked for cross-breeding, not auto-harvest
+      // Skip plants that are infused (awaiting cross-breed) or are active Cropsticks sources
       const bellTarget = bellTargets.find(({ row, col }) =>
         !harvestingPlots.current.has(`${row}-${col}`) &&
-        !getState().grid[row]?.[col]?.plant?.infused
+        !getState().grid[row]?.[col]?.plant?.infused &&
+        !crossbreedSourceCells.has(`${row}-${col}`)
       );
       if (bellTarget) {
         const { row, col } = bellTarget;
@@ -295,11 +296,62 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, autoPlantCoveredCells: autoPlanter };
     }, [state.grid, state.farmRows, state.farmSize]);
 
+  // Plant cells adjacent to active cropsticks, mapped to the direction their
+  // particle should travel (toward the cropsticks).
+  // Uses stored crossbreedSourceA/B coordinates so particles keep flowing even
+  // after plant.infused is cleared at cycle-start.
+  const crossbreedSourceCells = useMemo(() => {
+    const map = new Map<string, "up" | "down" | "left" | "right">();
+    const OFFSETS: [number, number, "up" | "down" | "left" | "right"][] = [
+      [-1, 0, "down"],
+      [ 1, 0, "up"  ],
+      [ 0,-1, "right"],
+      [ 0, 1, "left" ],
+    ];
+    for (let ri = 0; ri < state.grid.length; ri++) {
+      for (let ci = 0; ci < state.grid[ri].length; ci++) {
+        const gear = state.grid[ri][ci].gear;
+        if (!gear || gear.gearType !== "cropsticks") continue;
+        if (gear.crossbreedStartedAt == null) continue;
+
+        // Prefer stored source coordinates (set when infused is cleared at cycle start)
+        if (gear.crossbreedSourceA && gear.crossbreedSourceB) {
+          const sources = [gear.crossbreedSourceA, gear.crossbreedSourceB];
+          for (const { r: sr, c: sc } of sources) {
+            if (!state.grid[sr]?.[sc]?.plant) continue;
+            for (const [dr, dc, dir] of OFFSETS) {
+              if (ri + dr === sr && ci + dc === sc) {
+                map.set(`${sr}-${sc}`, dir);
+                break;
+              }
+            }
+          }
+          continue;
+        }
+
+        // Fallback: legacy cycles where infused flag is still set on the plants
+        for (const [dr, dc, dir] of OFFSETS) {
+          const nr = ri + dr;
+          const nc = ci + dc;
+          const plant = state.grid[nr]?.[nc]?.plant;
+          if (!plant || !plant.infused) continue;
+          map.set(`${nr}-${nc}`, dir);
+        }
+      }
+    }
+    return map;
+  }, [state.grid]);
+
   function handlePlotClick(row: number, col: number) {
     const plot = state.grid[row][col];
-    if (!plot.plant && !harvestingPlots.current.has(`${row}-${col}`)) {
-      setSelectedPlot({ row, col });
-    }
+    if (plot.plant || harvestingPlots.current.has(`${row}-${col}`)) return;
+
+    // Guest guard — guests have empty inventories, so opening the SeedPicker
+    // would just show "Nothing to place" (#148). Surface the sign-in prompt
+    // instead so the next click can actually do something.
+    if (!user) { requestSignIn("to plant seeds"); return; }
+
+    setSelectedPlot({ row, col });
   }
 
   function handleSeedSelect(speciesId: string) {
@@ -376,6 +428,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   }
 
   function handleUpgrade() {
+    if (!user) { requestSignIn("to upgrade your farm"); return; }
     const optimistic = upgradeFarm(state);
     if (optimistic) perform(optimistic, () => edgeUpgradeFarm());
   }
@@ -386,8 +439,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     for (let ri = 0; ri < currentState.grid.length; ri++) {
       for (let ci = 0; ci < currentState.grid[ri].length; ci++) {
         const p = currentState.grid[ri][ci];
-        // Skip attuned plants — they're set up for cross-breeding and should not be auto-harvested
-        if (p.plant && !p.plant.infused && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom") {
+        // Skip cross-breeding plants — they're active Cropsticks sources and must not be harvested
+        if (p.plant && !crossbreedSourceCells.has(`${ri}-${ci}`) && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom") {
           bloomed.push({ row: ri, col: ci });
         }
       }
@@ -416,7 +469,14 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             harvestingPlots.current.delete(`${row}-${col}`);
           }
         },
-        undefined,
+        () => {
+          // Fire the harvest popup on success — same pattern as PlotTile's
+          // manual harvest and Garden.tsx's bell auto-harvest. Without this
+          // Collect All silently filled inventory with no visible feedback.
+          if (harvestedSpeciesId) {
+            onHarvestPopup(harvestedSpeciesId, harvestedMutation);
+          }
+        },
         {
           serialize: true,
           rollback: (c) => ({
@@ -583,6 +643,8 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 fanDirection={fanCoveredCells.get(`${row}-${col}`)}
                 isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
                 isUnderAutoPlanter={autoPlantCoveredCells.has(`${row}-${col}`)}
+                crossbreedDirection={crossbreedSourceCells.get(`${row}-${col}`)}
+                isCrossBreeding={crossbreedSourceCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}
                 onGearInspectClose={() => setHighlightSource(null)}
                 cellSize={cellSize}

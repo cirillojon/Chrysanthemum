@@ -23,20 +23,20 @@ const corsHeaders = {
 const FLOWER_BLOOM_MS: Record<string, number> = {
   quickgrass: 120_000, dustweed: 135_000, sprig: 180_000, dewdrop: 195_000,
   pebblebloom: 204_000, ember_moss: 210_000, dandelion: 225_000, clover: 240_000,
-  violet: 255_000, lemongrass: 264_000, daisy: 270_000, honeywort: 276_000,
+  violet: 255_000, stormcap: 261_000, lemongrass: 264_000, daisy: 270_000, honeywort: 276_000,
   buttercup: 285_000, dawnpetal: 291_000, poppy: 300_000, chamomile: 315_000,
-  marigold: 330_000, sunflower: 360_000, coppercup: 375_000, ivybell: 390_000,
+  marigold: 330_000, stardust: 345_000, sunflower: 360_000, coppercup: 375_000, ivybell: 390_000,
   thornberry: 420_000, saltmoss: 444_000, ashpetal: 465_000, snowdrift: 489_000,
   swiftbloom: 720_000, shortcress: 765_000, thornwhistle: 840_000, starwort: 870_000,
   mintleaf: 885_000, tulip: 900_000, inkbloom: 930_000, hyacinth: 960_000,
-  snapdragon: 990_000, beebalm: 1_035_000, candleflower: 1_050_000, carnation: 1_080_000,
+  snapdragon: 990_000, moonstrike: 1_020_000, beebalm: 1_035_000, candleflower: 1_050_000, carnation: 1_080_000,
   ribbonweed: 1_110_000, hibiscus: 1_140_000, wildberry: 1_185_000, frostbell: 1_170_000,
   bluebell: 1_200_000, cherry_blossom: 1_230_000, rose: 1_260_000, peacockflower: 1_290_000,
   bamboo_bloom: 1_320_000, hummingbloom: 1_320_000, water_lily: 1_350_000, lanternflower: 1_380_000,
   dovebloom: 1_440_000, coral_bells: 1_500_000, sundew: 1_560_000, bubblebloom: 1_620_000,
   flashpetal: 2_700_000, rushwillow: 2_880_000, sweetheart_lily: 3_240_000, glassbell: 3_300_000,
   stormcaller: 3_420_000, lavender: 3_600_000, amber_crown: 3_600_000, peach_blossom: 3_600_000,
-  foxglove: 3_960_000, butterbloom: 4_140_000, peony: 4_320_000, tidebloom: 4_500_000,
+  foxglove: 3_960_000, winterwood: 4_050_000, butterbloom: 4_140_000, peony: 4_320_000, tidebloom: 4_500_000,
   starweave: 4_500_000, wisteria: 4_680_000, dreamcup: 4_680_000, coralbell: 4_860_000,
   foxfire: 4_950_000, bird_of_paradise: 5_040_000, solarbell: 5_040_000, moonpetal: 5_220_000,
   orchid: 5_400_000, duskrose: 5_580_000, passionflower: 5_760_000, glasswing: 6_000_000,
@@ -53,9 +53,11 @@ const FLOWER_BLOOM_MS: Record<string, number> = {
   solar_rose: 172_800_000, nebula_drift: 194_400_000, superbloom: 216_000_000,
   wanderbloom: 216_000_000, chrysanthemum: 259_200_000,
   umbral_bloom: 324_000_000, obsidian_rose: 388_800_000, duskmantle: 432_000_000,
-  graveweb: 518_400_000, nightwing: 648_000_000, ashenveil: 712_800_000, voidfire: 777_600_000,
+  deeproot: 450_000_000, graveweb: 518_400_000, rimestorm: 540_000_000,
+  nightwing: 648_000_000, solglow: 675_000_000, ashenveil: 712_800_000, voidfire: 777_600_000,
   dreambloom: 900_000_000, fairy_blossom: 972_000_000, lovebind: 1_036_800_000,
-  eternal_heart: 1_123_200_000, nova_bloom: 1_209_600_000, princess_blossom: 1_296_000_000,
+  islebloom: 1_065_000_000, eternal_heart: 1_123_200_000, moonrime: 1_155_000_000,
+  nova_bloom: 1_209_600_000, shadowgale: 1_245_000_000, princess_blossom: 1_296_000_000,
 };
 
 // ── Fertilizer speed multipliers (mirrors src/data/upgrades.ts) ───────────
@@ -266,7 +268,7 @@ function buildShieldCoverage(grid: Plot[][], now: number): Map<string, CoverageE
 // Per cron run, for each bloomed plant under a Scarecrow with an existing
 // string mutation, rolls the converted-to-per-minute strip chance. On hit
 // sets `mutation = null` (matches client convention; Giant-tried marker).
-function rollScarecrowStrip(grid: Plot[][], coverage: Map<string, CoverageEntry>, now: number): { grid: Plot[][]; changed: boolean } {
+function rollScarecrowStrip(grid: Plot[][], coverage: Map<string, CoverageEntry>, _now: number): { grid: Plot[][]; changed: boolean } {
   let changed = false;
   const next = grid.map((row, ri) => row.map((plot, ci) => {
     if (!plot.plant || !plot.plant.bloomedAt) return plot;
@@ -492,10 +494,12 @@ function rollWeatherMutations(
 
 // ── Cropsticks cross-breeding ──────────────────────────────────────────────
 //
-// Probability target: ~50% success per hour with 60-second ticks (60 ticks/hr).
-// p = 1 - 0.5^(1/60) ≈ 0.01154 (1.154% per tick).
+// v2.3: deterministic progress timer — once a cropsticks finds a valid recipe
+// pair of infused neighbors, it stamps `crossbreedStartedAt` and produces a
+// seed exactly 1 hour later. Replaces the old per-tick RNG roll so the UI
+// can render a progress bar with predictable arrival time.
 
-const CROPSTICKS_BREED_CHANCE_PER_TICK = 0.01154; // ~50% chance over 1 hour (1 tick/min)
+const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1_000; // 1 hour
 
 const RARITY_IDX: Record<string, number> = {
   common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
@@ -545,12 +549,6 @@ function findBestRecipe(
     if (!best || recipe.tier > best.tier) best = recipe;
   }
   return best;
-}
-
-// Yield 2 seeds when both inputs exceed the minimum rarity (mirrors getOutputCount in recipes.ts)
-function getOutputCount(rarityA: string, rarityB: string, minRarity: string): 1 | 2 {
-  return RARITY_IDX[rarityA] > RARITY_IDX[minRarity] &&
-         RARITY_IDX[rarityB] > RARITY_IDX[minRarity] ? 2 : 1;
 }
 
 // Species → { types, rarity } — mirrors ALL_FLOWERS in src/data/flowers.ts
@@ -711,32 +709,119 @@ const SPECIES_DATA: Record<string, { t: string[]; r: string }> = {
 };
 
 function runCropsticks(save: Save, now: number): Save {
-  void now; // unused but kept for symmetry with other run* functions
   let cur = save;
   const rows = cur.grid.length;
   const cols = cur.grid[0]?.length ?? 0;
 
   for (let ri = 0; ri < rows; ri++) {
     for (let ci = 0; ci < cols; ci++) {
-      const gear = cur.grid[ri][ci].gear;
-      if (!gear || gear.gearType !== "cropsticks") continue;
+      const rawGear = cur.grid[ri][ci].gear;
+      if (!rawGear || rawGear.gearType !== "cropsticks") continue;
 
-      // Collect infused bloomed neighbors in 4 cardinal directions
+      const gear      = rawGear as PlacedGearWithProgress;
+      const startedAt = gear.crossbreedStartedAt;
+      const storedA   = gear.crossbreedSourceA;
+      const storedB   = gear.crossbreedSourceB;
+
+      // ── In-progress cycle with stored source coordinates (v2.4+ path) ───
+      // Infused flag was already cleared when the cycle started; locate the
+      // source plants purely by stored grid coordinates.
+      if (startedAt != null && storedA && storedB) {
+        const plantA = cur.grid[storedA.r]?.[storedA.c]?.plant;
+        const plantB = cur.grid[storedB.r]?.[storedB.c]?.plant;
+
+        // Source plants must still exist and be bloomed (bloomedAt set, or timePlanted===0 for placed blooms).
+        const aIsBloomed = plantA && (plantA.bloomedAt || plantA.timePlanted === 0);
+        const bIsBloomed = plantB && (plantB.bloomedAt || plantB.timePlanted === 0);
+        if (!aIsBloomed || !bIsBloomed) {
+          const newGrid = cur.grid.map((row, r) =>
+            row.map((plot, c) =>
+              r === ri && c === ci && plot.gear
+                ? { ...plot, gear: clearStartedAt(plot.gear as PlacedGearWithProgress) }
+                : plot
+            )
+          );
+          cur = { ...cur, grid: newGrid };
+          continue;
+        }
+
+        // Not done yet — wait
+        if (now - startedAt < CROPSTICKS_BREED_DURATION_MS) continue;
+
+        // ── Complete ──────────────────────────────────────────────────────
+        const da = SPECIES_DATA[plantA.speciesId];
+        const db = SPECIES_DATA[plantB.speciesId];
+        const bestRecipe = da && db ? findBestRecipe(da.t, da.r, db.t, db.r) : null;
+
+        let outputSpeciesId: string;
+        let newDiscovered: string[];
+        let newDiscoveredRecipes: string[];
+
+        if (bestRecipe) {
+          // Recipe match → always produce the recipe output.
+          outputSpeciesId = bestRecipe.outputSpeciesId;
+          newDiscovered = cur.discovered.includes(outputSpeciesId)
+            ? cur.discovered
+            : [...cur.discovered, outputSpeciesId];
+          newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+            ? cur.discoveredRecipes
+            : [...cur.discoveredRecipes, bestRecipe.id];
+        } else {
+          // No recipe match → lower-rarity parent; random when tied.
+          const tierA = da ? (RARITY_IDX[da.r] ?? 0) : 0;
+          const tierB = db ? (RARITY_IDX[db.r] ?? 0) : 0;
+          if (tierA < tierB)      outputSpeciesId = plantA.speciesId;
+          else if (tierB < tierA) outputSpeciesId = plantB.speciesId;
+          else                    outputSpeciesId = Math.random() < 0.5 ? plantA.speciesId : plantB.speciesId;
+          newDiscovered      = cur.discovered;
+          newDiscoveredRecipes = cur.discoveredRecipes;
+        }
+
+        // Replace cropsticks cell with the seed; source plants' infused was
+        // already cleared when the cycle started — nothing to change on them.
+        const newGrid = cur.grid.map((row, r) =>
+          row.map((plot, c) => {
+            if (r === ri && c === ci) {
+              return { ...plot, gear: null, plant: { speciesId: outputSpeciesId, timePlanted: now } };
+            }
+            return plot;
+          })
+        );
+        cur = { ...cur, grid: newGrid, discovered: newDiscovered, discoveredRecipes: newDiscoveredRecipes };
+        continue;
+      }
+
+      // ── Scan for infused neighbors (new-cycle start OR legacy in-progress) ─
       type Neighbor = { r: number; c: number; plant: Plant };
       const infusedNeighbors: Neighbor[] = [];
       for (const [dr, dc] of OFFSETS_CROSS) {
         const nr = ri + dr;
         const nc = ci + dc;
         const plot = cur.grid[nr]?.[nc];
-        if (!plot?.plant || !plot.plant.bloomedAt || !plot.plant.infused) continue;
+        if (!plot?.plant || (!plot.plant.bloomedAt && plot.plant.timePlanted !== 0) || !plot.plant.infused) continue;
         infusedNeighbors.push({ r: nr, c: nc, plant: plot.plant });
       }
-      if (infusedNeighbors.length < 2) continue;
 
-      // Try all pairs, pick the highest-tier recipe match
+      // Need at least 2 infused neighbours to crossbreed
+      if (infusedNeighbors.length < 2) {
+        if (startedAt != null) {
+          const newGrid = cur.grid.map((row, r) =>
+            row.map((plot, c) =>
+              r === ri && c === ci && plot.gear
+                ? { ...plot, gear: clearStartedAt(plot.gear as PlacedGearWithProgress) }
+                : plot
+            )
+          );
+          cur = { ...cur, grid: newGrid };
+        }
+        continue;
+      }
+
+      // Pick highest-tier recipe pair; fall back to first available pair when
+      // no recipe matches (lower-rarity parent is produced at completion).
       let bestRecipe: Recipe | null = null;
-      let bestA: Neighbor | null = null;
-      let bestB: Neighbor | null = null;
+      let bestA: Neighbor = infusedNeighbors[0];
+      let bestB: Neighbor = infusedNeighbors[1];
 
       for (let i = 0; i < infusedNeighbors.length; i++) {
         for (let j = i + 1; j < infusedNeighbors.length; j++) {
@@ -746,8 +831,7 @@ function runCropsticks(save: Save, now: number): Save {
           const db = SPECIES_DATA[b.plant.speciesId];
           if (!da || !db) continue;
           const recipe = findBestRecipe(da.t, da.r, db.t, db.r);
-          if (!recipe) continue;
-          if (!bestRecipe || recipe.tier > bestRecipe.tier) {
+          if (recipe && (!bestRecipe || recipe.tier > bestRecipe.tier)) {
             bestRecipe = recipe;
             bestA = a;
             bestB = b;
@@ -755,52 +839,101 @@ function runCropsticks(save: Save, now: number): Save {
         }
       }
 
-      // Silent skip — no recipe match or failed probability roll
-      if (!bestRecipe || !bestA || !bestB) continue;
-      if (Math.random() >= CROPSTICKS_BREED_CHANCE_PER_TICK) continue;
+      // ── Valid pair, no cycle yet → start one with stored source coords ────
+      if (startedAt == null) {
+        const aR = bestA.r, aC = bestA.c;
+        const bR = bestB.r, bC = bestB.c;
+        const newGrid = cur.grid.map((row, r) =>
+          row.map((plot, c) => {
+            if (r === ri && c === ci && plot.gear) {
+              return {
+                ...plot,
+                gear: {
+                  ...plot.gear,
+                  crossbreedStartedAt: now,
+                  crossbreedSourceA: { r: aR, c: aC },
+                  crossbreedSourceB: { r: bR, c: bC },
+                },
+              };
+            }
+            // Clear infused immediately on the source plants
+            if ((r === aR && c === aC) || (r === bR && c === bC)) {
+              if (plot.plant) return { ...plot, plant: { ...plot.plant, infused: false } };
+            }
+            return plot;
+          })
+        );
+        cur = { ...cur, grid: newGrid };
+        continue;
+      }
 
-      // ── Success ────────────────────────────────────────────────────────────
-      const da = SPECIES_DATA[bestA.plant.speciesId]!;
-      const db = SPECIES_DATA[bestB.plant.speciesId]!;
-      const outputCount = getOutputCount(da.r, db.r, bestRecipe.minRarity);
-      const outputId    = bestRecipe.outputSpeciesId;
+      // ── Legacy: cycle in progress (no stored coords) + pair still valid ──
+      // This handles saves created before v2.4. Complete if time has elapsed.
+      if (now - startedAt < CROPSTICKS_BREED_DURATION_MS) continue;
 
-      // Add seed(s) to inventory
-      const existIdx = cur.inventory.findIndex(i => i.isSeed && i.speciesId === outputId && !i.mutation);
-      const newInv: InvItem[] = existIdx >= 0
-        ? cur.inventory.map((i, idx) =>
-            idx === existIdx ? { ...i, quantity: i.quantity + outputCount } : i
-          )
-        : [...cur.inventory, { speciesId: outputId, quantity: outputCount, isSeed: true }];
-
-      // Update discovered
-      const newDiscovered = cur.discovered.includes(outputId)
-        ? cur.discovered
-        : [...cur.discovered, outputId];
-
-      // Update discoveredRecipes
-      const newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
-        ? cur.discoveredRecipes
-        : [...cur.discoveredRecipes, bestRecipe.id];
-
-      // Clear infused from both source plants (leave them in place — not consumed)
       const aR = bestA.r, aC = bestA.c;
       const bR = bestB.r, bC = bestB.c;
+      const daLeg = SPECIES_DATA[bestA.plant.speciesId];
+      const dbLeg = SPECIES_DATA[bestB.plant.speciesId];
+
+      let outputSpeciesId: string;
+      let newDiscovered: string[];
+      let newDiscoveredRecipes: string[];
+
+      if (bestRecipe) {
+        // Recipe match → always produce the recipe output.
+        outputSpeciesId = bestRecipe.outputSpeciesId;
+        newDiscovered = cur.discovered.includes(outputSpeciesId)
+          ? cur.discovered
+          : [...cur.discovered, outputSpeciesId];
+        newDiscoveredRecipes = cur.discoveredRecipes.includes(bestRecipe.id)
+          ? cur.discoveredRecipes
+          : [...cur.discoveredRecipes, bestRecipe.id];
+      } else {
+        // No recipe → lower-rarity parent; random when tied.
+        const tierA = daLeg ? (RARITY_IDX[daLeg.r] ?? 0) : 0;
+        const tierB = dbLeg ? (RARITY_IDX[dbLeg.r] ?? 0) : 0;
+        if (tierA < tierB)      outputSpeciesId = bestA.plant.speciesId;
+        else if (tierB < tierA) outputSpeciesId = bestB.plant.speciesId;
+        else                    outputSpeciesId = Math.random() < 0.5 ? bestA.plant.speciesId : bestB.plant.speciesId;
+        newDiscovered      = cur.discovered;
+        newDiscoveredRecipes = cur.discoveredRecipes;
+      }
+
+      // Clear infused from source plants + replace cropsticks cell with the seed
       const newGrid = cur.grid.map((row, r) =>
         row.map((plot, c) => {
           if ((r === aR && c === aC) || (r === bR && c === bC)) {
             if (!plot.plant) return plot;
             return { ...plot, plant: { ...plot.plant, infused: false } };
           }
+          if (r === ri && c === ci) {
+            return { ...plot, gear: null, plant: { speciesId: outputSpeciesId, timePlanted: now } };
+          }
           return plot;
         })
       );
 
-      cur = { ...cur, grid: newGrid, inventory: newInv, discovered: newDiscovered, discoveredRecipes: newDiscoveredRecipes };
+      cur = { ...cur, grid: newGrid, discovered: newDiscovered, discoveredRecipes: newDiscoveredRecipes };
     }
   }
 
   return cur;
+}
+
+// Type-helper: PlacedGear may carry crossbreed fields on cropsticks.
+type PlacedGearWithProgress = {
+  gearType: string;
+  crossbreedStartedAt?: number;
+  crossbreedSourceA?: { r: number; c: number };
+  crossbreedSourceB?: { r: number; c: number };
+};
+function clearStartedAt(gear: PlacedGearWithProgress) {
+  const next = { ...gear };
+  delete next.crossbreedStartedAt;
+  delete next.crossbreedSourceA;
+  delete next.crossbreedSourceB;
+  return next;
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────
@@ -875,7 +1008,13 @@ Deno.serve(async (req: Request) => {
         flatGrid.some(plot => plot.plant && hasBloom(plot.plant, now, weatherMult));
       const hasCropsticks = flatGrid.some(plot => plot.gear?.gearType === "cropsticks");
       const hasInfusedBloomed = flatGrid.some(plot => plot.plant?.infused && plot.plant?.bloomedAt);
-      if (!hasActiveGear && !hasBloomedForMutation && !(hasCropsticks && hasInfusedBloomed)) continue;
+      // Also process saves where a cropsticks cycle is already in progress
+      // (stored coords path — source plants are no longer marked infused).
+      const hasCropsticksCycleActive = flatGrid.some(plot =>
+        plot.gear?.gearType === "cropsticks" &&
+        (plot.gear as PlacedGearWithProgress).crossbreedStartedAt != null
+      );
+      if (!hasActiveGear && !hasBloomedForMutation && !(hasCropsticks && hasInfusedBloomed) && !hasCropsticksCycleActive) continue;
 
       const original: Save = {
         user_id:           raw.user_id,

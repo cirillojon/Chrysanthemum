@@ -249,6 +249,43 @@
 .gear-wind-up    { animation-name: gear-wind-up;    bottom: 0; }
 .gear-wind-down  { animation-name: gear-wind-down;  top:    0; }
 
+/* ── Cropsticks cross-breed source particle animations ─────────────────── */
+/* Small emerald dots drift from the infused plant towards the cropsticks.  */
+@keyframes cross-particle-right {
+  0%   { transform: translateX(0);     opacity: 0;    }
+  15%  {                                opacity: 0.85; }
+  80%  {                                opacity: 0.5;  }
+  100% { transform: translateX(52px);  opacity: 0;    }
+}
+@keyframes cross-particle-left {
+  0%   { transform: translateX(0);     opacity: 0;    }
+  15%  {                                opacity: 0.85; }
+  80%  {                                opacity: 0.5;  }
+  100% { transform: translateX(-52px); opacity: 0;    }
+}
+@keyframes cross-particle-up {
+  0%   { transform: translateY(0);     opacity: 0;    }
+  15%  {                                opacity: 0.85; }
+  80%  {                                opacity: 0.5;  }
+  100% { transform: translateY(-52px); opacity: 0;    }
+}
+@keyframes cross-particle-down {
+  0%   { transform: translateY(0);    opacity: 0;    }
+  15%  {                               opacity: 0.85; }
+  80%  {                               opacity: 0.5;  }
+  100% { transform: translateY(52px); opacity: 0;    }
+}
+.cross-particle {
+  position: absolute;
+  width:  5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgb(52 211 153 / 0.85); /* emerald-400 */
+  pointer-events: none;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+
 /* ── Base resets ───────────────────────────────────────────────────────── */
 @layer base {
   *, *::before, *::after {

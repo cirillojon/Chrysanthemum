@@ -146,11 +146,13 @@ const FLOWER_GROWTH_TIMES: Record<string, { seed: number; sprout: number }> = {
   sprig: { seed: 60_000, sprout: 120_000 }, dewdrop: { seed: 65_000, sprout: 130_000 },
   pebblebloom: { seed: 68_000, sprout: 136_000 }, ember_moss: { seed: 70_000, sprout: 140_000 },
   dandelion: { seed: 75_000, sprout: 150_000 }, clover: { seed: 80_000, sprout: 160_000 },
-  violet: { seed: 85_000, sprout: 170_000 }, lemongrass: { seed: 88_000, sprout: 176_000 },
+  violet: { seed: 85_000, sprout: 170_000 }, stormcap: { seed: 87_000, sprout: 174_000 },
+  lemongrass: { seed: 88_000, sprout: 176_000 },
   daisy: { seed: 90_000, sprout: 180_000 }, honeywort: { seed: 92_000, sprout: 184_000 },
   buttercup: { seed: 95_000, sprout: 190_000 }, dawnpetal: { seed: 97_000, sprout: 194_000 },
   poppy: { seed: 100_000, sprout: 200_000 }, chamomile: { seed: 105_000, sprout: 210_000 },
-  marigold: { seed: 110_000, sprout: 220_000 }, sunflower: { seed: 120_000, sprout: 240_000 },
+  marigold: { seed: 110_000, sprout: 220_000 }, stardust: { seed: 115_000, sprout: 230_000 },
+  sunflower: { seed: 120_000, sprout: 240_000 },
   coppercup: { seed: 125_000, sprout: 250_000 }, ivybell: { seed: 130_000, sprout: 260_000 },
   thornberry: { seed: 140_000, sprout: 280_000 }, saltmoss: { seed: 148_000, sprout: 296_000 },
   ashpetal: { seed: 155_000, sprout: 310_000 }, snowdrift: { seed: 163_000, sprout: 326_000 },
@@ -158,8 +160,8 @@ const FLOWER_GROWTH_TIMES: Record<string, { seed: number; sprout: number }> = {
   thornwhistle: { seed: 280_000, sprout: 560_000 }, starwort: { seed: 290_000, sprout: 580_000 },
   mintleaf: { seed: 295_000, sprout: 590_000 }, tulip: { seed: 300_000, sprout: 600_000 },
   inkbloom: { seed: 310_000, sprout: 620_000 }, hyacinth: { seed: 320_000, sprout: 640_000 },
-  snapdragon: { seed: 330_000, sprout: 660_000 }, beebalm: { seed: 345_000, sprout: 690_000 },
-  candleflower: { seed: 350_000, sprout: 700_000 }, carnation: { seed: 360_000, sprout: 720_000 },
+  snapdragon: { seed: 330_000, sprout: 660_000 }, moonstrike: { seed: 340_000, sprout: 680_000 },
+  beebalm: { seed: 345_000, sprout: 690_000 }, candleflower: { seed: 350_000, sprout: 700_000 }, carnation: { seed: 360_000, sprout: 720_000 },
   ribbonweed: { seed: 370_000, sprout: 740_000 }, hibiscus: { seed: 380_000, sprout: 760_000 },
   wildberry: { seed: 395_000, sprout: 790_000 }, frostbell: { seed: 390_000, sprout: 780_000 },
   bluebell: { seed: 400_000, sprout: 800_000 }, cherry_blossom: { seed: 410_000, sprout: 820_000 },
@@ -172,7 +174,8 @@ const FLOWER_GROWTH_TIMES: Record<string, { seed: number; sprout: number }> = {
   sweetheart_lily: { seed: 1_080_000, sprout: 2_160_000 }, glassbell: { seed: 1_100_000, sprout: 2_200_000 },
   stormcaller: { seed: 1_140_000, sprout: 2_280_000 }, lavender: { seed: 1_200_000, sprout: 2_400_000 },
   amber_crown: { seed: 1_200_000, sprout: 2_400_000 }, peach_blossom: { seed: 1_200_000, sprout: 2_400_000 },
-  foxglove: { seed: 1_320_000, sprout: 2_640_000 }, butterbloom: { seed: 1_380_000, sprout: 2_760_000 },
+  foxglove: { seed: 1_320_000, sprout: 2_640_000 }, winterwood: { seed: 1_350_000, sprout: 2_700_000 },
+  butterbloom: { seed: 1_380_000, sprout: 2_760_000 },
   peony: { seed: 1_440_000, sprout: 2_880_000 }, tidebloom: { seed: 1_500_000, sprout: 3_000_000 },
   starweave: { seed: 1_500_000, sprout: 3_000_000 }, wisteria: { seed: 1_560_000, sprout: 3_120_000 },
   dreamcup: { seed: 1_560_000, sprout: 3_120_000 }, coralbell: { seed: 1_620_000, sprout: 3_240_000 },
@@ -209,12 +212,15 @@ const FLOWER_GROWTH_TIMES: Record<string, { seed: number; sprout: number }> = {
   nebula_drift: { seed: 64_800_000, sprout: 129_600_000 }, superbloom: { seed: 72_000_000, sprout: 144_000_000 },
   wanderbloom: { seed: 72_000_000, sprout: 144_000_000 }, chrysanthemum: { seed: 86_400_000, sprout: 172_800_000 },
   umbral_bloom: { seed: 108_000_000, sprout: 216_000_000 }, obsidian_rose: { seed: 129_600_000, sprout: 259_200_000 },
-  duskmantle: { seed: 144_000_000, sprout: 288_000_000 }, graveweb: { seed: 172_800_000, sprout: 345_600_000 },
-  nightwing: { seed: 216_000_000, sprout: 432_000_000 }, ashenveil: { seed: 237_600_000, sprout: 475_200_000 },
-  voidfire: { seed: 259_200_000, sprout: 518_400_000 },
+  duskmantle: { seed: 144_000_000, sprout: 288_000_000 }, deeproot: { seed: 150_000_000, sprout: 300_000_000 },
+  graveweb: { seed: 172_800_000, sprout: 345_600_000 }, rimestorm: { seed: 180_000_000, sprout: 360_000_000 },
+  nightwing: { seed: 216_000_000, sprout: 432_000_000 }, solglow: { seed: 225_000_000, sprout: 450_000_000 },
+  ashenveil: { seed: 237_600_000, sprout: 475_200_000 }, voidfire: { seed: 259_200_000, sprout: 518_400_000 },
   dreambloom: { seed: 300_000_000, sprout: 600_000_000 }, fairy_blossom: { seed: 324_000_000, sprout: 648_000_000 },
-  lovebind: { seed: 345_600_000, sprout: 691_200_000 }, eternal_heart: { seed: 374_400_000, sprout: 748_800_000 },
-  nova_bloom: { seed: 403_200_000, sprout: 806_400_000 }, princess_blossom: { seed: 432_000_000, sprout: 864_000_000 },
+  lovebind: { seed: 345_600_000, sprout: 691_200_000 }, islebloom: { seed: 355_000_000, sprout: 710_000_000 },
+  eternal_heart: { seed: 374_400_000, sprout: 748_800_000 }, moonrime: { seed: 385_000_000, sprout: 770_000_000 },
+  nova_bloom: { seed: 403_200_000, sprout: 806_400_000 }, shadowgale: { seed: 415_000_000, sprout: 830_000_000 },
+  princess_blossom: { seed: 432_000_000, sprout: 864_000_000 },
 };
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -375,21 +381,24 @@ Deno.serve(async (req: Request) => {
       const rarity = SPECIES_RARITY[plant.speciesId];
       if (!rarity) return err("Unknown species");
 
-      // Validate consumable tier vs. plant rarity
-      const tier = extractTier(consumableId);
-      if (tier === null) return err("This consumable cannot be applied to a plant");
+      // Validate consumable tier vs. plant rarity.
+      // Magnifying Glass and Garden Pin have no tier suffix and work on any rarity — skip the gate.
+      if (consumableId !== "magnifying_glass" && consumableId !== "garden_pin") {
+        const tier = extractTier(consumableId);
+        if (tier === null) return err("This consumable cannot be applied to a plant");
 
-      const requiredRarity = TIER_RARITIES[tier];
-      if (!requiredRarity) return err("Unknown consumable tier");
+        const requiredRarity = TIER_RARITIES[tier];
+        if (!requiredRarity) return err("Unknown consumable tier");
 
-      // All plant-targeting consumables match DOWNWARD — a higher-tier consumable
-      // works on lower-rarity plants (e.g. Mythic vial → Rare plant). Tier 1
-      // (Rare) is still the floor, so Common/Uncommon plants stay excluded.
-      const RARITY_ORDER: Record<string, number> = {
-        common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
-      };
-      if ((RARITY_ORDER[requiredRarity] ?? -1) < (RARITY_ORDER[rarity] ?? 999)) {
-        return err(`This ${requiredRarity} consumable can't reach ${rarity} plants`);
+        // All plant-targeting consumables match DOWNWARD — a higher-tier consumable
+        // works on lower-rarity plants (e.g. Mythic vial → Rare plant). Tier 1
+        // (Rare) is still the floor, so Common/Uncommon plants stay excluded.
+        const RARITY_ORDER: Record<string, number> = {
+          common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+        };
+        if ((RARITY_ORDER[requiredRarity] ?? -1) < (RARITY_ORDER[rarity] ?? 999)) {
+          return err(`This ${requiredRarity} consumable can't reach ${rarity} plants`);
+        }
       }
 
       // Deduct consumable
@@ -401,35 +410,39 @@ Deno.serve(async (req: Request) => {
       let updatedPlant: PlantData = { ...plant };
 
       // ── Bloom Burst ─────────────────────────────────────────────────────────
+      // Skip part of the remaining time in the plant's current stage:
+      //   - Seed   → advance by remaining/2 (half of remaining)
+      //   - Sprout → advance by remaining/4 (quarter, since sprout is 2× as
+      //              long as seed → half as effective per real-time second)
+      // Mirrors the client's applyPlantConsumable exactly.
       if (consumableId.startsWith("bloom_burst_")) {
         if (stage === "bloom") return err("Cannot use Bloom Burst on a fully bloomed plant");
 
         const times = FLOWER_GROWTH_TIMES[plant.speciesId];
         if (!times) return err("Unknown species growth data");
 
-        if (stage === "seed") {
-          // Advance seed → sprout: stamp sproutedAt = now
-          // Also advance growthMs to the seed threshold if the checkpoint system is in use
-          if (plant.growthMs !== undefined) {
-            updatedPlant = {
-              ...updatedPlant,
-              growthMs:   Math.max(plant.growthMs, times.seed),
-              lastTickAt: now,
-            };
-          }
-          updatedPlant = { ...updatedPlant, sproutedAt: now };
+        const seedMs   = times.seed;
+        const sproutMs = times.sprout;
 
+        // Current growthMs (same fallback chain as getStage above)
+        let currentGm: number;
+        if (plant.growthMs !== undefined) {
+          currentGm = plant.growthMs + Math.max(0, now - (plant.lastTickAt ?? now));
+        } else if (plant.sproutedAt != null) {
+          currentGm = seedMs + Math.max(0, now - plant.sproutedAt);
         } else {
-          // Advance sprout → halfway: mirror the client's optimistic logic —
-          // shift sproutedAt backward by half the elapsed sprout time.
-          const sproutedAt = plant.sproutedAt ?? now;
-          const elapsed    = now - sproutedAt;
-          const shift      = Math.floor(elapsed / 2);
-          // Also push the growthMs checkpoint back by shift ms if present
-          if (plant.lastTickAt !== undefined) {
-            updatedPlant = { ...updatedPlant, lastTickAt: plant.lastTickAt - shift };
-          }
-          updatedPlant = { ...updatedPlant, sproutedAt: sproutedAt - shift };
+          currentGm = Math.max(0, now - plant.timePlanted);
+        }
+
+        const stageEnd  = stage === "seed" ? seedMs : seedMs + sproutMs;
+        const divisor   = stage === "seed" ? 2 : 4;
+        const remaining = Math.max(0, stageEnd - currentGm);
+        const newGm     = currentGm + Math.floor(remaining / divisor);
+
+        updatedPlant = { ...updatedPlant, growthMs: newGm, lastTickAt: now };
+        // Also stamp sproutedAt if we crossed the seed → sprout boundary
+        if (newGm >= seedMs && updatedPlant.sproutedAt == null) {
+          updatedPlant = { ...updatedPlant, sproutedAt: now };
         }
 
       // ── Heirloom Charm ──────────────────────────────────────────────────────
@@ -460,14 +473,15 @@ Deno.serve(async (req: Request) => {
       // Locks in whatever mutation state the plant currently has — future
       // weather/sprinkler/fan ticks skip revealed plants. Player decides when
       // to lock based on what's already rolled.
-      } else if (consumableId.startsWith("magnifying_glass_")) {
-        if (plant.revealed) return err("This plant is already revealed");
+      } else if (consumableId === "magnifying_glass") {
+        if (plant.revealed) return err("This plant's species is already revealed");
+        if (plant.bloomedAt || plant.timePlanted === 0) return err("This plant has already bloomed — harvest it to identify it");
         updatedPlant = { ...updatedPlant, revealed: true };
 
       // ── Garden Pin ──────────────────────────────────────────────────────────
       // Shields the plot from auto-harvest (Harvest Bell, Auto-Planter).
       // Manual harvest still works. Permanent for the life of the plant.
-      } else if (consumableId.startsWith("garden_pin_")) {
+      } else if (consumableId === "garden_pin") {
         if (plant.pinned) return err("This plant is already pinned");
         updatedPlant = { ...updatedPlant, pinned: true };
 

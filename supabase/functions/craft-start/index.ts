@@ -73,6 +73,17 @@ const GEAR_RECIPES: GearRecipe[] = [
 
 const GEAR_RECIPE_MAP = Object.fromEntries(GEAR_RECIPES.map((r) => [r.outputGearType, r]));
 
+// ── Essence crafting (Universal Essence) ─────────────────────────────────────
+// Server-authoritative recipe for the time-gated Universal Essence craft. The
+// only "essence" kind currently is "universal"; one craft consumes 1 of each of
+// the 12 elemental essences and produces 1 Universal Essence after 60s.
+const UNIVERSAL_ESSENCE_ELEMENTALS = [
+  "blaze", "tide", "grove", "frost", "storm", "lunar",
+  "solar", "fairy", "shadow", "arcane", "stellar", "zephyr",
+] as const;
+const UNIVERSAL_ESSENCE_COST_PER_TYPE = 1;
+const UNIVERSAL_ESSENCE_BASE_DURATION_MS = 60_000; // 1 minute per essence
+
 // ── Response helpers ──────────────────────────────────────────────────────────
 
 const json = (body: unknown, status = 200) =>
@@ -97,8 +108,9 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json() as {
-      kind:        "gear" | "consumable" | "attunement";
+      kind:        "gear" | "consumable" | "attunement" | "essence";
       outputId:    string;
+      quantity?:   number;
       durationMs?: number;
       costs?: {
         essenceCosts?:    { type: string; amount: number }[];
@@ -109,9 +121,17 @@ Deno.serve(async (req: Request) => {
 
     const { kind, outputId } = body;
     if (!kind || !outputId)                                          return err("kind and outputId are required");
-    if (kind !== "gear" && kind !== "consumable" && kind !== "attunement") {
-      return err("kind must be 'gear', 'consumable', or 'attunement'");
+    if (kind !== "gear" && kind !== "consumable" && kind !== "attunement" && kind !== "essence") {
+      return err("kind must be 'gear', 'consumable', 'attunement', or 'essence'");
     }
+
+    // ── Bulk crafting — validate quantity (default 1, cap at 50) ──────────────
+    const MAX_BULK_QUANTITY = 50;
+    const rawQuantity = body.quantity ?? 1;
+    if (!Number.isInteger(rawQuantity) || rawQuantity < 1 || rawQuantity > MAX_BULK_QUANTITY) {
+      return err(`quantity must be an integer between 1 and ${MAX_BULK_QUANTITY}`);
+    }
+    const quantity = rawQuantity;
 
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -164,8 +184,9 @@ Deno.serve(async (req: Request) => {
       const recipe = GEAR_RECIPE_MAP[outputId] as GearRecipe | undefined;
       if (!recipe) return err(`Unknown gear type: ${outputId}`);
 
-      durationMs = recipe.durationMs;
-      coinCost   = recipe.coinCost;
+      // Multiply duration and costs by quantity (bulk crafting)
+      durationMs = recipe.durationMs * quantity;
+      coinCost   = recipe.coinCost   * quantity;
 
       if (coins < coinCost) {
         return err(`Not enough coins (need ${coinCost}, have ${coins})`);
@@ -173,14 +194,17 @@ Deno.serve(async (req: Request) => {
 
       for (const ing of recipe.ingredients) {
         if (ing.kind === "essence") {
+          const need = ing.amount * quantity;
           const have = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
-          if (have < ing.amount) return err(`Not enough ${ing.essenceType} essence (need ${ing.amount}, have ${have})`);
+          if (have < need) return err(`Not enough ${ing.essenceType} essence (need ${need}, have ${have})`);
         } else if (ing.kind === "gear") {
+          const need = ing.quantity * quantity;
           const have = gearInventory.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
-          if (have < ing.quantity) return err(`Not enough ${ing.gearType} (need ${ing.quantity}, have ${have})`);
+          if (have < need) return err(`Not enough ${ing.gearType} (need ${need}, have ${have})`);
         } else {
+          const need = ing.quantity * quantity;
           const have = consumables.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
-          if (have < ing.quantity) return err(`Not enough ${ing.consumableId} (need ${ing.quantity}, have ${have})`);
+          if (have < need) return err(`Not enough ${ing.consumableId} (need ${need}, have ${have})`);
         }
       }
 
@@ -188,49 +212,78 @@ Deno.serve(async (req: Request) => {
       coins -= coinCost;
       for (const ing of recipe.ingredients) {
         if (ing.kind === "essence") {
+          const need = ing.amount * quantity;
           essences = essences
-            .map((e) => e.type === ing.essenceType ? { ...e, amount: e.amount - ing.amount } : e)
+            .map((e) => e.type === ing.essenceType ? { ...e, amount: e.amount - need } : e)
             .filter((e) => e.amount > 0);
         } else if (ing.kind === "gear") {
+          const need = ing.quantity * quantity;
           gearInventory = gearInventory
-            .map((g) => g.gearType === ing.gearType ? { ...g, quantity: g.quantity - ing.quantity } : g)
+            .map((g) => g.gearType === ing.gearType ? { ...g, quantity: g.quantity - need } : g)
             .filter((g) => g.quantity > 0);
         } else {
+          const need = ing.quantity * quantity;
           consumables = consumables
-            .map((c) => c.id === ing.consumableId ? { ...c, quantity: c.quantity - ing.quantity } : c)
+            .map((c) => c.id === ing.consumableId ? { ...c, quantity: c.quantity - need } : c)
             .filter((c) => c.quantity > 0);
         }
       }
 
-      // Store costs for refund
+      // Store costs for refund (already multiplied by quantity)
       const eCosts = recipe.ingredients
         .filter((i): i is { kind: "essence"; essenceType: string; amount: number } => i.kind === "essence")
-        .map(({ essenceType: type, amount }) => ({ type, amount }));
+        .map(({ essenceType: type, amount }) => ({ type, amount: amount * quantity }));
       const gCosts = recipe.ingredients
         .filter((i): i is { kind: "gear"; gearType: string; quantity: number } => i.kind === "gear")
-        .map(({ gearType, quantity }) => ({ gearType, quantity }));
+        .map(({ gearType, quantity: q }) => ({ gearType, quantity: q * quantity }));
       const cCosts = recipe.ingredients
         .filter((i): i is { kind: "consumable"; consumableId: string; quantity: number } => i.kind === "consumable")
-        .map(({ consumableId: id, quantity }) => ({ id, quantity }));
+        .map(({ consumableId: id, quantity: q }) => ({ id, quantity: q * quantity }));
 
       if (eCosts.length) newEntryEssenceCosts    = eCosts;
       if (gCosts.length) newEntryGearCosts       = gCosts;
       if (cCosts.length) newEntryConsumableCosts = cCosts;
 
+    } else if (kind === "essence") {
+      // ── Server-authoritative essence craft (Universal Essence) ─────────────
+      if (outputId !== "universal") return err(`Unknown essence type: ${outputId}`);
+
+      durationMs = UNIVERSAL_ESSENCE_BASE_DURATION_MS * quantity;
+
+      const need = UNIVERSAL_ESSENCE_COST_PER_TYPE * quantity;
+      for (const type of UNIVERSAL_ESSENCE_ELEMENTALS) {
+        const have = essences.find((e) => e.type === type)?.amount ?? 0;
+        if (have < need) return err(`Not enough ${type} essence (need ${need}, have ${have})`);
+      }
+
+      // Deduct
+      const map = new Map<string, number>(essences.map((e) => [e.type, e.amount]));
+      for (const type of UNIVERSAL_ESSENCE_ELEMENTALS) {
+        map.set(type, (map.get(type) ?? 0) - need);
+      }
+      essences = Array.from(map.entries())
+        .map(([type, amount]) => ({ type, amount }))
+        .filter((e) => e.amount > 0);
+
+      // Store costs for refund (already × quantity)
+      newEntryEssenceCosts = UNIVERSAL_ESSENCE_ELEMENTALS.map((type) => ({ type, amount: need }));
+
     } else {
       // ── Client-declared costs (consumable / attunement) ────────────────────
       // The server trusts the recipe structure from the client but validates
       // the player actually has the required amounts before deducting.
+      // Client sends BASE durationMs + costs; server multiplies by quantity.
       const clientDurationMs = body.durationMs;
       if (!clientDurationMs || clientDurationMs <= 0) {
         return err("durationMs is required for consumable/attunement crafts");
       }
-      durationMs = clientDurationMs;
+      durationMs = clientDurationMs * quantity;
 
       const costs              = body.costs ?? {};
-      const essenceCostList    = costs.essenceCosts    ?? [];
-      const consumableCostList = costs.consumableCosts ?? [];
-      const attunementCostList = costs.attunementCosts ?? [];
+      // Multiply each cost amount/quantity by the bulk quantity.
+      const essenceCostList    = (costs.essenceCosts    ?? []).map((c) => ({ type: c.type, amount: c.amount * quantity }));
+      const consumableCostList = (costs.consumableCosts ?? []).map((c) => ({ id: c.id,     quantity: c.quantity * quantity }));
+      const attunementCostList = (costs.attunementCosts ?? []).map((c) => ({ rarity: c.rarity, quantity: c.quantity * quantity }));
 
       // Validate + deduct essence costs
       for (const { type, amount } of essenceCostList) {
@@ -243,9 +296,9 @@ Deno.serve(async (req: Request) => {
       }).filter((e) => e.amount > 0);
 
       // Validate + deduct consumable costs
-      for (const { id, quantity } of consumableCostList) {
+      for (const { id, quantity: need } of consumableCostList) {
         const have = consumables.find((c) => c.id === id)?.quantity ?? 0;
-        if (have < quantity) return err(`Not enough ${id} (need ${quantity}, have ${have})`);
+        if (have < need) return err(`Not enough ${id} (need ${need}, have ${have})`);
       }
       consumables = consumables.map((c) => {
         const cost = consumableCostList.find((x) => x.id === c.id);
@@ -253,16 +306,16 @@ Deno.serve(async (req: Request) => {
       }).filter((c) => c.quantity > 0);
 
       // Validate + deduct attunement costs (infusers)
-      for (const { rarity, quantity } of attunementCostList) {
+      for (const { rarity, quantity: need } of attunementCostList) {
         const have = infusers.find((i) => i.rarity === rarity)?.quantity ?? 0;
-        if (have < quantity) return err(`Not enough ${rarity} attunement (need ${quantity}, have ${have})`);
+        if (have < need) return err(`Not enough ${rarity} attunement (need ${need}, have ${have})`);
       }
       infusers = infusers.map((inf) => {
         const cost = attunementCostList.find((x) => x.rarity === inf.rarity);
         return cost ? { ...inf, quantity: inf.quantity - cost.quantity } : inf;
       }).filter((inf) => inf.quantity > 0);
 
-      // Store costs for refund
+      // Store costs for refund (already multiplied by quantity)
       if (essenceCostList.length)    newEntryEssenceCosts    = essenceCostList;
       if (consumableCostList.length) newEntryConsumableCosts = consumableCostList;
       if (attunementCostList.length) newEntryAttunementCosts = attunementCostList;
@@ -275,9 +328,14 @@ Deno.serve(async (req: Request) => {
     // queueing crafts.
     type BoostType = "growth" | "craft" | "attunement";
     const activeBoosts = (save.active_boosts ?? []) as { type: BoostType; expiresAt: string }[];
+    // v2.3: Forge Haste ("craft" boost) now applies to ALL crafting-queue work
+    // — gear, consumables, infusers, and the universal essence. The "attunement"
+    // boost (Resonance Draft) was always intended for the alchemy attunement
+    // queue (separate system), not infuser crafting.
     const craftBoostType: BoostType | null =
-      kind === "attunement" ? "attunement" :
-      kind === "gear" || kind === "consumable" ? "craft" : null;
+      kind === "gear" || kind === "consumable" || kind === "essence" || kind === "attunement"
+        ? "craft"
+        : null;
 
     if (craftBoostType) {
       const nowMs = Date.now();
@@ -295,6 +353,7 @@ Deno.serve(async (req: Request) => {
       startedAt: new Date().toISOString(),
       durationMs,
     };
+    if (quantity > 1)                    newEntry.quantity        = quantity;
     if (coinCost)                        newEntry.coinCost        = coinCost;
     if (newEntryEssenceCosts?.length)    newEntry.essenceCosts    = newEntryEssenceCosts;
     if (newEntryGearCosts?.length)       newEntry.gearCosts       = newEntryGearCosts;
@@ -327,7 +386,7 @@ Deno.serve(async (req: Request) => {
     void supabaseAdmin.from("action_log").insert({
       user_id: userId,
       action:  "craft_start",
-      payload: { kind, outputId },
+      payload: { kind, outputId, quantity },
       result:  { newEntry },
     });
 

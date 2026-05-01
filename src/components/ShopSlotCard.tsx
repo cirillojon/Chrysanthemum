@@ -39,7 +39,7 @@ function rarityBadgeClass(rarity: Rarity): string {
 }
 
 export function ShopSlotCard({ slot }: Props) {
-  const { state, getState, perform } = useGame();
+  const { state, getState, perform, user, requestSignIn } = useGame();
   const [justBought, setJustBought] = useState(false);
   // Absolute per-card gate: blocks any buy while a server call is in-flight,
   // even if stateRef or queuing somehow lets a second request slip through.
@@ -67,6 +67,10 @@ export function ShopSlotCard({ slot }: Props) {
     const outOfStock = slot.quantity === 0;
 
     function handleBuyFert() {
+      // Guest guard — guests can browse the shop but Buy needs auth. Prompt
+      // sign-in via the SignInPromptModal instead of letting the edge call
+      // fail with a silent "Not authenticated" rollback (#148).
+      if (!user) { requestSignIn("to buy fertilizer"); return; }
       if (buyingRef.current) return;
       const cur = getState();
       const optimistic = buyFertilizer(cur, slot.fertilizerType!);
@@ -102,6 +106,7 @@ export function ShopSlotCard({ slot }: Props) {
     }
 
     function handleBuyAllFert() {
+      if (!user) { requestSignIn("to buy fertilizer"); return; }
       if (buyingRef.current) return;
       const cur = getState();
       const optimistic = buyAllFertilizer(cur, slot.fertilizerType!);
@@ -210,6 +215,7 @@ export function ShopSlotCard({ slot }: Props) {
   )?.quantity ?? 0;
 
   function handleBuy() {
+    if (!user) { requestSignIn("to buy seeds"); return; }
     if (buyingRef.current) return;
     const cur = getState();
     const optimistic = buyFromShop(cur, slot.speciesId);
@@ -245,6 +251,7 @@ export function ShopSlotCard({ slot }: Props) {
   }
 
   function handleBuyAll() {
+    if (!user) { requestSignIn("to buy seeds"); return; }
     if (buyingRef.current) return;
     const cur = getState();
     const optimistic = buyAllFromShop(cur, slot.speciesId);
@@ -308,7 +315,7 @@ export function ShopSlotCard({ slot }: Props) {
       )}
 
       <div className="flex items-start justify-between">
-        <span className="text-4xl">{species.emoji.bloom}</span>
+        <span className="text-4xl">{isNew ? "❓" : species.emoji.bloom}</span>
         <span
           className={`text-xs font-mono font-medium px-2 py-0.5 rounded-full border ${rarity.color} border-current bg-current/10`}
         >
@@ -317,10 +324,12 @@ export function ShopSlotCard({ slot }: Props) {
       </div>
 
       <div>
-        <h3 className="font-semibold text-sm">{species.name}</h3>
-        <FlowerTypeBadges types={species.types} className="mt-1.5" />
+        <h3 className="font-semibold text-sm">{isNew ? "???" : species.name}</h3>
+        {!isNew && <FlowerTypeBadges types={species.types} className="mt-1.5" />}
         <p className="text-xs text-muted-foreground leading-relaxed mt-1">
-          {species.description}
+          {isNew
+            ? "Undiscovered seed — buy and grow it to reveal the species."
+            : species.description}
         </p>
       </div>
 

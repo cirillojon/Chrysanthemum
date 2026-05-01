@@ -80,13 +80,6 @@ export interface UpgradeResult {
   serverUpdatedAt: string;
 }
 
-export interface BotanyResult {
-  ok:              true;
-  inventory:       GameState["inventory"];
-  outputSpeciesIds: string[];
-  serverUpdatedAt: string;
-}
-
 // ── Typed callers ─────────────────────────────────────────────────────────────
 
 export async function edgeHarvest(row: number, col: number): Promise<Omit<HarvestResult, "inventory">> {
@@ -213,6 +206,7 @@ export interface SupplyBuyResult {
   supplyShop:    GameState["supplyShop"];
   fertilizers:   GameState["fertilizers"];
   gearInventory: GameState["gearInventory"];
+  consumables:   GameState["consumables"];
   serverUpdatedAt: string;
 }
 
@@ -222,14 +216,6 @@ export function edgeBuyFromSupplyShop(slotId: string) {
 
 export function edgeSyncSupplyShop(supplyShop: GameState["supplyShop"], lastSupplyReset: number) {
   return callEdge<{ ok: true }>("supply-action", { action: "sync", supplyShop, lastSupplyReset });
-}
-
-export function edgeBotanyConvert(selections: { speciesId: string; mutation?: string }[]) {
-  return callEdge<BotanyResult>("botany-convert", { action: "convert", selections });
-}
-
-export function edgeBotanyConvertAll(rarity: string) {
-  return callEdge<BotanyResult>("botany-convert", { action: "convert_all", rarity });
 }
 
 // ── Gifting ───────────────────────────────────────────────────────────────────
@@ -268,6 +254,7 @@ export interface MarketplaceListResult {
   inventory:      GameState["inventory"];
   fertilizers?:   GameState["fertilizers"];
   gearInventory?: GameState["gearInventory"];
+  consumables?:   GameState["consumables"];
   listingId:      string;
   serverUpdatedAt: string;
 }
@@ -288,11 +275,12 @@ export interface MarketplaceBuyResult {
 
 export interface ClaimMailResult {
   ok:             true;
-  kind:           "coins" | "flower" | "seed" | "fertilizer" | "gear";
+  kind:           "coins" | "flower" | "seed" | "fertilizer" | "gear" | "consumable";
   coins:          number;
   inventory:      GameState["inventory"];
   fertilizers:    GameState["fertilizers"];
   gearInventory:  GameState["gearInventory"];
+  consumables?:   GameState["consumables"];
   discovered:     GameState["discovered"];
   alreadyClaimed?: boolean;
   serverUpdatedAt: string;
@@ -303,6 +291,7 @@ export interface MarketplaceCancelResult {
   inventory:      GameState["inventory"];
   fertilizers?:   GameState["fertilizers"];
   gearInventory?: GameState["gearInventory"];
+  consumables?:   GameState["consumables"];
   serverUpdatedAt: string;
 }
 
@@ -341,6 +330,18 @@ export function edgeMarketplaceCreateGearListing(
     action:   "create_listing",
     isGear:   true,
     gearType,
+    askPrice,
+  });
+}
+
+export function edgeMarketplaceCreateConsumableListing(
+  consumableId: string,
+  askPrice: number,
+) {
+  return callEdge<MarketplaceListResult>("marketplace-list", {
+    action:       "create_listing",
+    isConsumable: true,
+    consumableId,
     askPrice,
   });
 }
@@ -392,6 +393,7 @@ export interface CraftStartResult {
 export interface CraftCollectResult {
   ok:              true;
   craftingQueue:   GameState["craftingQueue"];
+  essences:        GameState["essences"];
   gearInventory:   GameState["gearInventory"];
   consumables:     GameState["consumables"];
   infusers:        GameState["infusers"];
@@ -400,6 +402,7 @@ export interface CraftCollectResult {
 
 export interface CraftCancelResult {
   ok:              true;
+  coins:           number;
   craftingQueue:   GameState["craftingQueue"];
   essences:        GameState["essences"];
   gearInventory:   GameState["gearInventory"];
@@ -416,7 +419,7 @@ export interface UpgradeCraftingSlotsResult {
 }
 
 export function edgeCraftStart(
-  kind:        "gear" | "consumable" | "attunement",
+  kind:        "gear" | "consumable" | "attunement" | "essence",
   outputId:    string,
   durationMs?: number,
   costs?: {
@@ -424,8 +427,9 @@ export function edgeCraftStart(
     consumableCosts?: { id: string; quantity: number }[];
     attunementCosts?: { rarity: string; quantity: number }[];
   },
+  quantity:    number = 1,
 ) {
-  return callEdge<CraftStartResult>("craft-start", { kind, outputId, durationMs, costs });
+  return callEdge<CraftStartResult>("craft-start", { kind, outputId, quantity, durationMs, costs });
 }
 
 export function edgeCraftCollect(craftId: string) {
@@ -532,7 +536,9 @@ export interface AlchemyStripResult {
   serverUpdatedAt: string;
 }
 
-/** Attune an unmutated bloom — spends essence + coins, returns a randomly mutated bloom. */
+/** @deprecated Replaced by edgeAttuneStart — kept as a compatibility shim until
+ *  no client calls it. The new alchemy attunement flow is time-gated through
+ *  the attune-start / attune-collect / attune-cancel edge functions. */
 export function edgeAlchemyAttune(
   speciesId:   string,
   essenceType: string,
@@ -548,6 +554,56 @@ export function edgeAlchemyStrip(speciesId: string, mutation: string) {
   return callEdge<AlchemyStripResult>("alchemy-infuse", {
     action: "strip", speciesId, mutation,
   });
+}
+
+// ── Alchemy attunement queue (v2.3 — time-gated) ─────────────────────────────
+
+export interface AttuneStartResult {
+  ok:              true;
+  coins:           number;
+  inventory:       GameState["inventory"];
+  essences:        GameState["essences"];
+  attunementQueue: GameState["attunementQueue"];
+  serverUpdatedAt: string;
+}
+export interface AttuneCollectResult {
+  ok:              true;
+  inventory:       GameState["inventory"];
+  discovered:      GameState["discovered"];
+  attunementQueue: GameState["attunementQueue"];
+  mutation:        string;
+  tier:            1 | 2 | 3 | 4;
+  serverUpdatedAt: string;
+}
+export interface AttuneCancelResult {
+  ok:              true;
+  inventory:       GameState["inventory"];
+  attunementQueue: GameState["attunementQueue"];
+  serverUpdatedAt: string;
+}
+export interface UpgradeAttunementSlotsResult {
+  ok:                true;
+  coins:             number;
+  attunement_slots:  number;
+  serverUpdatedAt:   string;
+}
+
+/** Start a time-gated attunement on an unmutated bloom. Server rolls the
+ *  mutation outcome at start and stores it on the queue entry. */
+export function edgeAttuneStart(speciesId: string, essenceType: string, quantity: number) {
+  return callEdge<AttuneStartResult>("attune-start", { speciesId, essenceType, quantity });
+}
+/** Collect a finished attunement — applies the rolled mutation to inventory. */
+export function edgeAttuneCollect(attunementId: string) {
+  return callEdge<AttuneCollectResult>("attune-collect", { attunementId });
+}
+/** Cancel an in-flight attunement — refunds the source bloom (essence is forfeit). */
+export function edgeAttuneCancel(attunementId: string) {
+  return callEdge<AttuneCancelResult>("attune-cancel", { attunementId });
+}
+/** Buy the next attunement slot upgrade. */
+export function edgeUpgradeAttunementSlots() {
+  return callEdge<UpgradeAttunementSlotsResult>("upgrade", { action: "attunement_slots" });
 }
 
 // ── Consumable usage ──────────────────────────────────────────────────────────

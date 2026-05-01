@@ -1,4 +1,4 @@
-import type { Rarity, MutationType } from "./flowers";
+import type { Rarity, FlowerType, MutationType } from "./flowers";
 import type { FertilizerType } from "./upgrades";
 
 // ── Gear type identifiers ──────────────────────────────────────────────────
@@ -54,6 +54,75 @@ export interface PlacedGear {
   storedFertilizers?: FertilizerType[];
   /** Which direction the fan / aegis is blowing — fan and aegis gear only */
   direction?: FanDirection;
+  /** Cropsticks only — wall-clock ms when the current cross-breed cycle began.
+   *  Set when the cropsticks first sees a valid recipe pair of infused
+   *  neighbors; cleared on completion or when the pair becomes invalid.
+   *  Drives a deterministic progress bar instead of the old hourly RNG roll. */
+  crossbreedStartedAt?: number;
+  /** Cropsticks only — grid coordinates of the two source plants that started
+   *  the current cycle. Stored when the cycle begins so the infused flag can
+   *  be cleared immediately from source plants (they no longer visually show
+   *  "waiting") while the tick can still find them by position at completion. */
+  crossbreedSourceA?: { r: number; c: number };
+  crossbreedSourceB?: { r: number; c: number };
+}
+
+/** How long a cropsticks cross-breed takes. Mirrored in the
+ *  tick-offline-gardens cron. */
+export const CROPSTICKS_BREED_DURATION_MS = 60 * 60 * 1_000; // 1 hour
+
+// ── Cropsticks cross-breed recipes ─────────────────────────────────────────
+// Mirrors the RECIPES array in apply-infuser and tick-offline-gardens edge functions.
+// Used client-side to immediately show the progress bar after infusing a plant.
+
+export type CrossbreedRecipe = {
+  id:        string;
+  tier:      number;
+  typeA:     FlowerType;
+  typeB:     FlowerType;
+  minRarity: Rarity;
+};
+
+const RARITY_TIER_IDX: Record<Rarity, number> = {
+  common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+};
+
+export const CROPSTICKS_RECIPES: CrossbreedRecipe[] = [
+  // Tier 1 (rare minimum)
+  { id: "blaze+frost",    tier: 1, typeA: "blaze",   typeB: "frost",   minRarity: "rare"      },
+  { id: "lunar+solar",    tier: 1, typeA: "lunar",   typeB: "solar",   minRarity: "rare"      },
+  { id: "tide+storm",     tier: 1, typeA: "tide",    typeB: "storm",   minRarity: "rare"      },
+  { id: "grove+shadow",   tier: 1, typeA: "grove",   typeB: "shadow",  minRarity: "rare"      },
+  { id: "arcane+stellar", tier: 1, typeA: "arcane",  typeB: "stellar", minRarity: "rare"      },
+  { id: "fairy+zephyr",   tier: 1, typeA: "fairy",   typeB: "zephyr",  minRarity: "rare"      },
+  // Tier 2 (legendary minimum)
+  { id: "blaze+solar",    tier: 2, typeA: "blaze",   typeB: "solar",   minRarity: "legendary" },
+  { id: "lunar+tide",     tier: 2, typeA: "lunar",   typeB: "tide",    minRarity: "legendary" },
+  { id: "grove+zephyr",   tier: 2, typeA: "grove",   typeB: "zephyr",  minRarity: "legendary" },
+  { id: "frost+arcane",   tier: 2, typeA: "frost",   typeB: "arcane",  minRarity: "legendary" },
+  // Tier 3 (mythic minimum)
+  { id: "arcane+shadow",  tier: 3, typeA: "arcane",  typeB: "shadow",  minRarity: "mythic"    },
+  { id: "stellar+zephyr", tier: 3, typeA: "stellar", typeB: "zephyr",  minRarity: "mythic"    },
+  // Tier 4 (exalted minimum)
+  { id: "arcane+stellar", tier: 4, typeA: "arcane",  typeB: "stellar", minRarity: "exalted"   },
+];
+
+/** Returns the highest-tier matching recipe for two flower type/rarity combos,
+ *  or null if no valid recipe exists. Mirrors findBestRecipe in the edge functions. */
+export function findCrossbreedRecipe(
+  typesA: FlowerType[], rarityA: Rarity,
+  typesB: FlowerType[], rarityB: Rarity,
+): CrossbreedRecipe | null {
+  let best: CrossbreedRecipe | null = null;
+  for (const r of CROPSTICKS_RECIPES) {
+    if ((RARITY_TIER_IDX[rarityA] ?? -1) < RARITY_TIER_IDX[r.minRarity]) continue;
+    if ((RARITY_TIER_IDX[rarityB] ?? -1) < RARITY_TIER_IDX[r.minRarity]) continue;
+    const fwd = typesA.includes(r.typeA) && typesB.includes(r.typeB);
+    const rev = typesA.includes(r.typeB) && typesB.includes(r.typeA);
+    if (!fwd && !rev) continue;
+    if (!best || r.tier > best.tier) best = r;
+  }
+  return best;
 }
 
 // ── Player's gear supply inventory ────────────────────────────────────────
@@ -182,7 +251,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:      "Speeds up adjacent plants by 1.5×. May get them wet. Lasts 1 hour.",
     emoji:            "🚿",
     rarity:           "rare",
-    shopPrice:        400,
+    shopPrice:        800,
     category:         "sprinkler_regular",
     durationMs:       DURATION_1H,
     radiusOffsets:    OFFSETS_CROSS,
@@ -196,7 +265,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:      "Speeds up surrounding plants by 1.75×. May get them wet. Lasts 2 hours.",
     emoji:            "🚿",
     rarity:           "legendary",
-    shopPrice:        5_500,
+    shopPrice:        11_000,
     category:         "sprinkler_regular",
     durationMs:       DURATION_2H,
     radiusOffsets:    OFFSETS_3X3,
@@ -210,7 +279,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:      "Speeds up all nearby plants by 2×. May get them wet. Lasts 4 hours.",
     emoji:            "🚿",
     rarity:           "mythic",
-    shopPrice:        60_000,
+    shopPrice:        120_000,
     category:         "sprinkler_regular",
     durationMs:       DURATION_4H,
     radiusOffsets:    OFFSETS_DIAMOND,
@@ -224,7 +293,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:      "Speeds up plants in a wide area by 2.5×. May get them wet. Lasts 8 hours.",
     emoji:            "🚿",
     rarity:           "exalted",
-    shopPrice:        350_000,
+    shopPrice:        700_000,
     category:         "sprinkler_regular",
     durationMs:       DURATION_8H,
     radiusOffsets:    OFFSETS_5X5,
@@ -238,7 +307,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:      "Speeds up plants in a massive star-shaped area by 3×. May get them wet. Lasts 12 hours.",
     emoji:            "🚿",
     rarity:           "prismatic",
-    shopPrice:        2_000_000,
+    shopPrice:        4_000_000,
     category:         "sprinkler_regular",
     durationMs:       DURATION_12H,
     radiusOffsets:    OFFSETS_GRAND_STAR,
@@ -254,7 +323,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "50% chance per hour to apply Scorched to nearby blooms. Lasts 2 hours.",
     emoji:                 "♨️",
     rarity:                "legendary",
-    shopPrice:             6_000,
+    shopPrice:             12_000,
     category:              "sprinkler_mutation",
     durationMs:            DURATION_2H,
     radiusOffsets:         OFFSETS_3X3,
@@ -268,7 +337,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "50% chance per hour to apply Frozen to nearby blooms. Lasts 2 hours.",
     emoji:                 "🧊",
     rarity:                "legendary",
-    shopPrice:             6_000,
+    shopPrice:             12_000,
     category:              "sprinkler_mutation",
     durationMs:            DURATION_2H,
     radiusOffsets:         OFFSETS_3X3,
@@ -282,7 +351,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "50% chance per hour to apply Shocked to nearby wet blooms. Pair with a Sprinkler to wet them first. Lasts 2 hours.",
     emoji:                 "🔋",
     rarity:                "mythic",
-    shopPrice:             50_000,
+    shopPrice:             100_000,
     category:              "sprinkler_mutation",
     durationMs:            DURATION_2H,
     radiusOffsets:         OFFSETS_3X3,
@@ -296,7 +365,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "50% chance per hour to apply Moonlit to nearby blooms. Lasts 2 hours.",
     emoji:                 "🔮",
     rarity:                "mythic",
-    shopPrice:             50_000,
+    shopPrice:             100_000,
     category:              "sprinkler_mutation",
     durationMs:            DURATION_2H,
     radiusOffsets:         OFFSETS_3X3,
@@ -310,7 +379,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "50% chance per hour to apply Gilded to nearby blooms. Lasts 2 hours.",
     emoji:                 "💰",
     rarity:                "exalted",
-    shopPrice:             200_000,
+    shopPrice:             400_000,
     category:              "sprinkler_mutation",
     durationMs:            DURATION_2H,
     radiusOffsets:         OFFSETS_3X3,
@@ -324,7 +393,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "50% chance per hour to apply Rainbow to nearby blooms. Lasts 2 hours.",
     emoji:                 "🔭",
     rarity:                "prismatic",
-    shopPrice:             800_000,
+    shopPrice:             1_600_000,
     category:              "sprinkler_mutation",
     durationMs:            DURATION_2H,
     radiusOffsets:         OFFSETS_3X3,
@@ -340,7 +409,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:     "Adds a 1.2× night boost that stacks with sprinklers. Lasts 4 hours.",
     emoji:           "💡",
     rarity:          "uncommon",
-    shopPrice:       100,
+    shopPrice:       600,
     category:        "passive",
     passiveSubtype:  "grow_lamp",
     radiusOffsets:   OFFSETS_3X3,
@@ -354,7 +423,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:     "Adds a 1.5× night boost that stacks with sprinklers. Lasts 8 hours.",
     emoji:           "💡",
     rarity:          "rare",
-    shopPrice:       600,
+    shopPrice:       1200,
     category:        "passive",
     passiveSubtype:  "grow_lamp",
     radiusOffsets:   OFFSETS_3X3,
@@ -368,7 +437,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Blocks weather mutations on nearby plants. Has a 15% chance per hour to strip an existing mutation. Lasts 4 hours.",
     emoji:          "🧹",
     rarity:         "rare",
-    shopPrice:      700,
+    shopPrice:      1400,
     category:       "passive",
     passiveSubtype: "scarecrow",
     radiusOffsets:  OFFSETS_3X3,
@@ -382,7 +451,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Blocks weather mutations on nearby plants. Has a 25% chance per hour to strip an existing mutation. Lasts 8 hours.",
     emoji:          "🧹",
     rarity:         "legendary",
-    shopPrice:      7_500,
+    shopPrice:      15_000,
     category:       "passive",
     passiveSubtype: "scarecrow",
     radiusOffsets:  OFFSETS_3X3,
@@ -396,7 +465,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Blocks weather mutations on nearby plants in a wide area. Has a 40% chance per hour to strip an existing mutation. Lasts 12 hours.",
     emoji:          "🧹",
     rarity:         "mythic",
-    shopPrice:      50_000,
+    shopPrice:      100_000,
     category:       "passive",
     passiveSubtype: "scarecrow",
     radiusOffsets:  OFFSETS_DIAMOND,
@@ -410,7 +479,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Generates a fertilizer each time a nearby plant blooms. Stores up to 10. Lasts 4 hours.",
     emoji:          "🧺",
     rarity:         "uncommon",
-    shopPrice:      150,
+    shopPrice:      600,
     category:       "passive",
     passiveSubtype: "composter",
     radiusOffsets:  OFFSETS_3X3,
@@ -424,7 +493,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Generates a fertilizer each time a nearby plant blooms. Stores up to 20. Lasts 8 hours.",
     emoji:          "🧺",
     rarity:         "rare",
-    shopPrice:      800,
+    shopPrice:      1600,
     category:       "passive",
     passiveSubtype: "composter",
     radiusOffsets:  OFFSETS_3X3,
@@ -438,7 +507,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Generates a fertilizer each time a nearby plant blooms. Stores up to 30. Lasts 12 hours.",
     emoji:          "🧺",
     rarity:         "legendary",
-    shopPrice:      5_000,
+    shopPrice:      10_000,
     category:       "passive",
     passiveSubtype: "composter",
     radiusOffsets:  OFFSETS_3X3,
@@ -456,7 +525,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "Blows in one direction across 2 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 2 hours.",
     emoji:                 "💨",
     rarity:                "uncommon",
-    shopPrice:             250,
+    shopPrice:             600,
     category:              "passive",
     passiveSubtype:        "fan",
     durationMs:            DURATION_2H,
@@ -470,7 +539,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "Blows in one direction across 3 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 4 hours.",
     emoji:                 "💨",
     rarity:                "rare",
-    shopPrice:             1_200,
+    shopPrice:             2400,
     category:              "passive",
     passiveSubtype:        "fan",
     durationMs:            DURATION_4H,
@@ -484,7 +553,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:           "Blows in one direction across 4 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 8 hours.",
     emoji:                 "💨",
     rarity:                "legendary",
-    shopPrice:             8_000,
+    shopPrice:             16_000,
     category:              "passive",
     passiveSubtype:        "fan",
     durationMs:            DURATION_8H,
@@ -501,7 +570,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Automatically harvests bloomed plants on adjacent cells, even while offline. Lasts 2 hours.",
     emoji:          "🔔",
     rarity:         "uncommon",
-    shopPrice:      400,
+    shopPrice:      800,
     category:       "passive",
     passiveSubtype: "harvest_bell",
     radiusOffsets:  OFFSETS_CROSS,
@@ -514,7 +583,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Automatically harvests bloomed plants on adjacent cells, even while offline. Lasts 4 hours.",
     emoji:          "🔔",
     rarity:         "rare",
-    shopPrice:      2_500,
+    shopPrice:      5000,
     category:       "passive",
     passiveSubtype: "harvest_bell",
     radiusOffsets:  OFFSETS_CROSS,
@@ -527,7 +596,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Automatically harvests bloomed plants in surrounding cells, even while offline. Lasts 8 hours.",
     emoji:          "🔔",
     rarity:         "legendary",
-    shopPrice:      18_000,
+    shopPrice:      36_000,
     category:       "passive",
     passiveSubtype: "harvest_bell",
     radiusOffsets:  OFFSETS_3X3,
@@ -544,7 +613,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Blocks weather mutations on 2 plants in a chosen direction. Lasts 2 hours.",
     emoji:          "🛡️",
     rarity:         "uncommon",
-    shopPrice:      300,
+    shopPrice:      1_500,
     category:       "passive",
     passiveSubtype: "aegis",
     durationMs:     DURATION_2H,
@@ -557,7 +626,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Blocks weather mutations on 3 plants in a chosen direction. Lasts 4 hours.",
     emoji:          "🛡️",
     rarity:         "rare",
-    shopPrice:      1_500,
+    shopPrice:      3000,
     category:       "passive",
     passiveSubtype: "aegis",
     durationMs:     DURATION_4H,
@@ -570,7 +639,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Blocks weather mutations on 4 plants in a chosen direction. Lasts 8 hours.",
     emoji:          "🛡️",
     rarity:         "legendary",
-    shopPrice:      10_000,
+    shopPrice:      20_000,
     category:       "passive",
     passiveSubtype: "aegis",
     durationMs:     DURATION_8H,
@@ -587,7 +656,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Automatically plants seeds from your inventory into empty cells in a diamond area, even while offline. Lasts 12 hours.",
     emoji:          "🌾",
     rarity:         "prismatic",
-    shopPrice:      500_000,
+    shopPrice:      1_000_000,
     category:       "passive",
     passiveSubtype: "auto_planter",
     radiusOffsets:  OFFSETS_DIAMOND,
@@ -606,7 +675,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
     description:    "Passively cross-breeds adjacent flowers marked with Attunement. Place next to two attuned blooms of compatible types and wait for a hybrid seed to appear. Permanent.",
     emoji:          "🥢",
     rarity:         "legendary",
-    shopPrice:      12_000,
+    shopPrice:      24_000,
     category:       "passive",
     passiveSubtype: "cropsticks",
     radiusOffsets:  OFFSETS_CROSS, // highlights the 4 cells it monitors in the UI
@@ -750,25 +819,111 @@ export function isCropsticks(def: GearDefinition): boolean {
 
 export type SupplyItem =
   | { kind: "fertilizer"; fertilizerType: FertilizerType }
-  | { kind: "gear";       gearType: GearType };
+  | { kind: "gear";       gearType: GearType }
+  | { kind: "consumable"; consumableId: string };
 
 /** Items available at each rarity tier in the Supply Shop.
- *  Gear has moved to the Crafting system — only fertilizers appear here. */
+ *  Crafting is generally cheaper than buying — supply prices are 2× the
+ *  reference shopPrice on each gear, so the shop is a convenience option
+ *  for players who don't have the essences/ingredients on hand. */
 export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
   common: [
     { kind: "fertilizer", fertilizerType: "basic" },
   ],
   uncommon: [
     { kind: "fertilizer", fertilizerType: "advanced" },
+    { kind: "gear", gearType: "grow_lamp_uncommon" },
+    { kind: "gear", gearType: "composter_uncommon" },
+    { kind: "gear", gearType: "fan_uncommon" },
+    { kind: "gear", gearType: "harvest_bell_uncommon" },
+    { kind: "gear", gearType: "aegis_uncommon" },
   ],
   rare: [
     { kind: "fertilizer", fertilizerType: "premium" },
+    { kind: "gear", gearType: "sprinkler_rare" },
+    { kind: "gear", gearType: "grow_lamp_rare" },
+    { kind: "gear", gearType: "scarecrow_rare" },
+    { kind: "gear", gearType: "composter_rare" },
+    { kind: "gear", gearType: "fan_rare" },
+    { kind: "gear", gearType: "harvest_bell_rare" },
+    { kind: "gear", gearType: "aegis_rare" },
+    { kind: "consumable", consumableId: "bloom_burst_1" },
+    { kind: "consumable", consumableId: "heirloom_charm_1" },
+    { kind: "consumable", consumableId: "purity_vial_1" },
+    { kind: "consumable", consumableId: "giant_vial_1" },
+    { kind: "consumable", consumableId: "frost_vial_1" },
+    { kind: "consumable", consumableId: "ember_vial_1" },
+    { kind: "consumable", consumableId: "storm_vial_1" },
+    { kind: "consumable", consumableId: "moon_vial_1" },
+    { kind: "consumable", consumableId: "magnifying_glass" },
+    { kind: "consumable", consumableId: "garden_pin" },
+    { kind: "consumable", consumableId: "verdant_rush_1" },
+    { kind: "consumable", consumableId: "forge_haste_1" },
+    { kind: "consumable", consumableId: "resonance_draft_1" },
   ],
   legendary: [
     { kind: "fertilizer", fertilizerType: "elite" },
+    { kind: "gear", gearType: "sprinkler_legendary" },
+    { kind: "gear", gearType: "sprinkler_flame" },
+    { kind: "gear", gearType: "sprinkler_frost" },
+    { kind: "gear", gearType: "scarecrow_legendary" },
+    { kind: "gear", gearType: "composter_legendary" },
+    { kind: "gear", gearType: "fan_legendary" },
+    { kind: "gear", gearType: "harvest_bell_legendary" },
+    { kind: "gear", gearType: "aegis_legendary" },
+    { kind: "gear", gearType: "cropsticks" },
+    { kind: "consumable", consumableId: "bloom_burst_2" },
+    { kind: "consumable", consumableId: "heirloom_charm_2" },
+    { kind: "consumable", consumableId: "purity_vial_2" },
+    { kind: "consumable", consumableId: "giant_vial_2" },
+    { kind: "consumable", consumableId: "frost_vial_2" },
+    { kind: "consumable", consumableId: "ember_vial_2" },
+    { kind: "consumable", consumableId: "storm_vial_2" },
+    { kind: "consumable", consumableId: "moon_vial_2" },
+    { kind: "consumable", consumableId: "golden_vial_2" },
+    { kind: "consumable", consumableId: "verdant_rush_2" },
+    { kind: "consumable", consumableId: "forge_haste_2" },
+    { kind: "consumable", consumableId: "resonance_draft_2" },
   ],
   mythic: [
     { kind: "fertilizer", fertilizerType: "miracle" },
+    { kind: "gear", gearType: "sprinkler_mythic" },
+    { kind: "gear", gearType: "sprinkler_lightning" },
+    { kind: "gear", gearType: "sprinkler_lunar" },
+    { kind: "gear", gearType: "scarecrow_mythic" },
+    { kind: "consumable", consumableId: "bloom_burst_3" },
+    { kind: "consumable", consumableId: "heirloom_charm_3" },
+    { kind: "consumable", consumableId: "purity_vial_3" },
+    { kind: "consumable", consumableId: "giant_vial_3" },
+    { kind: "consumable", consumableId: "frost_vial_3" },
+    { kind: "consumable", consumableId: "ember_vial_3" },
+    { kind: "consumable", consumableId: "storm_vial_3" },
+    { kind: "consumable", consumableId: "moon_vial_3" },
+    { kind: "consumable", consumableId: "golden_vial_3" },
+    { kind: "consumable", consumableId: "verdant_rush_3" },
+    { kind: "consumable", consumableId: "forge_haste_3" },
+    { kind: "consumable", consumableId: "resonance_draft_3" },
+  ],
+  exalted: [
+    { kind: "gear", gearType: "sprinkler_exalted" },
+    { kind: "gear", gearType: "sprinkler_midas" },
+    { kind: "consumable", consumableId: "bloom_burst_4" },
+    { kind: "consumable", consumableId: "heirloom_charm_4" },
+    { kind: "consumable", consumableId: "golden_vial_4" },
+    { kind: "consumable", consumableId: "verdant_rush_4" },
+    { kind: "consumable", consumableId: "forge_haste_4" },
+    { kind: "consumable", consumableId: "resonance_draft_4" },
+  ],
+  prismatic: [
+    { kind: "gear", gearType: "sprinkler_prismatic" },
+    { kind: "gear", gearType: "sprinkler_prism" },
+    { kind: "gear", gearType: "auto_planter_prismatic" },
+    { kind: "consumable", consumableId: "bloom_burst_5" },
+    { kind: "consumable", consumableId: "heirloom_charm_5" },
+    { kind: "consumable", consumableId: "rainbow_vial_5" },
+    { kind: "consumable", consumableId: "verdant_rush_5" },
+    { kind: "consumable", consumableId: "forge_haste_5" },
+    { kind: "consumable", consumableId: "resonance_draft_5" },
   ],
 };
 

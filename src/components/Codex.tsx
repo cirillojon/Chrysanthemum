@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
-import { FLOWERS, MUTATIONS, RARITY_CONFIG } from "../data/flowers";
-import type { Rarity, MutationType } from "../data/flowers";
+import { FLOWERS, MUTATIONS, RARITY_CONFIG, FLOWER_TYPES } from "../data/flowers";
+import type { Rarity, MutationType, FlowerType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import {
   getTotalCodexEntries,
@@ -12,19 +12,54 @@ import { useGame } from "../store/GameContext";
 type FilterRarity = Rarity | "all";
 type FilterStatus = "all" | "discovered" | "undiscovered";
 
+/** Format a growth-time millisecond duration for the codex stats panel.
+ *  Shows d/h/m/s so times above 24 h read as days rather than raw hours. */
+function formatDuration(ms: number): string {
+  const totalSec = Math.floor(ms / 1_000);
+  const days    = Math.floor(totalSec / 86_400);
+  const hours   = Math.floor((totalSec % 86_400) / 3_600);
+  const minutes = Math.floor((totalSec % 3_600) / 60);
+  const seconds = totalSec % 60;
+  const parts: string[] = [];
+  if (days    > 0) parts.push(`${days}d`);
+  if (hours   > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+  return parts.join(" ");
+}
+
 interface Props {
   // When used on a profile page, pass in a read-only discovered array
   // When used in the main game, leave empty and it reads from context
   discoveredOverride?: string[];
   compact?: boolean; // compact mode for profile preview
+  /** Entries the user hasn't acknowledged (i.e., hasn't opened that card yet).
+   *  Drives the red dot on cards. App owns this set; we mutate via markSeen. */
+  unseenEntries?: Set<string>;
+  /** Called when the user expands a card — marks every entry belonging to
+   *  that species (base + mutations) as seen, so the navbar badge ticks down
+   *  and the red dot disappears. */
+  markSeen?: (speciesId: string) => void;
 }
 
-export function Codex({ discoveredOverride, compact = false }: Props) {
+export function Codex({ discoveredOverride, compact = false, unseenEntries, markSeen }: Props) {
   const { state } = useGame();
   const discovered = discoveredOverride ?? state.discovered;
 
+  // Snapshot unseen entries at mount so the "Newly discovered" labels persist
+  // through expanding/collapsing while the user is on the codex tab. The
+  // labels disappear automatically when the user navigates away (component
+  // unmounts) and the next visit takes a fresh snapshot of whatever's still
+  // unseen at that moment.
+  const [freshlyDiscovered] = useState<Set<string>>(
+    () => new Set(unseenEntries ?? [])
+  );
+
   const [filterRarity, setFilterRarity] = useState<FilterRarity>("all");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  // Multi-select type filter (OR semantics — show flowers with ANY selected
+  // type). Empty array = "all types". Mirrors the Alchemy → Sacrifice filter.
+  const [activeTypes, setActiveTypes]   = useState<FlowerType[]>([]);
   const [search, setSearch]             = useState("");
   const [expandedId, setExpandedId]     = useState<string | null>(null);
 
@@ -36,21 +71,29 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
     return FLOWERS.filter((f) => {
       if (filterRarity !== "all" && f.rarity !== filterRarity) return false;
 
+      // Type filter — OR semantics: a flower passes if it has any selected type.
+      // Empty selection = no filter.
+      if (activeTypes.length > 0 && !f.types.some((t) => activeTypes.includes(t))) {
+        return false;
+      }
+
       const { found: specFound } = getSpeciesCompletion(discovered, f.id);
       if (filterStatus === "discovered"   && specFound === 0) return false;
       if (filterStatus === "undiscovered" && specFound > 0)   return false;
 
       if (search.trim()) {
         const q = search.toLowerCase();
-        // Show mystery entries as ??? so don't filter out by name if undiscovered
+        // Undiscovered flowers never match search — otherwise typing the
+        // internal id (e.g. "void_chrysalis") would leak species the player
+        // hasn't earned yet via the ??? entries.
         const hasBase = isDiscovered(discovered, f.id);
-        if (!hasBase && !f.id.includes(q)) return false;
-        if (hasBase && !f.name.toLowerCase().includes(q) && !f.description.toLowerCase().includes(q)) return false;
+        if (!hasBase) return false;
+        if (!f.name.toLowerCase().includes(q) && !f.description.toLowerCase().includes(q)) return false;
       }
 
       return true;
     });
-  }, [discovered, filterRarity, filterStatus, search]);
+  }, [discovered, filterRarity, filterStatus, activeTypes, search]);
 
   if (compact) {
     return <CompactCodex discovered={discovered} total={total} found={found} pct={pct} />;
@@ -136,6 +179,44 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
           ))}
         </div>
 
+        {/* Type filter — OR multi-select. Click to toggle a type; empty = all */}
+        <div className="flex flex-wrap gap-1.5">
+          <button
+            onClick={() => setActiveTypes([])}
+            className={`
+              px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all
+              ${activeTypes.length === 0
+                ? "bg-foreground/10 border border-foreground/40 text-foreground"
+                : "bg-card/60 border border-border text-muted-foreground hover:border-foreground/30"
+              }
+            `}
+          >
+            All types
+          </button>
+          {(Object.keys(FLOWER_TYPES) as FlowerType[]).map((t) => {
+            const cfg      = FLOWER_TYPES[t];
+            const isActive = activeTypes.includes(t);
+            return (
+              <button
+                key={t}
+                onClick={() => setActiveTypes((prev) =>
+                  isActive ? prev.filter((x) => x !== t) : [...prev, t]
+                )}
+                className={`
+                  inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all
+                  ${isActive
+                    ? `${cfg.bgColor} ${cfg.borderColor} ${cfg.color} border`
+                    : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                  }
+                `}
+              >
+                <span>{cfg.emoji}</span>
+                <span>{cfg.name}</span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* Status filter */}
         <div className="flex gap-1.5">
           {(["all", "discovered", "undiscovered"] as FilterStatus[]).map((s) => (
@@ -168,18 +249,40 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
           const { found: specFound, total: specTotal } = getSpeciesCompletion(discovered, f.id);
           const rarity     = RARITY_CONFIG[f.rarity];
           const isExpanded = expandedId === f.id;
+          // Card has unseen content if any of this species' discovered entries
+          // (base or mutation combos) are in the unseen set. Drives the red
+          // dot in the top-right of the card.
+          const cardHasUnseen = (unseenEntries?.size ?? 0) > 0 && (
+            unseenEntries!.has(f.id) ||
+            (Object.keys(MUTATIONS) as MutationType[]).some((m) =>
+              unseenEntries!.has(`${f.id}:${m}`)
+            )
+          );
 
           return (
             <div
               key={f.id}
               className={`
-                bg-card/60 border rounded-xl overflow-hidden transition-all
+                relative bg-card/60 border rounded-xl overflow-hidden transition-all
                 ${hasBase ? `border-border hover:border-primary/30 ${rarity.glow}` : "border-border/40 opacity-60"}
               `}
             >
+              {/* Unseen-discovery dot — top-right corner. Cleared when the card
+                  is expanded (markSeen marks every entry of this species). */}
+              {cardHasUnseen && (
+                <span
+                  className="absolute top-2 right-2 z-10 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-card shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                  aria-label="New discovery"
+                />
+              )}
+
               {/* Main row */}
               <button
-                onClick={() => setExpandedId(isExpanded ? null : f.id)}
+                onClick={() => {
+                  setExpandedId(isExpanded ? null : f.id);
+                  // On expand (not collapse), mark this species' entries as seen.
+                  if (!isExpanded) markSeen?.(f.id);
+                }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-left"
               >
                 {/* Emoji */}
@@ -221,9 +324,36 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                 </span>
               </button>
 
-              {/* Expanded mutation details */}
-              {isExpanded && (
+              {/* Expanded mutation details — uses the CSS-grid `0fr → 1fr`
+                  trick so the dropdown smoothly animates open/closed without
+                  needing to measure heights. Inner div is `overflow-hidden`
+                  so the content clips while the row collapses. */}
+              <div
+                className={`
+                  grid transition-[grid-template-rows] duration-300 ease-out
+                  ${isExpanded ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}
+                `}
+              >
+                <div className="overflow-hidden">
                 <div className="px-4 pb-3 border-t border-border/40 pt-3 space-y-2">
+                  {/* Stats — growth time + sell price (only for discovered species) */}
+                  {hasBase && (
+                    <div className="bg-card/40 border border-border/40 rounded-lg px-3 py-2 mb-1 text-xs font-mono text-muted-foreground space-y-0.5">
+                      <div className="flex items-center justify-between">
+                        <span>Seed → Sprout</span>
+                        <span className="text-foreground">{formatDuration(f.growthTime.seed)}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span>Sprout → Bloom</span>
+                        <span className="text-foreground">{formatDuration(f.growthTime.sprout)}</span>
+                      </div>
+                      <div className="flex items-center justify-between pt-0.5 border-t border-border/40 mt-0.5">
+                        <span>Sell value</span>
+                        <span className="text-foreground">{f.sellValue.toLocaleString()} 🟡</span>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Base entry */}
                   <div className="flex items-center gap-2">
                     <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 ${
@@ -235,6 +365,11 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                     <span className="text-xs text-foreground">
                       {hasBase ? f.name : "???"}
                     </span>
+                    {freshlyDiscovered.has(f.id) && (
+                      <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30">
+                        Newly discovered
+                      </span>
+                    )}
                     <span className="text-xs text-muted-foreground ml-auto">Base</span>
                   </div>
 
@@ -242,6 +377,7 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                   {(Object.keys(MUTATIONS) as MutationType[]).map((mutId) => {
                     const found  = isDiscovered(discovered, f.id, mutId);
                     const mut    = MUTATIONS[mutId];
+                    const isFresh = freshlyDiscovered.has(`${f.id}:${mutId}`);
                     return (
                       <div key={mutId} className="flex items-center gap-2">
                         <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] flex-shrink-0 ${
@@ -254,6 +390,11 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                         <span className={`text-xs ${found ? mut.color : "text-muted-foreground"}`}>
                           {found ? mut.name : "???"}
                         </span>
+                        {isFresh && (
+                          <span className="text-[10px] font-bold text-red-400 uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/10 border border-red-500/30">
+                            Newly discovered
+                          </span>
+                        )}
                         {found && (
                           <span className="text-xs text-muted-foreground ml-auto">
                             ×{mut.valueMultiplier} value
@@ -272,7 +413,8 @@ export function Codex({ discoveredOverride, compact = false }: Props) {
                     </div>
                   )}
                 </div>
-              )}
+                </div>
+              </div>
             </div>
           );
         })}

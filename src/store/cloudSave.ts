@@ -138,7 +138,7 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       supplySlots:          (data.supply_slots    as number)                      ?? 2,
       lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
       serverUpdatedAt:      (data.updated_at as string) ?? null,
-      // Alchemy & Botany
+      // Alchemy
       essences:             (data.essences              as GameState["essences"])       ?? [],
       // Cross-breeding
       discoveredRecipes:    (data.discovered_recipes    as string[])                   ?? [],
@@ -149,6 +149,16 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       craftingSlotCount:    (data.crafting_slot_count   as number)                      ?? 1,
       // Phase 5a — active speed-boost consumables (pruned of expired entries on offline tick)
       activeBoosts:         (data.active_boosts         as GameState["activeBoosts"])   ?? [],
+      // Crafted consumables (Bloom Burst, vials, Eclipse Tonic, …) — edge functions
+      // (craft-collect, supply-action, alchemy-craft) write the DB column directly,
+      // but loadCloudSave needs to read it back so the client state isn't reset to
+      // [] on every refresh / new build.
+      consumables:          (data.consumables           as GameState["consumables"])    ?? [],
+      lastEclipseTonic:     (data.last_eclipse_tonic    as string | null)               ?? null,
+      lastWindShearUsed:    (data.last_wind_shear_used  as number | null)               ?? null,
+      // v2.3 Alchemy attunement queue (separate from craft queue — own slot count)
+      attunementSlots:      (data.attunement_slots      as number)                      ?? 0,
+      attunementQueue:      (data.attunement_queue      as GameState["attunementQueue"]) ?? [],
     } as GameState;
   } catch {
     return null;
@@ -182,7 +192,7 @@ export async function saveToCloud(
     supply_shop:            state.supplyShop        ?? [],
     supply_slots:           state.supplySlots       ?? 2,
     last_supply_reset:      state.lastSupplyReset   ?? 0,
-    // Alchemy & Botany
+    // Alchemy
     essences:               state.essences          ?? [],
     // Cross-breeding
     discovered_recipes:     state.discoveredRecipes ?? [],
@@ -193,6 +203,14 @@ export async function saveToCloud(
     crafting_slot_count:    state.craftingSlotCount ?? 1,
     // Phase 5a — active speed-boost consumables
     active_boosts:          state.activeBoosts      ?? [],
+    // Crafted consumables — kept in sync so we don't clobber edge-function
+    // writes with a stale empty array on the next saveToCloud roundtrip.
+    consumables:            state.consumables       ?? [],
+    last_eclipse_tonic:     state.lastEclipseTonic  ?? null,
+    last_wind_shear_used:   state.lastWindShearUsed ?? null,
+    // v2.3 Alchemy attunement queue
+    attunement_slots:       state.attunementSlots   ?? 0,
+    attunement_queue:       state.attunementQueue   ?? [],
     updated_at:             newUpdatedAt,
   };
 
@@ -577,11 +595,24 @@ export interface LeaderboardEntry {
   username: string;
   display_flower: string;
   display_mutation: string | null;
+  last_seen_at: string | null;
   coins: number;
   farm_size: number;
   discovered_count: number;
   updated_at: string;
   rank: number;
+}
+
+async function mergeLastSeen(entries: LeaderboardEntry[]): Promise<LeaderboardEntry[]> {
+  if (entries.length === 0) return entries;
+  const ids = entries.map((e) => e.id);
+  const { data } = await supabase
+    .from("users")
+    .select("id, last_seen_at")
+    .in("id", ids);
+  if (!data) return entries;
+  const map = new Map(data.map((u: { id: string; last_seen_at: string | null }) => [u.id, u.last_seen_at]));
+  return entries.map((e) => ({ ...e, last_seen_at: map.get(e.id) ?? null }));
 }
 
 export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
@@ -592,7 +623,7 @@ export async function getLeaderboard(): Promise<LeaderboardEntry[]> {
     .limit(50);
 
   if (error || !data) return [];
-  return data as LeaderboardEntry[];
+  return mergeLastSeen(data as LeaderboardEntry[]);
 }
 
 export async function getFriendsLeaderboard(
@@ -620,10 +651,11 @@ export async function getFriendsLeaderboard(
 
   if (error || !data) return [];
 
-  return (data as LeaderboardEntry[]).map((entry, i) => ({
+  const ranked = (data as LeaderboardEntry[]).map((entry, i) => ({
     ...entry,
     rank: i + 1,
   }));
+  return mergeLastSeen(ranked);
 }
 
 export async function getMyRank(userId: string): Promise<number | null> {

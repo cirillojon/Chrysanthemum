@@ -96,7 +96,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("essences, gear_inventory, consumables, infusers, crafting_queue, updated_at")
+        .select("coins, essences, gear_inventory, consumables, infusers, crafting_queue, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -117,12 +117,15 @@ Deno.serve(async (req: Request) => {
       gearType?:        string;   // legacy field
       startedAt:        string;
       durationMs:       number;
+      quantity?:        number;
+      coinCost?:        number;
       essenceCosts?:    { type: string; amount: number }[];
       gearCosts?:       { gearType: string; quantity: number }[];
       consumableCosts?: { id: string; quantity: number }[];
       attunementCosts?: { rarity: string; quantity: number }[];
     }[];
 
+    let coins         = (save.coins          ?? 0) as number;
     let essences      = (save.essences       ?? []) as { type: string; amount: number }[];
     let gearInventory = (save.gear_inventory ?? []) as { gearType: string; quantity: number }[];
     let consumables   = (save.consumables    ?? []) as { id: string; quantity: number }[];
@@ -139,6 +142,11 @@ Deno.serve(async (req: Request) => {
     // New entries: stored ingredient costs → use directly.
     // Legacy gear entries: no stored costs → fall back to recipe lookup.
     const hasStoredCosts = entry.essenceCosts || entry.gearCosts || entry.consumableCosts || entry.attunementCosts;
+
+    // Refund stored coin cost (new entries store this; legacy/no-cost entries skip).
+    if (typeof entry.coinCost === "number" && entry.coinCost > 0) {
+      coins += entry.coinCost;
+    }
 
     if (hasStoredCosts) {
       // ── New-format refund: use stored costs ──────────────────────────────────
@@ -197,6 +205,7 @@ Deno.serve(async (req: Request) => {
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
       .update({
+        coins,
         essences,
         gear_inventory: gearInventory,
         consumables,
@@ -222,6 +231,7 @@ Deno.serve(async (req: Request) => {
 
     return json({
       ok:              true,
+      coins,
       craftingQueue:   newQueue,
       essences,
       gearInventory,

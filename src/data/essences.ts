@@ -52,13 +52,13 @@ export function universalEssenceCraftable(essences: EssenceItem[]): number {
  * Units are then distributed among the flower's type(s) via independent rolls.
  */
 export const ESSENCE_YIELD: Record<Rarity, number> = {
-  common:    1,
-  uncommon:  2,
-  rare:      4,
-  legendary: 8,
-  mythic:    16,
-  exalted:   32,
-  prismatic: 64,
+  common:    2,
+  uncommon:  4,
+  rare:      8,
+  legendary: 16,
+  mythic:    32,
+  exalted:   64,
+  prismatic: 128,
 };
 
 // ── Yield calculation (deterministic even-split for UI preview) ────────────

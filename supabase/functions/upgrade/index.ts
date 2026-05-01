@@ -52,6 +52,15 @@ const CRAFTING_SLOT_UPGRADES = [
   { slots: 6, cost: 700_000 },
 ];
 
+// ── Alchemy attunement slot upgrades (mirrors src/data/gear-recipes.ts) ───────
+// Player starts at 0 slots. Each unlock = one more concurrent attunement.
+const ATTUNEMENT_SLOT_UPGRADES = [
+  { slots: 1, cost: 50_000  },
+  { slots: 2, cost: 150_000 },
+  { slots: 3, cost: 350_000 },
+  { slots: 4, cost: 700_000 },
+];
+
 function getNextFarmUpgrade(rows: number, cols: number) {
   return FARM_UPGRADES.find((u) => u.rows > rows || (u.rows === rows && u.cols > cols)) ?? null;
 }
@@ -63,6 +72,9 @@ function getNextSupplySlotUpgrade(currentSlots: number) {
 }
 function getNextCraftingSlotUpgrade(currentSlots: number) {
   return CRAFTING_SLOT_UPGRADES.find((u) => u.slots > currentSlots) ?? null;
+}
+function getNextAttunementSlotUpgrade(currentSlots: number) {
+  return ATTUNEMENT_SLOT_UPGRADES.find((u) => u.slots > currentSlots) ?? null;
 }
 
 function resizeGrid(old: { id: string; plant: unknown }[][], newRows: number, newCols: number) {
@@ -99,10 +111,10 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Parse action first so we can target the right columns ─────────────────
-    const { action } = await req.json() as { action: "farm" | "shop_slots" | "supply_slots" | "crafting_slots" };
+    const { action } = await req.json() as { action: "farm" | "shop_slots" | "supply_slots" | "crafting_slots" | "attunement_slots" };
 
-    if (action !== "farm" && action !== "shop_slots" && action !== "supply_slots" && action !== "crafting_slots") {
-      return new Response(JSON.stringify({ error: "Invalid action — use 'farm', 'shop_slots', 'supply_slots', or 'crafting_slots'" }), {
+    if (action !== "farm" && action !== "shop_slots" && action !== "supply_slots" && action !== "crafting_slots" && action !== "attunement_slots") {
+      return new Response(JSON.stringify({ error: "Invalid action — use 'farm', 'shop_slots', 'supply_slots', 'crafting_slots', or 'attunement_slots'" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -116,7 +128,8 @@ Deno.serve(async (req: Request) => {
       action === "farm"             ? "coins, farm_rows, farm_size, grid"     :
       action === "shop_slots"       ? "coins, shop_slots, shop"               :
       action === "supply_slots"     ? "coins, supply_slots, supply_shop"       :
-                                      "coins, crafting_slot_count";
+      action === "crafting_slots"   ? "coins, crafting_slot_count"             :
+                                      "coins, attunement_slots";
 
     // ── Verify JWT + load save in parallel ────────────────────────────────────
     const [authResult, saveResult] = await Promise.all([
@@ -243,6 +256,27 @@ Deno.serve(async (req: Request) => {
 
       coins -= next.cost;
       updatePayload = { coins, crafting_slot_count: next.slots };
+      logResult = { from: currentSlots, to: next.slots, cost: next.cost };
+    }
+
+    // ── Upgrade attunement slots (alchemy attune queue) ──────────────────────
+    if (action === "attunement_slots") {
+      const currentSlots = (save.attunement_slots ?? 0) as number;
+      const next         = getNextAttunementSlotUpgrade(currentSlots);
+
+      if (!next) {
+        return new Response(JSON.stringify({ error: "Attunement slots already at maximum" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (coins < next.cost) {
+        return new Response(JSON.stringify({ error: "Not enough coins" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      coins -= next.cost;
+      updatePayload = { coins, attunement_slots: next.slots };
       logResult = { from: currentSlots, to: next.slots, cost: next.cost };
     }
 

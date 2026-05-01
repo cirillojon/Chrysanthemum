@@ -12,7 +12,7 @@ import { getFlower, RARITY_CONFIG, MUTATIONS, type MutationType } from "../data/
 import { FERTILIZERS } from "../data/upgrades";
 import { WEATHER } from "../data/weather";
 import type { WeatherType } from "../data/weather";
-import { GEAR, isGearExpired, type FanDirection } from "../data/gear";
+import { GEAR, isGearExpired, CROPSTICKS_BREED_DURATION_MS, type FanDirection } from "../data/gear";
 import { PlotTooltip } from "./PlotTooltip";
 import { GearTooltip } from "./GearTooltip";
 import { useGame } from "../store/GameContext";
@@ -61,6 +61,10 @@ interface Props {
   isUnderHarvestBell?: boolean;
   /** True when this cell is within an auto-planter's radius. */
   isUnderAutoPlanter?: boolean;
+  /** Direction a crossbreed particle should travel (toward the active cropsticks). */
+  crossbreedDirection?: "up" | "down" | "left" | "right";
+  /** True when this plant is actively serving as a Cropsticks cross-breed source — blocks manual harvest. */
+  isCrossBreeding?: boolean;
   /** Called when this cell's gear tooltip opens — lets Garden highlight affected cells. */
   onGearInspect?:      (row: number, col: number, gearType: import("../data/gear").GearType) => void;
   onGearInspectClose?: () => void;
@@ -75,11 +79,12 @@ export function PlotTile({
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
   isUnderFan, fanDirection, isUnderHarvestBell, isUnderAutoPlanter,
+  crossbreedDirection, isCrossBreeding = false,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
   showGrowthDebug = false,
 }: Props) {
-  const { perform, getState, activeWeather } = useGame();
+  const { state, perform, getState, activeWeather, reloadFromCloud } = useGame();
   const { settings } = useSettings();
   const now    = Date.now();
   const plant  = plot.plant;
@@ -96,6 +101,11 @@ export function PlotTile({
 
   const rarity     = species ? RARITY_CONFIG[species.rarity] : null;
   const isBloomed  = stage === "bloom";
+  // A plant is "identified" (species known) if it's already in the codex (harvested
+  // before) OR the player used a Magnifying Glass on this specific tile.
+  const isIdentified = plant
+    ? (state.discovered.includes(plant.speciesId) || !!plant.revealed)
+    : false;
   const hasFert    = !!plant?.fertilizer;
 
   const debugTotalMult = showGrowthDebug && plant ? (() => {
@@ -108,6 +118,28 @@ export function PlotTile({
 
   const [open,     setOpen]     = useState(false);
   const [gearOpen, setGearOpen] = useState(false);
+  // Force a 1s re-render while a cropsticks cycle is active so the progress
+  // bar visually advances even when no other state changes are happening
+  // (a fully-bloomed garden with cropsticks doesn't tick anything else).
+  const [, forceTick] = useState(0);
+  const cropsticksActive =
+    plot.gear?.gearType === "cropsticks" && plot.gear.crossbreedStartedAt != null;
+  const cropsticksComplete =
+    cropsticksActive &&
+    (now - (plot.gear!.crossbreedStartedAt as number)) >= CROPSTICKS_BREED_DURATION_MS;
+  useEffect(() => {
+    if (!cropsticksActive) return;
+    const id = setInterval(() => forceTick((n) => (n + 1) & 0xffff), 1_000);
+    return () => clearInterval(id);
+  }, [cropsticksActive]);
+  // When the progress bar hits 100%, poll the server every 10 s until the tick
+  // has replaced the cropsticks with a seed (cropsticksActive becomes false).
+  useEffect(() => {
+    if (!cropsticksComplete) return;
+    reloadFromCloud();
+    const id = setInterval(() => reloadFromCloud(), 10_000);
+    return () => clearInterval(id);
+  }, [cropsticksComplete]);
   const tileRef       = useRef<HTMLDivElement>(null);
   const harvestingRef = useRef(false);
 
@@ -133,6 +165,7 @@ export function PlotTile({
 
   function handleHarvest() {
     if (!plant) return;
+    if (isCrossBreeding) return;
     if (harvestingRef.current) return;
     if (harvestPending?.()) return;
     const currentState = getState();
@@ -193,6 +226,14 @@ export function PlotTile({
     const expiryProgress = def.durationMs
       ? Math.max(0, (gear.placedAt + def.durationMs - now) / def.durationMs)
       : null;
+
+    // Cropsticks cross-breed progress (0..1) — ticks deterministically from
+    // crossbreedStartedAt over CROPSTICKS_BREED_DURATION_MS. Replaces the old
+    // hourly RNG roll with a visible bar.
+    const cropProgress: number | null =
+      def.passiveSubtype === "cropsticks" && gear.crossbreedStartedAt != null
+        ? Math.min(1, Math.max(0, (now - gear.crossbreedStartedAt) / CROPSTICKS_BREED_DURATION_MS))
+        : null;
 
     // Prismatic uses "rainbow-text" and Exalted uses "text-black" — both need manual mapping
     const gearBarBg = gearRarity.color === "rainbow-text"
@@ -256,6 +297,19 @@ export function PlotTile({
             </div>
           )}
 
+          {/* Cropsticks cross-breed progress (deterministic — replaces RNG) */}
+          {cropProgress !== null && (
+            <div
+              className="absolute bottom-1 left-2 right-2 h-1 bg-border rounded-full overflow-hidden"
+              title={`Cross-breeding · ${Math.floor(cropProgress * 100)}%`}
+            >
+              <div
+                className="h-full rounded-full bg-emerald-400"
+                style={{ width: `${cropProgress * 100}%`, transition: "width 1s linear" }}
+              />
+            </div>
+          )}
+
           {/* Composter stored count badge */}
           {def.passiveSubtype === "composter" && storedCount > 0 && (
             <span className="absolute top-0.5 right-0.5 text-[9px] font-mono font-bold text-primary leading-none">
@@ -308,6 +362,7 @@ export function PlotTile({
           col={col}
           onClose={() => setOpen(false)}
           onHarvestRequest={isBloomed ? handleHarvest : undefined}
+          isCrossBreeding={isCrossBreeding}
           gearGrowthMultiplier={gearMult}
           isUnderSprinkler={isUnderSprinkler}
           sprinklerMutations={sprinklerMutations}
@@ -321,7 +376,7 @@ export function PlotTile({
 
       <button
         onClick={handleClick}
-        style={isBloomed && species?.rarity === "prismatic"
+        style={isBloomed && isIdentified && species?.rarity === "prismatic"
           ? { animation: "rainbow-border-cycle 3s linear infinite, rainbow-bg-cycle 3s linear infinite, rainbow-glow-cycle 3s linear infinite" }
           : undefined
         }
@@ -338,14 +393,14 @@ export function PlotTile({
         `}
         title={
           isBloomed
-            ? `${species?.name} — ${plant.infused ? "Attuned 🥢 · " : ""}Tap for options`
+            ? `${isIdentified ? species?.name : "???"} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
             : open
             ? "Click to close"
-            : `${species?.name} — Click for options`
+            : `${isIdentified ? species?.name : "???"} — Click for options`
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell) && (
+        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -406,8 +461,32 @@ export function PlotTile({
           </div>
         )}
 
+        {/* Crossbreed particle overlay — emerald dots drift toward adjacent cropsticks */}
+        {settings.plotAnimations && !!crossbreedDirection && (
+          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+            {(["0s", "-0.55s", "-1.1s"] as const).map((delay, i) => {
+              const horiz = crossbreedDirection === "left" || crossbreedDirection === "right";
+              return (
+                <div
+                  key={i}
+                  className="cross-particle"
+                  style={{
+                    animationName: `cross-particle-${crossbreedDirection}`,
+                    animationDuration: "1.4s",
+                    animationDelay: delay,
+                    // Spread perpendicular to the travel axis so the 3 dots
+                    // form distinct lanes rather than stacking on one line.
+                    left: horiz ? "42%" : `${20 + i * 22}%`,
+                    top:  horiz ? `${20 + i * 22}%` : "42%",
+                  }}
+                />
+              );
+            })}
+          </div>
+        )}
+
         <span className="text-2xl leading-none">
-          {species?.emoji[stage!] ?? "🌱"}
+          {isIdentified ? (species?.emoji[stage!] ?? "🌱") : (isBloomed ? "❓" : "🌱")}
         </span>
 
         {/* Fertilizer indicator — top-left */}
@@ -439,8 +518,8 @@ export function PlotTile({
             {isUnderGrowLamp && <span className="text-[9px]" title="Under grow lamp">💡</span>}
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
-            {plant.infused && <span className="text-[9px]" title="Attuned — cross-breeding active">🥢</span>}
-            {plant.revealed && <span className="text-[9px]" title="Revealed — mutation locked in">🔎</span>}
+            {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
+            {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
           </div>
         )}
 
@@ -483,7 +562,7 @@ export function PlotTile({
         ) : null}
 
         {/* Mutation emoji — bottom-right */}
-        {settings.plotMutationIndicator && isBloomed && (plant as PlantedFlower).mutation && (
+        {settings.plotMutationIndicator && isBloomed && isIdentified && (plant as PlantedFlower).mutation && (
           <span className="absolute -bottom-1 -right-1 text-sm leading-none">
             {MUTATIONS[(plant as PlantedFlower).mutation!].emoji}
           </span>

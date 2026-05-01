@@ -1,7 +1,10 @@
 import { useState, useEffect } from "react";
 import { useGame } from "../store/GameContext";
-import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
-import type { MutationType } from "../data/flowers";
+import { getFlower, RARITY_CONFIG, MUTATIONS, FLOWER_TYPES } from "../data/flowers";
+import type { FlowerType, MutationType } from "../data/flowers";
+import {
+  ALL_FLOWER_TYPES, UNIVERSAL_ESSENCE_DISPLAY, UNIVERSAL_ESSENCE_TYPE,
+} from "../data/essences";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { InventoryItemCard } from "./InventoryItemCard";
 import { sellFlower, rollbackSellAll, applyEclipseTonic, type InventoryItem } from "../store/gameStore";
@@ -9,10 +12,10 @@ import { edgeSellAll, edgeUseEclipseTonic, edgeAlchemyCraftSeed, edgeActivateBoo
 import { FERTILIZERS } from "../data/upgrades";
 import { GEAR } from "../data/gear";
 import type { GearInventoryItem } from "../data/gear";
-import { CONSUMABLE_RECIPE_MAP, ROMAN, type ConsumableId } from "../data/consumables";
+import { CONSUMABLE_RECIPE_MAP, type ConsumableId } from "../data/consumables";
 
-type Tab = 0 | 1 | 2 | 3;
-const TAB_LABELS = ["Seeds", "Blooms", "Supplies", "Consumables"] as const;
+type Tab = 0 | 1 | 2 | 3 | 4;
+const TAB_LABELS = ["Seeds", "Blooms", "Supplies", "Consumables", "Essences"] as const;
 
 interface Props {
   newSeeds?:    number;
@@ -42,6 +45,8 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const supplyCount      = fertilizers.reduce((s, f) => s + f.quantity, 0)
                          + gearItems.reduce((s, g) => s + g.quantity, 0);
   const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0);
+  const essenceItems     = (state.essences ?? []).filter((e) => e.amount > 0);
+  const essenceCount     = essenceItems.reduce((s, e) => s + e.amount, 0);
 
   const totalBloomValue = blooms.reduce((sum, item) => {
     const species = getFlower(item.speciesId);
@@ -204,8 +209,15 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       {/* Tab bar */}
       <div className="flex gap-1 bg-card/40 border border-border rounded-xl p-1">
         {TAB_LABELS.map((label, i) => {
-          const count    = i === 0 ? seedCount : i === 1 ? bloomCount : i === 2 ? supplyCount : consumableCount;
-          const newCount = i === 0 ? newSeeds  : i === 1 ? newBlooms  : i === 2 ? newSupplies : 0;
+          const count    = i === 0 ? seedCount
+                         : i === 1 ? bloomCount
+                         : i === 2 ? supplyCount
+                         : i === 3 ? consumableCount
+                         : essenceCount;
+          const newCount = i === 0 ? newSeeds
+                         : i === 1 ? newBlooms
+                         : i === 2 ? newSupplies
+                         : 0;
           const subKey   = (i === 0 ? "seeds" : i === 1 ? "blooms" : "supplies") as "seeds" | "blooms" | "supplies";
           return (
             <button
@@ -300,7 +312,8 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           fertilizers.length > 0 || gearItems.length > 0 ? (
             <>
               {fertilizers.map((f) => {
-                const fert = FERTILIZERS[f.type];
+                const fert       = FERTILIZERS[f.type];
+                const fertRarity = RARITY_CONFIG[fert.rarity];
                 return (
                   <div
                     key={f.type}
@@ -310,12 +323,12 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-sm">{fert.name}</h3>
-                        <span className={`text-xs font-mono ${fert.color}`}>
-                          {fert.speedMultiplier}× speed
+                        <span className={`text-xs font-mono ${fertRarity.color}`}>
+                          {fertRarity.label}
                         </span>
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        ×{f.quantity} · Apply to a growing plant in the garden
+                        ×{f.quantity} · Speeds growth by <span className="text-foreground font-semibold">{fert.speedMultiplier}×</span> · Apply to a growing plant
                       </p>
                     </div>
                   </div>
@@ -330,6 +343,49 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           )
         )}
 
+        {/* ── Essences ────────────────────────────────────────────────────── */}
+        {tab === 4 && (() => {
+          // Always show all 12 elementals + Universal in the same fixed order
+          // as the EssenceBank widget. Empty rows dim to 40% so the player can
+          // see what's missing — same pattern as the bank tile grid.
+          const amountByType = new Map<string, number>(
+            (state.essences ?? []).map((e) => [e.type, e.amount])
+          );
+          const rows = [
+            ...ALL_FLOWER_TYPES.map((type) => ({
+              type, amount: amountByType.get(type) ?? 0,
+              cfg: FLOWER_TYPES[type as FlowerType],
+              isUniversal: false,
+            })),
+            {
+              type: UNIVERSAL_ESSENCE_TYPE,
+              amount: amountByType.get(UNIVERSAL_ESSENCE_TYPE) ?? 0,
+              cfg: UNIVERSAL_ESSENCE_DISPLAY,
+              isUniversal: true,
+            },
+          ];
+          return (
+            <>
+              <p className="text-[11px] text-muted-foreground px-1 pb-1">
+                Essences are earned by sacrificing flowers in the Alchemy lab. Combine all 12 elementals into a Universal Essence in Craft → Other.
+              </p>
+              {rows.map((r) => (
+                <EssenceInventoryRow
+                  key={r.type}
+                  type={r.type}
+                  amount={r.amount}
+                  emoji={r.cfg.emoji}
+                  name={r.cfg.name}
+                  color={r.cfg.color}
+                  bgColor={r.cfg.bgColor}
+                  borderColor={r.cfg.borderColor}
+                  isUniversal={r.isUniversal}
+                />
+              ))}
+            </>
+          );
+        })()}
+
       </div>
 
     </div>
@@ -337,7 +393,9 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
     {/* ── Pouch result toast ── */}
 
     {pouchResult && (() => {
-      const flower = getFlower(pouchResult.speciesId);
+      const flower     = getFlower(pouchResult.speciesId);
+      const rarity     = flower ? RARITY_CONFIG[flower.rarity] : null;
+      const discovered = state.discovered.includes(pouchResult.speciesId);
       return (
         <div
           className={`
@@ -347,11 +405,13 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
           `}
         >
           <div className="flex items-center gap-3 bg-card border border-primary/40 rounded-2xl px-5 py-4 shadow-2xl shadow-primary/10 min-w-64">
-            <span className="text-2xl">{flower?.emoji.seed ?? "🎁"}</span>
+            <span className="text-2xl">{discovered ? (flower?.emoji.seed ?? "🎁") : "❓"}</span>
             <div>
               <p className="text-sm font-bold text-primary mb-0.5">Pouch opened!</p>
               <p className="text-[11px] text-muted-foreground">
-                {flower?.name ?? pouchResult.speciesId} seed
+                New{" "}
+                <span className={rarity?.color ?? ""}>{rarity?.label ?? "Unknown"}</span>
+                {" "}{discovered ? (flower?.name ?? pouchResult.speciesId) : "???"} seed
               </p>
             </div>
           </div>
@@ -368,6 +428,45 @@ function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hi
       <span className="text-4xl">{emoji}</span>
       <p className="font-medium text-muted-foreground text-sm">{message}</p>
       <p className="text-xs text-muted-foreground max-w-xs">{hint}</p>
+    </div>
+  );
+}
+
+function EssenceInventoryRow({
+  type, amount, emoji, name, color, bgColor, borderColor, isUniversal,
+}: {
+  type: string; amount: number; emoji: string; name: string;
+  color: string; bgColor: string; borderColor: string; isUniversal: boolean;
+}) {
+  const empty = amount <= 0;
+  // Universal Essence gets the prismatic rainbow treatment; others use their
+  // flower-type config. Empty rows dim to 40% but stay visible so the player
+  // can see which types they're missing.
+  const card = isUniversal
+    ? "rainbow-tile border"
+    : `bg-card/60 border ${borderColor}`;
+  const bg   = isUniversal ? "" : bgColor; // bgColor would conflict with rainbow-tile's animated bg
+  const _accent = isUniversal ? "rainbow-text" : color;
+  return (
+    <div
+      key={type}
+      className={`flex items-center gap-4 rounded-xl px-4 py-3 transition-opacity ${card} ${bg} ${empty ? "opacity-40" : ""}`}
+    >
+      <span className="text-3xl flex-shrink-0">{emoji}</span>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <h3 className="font-semibold text-sm">{name} Essence</h3>
+          {isUniversal && (
+            <span className="text-xs font-mono rainbow-text">Prismatic</span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mt-0.5">
+          ×{amount.toLocaleString()}
+          {isUniversal
+            ? " · Used in legendary+ cross-breed recipes"
+            : " · Sacrifice flowers to earn more"}
+        </p>
+      </div>
     </div>
   );
 }
@@ -461,23 +560,32 @@ function ConsumablesTabContent({
           ? activeBoosts.find((b) => b.type === boostType && new Date(b.expiresAt).getTime() > nowMs)
           : null;
 
+        const consRarity   = RARITY_CONFIG[recipe.rarity];
+        const isPrismatic  = recipe.rarity === "prismatic";
+        // Prismatic uses rainbow-tile (animated border + bg + glow in a single
+        // declaration) so the border actually animates — `glow` is empty for
+        // prismatic in RARITY_CONFIG, so without this branch it'd fall back
+        // to the static gray border-border.
         return (
           <div
             key={c.id}
-            className="flex items-start gap-3 bg-card/60 border border-border rounded-xl px-4 py-3"
+            className={`
+              flex items-start gap-4 bg-card/60 border rounded-xl px-4 py-3
+              ${isPrismatic ? "rainbow-tile" : `${consRarity?.glow ?? ""} border-border`}
+            `}
           >
-            <span className="text-2xl flex-shrink-0 mt-0.5">{recipe.emoji}</span>
+            <span className="text-3xl flex-shrink-0">{recipe.emoji}</span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-semibold text-sm">{recipe.name}</h3>
                 {recipe.tier !== null && (
-                  <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded-full border ${RARITY_CONFIG[recipe.rarity]?.color ?? ""} border-current bg-current/10`}>
-                    {RARITY_CONFIG[recipe.rarity]?.label ?? recipe.rarity}
+                  <span className={`text-xs font-mono ${consRarity?.color ?? ""}`}>
+                    {consRarity?.label ?? recipe.rarity}
                   </span>
                 )}
               </div>
               <p className="text-xs text-muted-foreground mt-0.5 leading-snug">{recipe.description}</p>
-              <p className="text-[10px] text-muted-foreground/70 mt-0.5">×{c.quantity} · {context}</p>
+              <p className="text-xs text-muted-foreground mt-0.5">×{c.quantity} · {context}</p>
 
               {isEclipse && (
                 <button
@@ -538,21 +646,26 @@ function ConsumablesTabContent({
 }
 
 function SeedInventoryRow({ item }: { item: InventoryItem }) {
+  const { state } = useGame();
   const species = getFlower(item.speciesId);
   const rarity  = species ? RARITY_CONFIG[species.rarity] : null;
   if (!species) return null;
 
+  const isNew = !state.discovered.includes(item.speciesId);
+
   return (
     <div className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 ${rarity?.glow ?? ""} border-border`}>
-      <span className="text-3xl flex-shrink-0">{species.emoji.seed}</span>
+      <span className="text-3xl flex-shrink-0">{isNew ? "❓" : species.emoji.seed}</span>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <h3 className="font-semibold text-sm">{species.name} Seed</h3>
+          <h3 className="font-semibold text-sm">{isNew ? "??? Seed" : `${species.name} Seed`}</h3>
           <span className={`text-xs font-mono ${rarity?.color}`}>{rarity?.label}</span>
         </div>
-        <FlowerTypeBadges types={species.types} className="mt-1" />
+        {!isNew && <FlowerTypeBadges types={species.types} className="mt-1" />}
         <p className="text-xs text-muted-foreground mt-0.5">
-          ×{item.quantity} · Plant in your garden to grow
+          {isNew
+            ? `×${item.quantity} · Grow it to reveal the species`
+            : `×${item.quantity} · Plant in your garden to grow`}
         </p>
       </div>
     </div>

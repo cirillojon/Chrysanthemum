@@ -57,6 +57,9 @@ export interface Fertilizer {
   emoji: string;
   speedMultiplier: number;
   shopPrice: number;
+  /** Mirrors the supply pool tier this fertilizer drops in.
+   *  basic=common, advanced=uncommon, premium=rare, elite=legendary, miracle=mythic. */
+  rarity: import("./flowers").Rarity;
   color: string;
   /** Tailwind border + shadow class applied to the shop card border, e.g. "border-green-400/40 shadow-[0_0_12px_rgba(74,222,128,0.15)]" */
   cardBorder: string;
@@ -106,9 +109,9 @@ export const getNextMarketplaceSlotUpgrade = (currentSlots: number): Marketplace
 // ── Fertilizers ───────────────────────────────────────────────────────────
 
 export const FERTILIZERS: Record<FertilizerType, Fertilizer> = {
-  basic:   { id: "basic",   name: "Basic Fertilizer",   description: "Speeds growth by 1.1×.", emoji: "🦴", speedMultiplier: 1.1,  shopPrice: 10,     color: "text-gray-400",   cardBorder: "border-gray-400/30",   shopWeight: 40 },
-  advanced:{ id: "advanced",name: "Advanced Fertilizer",description: "Speeds growth by 1.25×.",emoji: "🥣", speedMultiplier: 1.25, shopPrice: 30,     color: "text-green-400",  cardBorder: "border-green-400/40",  shopWeight: 25 },
-  premium: { id: "premium", name: "Premium Fertilizer", description: "Speeds growth by 1.5×.", emoji: "🧪", speedMultiplier: 1.5,  shopPrice: 200,    color: "text-blue-400",   cardBorder: "border-blue-400/40",   shopWeight: 15 },
-  elite:   { id: "elite",   name: "Elite Fertilizer",   description: "Speeds growth by 1.75×.",emoji: "⚗️", speedMultiplier: 1.75, shopPrice: 2_500,  color: "text-yellow-400", cardBorder: "border-yellow-400/40", shopWeight: 5  },
-  miracle: { id: "miracle", name: "Miracle Fertilizer", description: "Speeds growth by 2×.",   emoji: "💫", speedMultiplier: 2,    shopPrice: 35_000, color: "text-pink-400",   cardBorder: "border-pink-400/40",   shopWeight: 2  },
+  basic:   { id: "basic",   name: "Basic Fertilizer",   description: "Speeds growth by 1.1×.", emoji: "🦴", speedMultiplier: 1.1,  shopPrice: 10,     rarity: "common",    color: "text-gray-400",   cardBorder: "border-gray-400/30",   shopWeight: 40 },
+  advanced:{ id: "advanced",name: "Advanced Fertilizer",description: "Speeds growth by 1.25×.",emoji: "🥣", speedMultiplier: 1.25, shopPrice: 30,     rarity: "uncommon",  color: "text-green-400",  cardBorder: "border-green-400/40",  shopWeight: 25 },
+  premium: { id: "premium", name: "Premium Fertilizer", description: "Speeds growth by 1.5×.", emoji: "🧪", speedMultiplier: 1.5,  shopPrice: 200,    rarity: "rare",      color: "text-blue-400",   cardBorder: "border-blue-400/40",   shopWeight: 15 },
+  elite:   { id: "elite",   name: "Elite Fertilizer",   description: "Speeds growth by 1.75×.",emoji: "⚗️", speedMultiplier: 1.75, shopPrice: 2_500,  rarity: "legendary", color: "text-yellow-400", cardBorder: "border-yellow-400/40", shopWeight: 5  },
+  miracle: { id: "miracle", name: "Miracle Fertilizer", description: "Speeds growth by 2×.",   emoji: "💫", speedMultiplier: 2,    shopPrice: 35_000, rarity: "mythic",    color: "text-pink-400",   cardBorder: "border-pink-400/40",   shopWeight: 2  },
 };

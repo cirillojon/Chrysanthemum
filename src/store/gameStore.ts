@@ -1,10 +1,12 @@
-import { FLOWERS, MUTATIONS, getFlower, type GrowthStage, type MutationType, type Rarity } from "../data/flowers";
+import { FLOWERS, MUTATIONS, getFlower, type FlowerType, type GrowthStage, type MutationType, type Rarity } from "../data/flowers";
 import { FERTILIZERS, getNextUpgrade, getNextShopSlotUpgrade, getNextMarketplaceSlotUpgrade, getNextSupplySlotUpgrade, DEFAULT_SHOP_SLOTS, DEFAULT_SUPPLY_SLOTS, type FertilizerType } from "../data/upgrades";
 import type { WeatherType } from "../data/weather";
 import { WEATHER } from "../data/weather";
-import { BOTANY_REQUIREMENTS, NEXT_RARITY } from "../data/botany";
 import { mergeEssences, calculateEssenceYield, type EssenceItem } from "../data/essences";
-import type { ConsumableItem } from "../data/consumables";
+import {
+  CONSUMABLE_RECIPE_MAP, consumableShopPrice,
+  type ConsumableItem, type ConsumableId,
+} from "../data/consumables";
 import {
   WEATHER_MUT_CHANCE_PER_TICK,
   THUNDERSTORM_WET_CHANCE_PER_TICK,
@@ -15,7 +17,7 @@ import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
   isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isAutoPlanter,
-  rollComposterFertilizer,
+  rollComposterFertilizer, findCrossbreedRecipe,
   SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
   type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
 } from "../data/gear";
@@ -89,13 +91,16 @@ export interface ShopSlot {
   /** Supply shop: this slot is a gear item */
   isGear?:       boolean;
   gearType?:     GearType;
+  /** Supply shop: this slot is a craftable consumable */
+  isConsumable?: boolean;
+  consumableId?: string;
   /** Pinned by a Slot Lock — survives the next supply shop refresh */
   locked?:       boolean;
 }
 
 // ── Crafting queue ─────────────────────────────────────────────────────────
 
-export type CraftKind = "gear" | "consumable" | "attunement";
+export type CraftKind = "gear" | "consumable" | "attunement" | "essence";
 
 // ── Active speed-boost consumables (Phase 5a) ─────────────────────────────────
 // Verdant Rush  → "growth"     → 2× growth speed for all plants
@@ -141,12 +146,38 @@ export interface CraftingQueueEntry {
   kind:       CraftKind;
   outputId:   string;      // gearType | consumableId | rarity string (for attunement)
   startedAt:  string;      // ISO timestamp
-  durationMs: number;
-  // Stored ingredient costs — used by craft-cancel for refund without recipe lookup
+  durationMs: number;      // total duration (includes quantity multiplier)
+  // Bulk crafting — number of output items the entry will deliver on collect.
+  // Defaults to 1 if absent (legacy entries created before bulk crafting shipped).
+  // Costs already stored on this entry have been multiplied by quantity at start time.
+  quantity?:  number;
+  // Stored ingredient costs — used by craft-cancel for refund without recipe lookup.
+  // Costs are stored AS PAID (already multiplied by quantity).
   essenceCosts?:    { type: string; amount: number }[];
   gearCosts?:       { gearType: string; quantity: number }[];
   consumableCosts?: { id: string; quantity: number }[];
   attunementCosts?: { rarity: string; quantity: number }[];
+}
+
+// ── Alchemy Attunement queue (v2.3) ────────────────────────────────────────
+//
+// One entry per in-flight alchemy attunement. The mutation outcome is rolled
+// at COLLECT time (not start) so the player doesn't know what they're getting
+// until the attunement finishes. Cancel refunds the source flower(s) but NOT
+// the essence.
+export interface AttunementQueueEntry {
+  id:           string;       // server-generated uuid
+  speciesId:    string;       // input flower species
+  /** Mutation tier 1-4 (drives duration + which mutation pool will roll). */
+  tier:         number;
+  /** Mutation outcome — only present on legacy entries (pre-v2.3-collect-time-roll).
+   *  Modern entries leave this undefined; collect rolls it server-side. */
+  mutation?:    MutationType;
+  startedAt:    string;       // ISO
+  durationMs:   number;
+  // Stored cost for cancel refund — flowers come back, essence does not.
+  flowerCount:        number;
+  flowerSourceMutation?: MutationType; // mutation of the input bloom (undefined = base)
 }
 
 export interface GameState {
@@ -188,6 +219,12 @@ export interface GameState {
   // Phase 3 — time-gated crafting queue
   craftingQueue:     CraftingQueueEntry[];
   craftingSlotCount: number;
+  // v2.3 — Alchemy attunement queue (separate from crafting). Player starts
+  // with 0 slots and buys up to 4 via the upgrade edge function. Each queue
+  // entry stores the rolled mutation outcome + the source flower so cancel
+  // can refund the bloom (essence is consumed at start, not refundable).
+  attunementSlots: number;
+  attunementQueue: AttunementQueueEntry[];
   // Phase 5a — active speed-boost consumables (Verdant Rush, Forge Haste, Resonance Draft).
   // Each entry tracks one consumable activation with its expiry. Multiple of the same type
   // are allowed but only the latest expiry matters; getBoostMultiplier returns 2× while any
@@ -204,6 +241,10 @@ export interface OfflineSummary {
   readyToHarvest: number;
   shopRestocked: boolean;
   supplyRestocked: boolean;
+  /** Crafting queue entries whose duration has elapsed but haven't been collected. */
+  craftsReady: number;
+  /** Alchemy attunement queue entries whose duration has elapsed. */
+  attunementsReady: number;
 }
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -289,6 +330,22 @@ export const SHOP_RARITY_WEIGHTS: Partial<Record<Rarity, number>> = {
   mythic:    1,
 };
 
+/**
+ * Seed price as a fraction of sellValue, tiered by rarity. Early-game flowers
+ * get a higher % profit margin (0.65 → 35% margin) and late-game flowers a
+ * tighter margin (0.85 → 15%). Stops bulk-buying high-rarity seeds from being
+ * a free coin printer once the player can afford them.
+ */
+const SEED_PRICE_RATIO: Record<Rarity, number> = {
+  common:    0.65,
+  uncommon:  0.68,
+  rare:      0.72,
+  legendary: 0.75,
+  mythic:    0.78,
+  exalted:   0.82,
+  prismatic: 0.85,
+};
+
 function generateShop(shopSlots: number = DEFAULT_SHOP_SLOTS): ShopSlot[] {
   const chosen: ShopSlot[] = [];
   const usedIds = new Set<string>();
@@ -328,7 +385,7 @@ function generateShop(shopSlots: number = DEFAULT_SHOP_SLOTS): ShopSlot[] {
     usedIds.add(flower.id);
     chosen.push({
       speciesId: flower.id,
-      price:     Math.max(5, Math.floor(flower.sellValue * 0.75)),
+      price:     Math.max(5, Math.floor(flower.sellValue * SEED_PRICE_RATIO[flower.rarity])),
       quantity:  Math.floor(Math.random() * 4) + 1,
     });
   }
@@ -411,7 +468,7 @@ function generateSupplyShop(supplySlots: number = DEFAULT_SUPPLY_SLOTS): ShopSlo
         price:        fert.shopPrice,
         quantity:     Math.floor(Math.random() * 3) + 1,
       });
-    } else {
+    } else if (item.kind === "gear") {
       const gearDef = GEAR[item.gearType];
       chosen.push({
         speciesId: `supply_gear_${item.gearType}_${chosen.length}`,
@@ -419,6 +476,17 @@ function generateSupplyShop(supplySlots: number = DEFAULT_SUPPLY_SLOTS): ShopSlo
         gearType:  item.gearType,
         price:     gearDef.shopPrice,
         quantity:  1,
+      });
+    } else {
+      // consumable — derive price from rarity + category multiplier
+      const recipe = CONSUMABLE_RECIPE_MAP[item.consumableId as ConsumableId];
+      if (!recipe) continue;
+      chosen.push({
+        speciesId:    `supply_cons_${item.consumableId}_${chosen.length}`,
+        isConsumable: true,
+        consumableId: item.consumableId,
+        price:        consumableShopPrice(recipe),
+        quantity:     1,
       });
     }
   }
@@ -457,6 +525,8 @@ export function defaultState(): GameState {
     lastWindShearUsed:    null,
     craftingQueue:        [],
     craftingSlotCount:    1,
+    attunementSlots:      0,
+    attunementQueue:      [],
     activeBoosts:         [],
     serverUpdatedAt:      null,
   };
@@ -477,7 +547,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) {
       const state = defaultState();
-      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false } };
+      return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false, craftsReady: 0, attunementsReady: 0 } };
     }
     const parsed = JSON.parse(raw) as GameState;
     // Backfill discovered for saves that predate the codex
@@ -486,7 +556,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
   } catch (e) {
     // console.warn("Failed to load save, starting fresh:", e);
     const state = defaultState();
-    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false } };
+    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false, craftsReady: 0 } };
   }
 }
 
@@ -546,6 +616,8 @@ export function applyOfflineTick(
     consumables:          save.consumables           ?? [],
     lastEclipseTonic:     save.lastEclipseTonic      ?? null,
     lastWindShearUsed:    save.lastWindShearUsed     ?? null,
+    attunementSlots:      save.attunementSlots       ?? 0,
+    attunementQueue:      save.attunementQueue       ?? [],
     activeBoosts:         pruneActiveBoosts(save.activeBoosts, now),
   };
 
@@ -577,6 +649,10 @@ export function applyOfflineTick(
       if (slot.isGear && slot.gearType) {
         const gearDef = GEAR[slot.gearType as GearType];
         return gearDef ? { ...slot, price: gearDef.shopPrice } : slot;
+      }
+      if (slot.isConsumable && slot.consumableId) {
+        const recipe = CONSUMABLE_RECIPE_MAP[slot.consumableId as ConsumableId];
+        return recipe ? { ...slot, price: consumableShopPrice(recipe) } : slot;
       }
       return slot;
     }),
@@ -643,9 +719,24 @@ export function applyOfflineTick(
     .flat()
     .filter((p) => p.plant && getCurrentStage(p.plant, now) === "bloom").length;
 
+  // Crafts whose timer has elapsed but haven't been collected yet — surfaced
+  // on the offline banner so users coming back see what's waiting in the queue.
+  // Crafts run on a real-time clock, so this includes both jobs that finished
+  // while offline and any that were already done when the user logged out.
+  const craftsReady = (updated.craftingQueue ?? []).filter((entry) => {
+    const doneAt = new Date(entry.startedAt).getTime() + entry.durationMs;
+    return now >= doneAt;
+  }).length;
+
+  // Same wall-clock check for the attunement queue.
+  const attunementsReady = (updated.attunementQueue ?? []).filter((entry) => {
+    const doneAt = new Date(entry.startedAt).getTime() + entry.durationMs;
+    return now >= doneAt;
+  }).length;
+
   return {
     state:   updated,
-    summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked },
+    summary: { minutesAway, readyToHarvest, shopRestocked, supplyRestocked, craftsReady, attunementsReady },
   };
 }
 
@@ -778,6 +869,90 @@ export function pruneExpiredGear(grid: Plot[][], now: number): Plot[][] {
     })
   );
   return changed ? newGrid : grid;
+}
+
+/** Client-side mirror of tryStartCropsticksCycles in the apply-infuser edge function.
+ *
+ * After infusing the plant at (row, col), scans its 4 cardinal neighbours for idle
+ * cropsticks gear.  For each idle cropsticks whose cardinal neighbours now include
+ * at least two infused+bloomed plants with a valid cross-breed recipe:
+ *   - Stamps crossbreedStartedAt so the progress bar appears immediately.
+ *   - Stores crossbreedSourceA/B so the tick can find the plants at completion
+ *     time without relying on the infused flag.
+ *   - Clears plant.infused on both source plants immediately.
+ *
+ * Cells that already have crossbreedStartedAt set are skipped (no double-start). */
+export function stampCropsticksCycles(
+  grid: Plot[][],
+  row:  number,
+  col:  number,
+  now:  number,
+): Plot[][] {
+  const OFFSETS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+  let g = grid;
+
+  for (const [dr, dc] of OFFSETS) {
+    const cr = row + dr;
+    const cc = col + dc;
+    const cropCell = g[cr]?.[cc];
+    if (!cropCell?.gear) continue;
+    if (cropCell.gear.gearType !== "cropsticks") continue;
+    if (cropCell.gear.crossbreedStartedAt != null) continue; // already running
+
+    // Collect infused+bloomed cardinal neighbours of this cropsticks WITH coordinates
+    type N = { r: number; c: number; types: FlowerType[]; rarity: Rarity };
+    const nbrs: N[] = [];
+    for (const [or, oc] of OFFSETS) {
+      const nr = cr + or;
+      const nc = cc + oc;
+      const nPlant = g[nr]?.[nc]?.plant;
+      if (!nPlant || (!nPlant.bloomedAt && nPlant.timePlanted !== 0) || !nPlant.infused) continue;
+      const sp = getFlower(nPlant.speciesId);
+      if (!sp) continue;
+      nbrs.push({ r: nr, c: nc, types: sp.types as FlowerType[], rarity: sp.rarity });
+    }
+
+    // Need at least 2 infused neighbours to crossbreed
+    if (nbrs.length < 2) continue;
+
+    // Pick highest-tier recipe pair; fall back to first available pair when
+    // no recipe matches (tick will output the lower-rarity parent at completion).
+    let bestPairTier = -1;
+    let sourceA: N = nbrs[0];
+    let sourceB: N = nbrs[1];
+    for (let i = 0; i < nbrs.length; i++) {
+      for (let j = i + 1; j < nbrs.length; j++) {
+        const recipe = findCrossbreedRecipe(nbrs[i].types, nbrs[i].rarity, nbrs[j].types, nbrs[j].rarity);
+        if (recipe && recipe.tier > bestPairTier) {
+          bestPairTier = recipe.tier;
+          sourceA = nbrs[i];
+          sourceB = nbrs[j];
+        }
+      }
+    }
+
+    // Stamp the cropsticks + store source coords + clear infused on source plants
+    g = g.map((r, ri) =>
+      r.map((p, ci) => {
+        if (ri === cr && ci === cc && p.gear) {
+          return {
+            ...p,
+            gear: {
+              ...p.gear,
+              crossbreedStartedAt: now,
+              crossbreedSourceA: { r: sourceA!.r, c: sourceA!.c },
+              crossbreedSourceB: { r: sourceB!.r, c: sourceB!.c },
+            },
+          };
+        }
+        if ((ri === sourceA!.r && ci === sourceA!.c) || (ri === sourceB!.r && ci === sourceB!.c)) {
+          if (p.plant) return { ...p, plant: { ...p.plant, infused: false } };
+        }
+        return p;
+      })
+    );
+  }
+  return g;
 }
 
 // ── Growth calculation ─────────────────────────────────────────────────────
@@ -987,7 +1162,8 @@ export function plantBloom(
           ...p,
           plant: {
             speciesId,
-            timePlanted: 0, // epoch → always past bloom threshold
+            timePlanted: 0,   // epoch → always past bloom threshold
+            bloomedAt: Date.now(), // placed blooms are immediately at bloom stage
             fertilizer: null,
             ...(mutation ? { mutation } : {}),
             ...(mastered ? { masteredBonus: 1.25 } : {}),
@@ -1209,9 +1385,6 @@ export function tickWeatherMutations(
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
 
-      // Magnifying Glass — once revealed, the plant's mutation state is locked
-      if (plot.plant.revealed) return plot;
-
       // Weather mutations only apply at bloom — the plant must be at peak to be affected
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
@@ -1294,9 +1467,6 @@ export function tickSprinklerMutations(
   const newGrid = state.grid.map((row, ri) =>
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
-
-      // Magnifying Glass — once revealed, the plant's mutation state is locked
-      if (plot.plant.revealed) return plot;
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
@@ -1382,7 +1552,6 @@ export function tickScarecrowStrip(
   const newGrid = state.grid.map((row, ri) =>
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
-      if (plot.plant.revealed) return plot;
       if (typeof plot.plant.mutation !== "string") return plot;
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
@@ -1421,9 +1590,6 @@ export function tickFanMutations(
   const newGrid = state.grid.map((row, ri) =>
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
-
-      // Magnifying Glass — once revealed, fans can no longer strip or apply
-      if (plot.plant.revealed) return plot;
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
@@ -2112,137 +2278,6 @@ export function upgradeMarketplaceSlots(state: GameState): GameState | null {
   };
 }
 
-export function botanyConvert(
-  state: GameState,
-  selections: { speciesId: string; mutation?: MutationType }[]
-): { state: GameState; outputSpeciesId: string } | null {
-  if (selections.length === 0) return null;
-
-  // Validate all selections share the same rarity
-  const firstSpecies = getFlower(selections[0].speciesId);
-  if (!firstSpecies) return null;
-  const rarity = firstSpecies.rarity;
-
-  const required = BOTANY_REQUIREMENTS[rarity];
-  if (!required) return null;
-  if (selections.length !== required) return null;
-
-  if (!selections.every((s) => getFlower(s.speciesId)?.rarity === rarity)) return null;
-
-  // Validate inventory quantities
-  const consumeCounts = new Map<string, number>();
-  for (const sel of selections) {
-    const key = `${sel.speciesId}||${sel.mutation ?? ""}`;
-    consumeCounts.set(key, (consumeCounts.get(key) ?? 0) + 1);
-  }
-
-  for (const [key, count] of consumeCounts) {
-    const [speciesId, mutStr] = key.split("||");
-    const mutation = mutStr ? (mutStr as MutationType) : undefined;
-    const invItem = state.inventory.find(
-      (i) => i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
-    );
-    if (!invItem || invItem.quantity < count) return null;
-  }
-
-  // Determine output rarity
-  const nextRarity = NEXT_RARITY[rarity];
-  if (!nextRarity) return null;
-
-  // Pick output species — prefer ones not yet in codex, then random
-  const nextRarityFlowers = FLOWERS.filter((f) => f.rarity === nextRarity);
-  if (nextRarityFlowers.length === 0) return null;
-
-  const undiscovered = nextRarityFlowers.filter(
-    (f) => !isDiscovered(state.discovered, f.id)
-  );
-  const pool = undiscovered.length > 0 ? undiscovered : nextRarityFlowers;
-  const outputSpecies = pool[Math.floor(Math.random() * pool.length)];
-
-  // Remove consumed flowers
-  let newInventory = [...state.inventory];
-  for (const [key, count] of consumeCounts) {
-    const [speciesId, mutStr] = key.split("||");
-    const mutation = mutStr ? (mutStr as MutationType) : undefined;
-    newInventory = newInventory
-      .map((i) =>
-        i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
-          ? { ...i, quantity: i.quantity - count }
-          : i
-      )
-      .filter((i) => i.quantity > 0);
-  }
-
-  // Add output seed
-  const existingSeed = newInventory.find(
-    (i) => i.speciesId === outputSpecies.id && i.isSeed
-  );
-  if (existingSeed) {
-    newInventory = newInventory.map((i) =>
-      i.speciesId === outputSpecies.id && i.isSeed
-        ? { ...i, quantity: i.quantity + 1 }
-        : i
-    );
-  } else {
-    newInventory.push({ speciesId: outputSpecies.id, quantity: 1, isSeed: true });
-  }
-
-  return {
-    state: { ...state, inventory: newInventory },
-    outputSpeciesId: outputSpecies.id,
-  };
-}
-
-export function botanyConvertAll(
-  state: GameState,
-  rarity: Rarity
-): { state: GameState; outputSpeciesIds: string[] } | null {
-  const required = BOTANY_REQUIREMENTS[rarity];
-  if (!required) return null;
-
-  let current = state;
-  const outputs: string[] = [];
-
-  while (true) {
-    // Get eligible inventory for this rarity
-    const eligible = current.inventory.filter((item) => {
-      if (item.isSeed) return false;
-      const species = getFlower(item.speciesId);
-      return species?.rarity === rarity && item.quantity > 0;
-    });
-
-    const totalEligible = eligible.reduce((sum, i) => sum + i.quantity, 0);
-    if (totalEligible < required) break;
-
-    // Build selections greedily from available inventory
-    const selections: { speciesId: string; mutation?: MutationType }[] = [];
-    const tempUsed = new Map<string, number>();
-
-    for (const item of eligible) {
-      const key      = `${item.speciesId}||${item.mutation ?? ""}`;
-      const used     = tempUsed.get(key) ?? 0;
-      const avail    = item.quantity - used;
-      const toTake   = Math.min(avail, required - selections.length);
-      for (let i = 0; i < toTake; i++) {
-        selections.push({ speciesId: item.speciesId, mutation: item.mutation });
-      }
-      if (toTake > 0) tempUsed.set(key, used + toTake);
-      if (selections.length === required) break;
-    }
-
-    if (selections.length < required) break;
-
-    const result = botanyConvert(current, selections);
-    if (!result) break;
-
-    current = result.state;
-    outputs.push(result.outputSpeciesId);
-  }
-
-  if (outputs.length === 0) return null;
-  return { state: current, outputSpeciesIds: outputs };
-}
-
 // ── Gear actions ───────────────────────────────────────────────────────────
 
 export function placeGear(
@@ -2258,15 +2293,34 @@ export function placeGear(
   const invItem = state.gearInventory.find((g) => g.gearType === gearType);
   if (!invItem || invItem.quantity < 1) return null;
 
+  const now = Date.now();
   const placedGear: PlacedGear = direction
-    ? { gearType, placedAt: Date.now(), direction }
-    : { gearType, placedAt: Date.now() };
+    ? { gearType, placedAt: now, direction }
+    : { gearType, placedAt: now };
 
-  const newGrid = state.grid.map((r, ri) =>
+  let newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>
       ri === row && ci === col ? { ...p, gear: placedGear } : p
     )
   );
+
+  // When placing cropsticks, immediately start the cycle if any adjacent pair
+  // of infused+bloomed plants matches a recipe — mirrors what apply-infuser does
+  // when infusing the second plant while cropsticks are already present.
+  if (gearType === "cropsticks") {
+    const OFFSETS: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+    for (const [dr, dc] of OFFSETS) {
+      const nr = row + dr;
+      const nc = col + dc;
+      const nPlant = newGrid[nr]?.[nc]?.plant;
+      if (nPlant?.infused && (nPlant.bloomedAt || nPlant.timePlanted === 0)) {
+        // Call stampCropsticksCycles from the adjacent plant's position —
+        // it will scan back to find the cropsticks we just placed and start it.
+        newGrid = stampCropsticksCycles(newGrid, nr, nc, now);
+        break; // stampCropsticksCycles already considers all 4 neighbours of the cropsticks
+      }
+    }
+  }
 
   const newGearInv = state.gearInventory
     .map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity - 1 } : g)
@@ -2403,6 +2457,23 @@ export function buyFromSupplyShop(
     };
   }
 
+  if (slot.isConsumable && slot.consumableId) {
+    const consumables = state.consumables ?? [];
+    const existing    = consumables.find((c) => c.id === slot.consumableId);
+    const newConsumables = existing
+      ? consumables.map((c) =>
+          c.id === slot.consumableId ? { ...c, quantity: c.quantity + 1 } : c
+        )
+      : [...consumables, { id: slot.consumableId, quantity: 1 }];
+
+    return {
+      ...state,
+      coins:       state.coins - slot.price,
+      supplyShop:  newSupplyShop,
+      consumables: newConsumables,
+    };
+  }
+
   return null;
 }
 
@@ -2521,17 +2592,39 @@ export function applyPlantConsumable(
   let updatedPlant: PlantedFlower = { ...plant };
 
   if (consumableId.startsWith("bloom_burst_")) {
-    const now   = Date.now();
-    const stage = getCurrentStage(plant, now);
-    if (stage === "seed") {
-      // Advance seed → sprout: stamp sproutedAt now
-      updatedPlant = { ...updatedPlant, sproutedAt: now };
-    } else if (stage === "sprout") {
-      // Advance halfway through sprout phase
-      const sproutedAt = plant.sproutedAt ?? now;
-      updatedPlant = { ...updatedPlant, sproutedAt: sproutedAt - Math.floor((now - sproutedAt) / 2) };
+    const now     = Date.now();
+    const stage   = getCurrentStage(plant, now);
+    const species = getFlower(plant.speciesId);
+    // Bloom Burst: skip part of the remaining time in the plant's CURRENT stage.
+    //   - Seed stage   → halve remaining seed time   (advance by remaining/2)
+    //   - Sprout stage → quarter remaining sprout time (advance by remaining/4)
+    //                    half as effective because sprout is 2× as long as seed
+    //   - Bloom stage  → no-op (already done)
+    // We write directly to growthMs + lastTickAt so the optimistic update is
+    // independent of growth multipliers. Server mirrors this exact logic.
+    if (species && stage !== "bloom") {
+      const seedMs   = species.growthTime.seed;
+      const sproutMs = species.growthTime.sprout;
+      // Inline current growthMs — same fallback chain as the server's getStage.
+      // Avoid computeGrowthMs() which requires weather/gear context that this
+      // helper doesn't have access to.
+      const currentGm =
+        plant.growthMs !== undefined
+          ? plant.growthMs + Math.max(0, now - (plant.lastTickAt ?? now))
+          : plant.sproutedAt != null
+            ? seedMs + Math.max(0, now - plant.sproutedAt)
+            : Math.max(0, now - plant.timePlanted);
+      const stageEnd = stage === "seed" ? seedMs : seedMs + sproutMs;
+      const divisor  = stage === "seed" ? 2 : 4;
+      const remaining = Math.max(0, stageEnd - currentGm);
+      const newGm     = currentGm + Math.floor(remaining / divisor);
+      updatedPlant = { ...updatedPlant, growthMs: newGm, lastTickAt: now };
+      // Also stamp sproutedAt if we crossed the seed → sprout boundary so
+      // legacy code paths (and the codex/UI fallbacks) stay consistent.
+      if (newGm >= seedMs && !updatedPlant.sproutedAt) {
+        updatedPlant = { ...updatedPlant, sproutedAt: now };
+      }
     }
-    // bloom stage: no-op client-side (server validates)
   } else if (consumableId.startsWith("heirloom_charm_")) {
     updatedPlant = { ...updatedPlant, heirloomActive: true };
   } else if (consumableId.startsWith("purity_vial_")) {
@@ -2550,11 +2643,12 @@ export function applyPlantConsumable(
     updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "golden",   multiplier: 5 }, mutationBlocked: undefined };
   } else if (consumableId.startsWith("rainbow_vial_")) {
     updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "rainbow",  multiplier: 5 }, mutationBlocked: undefined };
-  } else if (consumableId.startsWith("magnifying_glass_")) {
-    // Lock in the plant's current mutation state — future ticks skip revealed plants.
+  } else if (consumableId === "magnifying_glass") {
+    // Reveal the species growing in this tile (seed/sprout only).
     if (plant.revealed) return null;
+    if (plant.bloomedAt || plant.timePlanted === 0) return null; // already bloomed
     updatedPlant = { ...updatedPlant, revealed: true };
-  } else if (consumableId.startsWith("garden_pin_")) {
+  } else if (consumableId === "garden_pin") {
     // Shield the plot from auto-harvest (Harvest Bell, Auto-Planter).
     if (plant.pinned) return null;
     updatedPlant = { ...updatedPlant, pinned: true };

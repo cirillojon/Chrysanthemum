@@ -44,7 +44,7 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.auth.getUser(token),
       supabaseAdmin
         .from("game_saves")
-        .select("gear_inventory, consumables, infusers, crafting_queue, updated_at")
+        .select("essences, gear_inventory, consumables, infusers, crafting_queue, updated_at")
         .eq("user_id", userId)
         .single(),
     ]);
@@ -65,8 +65,10 @@ Deno.serve(async (req: Request) => {
       gearType?:  string;   // legacy field
       startedAt:  string;
       durationMs: number;
+      quantity?:  number;   // bulk crafting (defaults to 1)
     }[];
 
+    let essences      = (save.essences       ?? []) as { type: string; amount: number }[];
     let gearInventory = (save.gear_inventory ?? []) as { gearType: string; quantity: number }[];
     let consumables   = (save.consumables    ?? []) as { id: string; quantity: number }[];
     let infusers      = (save.infusers       ?? []) as { rarity: string; quantity: number }[];
@@ -88,6 +90,10 @@ Deno.serve(async (req: Request) => {
 
     if (!outputId) return err("Malformed queue entry: missing outputId/gearType");
 
+    // ── Bulk delivery (defaults to 1 for legacy entries) ──────────────────────
+    const rawQty   = entry.quantity ?? 1;
+    const qty      = Number.isInteger(rawQty) && rawQty >= 1 && rawQty <= 50 ? rawQty : 1;
+
     // ── Remove from queue ─────────────────────────────────────────────────────
     const newQueue = craftingQueue.filter((e) => e.id !== craftId);
 
@@ -95,21 +101,28 @@ Deno.serve(async (req: Request) => {
     if (kind === "gear") {
       const idx = gearInventory.findIndex((g) => g.gearType === outputId);
       gearInventory = idx >= 0
-        ? gearInventory.map((g, i) => i === idx ? { ...g, quantity: g.quantity + 1 } : g)
-        : [...gearInventory, { gearType: outputId, quantity: 1 }];
+        ? gearInventory.map((g, i) => i === idx ? { ...g, quantity: g.quantity + qty } : g)
+        : [...gearInventory, { gearType: outputId, quantity: qty }];
 
     } else if (kind === "consumable") {
       const idx = consumables.findIndex((c) => c.id === outputId);
       consumables = idx >= 0
-        ? consumables.map((c, i) => i === idx ? { ...c, quantity: c.quantity + 1 } : c)
-        : [...consumables, { id: outputId, quantity: 1 }];
+        ? consumables.map((c, i) => i === idx ? { ...c, quantity: c.quantity + qty } : c)
+        : [...consumables, { id: outputId, quantity: qty }];
 
     } else if (kind === "attunement") {
       // outputId is a rarity string (e.g. "rare", "legendary", …)
       const idx = infusers.findIndex((inf) => inf.rarity === outputId);
       infusers = idx >= 0
-        ? infusers.map((inf, i) => i === idx ? { ...inf, quantity: inf.quantity + 1 } : inf)
-        : [...infusers, { rarity: outputId, quantity: 1 }];
+        ? infusers.map((inf, i) => i === idx ? { ...inf, quantity: inf.quantity + qty } : inf)
+        : [...infusers, { rarity: outputId, quantity: qty }];
+
+    } else if (kind === "essence") {
+      // outputId is an essence type (currently only "universal")
+      const idx = essences.findIndex((e) => e.type === outputId);
+      essences = idx >= 0
+        ? essences.map((e, i) => i === idx ? { ...e, amount: e.amount + qty } : e)
+        : [...essences, { type: outputId, amount: qty }];
 
     } else {
       return err(`Unknown craft kind: ${kind}`);
@@ -119,6 +132,7 @@ Deno.serve(async (req: Request) => {
     const { data: updateData, error: updateError } = await supabaseAdmin
       .from("game_saves")
       .update({
+        essences,
         gear_inventory: gearInventory,
         consumables,
         infusers,
@@ -137,13 +151,14 @@ Deno.serve(async (req: Request) => {
     void supabaseAdmin.from("action_log").insert({
       user_id: userId,
       action:  "craft_collect",
-      payload: { craftId, kind, outputId },
-      result:  { kind, outputId },
+      payload: { craftId, kind, outputId, quantity: qty },
+      result:  { kind, outputId, quantity: qty },
     });
 
     return json({
       ok:              true,
       craftingQueue:   newQueue,
+      essences,
       gearInventory,
       consumables,
       infusers,

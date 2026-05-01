@@ -6,13 +6,14 @@ import {
   applyFertilizer,
   removePlant,
   applyPlantConsumable,
+  stampCropsticksCycles,
 } from "../store/gameStore";
 import { edgeApplyFertilizer, edgeRemovePlant, edgeApplyAttunement, edgeApplyPlantConsumable, edgeUnpinPlant } from "../lib/edgeFunctions";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
 import { FERTILIZERS, type FertilizerType } from "../data/upgrades";
 import { useGame } from "../store/GameContext";
-import { CONSUMABLE_RECIPE_MAP, ROMAN, type ConsumableId } from "../data/consumables";
+import { CONSUMABLE_RECIPE_MAP, ROMAN, RARITY_TIER, type ConsumableId } from "../data/consumables";
 
 interface Props {
   plant:                 PlantedFlower;
@@ -21,6 +22,8 @@ interface Props {
   onClose?:              () => void;
   /** Called when the user clicks the Harvest button (for bloomed plants). */
   onHarvestRequest?:     () => void;
+  /** True when this plant is actively serving as a Cropsticks cross-breed source. */
+  isCrossBreeding?:      boolean;
   /** Combined sprinkler × grow-lamp growth multiplier for this cell. */
   gearGrowthMultiplier?: number;
   isUnderSprinkler?:     boolean;
@@ -47,7 +50,7 @@ function formatMs(ms: number): string {
 }
 
 export function PlotTooltip({
-  plant, row, col, onClose, onHarvestRequest,
+  plant, row, col, onClose, onHarvestRequest, isCrossBreeding = false,
   gearGrowthMultiplier = 1.0,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell,
@@ -93,15 +96,25 @@ export function PlotTooltip({
   const msLeft        = getMsUntilNextStage(plant, now, activeWeather, gearGrowthMultiplier);
   const rarity        = RARITY_CONFIG[species.rarity];
   const isBloomed     = stage === "bloom";
+  // A plant is "identified" (species known to this player) if it's already in the
+  // codex (harvested before) OR the player used a Magnifying Glass on this tile.
+  const isIdentified = state.discovered.includes(plant.speciesId) || !!plant.revealed;
   const hasFertilizer = !!plant.fertilizer;
   const availableFerts = state.fertilizers
     .filter((f) => f.quantity > 0)
     .sort((a, b) => FERTILIZERS[a.type].speedMultiplier - FERTILIZERS[b.type].speedMultiplier);
 
-  // Attunement Crystal — find one that matches this flower's rarity
-  const matchingAttunement = (state.infusers ?? []).find(
-    (i) => i.rarity === species.rarity && i.quantity > 0
-  );
+  // Rarity ordering used for both infuser and consumable matching.
+  const RARITY_ORDER: Record<string, number> = {
+    common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
+  };
+
+  // Infuser matching — backwards-tier: any infuser with tier ≥ flower's rarity tier works.
+  // Select the lowest matching tier first to conserve higher-tier infusers.
+  const flowerRarityTier = RARITY_ORDER[species.rarity] ?? 0;
+  const matchingInfuser = [...(state.infusers ?? [])]
+    .filter((i) => (RARITY_ORDER[i.rarity] ?? 0) >= flowerRarityTier && i.quantity > 0)
+    .sort((a, b) => (RARITY_ORDER[a.rarity] ?? 0) - (RARITY_ORDER[b.rarity] ?? 0))[0] ?? null;
 
   // Consumables applicable to this plant right now.
   //
@@ -109,24 +122,22 @@ export function PlotTooltip({
   // higher-tier consumable works on lower-rarity plants (e.g. Mythic vial on
   // a Rare). Floor is still tier 1 (Rare), so Common/Uncommon plants stay
   // excluded.
-  const RARITY_ORDER: Record<string, number> = {
-    common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
-  };
   const applicableConsumables = (state.consumables ?? []).filter((c) => {
     if (c.quantity <= 0) return false;
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
     if (!recipe || recipe.tier === null) return false;
 
-    if ((RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
+    // Magnifying Glass and Garden Pin bypass the rarity gate — they work on any species
+    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
     // Heirloom Charm only works on bloomed plants
     if (c.id.startsWith("heirloom_charm_") && !isBloomed) return false;
-    // Magnifying Glass: hide once the plant is already revealed
-    if (c.id.startsWith("magnifying_glass_") && plant.revealed) return false;
+    // Magnifying Glass: only usable on non-bloomed, not-yet-revealed plants
+    if (c.id === "magnifying_glass" && (plant.revealed || isBloomed)) return false;
     // Garden Pin: hide once the plant is already pinned
-    if (c.id.startsWith("garden_pin_") && plant.pinned) return false;
+    if (c.id === "garden_pin" && plant.pinned) return false;
     return true;
   });
 
@@ -136,7 +147,11 @@ export function PlotTooltip({
     try {
       const res = await edgeApplyAttunement(row, col);
       const cur = getState();
-      update({ ...cur, grid: res.grid, infusers: res.infusers, serverUpdatedAt: res.serverUpdatedAt });
+      // Client-side fallback: stamp crossbreedStartedAt on adjacent cropsticks that
+      // now have a valid infused pair, in case the edge function didn't (e.g. older
+      // deployment or network quirk). Skips cells already stamped by the server.
+      const activeGrid = stampCropsticksCycles(res.grid, row, col, Date.now());
+      update({ ...cur, grid: activeGrid, infusers: res.infusers, serverUpdatedAt: res.serverUpdatedAt });
       onClose?.();
     } catch {
       // Server function not yet active or error — silently re-enable button
@@ -239,11 +254,11 @@ export function PlotTooltip({
 
         {/* Header */}
         <div className="flex items-center gap-2">
-          <span className="text-xl">{species.emoji[stage]}</span>
+          <span className="text-xl">{!isIdentified ? (isBloomed ? "❓" : "🌱") : species.emoji[stage]}</span>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold leading-tight">{species.name}</p>
+            <p className="text-xs font-semibold leading-tight">{!isIdentified ? "???" : species.name}</p>
             <p className={`text-[10px] font-mono ${rarity.color}`}>{rarity.label}</p>
-            <FlowerTypeBadges types={species.types} className="mt-1" />
+            {isIdentified && <FlowerTypeBadges types={species.types} className="mt-1" />}
           </div>
           {/* Close button */}
           {onClose && (
@@ -276,29 +291,37 @@ export function PlotTooltip({
           {isBloomed && (
             <p className="text-primary font-semibold">Ready to harvest!</p>
           )}
-          {/* Mutation display — surfaces both bloomed plants and revealed (locked) plants. */}
-          {(isBloomed || plant.revealed) && plant.mutation && (() => {
+          {/* Mutation display — only for identified bloomed plants */}
+          {isBloomed && isIdentified && plant.mutation && (() => {
             const mut = MUTATIONS[plant.mutation];
             return (
               <p className={`text-[10px] font-mono ${mut.color}`}>
-                {plant.revealed && "🔎 "}{mut.emoji} {mut.name} · ×{mut.valueMultiplier} value
-                {plant.revealed && !isBloomed && " (locked)"}
+                {mut.emoji} {mut.name} · ×{mut.valueMultiplier} value
               </p>
             );
           })()}
-          {/* Bloomed-only "No mutation" message — preserves original undefined-vs-null distinction. */}
-          {isBloomed && !plant.revealed && plant.mutation === null && (
+          {/* "No mutation" — only for identified bloomed plants */}
+          {isBloomed && isIdentified && plant.mutation === null && (
             <p className="text-[10px] text-muted-foreground font-mono">No mutation</p>
           )}
-          {/* Revealed-but-not-bloomed: explicit "No mutation (locked)" for null OR undefined. */}
-          {plant.revealed && !isBloomed && plant.mutation == null && (
-            <p className="text-[10px] text-muted-foreground font-mono">🔎 No mutation (locked)</p>
-          )}
-          {/* Revealed AND bloomed with no mutation (== null catches both null and undefined). */}
-          {plant.revealed && isBloomed && plant.mutation == null && (
-            <p className="text-[10px] text-muted-foreground font-mono">🔎 No mutation (locked)</p>
+          {/* Magnifying Glass used — species is revealed for this growing tile */}
+          {plant.revealed && !isBloomed && (
+            <p className="text-[10px] font-mono text-sky-400">🔎 Species revealed</p>
           )}
           {/* Active consumable flags */}
+          {plant.infused && (() => {
+            const crossbreedActive = (
+              [[row - 1, col], [row + 1, col], [row, col - 1], [row, col + 1]] as [number, number][]
+            ).some(([r, c]) => {
+              const g = state.grid[r]?.[c]?.gear;
+              return g?.gearType === "cropsticks" && g.crossbreedStartedAt != null;
+            });
+            return (
+              <p className="text-[10px] font-mono text-emerald-400">
+                {crossbreedActive ? "💉 Cross-breeding…" : "💉 Infused · awaiting Cropsticks"}
+              </p>
+            );
+          })()}
           {plant.heirloomActive && (
             <p className="text-[10px] font-mono text-emerald-400">🔮 Heirloom Charm active</p>
           )}
@@ -315,8 +338,8 @@ export function PlotTooltip({
           )}
         </div>
 
-        {/* Plant-targeting consumables */}
-        {applicableConsumables.length > 0 && (
+        {/* Plant-targeting consumables + infuser */}
+        {(applicableConsumables.length > 0 || (isBloomed && !plant.infused && matchingInfuser)) && (
           <div className="pt-1 border-t border-border">
             <p className="text-[10px] text-muted-foreground mb-1">Use consumable</p>
             <div className="flex flex-wrap gap-1">
@@ -344,6 +367,26 @@ export function PlotTooltip({
                   </button>
                 );
               })}
+              {isBloomed && (!!plant.bloomedAt || plant.timePlanted === 0) && !plant.infused && matchingInfuser && (() => {
+                const tier  = RARITY_TIER[matchingInfuser.rarity as keyof typeof RARITY_TIER] ?? 1;
+                const roman = ROMAN[tier as 1|2|3|4|5];
+                return (
+                  <button
+                    onClick={handleApplyAttunement}
+                    disabled={!!applyingAttunement}
+                    title={`Infuser ${roman} — Mark this bloom as a cross-breeding participant`}
+                    className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded-md border text-[10px] transition-colors disabled:opacity-50 ${
+                      applyingAttunement
+                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+                        : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20"
+                    }`}
+                  >
+                    <span>💉</span>
+                    <span>{roman}</span>
+                    <span className="text-muted-foreground ml-0.5">×{matchingInfuser.quantity}</span>
+                  </button>
+                );
+              })()}
             </div>
           </div>
         )}
@@ -351,7 +394,8 @@ export function PlotTooltip({
         {/* Bloomed / pinned actions — Harvest + Remove Pin + Attunement.
             Pinned plants surface "Remove Pin" instead of Harvest; the user must
             unpin first to actually take the bloom (pin is consumed). Unbloomed
-            pinned plants also get the button so a misplaced pin can be undone. */}
+            pinned plants also get the button so a misplaced pin can be undone.
+            Cross-breeding plants show a lock message instead of Harvest. */}
         {(isBloomed || plant.pinned) && (
           <div className="pt-1 border-t border-border space-y-1.5">
             {plant.pinned ? (
@@ -363,6 +407,10 @@ export function PlotTooltip({
               >
                 {unpinning ? "Removing…" : "📌 Remove Pin"}
               </button>
+            ) : isCrossBreeding ? (
+              <p className="text-[11px] text-emerald-400/80 font-mono text-center py-0.5">
+                🔗 Cross-breeding — harvest locked
+              </p>
             ) : onHarvestRequest && (
               <button
                 onClick={() => { onHarvestRequest(); onClose?.(); }}
@@ -372,25 +420,6 @@ export function PlotTooltip({
               </button>
             )}
 
-            {/* Attunement section — only when bloomed (it operates on bloomed plants) */}
-            {isBloomed && (
-              plant.infused ? (
-                <div className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                  <span>🥢</span>
-                  <span className="text-[10px] text-emerald-400 font-medium">Attuned · awaiting Cropsticks</span>
-                </div>
-              ) : matchingAttunement ? (
-                <button
-                  onClick={handleApplyAttunement}
-                  disabled={applyingAttunement}
-                  className="w-full py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
-                >
-                  {applyingAttunement ? "Applying…" : `🥢 Attune ×${matchingAttunement.quantity}`}
-                </button>
-              ) : (
-                <p className="text-[10px] text-muted-foreground text-center">No matching Attunement Crystal in inventory</p>
-              )
-            )}
           </div>
         )}
 
