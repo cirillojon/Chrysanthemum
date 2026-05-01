@@ -63,6 +63,8 @@ interface Props {
   isUnderLawnmower?: boolean;
   /** Direction the lawnmower covering this cell is facing. */
   lawnmowerDirection?: FanDirection;
+  /** "boost" (3×) or "slow" (0.5×) — set when this cell is covered by a Balance Scale. */
+  balanceScaleSide?: "boost" | "slow";
   /** True when this cell is within an auto-planter's radius. */
   isUnderAutoPlanter?: boolean;
   /** Direction a crossbreed particle should travel (toward the active cropsticks). */
@@ -82,7 +84,7 @@ export function PlotTile({
   isSelected, isHighlighted,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
-  isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, isUnderAutoPlanter,
+  isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, balanceScaleSide, isUnderAutoPlanter,
   crossbreedDirection, isCrossBreeding = false,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
@@ -376,6 +378,7 @@ export function PlotTile({
           isUnderFan={isUnderFan}
           isUnderHarvestBell={isUnderHarvestBell}
           isUnderLawnmower={isUnderLawnmower}
+          balanceScaleSide={balanceScaleSide}
         />
       )}
 
@@ -405,7 +408,7 @@ export function PlotTile({
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower) && (
+        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
@@ -463,6 +466,21 @@ export function PlotTile({
                 <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.6 - 1.2}s` }}>🍃</span>
               ));
             })()}
+            {/* Balance Scale: ✦ boost side rises (amber), ▾ slow side drifts down (gray) */}
+            {balanceScaleSide === "boost" && (
+              <>
+                <span className="gear-scale-boost" style={{ left: "18%", animationDelay: "-1.2s" }}>✦</span>
+                <span className="gear-scale-boost" style={{ left: "50%", animationDelay: "-0.5s" }}>✦</span>
+                <span className="gear-scale-boost" style={{ left: "76%", animationDelay: "0s"    }}>✦</span>
+              </>
+            )}
+            {balanceScaleSide === "slow" && (
+              <>
+                <span className="gear-scale-slow" style={{ left: "18%", animationDelay: "-1.6s" }}>▾</span>
+                <span className="gear-scale-slow" style={{ left: "50%", animationDelay: "-0.8s" }}>▾</span>
+                <span className="gear-scale-slow" style={{ left: "76%", animationDelay: "0s"    }}>▾</span>
+              </>
+            )}
             {/* Fan: 💨 gusts drifting in the fan's direction */}
             {isUnderFan && (() => {
               const dir  = fanDirection ?? "right";
@@ -522,7 +540,7 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || plant.infused || plant.revealed) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || plant.infused || plant.revealed) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
             {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map(({ emoji, label }, i) => (
@@ -534,6 +552,8 @@ export function PlotTile({
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
             {isUnderLawnmower && <span className="text-[9px]" title="Lawnmower — directional auto-harvest">🦼</span>}
+            {balanceScaleSide === "boost" && <span className="text-[9px]" title="Balance Scale — 3× growth boost">⚖️</span>}
+            {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× growth penalty">⚖️</span>}
             {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
             {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
           </div>

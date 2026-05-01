@@ -233,6 +233,26 @@ export const GEAR_RECIPES: GearRecipe[] = [
     durationMs:     DL,
   },
 
+  // ── Balance Scale (I–III) ─────────────────────────────────────────────────
+  {
+    outputGearType: "balance_scale_legendary",
+    ingredients:    [E("arcane", 8), E("solar", 4), E("shadow", 4)],
+    coinCost:       10_000,
+    durationMs:     DL,
+  },
+  {
+    outputGearType: "balance_scale_mythic",
+    ingredients:    [G("balance_scale_legendary")],
+    coinCost:       75_000,
+    durationMs:     DM,
+  },
+  {
+    outputGearType: "balance_scale_exalted",
+    ingredients:    [G("balance_scale_mythic")],
+    coinCost:       500_000,
+    durationMs:     DE,
+  },
+
   // ── Aegis (I–III) ────────────────────────────────────────────────────────
   {
     outputGearType: "aegis_uncommon",

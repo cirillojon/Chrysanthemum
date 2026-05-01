@@ -58,7 +58,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   }, []);
 
   // Compute gear coverage in one pass
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, autoPlanterKeys } = useMemo(() => {
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, balanceScaleCells, autoPlanterKeys } = useMemo(() => {
     const regular      = new Set<string>();
     const mutation     = new Map<string, string[]>();
     const scarecrow    = new Set<string>();
@@ -67,6 +67,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
     const fan          = new Map<string, FanDirection>();
     const harvestBell  = new Set<string>();
     const lawnmower    = new Map<string, FanDirection>();
+    const balanceScale = new Map<string, "boost" | "slow">();
     const autoPlanter  = new Set<string>();
     for (let ri = 0; ri < grid.length; ri++) {
       for (let ci = 0; ci < grid[ri].length; ci++) {
@@ -98,12 +99,23 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
         } else if (def.passiveSubtype === "lawnmower") {
           const dir = g.direction ?? "right";
           keys.forEach((k) => lawnmower.set(k, dir));
+        } else if (def.passiveSubtype === "balance_scale") {
+          const dir   = g.direction ?? "right";
+          const phase = Math.floor((now - g.placedAt) / 3_600_000) % 2;
+          affected.forEach(([r, c]) => {
+            const dr = r - ri, dc = c - ci;
+            const inChosen =
+              (dir === "right" && dc > 0) || (dir === "left"  && dc < 0) ||
+              (dir === "down"  && dr > 0) || (dir === "up"    && dr < 0);
+            const isBoost = phase === 0 ? inChosen : !inChosen;
+            balanceScale.set(`${r}-${c}`, isBoost ? "boost" : "slow");
+          });
         } else if (def.passiveSubtype === "auto_planter") {
           keys.forEach((k) => autoPlanter.add(k));
         }
       }
     }
-    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, autoPlanterKeys: autoPlanter };
+    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, balanceScaleCells: balanceScale, autoPlanterKeys: autoPlanter };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid, farmSize, rows]);
 
@@ -268,6 +280,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           const underHarvestBell  = harvestBellKeys.has(cellKey);
           const underLawnmower    = lawnmowerCells.has(cellKey);
           const lawnmowerDir      = lawnmowerCells.get(cellKey);
+          const balanceScaleSide  = balanceScaleCells.get(cellKey) as "boost" | "slow" | undefined;
           const underAutoPlanter  = autoPlanterKeys.has(cellKey);
 
           const crossbreedDirection = crossbreedSourceCells.get(cellKey);
@@ -291,7 +304,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               title={isBloomed ? `${species?.name} — bloomed` : "??? — growing"}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || underFan) && (
+              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || !!balanceScaleSide || underFan) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
                   {underGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
                   {underSprinkler && (
@@ -350,6 +363,20 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                       <span key={li} className={cls} style={{ [axis]: pos, animationDelay: `${li * 0.6 - 1.2}s` }}>🍃</span>
                     ));
                   })()}
+                  {balanceScaleSide === "boost" && (
+                    <>
+                      <span className="gear-scale-boost" style={{ left: "18%", animationDelay: "-1.2s" }}>✦</span>
+                      <span className="gear-scale-boost" style={{ left: "50%", animationDelay: "-0.5s" }}>✦</span>
+                      <span className="gear-scale-boost" style={{ left: "76%", animationDelay: "0s"    }}>✦</span>
+                    </>
+                  )}
+                  {balanceScaleSide === "slow" && (
+                    <>
+                      <span className="gear-scale-slow" style={{ left: "18%", animationDelay: "-1.6s" }}>▾</span>
+                      <span className="gear-scale-slow" style={{ left: "50%", animationDelay: "-0.8s" }}>▾</span>
+                      <span className="gear-scale-slow" style={{ left: "76%", animationDelay: "0s"    }}>▾</span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -394,7 +421,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || plant.infused || plant.revealed) && (
+              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || !!balanceScaleSide || plant.infused || plant.revealed) && (
                 <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2"}`}>
                   {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
                   {mutEmojis.map((emoji, i) => (
@@ -406,6 +433,8 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                   {underFan && <span className="text-[9px]" title="In fan range">💨</span>}
                   {underHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
                   {underAutoPlanter && <span className="text-[9px]" title="Auto-planter active">🌱</span>}
+                  {balanceScaleSide === "boost" && <span className="text-[9px]" title="Balance Scale — 3× boost">⚖️</span>}
+                  {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× slow">⚖️</span>}
                   {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
                   {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
                 </div>

@@ -249,7 +249,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   }, [highlightSource, state.farmRows, state.farmSize, state.grid]);
 
   // Per-cell gear coverage — used for plant indicator icons
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, lawnmowerCoveredCells, autoPlantCoveredCells } =
+  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, lawnmowerCoveredCells, balanceScaleCoveredCells, autoPlantCoveredCells } =
     useMemo(() => {
       const regular  = new Set<string>();
       const mutation = new Map<string, { emoji: string; label: string }[]>(); // cellKey → unique mutation sprinklers
@@ -259,6 +259,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const fan        = new Map<string, FanDirection>();
       const harvestBell  = new Set<string>();
       const lawnmower    = new Map<string, FanDirection>();
+      const balanceScale = new Map<string, "boost" | "slow">();
       const autoPlanter  = new Set<string>();
       const now = Date.now();
       for (let ri = 0; ri < state.grid.length; ri++) {
@@ -292,12 +293,23 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
           } else if (def.passiveSubtype === "lawnmower") {
             const dir = g.direction ?? "right";
             keys.forEach((k) => lawnmower.set(k, dir));
+          } else if (def.passiveSubtype === "balance_scale") {
+            const dir   = g.direction ?? "right";
+            const phase = Math.floor((now - g.placedAt) / 3_600_000) % 2;
+            affected.forEach(([r, c]) => {
+              const dr = r - ri, dc = c - ci;
+              const inChosen =
+                (dir === "right" && dc > 0) || (dir === "left"  && dc < 0) ||
+                (dir === "down"  && dr > 0) || (dir === "up"    && dr < 0);
+              const isBoost = phase === 0 ? inChosen : !inChosen;
+              balanceScale.set(`${r}-${c}`, isBoost ? "boost" : "slow");
+            });
           } else if (def.passiveSubtype === "auto_planter") {
             keys.forEach((k) => autoPlanter.add(k));
           }
         }
       }
-      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, lawnmowerCoveredCells: lawnmower, autoPlantCoveredCells: autoPlanter };
+      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, lawnmowerCoveredCells: lawnmower, balanceScaleCoveredCells: balanceScale, autoPlantCoveredCells: autoPlanter };
     }, [state.grid, state.farmRows, state.farmSize]);
 
   // Plant cells adjacent to active cropsticks, mapped to the direction their
@@ -398,7 +410,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   function handleGearSelect(gearType: GearType) {
     if (!selectedPlot) return;
     const def = GEAR[gearType];
-    if (def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower") {
+    if (def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower" || def.passiveSubtype === "balance_scale") {
       // Directional gear needs a direction — show direction picker first
       setPendingFan({ gearType, row: selectedPlot.row, col: selectedPlot.col });
       setSelectedPlot(null);
@@ -648,6 +660,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 isUnderHarvestBell={harvestBellCoveredCells.has(`${row}-${col}`)}
                 isUnderLawnmower={lawnmowerCoveredCells.has(`${row}-${col}`)}
                 lawnmowerDirection={lawnmowerCoveredCells.get(`${row}-${col}`)}
+                balanceScaleSide={balanceScaleCoveredCells.get(`${row}-${col}`)}
                 isUnderAutoPlanter={autoPlantCoveredCells.has(`${row}-${col}`)}
                 crossbreedDirection={crossbreedSourceCells.get(`${row}-${col}`)}
                 isCrossBreeding={crossbreedSourceCells.has(`${row}-${col}`)}

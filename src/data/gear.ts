@@ -37,13 +37,16 @@ export type PassiveGearType =
   | "lawnmower_uncommon"
   | "lawnmower_rare"
   | "lawnmower_legendary"
+  | "balance_scale_legendary"
+  | "balance_scale_mythic"
+  | "balance_scale_exalted"
   | "auto_planter_prismatic"
   | "cropsticks";
 
 export type GearType = SprinklerGearType | PassiveGearType;
 
 export type GearCategory  = "sprinkler_regular" | "sprinkler_mutation" | "passive";
-export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis" | "lawnmower";
+export type PassiveSubtype = "grow_lamp" | "scarecrow" | "composter" | "fan" | "harvest_bell" | "auto_planter" | "cropsticks" | "aegis" | "lawnmower" | "balance_scale";
 
 /** Which way a Fan or Aegis is pointing — set at placement time */
 export type FanDirection = "up" | "down" | "left" | "right";
@@ -692,6 +695,50 @@ export const GEAR: Record<GearType, GearDefinition> = {
     fanRange:       4,
   },
 
+  // ── Balance Scale ─────────────────────────────────────────────────────────
+  // Points in a player-chosen direction. The chosen arm gives a 3× growth boost;
+  // the opposite arm gives a 0.5× penalty. The active side FLIPS every hour.
+  // Client-side only — not applied during offline tick.
+
+  balance_scale_legendary: {
+    id:             "balance_scale_legendary",
+    name:           "Balance Scale I",
+    description:    "Alternates every hour: 1 cell in the chosen direction grows 3× faster, 1 cell behind grows 0.5× slower. Lasts 8 hours.",
+    emoji:          "⚖️",
+    rarity:         "legendary",
+    shopPrice:      30_000,
+    category:       "passive",
+    passiveSubtype: "balance_scale",
+    durationMs:     DURATION_8H,
+    fanRange:       1,
+  },
+
+  balance_scale_mythic: {
+    id:             "balance_scale_mythic",
+    name:           "Balance Scale II",
+    description:    "Alternates every hour: 2 cells in the chosen direction grow 3× faster, 2 cells behind grow 0.5× slower. Lasts 10 hours.",
+    emoji:          "⚖️",
+    rarity:         "mythic",
+    shopPrice:      200_000,
+    category:       "passive",
+    passiveSubtype: "balance_scale",
+    durationMs:     10 * 60 * 60 * 1_000,
+    fanRange:       2,
+  },
+
+  balance_scale_exalted: {
+    id:             "balance_scale_exalted",
+    name:           "Balance Scale III",
+    description:    "Alternates every hour: 3 cells in the chosen direction grow 3× faster, 3 cells behind grow 0.5× slower. Lasts 12 hours.",
+    emoji:          "⚖️",
+    rarity:         "exalted",
+    shopPrice:      1_200_000,
+    category:       "passive",
+    passiveSubtype: "balance_scale",
+    durationMs:     DURATION_12H,
+    fanRange:       3,
+  },
+
   // ── Auto-Planter ─────────────────────────────────────────────────────────
   // Automatically plants seeds from the player's inventory into empty cells
   // within a 5×5 area — works even while offline.
@@ -752,6 +799,24 @@ export function getAffectedCells(
   direction?: FanDirection
 ): [number, number][] {
   const def = GEAR[gearType];
+
+  // Balance Scale: covers cells in BOTH the chosen direction AND its opposite.
+  // The chosen direction is the "boost" arm in phase 0 (switches every hour).
+  if (def.passiveSubtype === "balance_scale" && def.fanRange) {
+    if (!direction) return [];
+    const range = def.fanRange;
+    const offsets: [number, number][] = [];
+    for (let i = 1; i <= range; i++) {
+      // Chosen direction
+      if (direction === "up")    { offsets.push([-i,  0]); offsets.push([ i,  0]); }
+      if (direction === "down")  { offsets.push([ i,  0]); offsets.push([-i,  0]); }
+      if (direction === "left")  { offsets.push([ 0, -i]); offsets.push([ 0,  i]); }
+      if (direction === "right") { offsets.push([ 0,  i]); offsets.push([ 0, -i]); }
+    }
+    return offsets
+      .map(([dr, dc]): [number, number] => [gearRow + dr, gearCol + dc])
+      .filter(([r, c]) => r >= 0 && r < gridRows && c >= 0 && c < gridCols);
+  }
 
   // Fan / Aegis / Lawnmower: compute a line of cells in the chosen direction
   if ((def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower") && def.fanRange) {
@@ -853,6 +918,10 @@ export function isLawnmower(def: GearDefinition): boolean {
   return def.passiveSubtype === "lawnmower";
 }
 
+export function isBalanceScale(def: GearDefinition): boolean {
+  return def.passiveSubtype === "balance_scale";
+}
+
 export function isHarvestBell(def: GearDefinition): boolean {
   return def.passiveSubtype === "harvest_bell";
 }
@@ -928,6 +997,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "harvest_bell_legendary" },
     { kind: "gear", gearType: "lawnmower_legendary" },
     { kind: "gear", gearType: "aegis_legendary" },
+    { kind: "gear", gearType: "balance_scale_legendary" },
     { kind: "gear", gearType: "cropsticks" },
     { kind: "consumable", consumableId: "bloom_burst_2" },
     { kind: "consumable", consumableId: "heirloom_charm_2" },
@@ -950,6 +1020,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
     { kind: "gear", gearType: "sprinkler_lightning" },
     { kind: "gear", gearType: "sprinkler_lunar" },
     { kind: "gear", gearType: "scarecrow_mythic" },
+    { kind: "gear", gearType: "balance_scale_mythic" },
     { kind: "consumable", consumableId: "bloom_burst_3" },
     { kind: "consumable", consumableId: "heirloom_charm_3" },
     { kind: "consumable", consumableId: "purity_vial_3" },
@@ -969,6 +1040,7 @@ export const SUPPLY_POOLS: Partial<Record<Rarity, SupplyItem[]>> = {
   exalted: [
     { kind: "gear", gearType: "sprinkler_exalted" },
     { kind: "gear", gearType: "sprinkler_midas" },
+    { kind: "gear", gearType: "balance_scale_exalted" },
     { kind: "consumable", consumableId: "bloom_burst_4" },
     { kind: "consumable", consumableId: "heirloom_charm_4" },
     { kind: "consumable", consumableId: "purity_vial_4" },

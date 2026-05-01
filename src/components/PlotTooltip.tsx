@@ -34,6 +34,8 @@ interface Props {
   isUnderFan?:           boolean;
   isUnderHarvestBell?:   boolean;
   isUnderLawnmower?:     boolean;
+  /** "boost" (3×) or "slow" (0.5×) when covered by an active Balance Scale. */
+  balanceScaleSide?:     "boost" | "slow";
 }
 
 function formatMs(ms: number): string {
@@ -55,6 +57,7 @@ export function PlotTooltip({
   gearGrowthMultiplier = 1.0,
   isUnderSprinkler, sprinklerMutations = [],
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell, isUnderLawnmower,
+  balanceScaleSide,
 }: Props) {
   const { state, getState, perform, update, activeWeather } = useGame();
   const [showFertPicker,    setShowFertPicker]    = useState(false);
@@ -417,7 +420,7 @@ export function PlotTooltip({
         )}
 
         {/* Active gear effects */}
-        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell || isUnderLawnmower) && (
+        {(isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide) && (
           <div className="pt-1 border-t border-border space-y-1">
             <p className="text-[10px] text-muted-foreground">Active gear</p>
 
@@ -463,6 +466,16 @@ export function PlotTooltip({
               {isUnderLawnmower && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-green-400/10 border border-green-400/20 text-[10px] text-green-300">
                   <span>🦼</span><span>Lawnmower</span>
+                </span>
+              )}
+              {balanceScaleSide === "boost" && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-400/10 border border-amber-400/20 text-[10px] text-amber-300">
+                  <span>⚖️</span><span>Scale 3× boost</span>
+                </span>
+              )}
+              {balanceScaleSide === "slow" && (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-400/10 border border-slate-400/20 text-[10px] text-slate-400">
+                  <span>⚖️</span><span>Scale 0.5× slow</span>
                 </span>
               )}
             </div>

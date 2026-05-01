@@ -149,7 +149,17 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
     );
   }
 
-  const isDirectional = def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower";
+  const isDirectional = def.passiveSubtype === "fan" || def.passiveSubtype === "aegis" || def.passiveSubtype === "lawnmower" || def.passiveSubtype === "balance_scale";
+
+  // Balance Scale: which arm is currently boosting?
+  const OPPOSITE_DIR: Record<string, string> = { up: "down", down: "up", left: "right", right: "left" };
+  const DIR_ARROW:    Record<string, string> = { up: "↑", down: "↓", left: "←", right: "→" };
+  const balanceScalePhase = def.passiveSubtype === "balance_scale"
+    ? Math.floor((now - gear.placedAt) / 3_600_000) % 2
+    : null;
+  const balanceScaleBoostDir = balanceScalePhase !== null
+    ? (balanceScalePhase === 0 ? (gear.direction ?? "right") : OPPOSITE_DIR[gear.direction ?? "right"])
+    : null;
 
   return (
     <div
@@ -182,10 +192,12 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
         {/* Description */}
         <p className="text-[10px] text-muted-foreground leading-snug">{def.description}</p>
 
-        {/* Directional gear picker (fan, aegis, lawnmower) */}
+        {/* Directional gear picker (fan, aegis, lawnmower, balance_scale) */}
         {isDirectional && (
           <div className="pt-1 border-t border-border space-y-1.5">
-            <p className="text-[10px] text-muted-foreground">Direction</p>
+            <p className="text-[10px] text-muted-foreground">
+              {def.passiveSubtype === "balance_scale" ? "Boost direction" : "Direction"}
+            </p>
             <div className="grid grid-cols-3 gap-1">
               <div />
               <button
@@ -225,6 +237,16 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
               >↓</button>
               <div />
             </div>
+            {/* Balance Scale: show which arm is currently boosting */}
+            {balanceScaleBoostDir !== null && (
+              <p className="text-[10px] text-muted-foreground">
+                Now boosting:{" "}
+                <span className="text-amber-300 font-mono">
+                  {DIR_ARROW[balanceScaleBoostDir]} {balanceScaleBoostDir}
+                </span>
+                <span className="text-muted-foreground"> · switches hourly</span>
+              </p>
+            )}
           </div>
         )}
 

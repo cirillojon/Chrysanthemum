@@ -16,7 +16,7 @@ import {
 import {
   GEAR, isGearExpired, getGearAffectingCell, getAffectedCells,
   isRegularSprinkler, isMutationSprinkler,
-  isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isLawnmower, isAutoPlanter,
+  isScarecrow, isAegis, isGrowLamp, isComposter, isFan, isHarvestBell, isLawnmower, isBalanceScale, isAutoPlanter,
   rollComposterFertilizer, findCrossbreedRecipe,
   SUPPLY_POOLS, SUPPLY_RARITY_WEIGHTS, isRarityUnlocked,
   type GearType, type PlacedGear, type GearInventoryItem, type FanDirection,
@@ -979,7 +979,9 @@ export function getPassiveGrowthMultiplier(
   let bestLamp      = 1.0;
 
   const sources = getGearAffectingCell(grid, row, col, now);
-  for (const { def } of sources) {
+  let balanceScaleBoostMult = 1.0;
+  let balanceScaleSlowMult  = 1.0;
+  for (const { def, sourceRow, sourceCol, placedGear } of sources) {
     // Regular sprinkler: take the highest multiplier across all covering sprinklers
     if (isRegularSprinkler(def) && def.growthMultiplier) {
       bestSprinkler = Math.max(bestSprinkler, def.growthMultiplier);
@@ -988,9 +990,28 @@ export function getPassiveGrowthMultiplier(
     if (isGrowLamp(def) && night && def.nightMultiplier) {
       bestLamp = Math.max(bestLamp, def.nightMultiplier);
     }
+    // Balance scale: alternates 3× boost / 0.5× slow every hour.
+    // Phase 0 = chosen direction boosted; phase 1 = opposite boosted.
+    if (isBalanceScale(def) && def.fanRange) {
+      const phase = Math.floor((now - placedGear.placedAt) / 3_600_000) % 2;
+      const dr    = row - sourceRow;
+      const dc    = col - sourceCol;
+      const dir   = placedGear.direction ?? "right";
+      const inChosen =
+        (dir === "right" && dc > 0) ||
+        (dir === "left"  && dc < 0) ||
+        (dir === "down"  && dr > 0) ||
+        (dir === "up"    && dr < 0);
+      const isBoosted = phase === 0 ? inChosen : !inChosen;
+      if (isBoosted) {
+        balanceScaleBoostMult = Math.max(balanceScaleBoostMult, 3.0);
+      } else {
+        balanceScaleSlowMult = Math.min(balanceScaleSlowMult, 0.5);
+      }
+    }
   }
-  // Sprinkler and grow lamp multiply together (lamp is additive bonus on top)
-  return bestSprinkler * bestLamp;
+  // Sprinkler and grow lamp multiply together; balance scale applies on top
+  return bestSprinkler * bestLamp * balanceScaleBoostMult * balanceScaleSlowMult;
 }
 
 function computeGrowthMs(
@@ -2329,7 +2350,7 @@ export function placeGear(
   return { ...state, grid: newGrid, gearInventory: newGearInv };
 }
 
-/** Updates the direction of a directional gear (fan, aegis, lawnmower) placed at (row, col). */
+/** Updates the direction of a directional gear (fan, aegis, lawnmower, balance_scale) placed at (row, col). */
 export function setFanDirection(
   state: GameState,
   row: number,
@@ -2339,7 +2360,7 @@ export function setFanDirection(
   const plot = state.grid[row]?.[col];
   if (!plot?.gear) return null;
   const def = GEAR[plot.gear.gearType];
-  if (def.passiveSubtype !== "fan" && def.passiveSubtype !== "aegis" && def.passiveSubtype !== "lawnmower") return null;
+  if (def.passiveSubtype !== "fan" && def.passiveSubtype !== "aegis" && def.passiveSubtype !== "lawnmower" && def.passiveSubtype !== "balance_scale") return null;
 
   const newGrid = state.grid.map((r, ri) =>
     r.map((p, ci) =>
