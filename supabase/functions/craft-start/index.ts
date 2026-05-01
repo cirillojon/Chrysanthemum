@@ -27,12 +27,12 @@ interface GearRecipe {
   durationMs:     number;
 }
 
-const DU = 5  * 60_000;
-const DR = 20 * 60_000;
-const DL = 90 * 60_000;
-const DM = 5  * 60 * 60_000;
-const DE = 12 * 60 * 60_000;
-const DP = 24 * 60 * 60_000;
+const DU = 3 * 60_000;
+const DR = 10  * 60_000;
+const DL = 45  * 60_000;
+const DM = 2.5 * 60 * 60_000;
+const DE = 6   * 60 * 60_000;
+const DP = 12  * 60 * 60_000;
 
 const E = (essenceType: string, amount: number): GearIngredient => ({ kind: "essence", essenceType, amount });
 const G = (gearType: string, quantity = 2): GearIngredient => ({ kind: "gear", gearType, quantity });
