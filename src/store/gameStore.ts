@@ -1385,9 +1385,6 @@ export function tickWeatherMutations(
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
 
-      // Magnifying Glass — once revealed, the plant's mutation state is locked
-      if (plot.plant.revealed) return plot;
-
       // Weather mutations only apply at bloom — the plant must be at peak to be affected
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
@@ -1470,9 +1467,6 @@ export function tickSprinklerMutations(
   const newGrid = state.grid.map((row, ri) =>
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
-
-      // Magnifying Glass — once revealed, the plant's mutation state is locked
-      if (plot.plant.revealed) return plot;
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
@@ -1558,7 +1552,6 @@ export function tickScarecrowStrip(
   const newGrid = state.grid.map((row, ri) =>
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
-      if (plot.plant.revealed) return plot;
       if (typeof plot.plant.mutation !== "string") return plot;
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
@@ -1597,9 +1590,6 @@ export function tickFanMutations(
   const newGrid = state.grid.map((row, ri) =>
     row.map((plot, ci) => {
       if (!plot.plant) return plot;
-
-      // Magnifying Glass — once revealed, fans can no longer strip or apply
-      if (plot.plant.revealed) return plot;
 
       const stage = getCurrentStage(plot.plant, now, weatherType);
       if (stage !== "bloom") return plot;
@@ -2653,9 +2643,10 @@ export function applyPlantConsumable(
     updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "golden",   multiplier: 5 }, mutationBlocked: undefined };
   } else if (consumableId.startsWith("rainbow_vial_")) {
     updatedPlant = { ...updatedPlant, mutationBoost: { mutation: "rainbow",  multiplier: 5 }, mutationBlocked: undefined };
-  } else if (consumableId.startsWith("magnifying_glass_")) {
-    // Lock in the plant's current mutation state — future ticks skip revealed plants.
+  } else if (consumableId === "magnifying_glass") {
+    // Reveal the species growing in this tile (seed/sprout only).
     if (plant.revealed) return null;
+    if (plant.bloomedAt || plant.timePlanted === 0) return null; // already bloomed
     updatedPlant = { ...updatedPlant, revealed: true };
   } else if (consumableId.startsWith("garden_pin_")) {
     // Shield the plot from auto-harvest (Harvest Bell, Auto-Planter).

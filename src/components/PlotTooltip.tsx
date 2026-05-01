@@ -94,7 +94,12 @@ export function PlotTooltip({
   const msLeft        = getMsUntilNextStage(plant, now, activeWeather, gearGrowthMultiplier);
   const rarity        = RARITY_CONFIG[species.rarity];
   const isBloomed     = stage === "bloom";
-  const isNew         = !state.discovered.includes(plant.speciesId);
+  // A plant is "identified" (species known to this player) if:
+  //   - bloomed  → species is in the codex (discovered by harvesting before)
+  //   - growing  → player used a Magnifying Glass on this tile (plant.revealed)
+  const isIdentified  = isBloomed
+    ? state.discovered.includes(plant.speciesId)
+    : !!plant.revealed;
   const hasFertilizer = !!plant.fertilizer;
   const availableFerts = state.fertilizers
     .filter((f) => f.quantity > 0)
@@ -129,8 +134,8 @@ export function PlotTooltip({
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
     // Heirloom Charm only works on bloomed plants
     if (c.id.startsWith("heirloom_charm_") && !isBloomed) return false;
-    // Magnifying Glass: hide once the plant is already revealed
-    if (c.id.startsWith("magnifying_glass_") && plant.revealed) return false;
+    // Magnifying Glass: only usable on non-bloomed, not-yet-revealed plants
+    if (c.id === "magnifying_glass" && (plant.revealed || isBloomed)) return false;
     // Garden Pin: hide once the plant is already pinned
     if (c.id.startsWith("garden_pin_") && plant.pinned) return false;
     return true;
@@ -249,11 +254,13 @@ export function PlotTooltip({
 
         {/* Header */}
         <div className="flex items-center gap-2">
-          <span className="text-xl">{isNew ? "❓" : species.emoji[stage]}</span>
+          <span className="text-xl">{!isIdentified ? (isBloomed ? "❓" : "🌱") : species.emoji[stage]}</span>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold leading-tight">{isNew ? "???" : species.name}</p>
-            <p className={`text-[10px] font-mono ${rarity.color}`}>{rarity.label}</p>
-            {!isNew && <FlowerTypeBadges types={species.types} className="mt-1" />}
+            <p className="text-xs font-semibold leading-tight">{!isIdentified ? "???" : species.name}</p>
+            <p className={`text-[10px] font-mono ${isIdentified ? rarity.color : "text-muted-foreground"}`}>
+              {isIdentified ? rarity.label : "???"}
+            </p>
+            {isIdentified && <FlowerTypeBadges types={species.types} className="mt-1" />}
           </div>
           {/* Close button */}
           {onClose && (
@@ -286,27 +293,22 @@ export function PlotTooltip({
           {isBloomed && (
             <p className="text-primary font-semibold">Ready to harvest!</p>
           )}
-          {/* Mutation display — surfaces both bloomed plants and revealed (locked) plants. */}
-          {(isBloomed || plant.revealed) && plant.mutation && (() => {
+          {/* Mutation display — only for identified bloomed plants */}
+          {isBloomed && isIdentified && plant.mutation && (() => {
             const mut = MUTATIONS[plant.mutation];
             return (
               <p className={`text-[10px] font-mono ${mut.color}`}>
-                {plant.revealed && "🔎 "}{mut.emoji} {mut.name} · ×{mut.valueMultiplier} value
-                {plant.revealed && !isBloomed && " (locked)"}
+                {mut.emoji} {mut.name} · ×{mut.valueMultiplier} value
               </p>
             );
           })()}
-          {/* Bloomed-only "No mutation" message — preserves original undefined-vs-null distinction. */}
-          {isBloomed && !plant.revealed && plant.mutation === null && (
+          {/* "No mutation" — only for identified bloomed plants */}
+          {isBloomed && isIdentified && plant.mutation === null && (
             <p className="text-[10px] text-muted-foreground font-mono">No mutation</p>
           )}
-          {/* Revealed-but-not-bloomed: explicit "No mutation (locked)" for null OR undefined. */}
-          {plant.revealed && !isBloomed && plant.mutation == null && (
-            <p className="text-[10px] text-muted-foreground font-mono">🔎 No mutation (locked)</p>
-          )}
-          {/* Revealed AND bloomed with no mutation (== null catches both null and undefined). */}
-          {plant.revealed && isBloomed && plant.mutation == null && (
-            <p className="text-[10px] text-muted-foreground font-mono">🔎 No mutation (locked)</p>
+          {/* Magnifying Glass used — species is revealed for this growing tile */}
+          {plant.revealed && !isBloomed && (
+            <p className="text-[10px] font-mono text-sky-400">🔎 Species revealed</p>
           )}
           {/* Active consumable flags */}
           {plant.infused && (() => {

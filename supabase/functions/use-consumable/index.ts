@@ -464,8 +464,9 @@ Deno.serve(async (req: Request) => {
       // Locks in whatever mutation state the plant currently has — future
       // weather/sprinkler/fan ticks skip revealed plants. Player decides when
       // to lock based on what's already rolled.
-      } else if (consumableId.startsWith("magnifying_glass_")) {
-        if (plant.revealed) return err("This plant is already revealed");
+      } else if (consumableId === "magnifying_glass") {
+        if (plant.revealed) return err("This plant's species is already revealed");
+        if (plant.bloomedAt || plant.timePlanted === 0) return err("This plant has already bloomed — harvest it to identify it");
         updatedPlant = { ...updatedPlant, revealed: true };
 
       // ── Garden Pin ──────────────────────────────────────────────────────────

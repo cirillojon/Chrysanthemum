@@ -282,7 +282,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                 }
                 ${plant.infused ? "ring-2 ring-emerald-400/60" : ""}
               `}
-              title={`${species?.name} — ${stage}`}
+              title={isBloomed ? `${species?.name} — bloomed` : "??? — growing"}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
               {settings.plotAnimations && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underFan) && (
@@ -361,7 +361,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               <span className="text-xl leading-none">
-                {species?.emoji[stage!] ?? "🌱"}
+                {isBloomed ? (species?.emoji[stage!] ?? "🌸") : "🌱"}
               </span>
 
               {/* Fertilizer — top-left */}
@@ -392,7 +392,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                   {underHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
                   {underAutoPlanter && <span className="text-[9px]" title="Auto-planter active">🌱</span>}
                   {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
-                  {plant.revealed && <span className="text-[9px]" title="Revealed — mutation locked in">🔎</span>}
+                  {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
                 </div>
               )}
 

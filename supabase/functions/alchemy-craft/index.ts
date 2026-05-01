@@ -99,11 +99,7 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "rainbow_vial_4", cost: U("rainbow_vial_3", 2) },
   { id: "rainbow_vial_5", cost: U("rainbow_vial_4", 2) },
   // Magnifying Glass
-  { id: "magnifying_glass_1", cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
-  { id: "magnifying_glass_2", cost: U("magnifying_glass_1", 2) },
-  { id: "magnifying_glass_3", cost: U("magnifying_glass_2", 2) },
-  { id: "magnifying_glass_4", cost: U("magnifying_glass_3", 2) },
-  { id: "magnifying_glass_5", cost: U("magnifying_glass_4", 2) },
+  { id: "magnifying_glass", cost: E([{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }]) },
   // Verdant Rush
   { id: "verdant_rush_1", cost: E([{ type: "grove", amount: 4 }, { type: "zephyr", amount: 4 }]) },
   { id: "verdant_rush_2", cost: U("verdant_rush_1", 2) },

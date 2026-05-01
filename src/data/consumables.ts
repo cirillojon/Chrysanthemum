@@ -19,7 +19,7 @@ export type ConsumableId =
   | "slot_lock"
   | "seed_pouch_1"     | "seed_pouch_2"     | "seed_pouch_3"     | "seed_pouch_4"     | "seed_pouch_5"
   | `seed_pouch_${"blaze"|"tide"|"grove"|"frost"|"storm"|"lunar"|"solar"|"fairy"|"shadow"|"arcane"|"stellar"|"zephyr"}_${1|2|3|4|5}`
-  | "magnifying_glass_1" | "magnifying_glass_2" | "magnifying_glass_3" | "magnifying_glass_4" | "magnifying_glass_5"
+  | "magnifying_glass"
   | "garden_pin_1"       | "garden_pin_2"       | "garden_pin_3"       | "garden_pin_4"       | "garden_pin_5"
   | "verdant_rush_1"     | "verdant_rush_2"     | "verdant_rush_3"     | "verdant_rush_4"     | "verdant_rush_5"
   | "forge_haste_1"      | "forge_haste_2"      | "forge_haste_3"      | "forge_haste_4"      | "forge_haste_5"
@@ -334,23 +334,11 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     description: `Significantly increases the Rainbow mutation chance for a ${r(5)} plant.`,
     cost: { kind: "consumable", id: "rainbow_vial_4", quantity: 2 } },
 
-  // ── Magnifying Glass (I–V) — utility ─────────────────────────────────────
-  // One-time use: reveals hidden plot information (plant species, mutation, growth %).
-  { id: "magnifying_glass_1", name: "Magnifying Glass I",   emoji: "🔍", tier: 1, rarity: "rare",      category: "utility",
-    description: `Reveals all details of a ${r(1)} plot — species, mutation, and exact growth progress.`,
+  // ── Magnifying Glass — utility ────────────────────────────────────────────
+  // One-time use: reveals what species is growing in a seed or sprout tile.
+  { id: "magnifying_glass", name: "Magnifying Glass", emoji: "🔍", tier: 1, rarity: "rare", category: "utility",
+    description: "Peek at an unidentified seed or sprout — reveals the species growing in that tile for you.",
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "stellar", amount: 4 }] } },
-  { id: "magnifying_glass_2", name: "Magnifying Glass II",  emoji: "🔍", tier: 2, rarity: "legendary", category: "utility",
-    description: `Reveals all details of a ${r(2)} plot — species, mutation, and exact growth progress.`,
-    cost: { kind: "consumable", id: "magnifying_glass_1", quantity: 2 } },
-  { id: "magnifying_glass_3", name: "Magnifying Glass III", emoji: "🔍", tier: 3, rarity: "mythic",    category: "utility",
-    description: `Reveals all details of a ${r(3)} plot — species, mutation, and exact growth progress.`,
-    cost: { kind: "consumable", id: "magnifying_glass_2", quantity: 2 } },
-  { id: "magnifying_glass_4", name: "Magnifying Glass IV",  emoji: "🔍", tier: 4, rarity: "exalted",   category: "utility",
-    description: `Reveals all details of a ${r(4)} plot — species, mutation, and exact growth progress.`,
-    cost: { kind: "consumable", id: "magnifying_glass_3", quantity: 2 } },
-  { id: "magnifying_glass_5", name: "Magnifying Glass V",   emoji: "🔍", tier: 5, rarity: "prismatic", category: "utility",
-    description: `Reveals all details of a ${r(5)} plot — species, mutation, and exact growth progress.`,
-    cost: { kind: "consumable", id: "magnifying_glass_4", quantity: 2 } },
 
   // ── Garden Pin (I–V) — utility ───────────────────────────────────────────
   // Pins a single plot — when bloomed, the plant is shielded from auto-harvest

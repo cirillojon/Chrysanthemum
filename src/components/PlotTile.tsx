@@ -82,7 +82,7 @@ export function PlotTile({
   cellSize = "w-16 h-16",
   showGrowthDebug = false,
 }: Props) {
-  const { perform, getState, activeWeather, reloadFromCloud } = useGame();
+  const { state, perform, getState, activeWeather, reloadFromCloud } = useGame();
   const { settings } = useSettings();
   const now    = Date.now();
   const plant  = plot.plant;
@@ -99,6 +99,14 @@ export function PlotTile({
 
   const rarity     = species ? RARITY_CONFIG[species.rarity] : null;
   const isBloomed  = stage === "bloom";
+  // A plant is "identified" (species known) if:
+  //   - bloomed → species must be in the player's discovered codex (harvested before)
+  //   - growing → player used a Magnifying Glass on this tile (plant.revealed)
+  const isIdentified = plant
+    ? (isBloomed
+        ? state.discovered.includes(plant.speciesId)
+        : !!plant.revealed)
+    : false;
   const hasFert    = !!plant?.fertilizer;
 
   const debugTotalMult = showGrowthDebug && plant ? (() => {
@@ -367,7 +375,7 @@ export function PlotTile({
 
       <button
         onClick={handleClick}
-        style={isBloomed && species?.rarity === "prismatic"
+        style={isBloomed && isIdentified && species?.rarity === "prismatic"
           ? { animation: "rainbow-border-cycle 3s linear infinite, rainbow-bg-cycle 3s linear infinite, rainbow-glow-cycle 3s linear infinite" }
           : undefined
         }
@@ -384,10 +392,10 @@ export function PlotTile({
         `}
         title={
           isBloomed
-            ? `${species?.name} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
+            ? `${isIdentified ? species?.name : "???"} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
             : open
             ? "Click to close"
-            : `${species?.name} — Click for options`
+            : `${isIdentified ? species?.name : "???"} — Click for options`
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
@@ -477,7 +485,7 @@ export function PlotTile({
         )}
 
         <span className="text-2xl leading-none">
-          {species?.emoji[stage!] ?? "🌱"}
+          {isIdentified ? (species?.emoji[stage!] ?? "🌱") : (isBloomed ? "❓" : "🌱")}
         </span>
 
         {/* Fertilizer indicator — top-left */}
@@ -510,7 +518,7 @@ export function PlotTile({
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
             {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
-            {plant.revealed && <span className="text-[9px]" title="Revealed — mutation locked in">🔎</span>}
+            {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
           </div>
         )}
 
@@ -553,7 +561,7 @@ export function PlotTile({
         ) : null}
 
         {/* Mutation emoji — bottom-right */}
-        {settings.plotMutationIndicator && isBloomed && (plant as PlantedFlower).mutation && (
+        {settings.plotMutationIndicator && isBloomed && isIdentified && (plant as PlantedFlower).mutation && (
           <span className="absolute -bottom-1 -right-1 text-sm leading-none">
             {MUTATIONS[(plant as PlantedFlower).mutation!].emoji}
           </span>
