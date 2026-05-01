@@ -603,9 +603,10 @@ export function applyCraftAttunement(
         .filter((e) => e.amount > 0);
     }
   } else {
-    const prevRarity = TIER_RARITIES[recipe.cost.tier];
+    const attunCost  = recipe.cost as { kind: "attunement"; tier: 1 | 2 | 3 | 4; quantity: number };
+    const prevRarity = TIER_RARITIES[attunCost.tier];
     newAttunements = newAttunements
-      .map((i) => i.rarity === prevRarity ? { ...i, quantity: i.quantity - recipe.cost.quantity } : i)
+      .map((i) => i.rarity === prevRarity ? { ...i, quantity: i.quantity - attunCost.quantity } : i)
       .filter((i) => i.quantity > 0);
   }
 

@@ -558,7 +558,7 @@ export function loadGame(): { state: GameState; summary: OfflineSummary } {
   } catch (e) {
     // console.warn("Failed to load save, starting fresh:", e);
     const state = defaultState();
-    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false, craftsReady: 0 } };
+    return { state, summary: { minutesAway: 0, readyToHarvest: 0, shopRestocked: false, supplyRestocked: false, craftsReady: 0, attunementsReady: 0 } };
   }
 }
 
@@ -983,7 +983,7 @@ export function getPassiveGrowthMultiplier(
   const sources = getGearAffectingCell(grid, row, col, now);
   let balanceScaleBoostMult = 1.0;
   let balanceScaleSlowMult  = 1.0;
-  for (const { def, sourceRow, sourceCol, placedGear } of sources) {
+  for (const { def, sourceRow: _sourceRow, sourceCol, placedGear: _placedGear } of sources) {
     // Regular sprinkler / Aqueduct: take the highest multiplier across all covering sources
     if ((isRegularSprinkler(def) || isAqueduct(def)) && def.growthMultiplier) {
       bestSprinkler = Math.max(bestSprinkler, def.growthMultiplier);
@@ -1186,7 +1186,7 @@ export function plantBloom(
             timePlanted: 0,   // epoch → always past bloom threshold
             bloomedAt: Date.now(), // placed blooms are immediately at bloom stage
             fertilizer: null,
-            ...(mutation ? { mutation } : {}),
+            ...(mutation ? { mutation: mutation as MutationType } : {}),
             ...(mastered ? { masteredBonus: 1.25 } : {}),
           },
         };
@@ -2501,7 +2501,7 @@ export function buyFromSupplyShop(
       ? consumables.map((c) =>
           c.id === slot.consumableId ? { ...c, quantity: c.quantity + 1 } : c
         )
-      : [...consumables, { id: slot.consumableId, quantity: 1 }];
+      : [...consumables, { id: slot.consumableId as ConsumableId, quantity: 1 }];
 
     return {
       ...state,

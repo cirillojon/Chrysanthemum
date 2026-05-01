@@ -17,6 +17,7 @@ import type { FlowerType } from "../data/flowers";
 import {
   UNIVERSAL_ESSENCE_DISPLAY, UNIVERSAL_ESSENCE_COST_PER_TYPE,
   ALL_FLOWER_TYPES, universalEssenceCraftable,
+  type EssenceType,
 } from "../data/essences";
 import {
   edgeCraftStart, edgeCraftCollect, edgeCraftCancel,
@@ -935,7 +936,7 @@ export function CraftingTab() {
 
         // Build stored costs for optimistic cancel refund (already × qty)
         const essenceCosts    = recipe.ingredients.filter((i): i is { kind: "essence"; essenceType: string; amount: number } => i.kind === "essence").map(({ essenceType: type, amount }) => ({ type, amount: amount * qty }));
-        const gearCosts       = recipe.ingredients.filter((i): i is { kind: "gear"; gearType: string; quantity: number } => i.kind === "gear").map(({ gearType: gt, quantity }) => ({ gearType: gt, quantity: quantity * qty }));
+        const gearCosts       = recipe.ingredients.filter((i): i is { kind: "gear"; gearType: GearType; quantity: number } => i.kind === "gear").map(({ gearType: gt, quantity }) => ({ gearType: gt, quantity: quantity * qty }));
         const consumableCosts = recipe.ingredients.filter((i): i is { kind: "consumable"; consumableId: string; quantity: number } => i.kind === "consumable").map(({ consumableId: id, quantity }) => ({ id, quantity: quantity * qty }));
 
         const tempEntry: CraftingQueueEntry = {
@@ -1204,7 +1205,7 @@ export function CraftingTab() {
       const idx    = consum.findIndex((c) => c.id === outputId);
       optimistic.consumables = idx >= 0
         ? consum.map((c, i) => i === idx ? { ...c, quantity: c.quantity + qty } : c)
-        : [...consum, { id: outputId, quantity: qty }];
+        : [...consum, { id: outputId as ConsumableId, quantity: qty }];
     } else if (kind === "attunement") {
       const inf = cur.infusers ?? [];
       const idx = inf.findIndex((i) => i.rarity === outputId);
@@ -1216,7 +1217,7 @@ export function CraftingTab() {
       const idx = ess.findIndex((e) => e.type === outputId);
       optimistic.essences = idx >= 0
         ? ess.map((e, j) => j === idx ? { ...e, amount: e.amount + qty } : e)
-        : [...ess, { type: outputId, amount: qty }];
+        : [...ess, { type: outputId as EssenceType, amount: qty }];
     }
 
     const { emoji, name } = queueEntryDisplay(entry);
@@ -1271,7 +1272,7 @@ export function CraftingTab() {
       const i = essences.findIndex((e) => e.type === type);
       essences = i >= 0
         ? essences.map((e, j) => j === i ? { ...e, amount: e.amount + amount } : e)
-        : [...essences, { type, amount }];
+        : [...essences, { type: type as EssenceType, amount }];
     }
     for (const { gearType, quantity } of (entry.gearCosts ?? [])) {
       const i = gearInv.findIndex((g) => g.gearType === gearType);
@@ -1291,7 +1292,7 @@ export function CraftingTab() {
         const i = consum.findIndex((c) => c.id === id);
         consum = i >= 0
           ? consum.map((c, j) => j === i ? { ...c, quantity: c.quantity + quantity } : c)
-          : [...consum, { id, quantity }];
+          : [...consum, { id: id as ConsumableId, quantity }];
       }
     }
     for (const { rarity, quantity } of (entry.attunementCosts ?? [])) {

@@ -431,7 +431,7 @@ function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hi
 }
 
 function EssenceInventoryRow({
-  type, amount, emoji, name, color, bgColor, borderColor, isUniversal,
+  type, amount, emoji, name, color: _color, bgColor, borderColor, isUniversal,
 }: {
   type: string; amount: number; emoji: string; name: string;
   color: string; bgColor: string; borderColor: string; isUniversal: boolean;
@@ -444,7 +444,6 @@ function EssenceInventoryRow({
     ? "rainbow-tile border"
     : `bg-card/60 border ${borderColor}`;
   const bg   = isUniversal ? "" : bgColor; // bgColor would conflict with rainbow-tile's animated bg
-  const _accent = isUniversal ? "rainbow-text" : color;
   return (
     <div
       key={type}

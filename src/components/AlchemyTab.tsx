@@ -60,7 +60,7 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
       </p>
       <div className="flex flex-wrap gap-1.5">
         {preview.map(({ type, amount }) => {
-          const cfg = FLOWER_TYPES[type];
+          const cfg = type === "universal" ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
           return (
             <span
               key={type}

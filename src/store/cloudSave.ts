@@ -299,9 +299,16 @@ export async function getPublicSave(userId: string): Promise<GameState | null> {
     lastSupplyReset:      (data.last_supply_reset as number)                    ?? 0,
     essences:             (data.essences              as GameState["essences"])  ?? [],
     discoveredRecipes:    (data.discovered_recipes    as string[])              ?? [],
-    infusers:             (data.infusers              as GameState["infusers"]) ?? [], // Attunement Crystals
+    infusers:             (data.infusers              as GameState["infusers"])          ?? [], // Attunement Crystals
+    consumables:          (data.consumables           as GameState["consumables"])        ?? [],
+    lastEclipseTonic:     (data.last_eclipse_tonic    as string | null)                   ?? null,
+    lastWindShearUsed:    (data.last_wind_shear_used  as number | null)                   ?? null,
     craftingQueue:        [],
     craftingSlotCount:    1,
+    attunementSlots:      (data.attunement_slots      as number)                          ?? 0,
+    attunementQueue:      (data.attunement_queue      as GameState["attunementQueue"])    ?? [],
+    activeBoosts:         (data.active_boosts         as GameState["activeBoosts"])       ?? [],
+    serverUpdatedAt:      (data.updated_at            as string | null)                   ?? null,
   } as GameState;
 }
 
