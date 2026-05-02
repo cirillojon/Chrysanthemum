@@ -46,6 +46,30 @@ const FLOWER_SELL_VALUES: Record<string, number> = {
   graveweb: 355_000, nightwing: 430_000, ashenveil: 465_000, voidfire: 500_000,
   dreambloom: 1_000_000, fairy_blossom: 1_200_000, lovebind: 1_350_000,
   eternal_heart: 1_550_000, nova_bloom: 1_800_000, princess_blossom: 2_000_000,
+  // v2.3.0 & v2.3.1 additions
+  stormcap: 14, stardust: 16, moonstrike: 56, winterwood: 325,
+  galebloom: 4_000, infernopetal: 51_000, anchorweed: 55_000, worldroot: 60_000,
+  clearingbloom: 65_000, permafrost: 71_000, frostspine: 75_000, tempest_eye: 79_000,
+  thundercrown: 81_000, moonsmile: 84_000, dreamshade: 87_000, gravewilt: 93_000,
+  deeproot: 320_000, rimestorm: 365_000, solglow: 440_000,
+  islebloom: 1_400_000, moonrime: 1_650_000, shadowgale: 1_900_000,
+  cloudveil: 14, pepperbloom: 14, flurrysprig: 14, showerbloom: 15, creamcap: 15,
+  duskling: 16, moongrass: 16, owlsage: 17, brewleaf: 17, hexblossom: 18,
+  starfleck: 18, cometail: 19, glacierbud: 45, cloudgrass: 48, chimebloom: 51,
+  evenfall: 54, sundrift: 58, moonspan: 61, tanglewort: 66, medalwort: 74,
+  topazbloom: 80, blazecrown: 265, terracotta: 275, frostmark: 310, coldsnap: 340,
+  voidpetal: 430,
+  // Cropsticks cross-breed outputs
+  phoenix_lily: 22_000, eclipse_bloom: 24_000, tempest_orchid: 26_000,
+  blightmantle: 28_000, cosmosbloom: 30_000, dreamgust: 32_000,
+  solarburst: 130_000, tidalune: 150_000, whisperleaf: 170_000, crystalmind: 190_000,
+  void_chrysalis: 700_000, starloom: 800_000, the_first_bloom: 5_000_000,
+};
+
+// ── Mutation sell multipliers (mirrors src/data/flowers.ts) ──────────────────
+const MUTATION_MULTIPLIERS: Record<string, number> = {
+  golden: 4.0, rainbow: 5.0, giant: 2.0, moonlit: 2.5,
+  frozen: 2.0, scorched: 2.0, wet: 1.1, windstruck: 0.7, shocked: 2.5,
 };
 
 // ── Fertilizer shop prices (mirrors src/data/upgrades.ts) ────────────────────
@@ -475,7 +499,8 @@ Deno.serve(async (req: Request) => {
         .map((i, idx) => idx === itemIdx ? { ...i, quantity: i.quantity - 1 } : i)
         .filter((i) => i.quantity > 0);
 
-      const baseValue = FLOWER_SELL_VALUES[body.speciesId] ?? 0;
+      const mutMultiplier = body.mutation ? (MUTATION_MULTIPLIERS[body.mutation] ?? 1.0) : 1.0;
+      const baseValue = Math.floor((FLOWER_SELL_VALUES[body.speciesId] ?? 0) * mutMultiplier);
 
       // Insert listing
       const { data: listing, error: insertError } = await supabaseAdmin

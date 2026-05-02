@@ -353,7 +353,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // (Harvest Bell, Auto-Planter). Player can still manually harvest at will.
   // Works on any rarity, like Magnifying Glass.
   { id: "garden_pin", name: "Garden Pin", emoji: "📌", tier: null, rarity: "rare", category: "utility",
-    description: "Pins a plot — its bloom won't be auto-harvested by Harvest Bells or Auto-Planters.",
+    description: "Pins a plot — its bloom won't be auto-harvested by Harvest Bells or Lawn Mowers.",
     cost: { kind: "essence", amounts: [{ type: "arcane", amount: 4 }, { type: "fairy", amount: 4 }] } },
 
   // ── Ruler (non-tiered) — utility ─────────────────────────────────────────
