@@ -114,7 +114,9 @@ const OFFSETS_DIAMOND: [number, number][] = [
 
 // ── Gear definitions ───────────────────────────────────────────────────────
 interface GearDef {
-  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis" | "lawnmower" | "fan" | "sprinkler_regular" | "sprinkler_mutation";
+  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis" | "lawnmower" | "fan" | "sprinkler_regular" | "sprinkler_mutation" | "composter";
+  /** Composter only — max fertilizers that can be stored before collection. */
+  maxStorage?: number;
   /** Radius offsets for radial gear (harvest bell, auto-planter, scarecrow, sprinklers). */
   offsets?: [number, number][];
   /** Line-of-sight cell count for directional gear (fan, aegis, lawnmower). */
@@ -137,6 +139,10 @@ const GEAR_DEFS: Record<string, GearDef> = {
   harvest_bell_rare:      { subtype: "harvest_bell", offsets: OFFSETS_CROSS,   durationMs:  4 * 60 * 60 * 1_000 },
   harvest_bell_legendary: { subtype: "harvest_bell", offsets: OFFSETS_3X3,     durationMs:  8 * 60 * 60 * 1_000 },
   auto_planter_prismatic: { subtype: "auto_planter", offsets: OFFSETS_DIAMOND, durationMs: 12 * 60 * 60 * 1_000 },
+  // Composter — generates a fertilizer each time a nearby plant blooms
+  composter_uncommon:  { subtype: "composter", offsets: OFFSETS_3X3,     durationMs:  4 * 60 * 60 * 1_000, maxStorage: 10 },
+  composter_rare:      { subtype: "composter", offsets: OFFSETS_3X3,     durationMs:  8 * 60 * 60 * 1_000, maxStorage: 20 },
+  composter_legendary: { subtype: "composter", offsets: OFFSETS_DIAMOND, durationMs: 12 * 60 * 60 * 1_000, maxStorage: 30 },
   // Scarecrow — blocks weather AND gear mutations within radius, plus strip chance
   scarecrow_rare:         { subtype: "scarecrow", offsets: OFFSETS_3X3,     durationMs:  4 * 60 * 60 * 1_000, scarecrowStripPerHour: 0.15 },
   scarecrow_legendary:    { subtype: "scarecrow", offsets: OFFSETS_3X3,     durationMs:  8 * 60 * 60 * 1_000, scarecrowStripPerHour: 0.25 },
@@ -431,6 +437,65 @@ function rollSprinklers(grid: Plot[][], shieldCoverage: Map<string, CoverageEntr
   }
 
   return { grid: changed ? next : grid, changed };
+}
+
+// ── Composter ─────────────────────────────────────────────────────────────
+function rollComposterFertilizer(rarity: string): string {
+  const table: Record<string, Record<string, number>> = {
+    common:    { basic: 50, advanced: 30, premium: 15, elite: 4,  miracle: 1  },
+    uncommon:  { basic: 35, advanced: 35, premium: 20, elite: 8,  miracle: 2  },
+    rare:      { basic: 20, advanced: 30, premium: 30, elite: 15, miracle: 5  },
+    legendary: { basic: 10, advanced: 20, premium: 30, elite: 25, miracle: 15 },
+    mythic:    { basic: 5,  advanced: 15, premium: 25, elite: 30, miracle: 25 },
+    exalted:   { basic: 3,  advanced: 10, premium: 20, elite: 30, miracle: 37 },
+    prismatic: { basic: 2,  advanced: 8,  premium: 15, elite: 25, miracle: 50 },
+  };
+  const weights = table[rarity] ?? table.common;
+  const total   = Object.values(weights).reduce((s, w) => s + w, 0);
+  let roll      = Math.random() * total;
+  for (const [type, weight] of Object.entries(weights)) {
+    roll -= weight;
+    if (roll <= 0) return type;
+  }
+  return "basic";
+}
+
+function runComposters(originalGrid: Plot[][], stampedGrid: Plot[][], now: number): Plot[][] {
+  const rows = stampedGrid.length;
+  const cols = stampedGrid[0]?.length ?? 0;
+  let grid = stampedGrid;
+
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const wasBloom = !!(originalGrid[r]?.[c]?.plant?.bloomedAt);
+      const nowBloom = !!(stampedGrid[r]?.[c]?.plant?.bloomedAt);
+      if (wasBloom || !nowBloom) continue; // only newly bloomed this tick
+
+      const speciesId = stampedGrid[r][c].plant!.speciesId;
+      const rarity    = SPECIES_DATA[speciesId]?.r ?? "common";
+
+      for (const [dr, dc] of OFFSETS_3X3) {
+        const cr = r + dr;
+        const cc = c + dc;
+        if (cr < 0 || cr >= rows || cc < 0 || cc >= cols) continue;
+        const plot = grid[cr][cc];
+        if (!plot.gear) continue;
+        const def = GEAR_DEFS[plot.gear.gearType];
+        if (!def || def.subtype !== "composter") continue;
+        if (isExpired(plot.gear, now)) continue;
+        const stored   = (plot.gear.storedFertilizers ?? []) as string[];
+        const maxStore = def.maxStorage ?? 10;
+        if (stored.length >= maxStore) continue;
+
+        const fertType  = rollComposterFertilizer(rarity);
+        const newGear   = { ...plot.gear, storedFertilizers: [...stored, fertType] };
+        grid = grid.map((row, ri) =>
+          ri !== cr ? row : row.map((p, ci) => ci !== cc ? p : { ...p, gear: newGear })
+        );
+      }
+    }
+  }
+  return grid;
 }
 
 // ── Stamp bloomedAt ────────────────────────────────────────────────────────
@@ -1171,6 +1236,12 @@ Deno.serve(async (req: Request) => {
       // 1. Stamp bloomedAt so harvest bell + mutations can find ready plants
       const { grid: stamped, changed: stampChanged } = stampBloomed(original.grid, now, weatherMult);
       let sim = stampChanged ? { ...original, grid: stamped } : original;
+
+      // 1b. Feed composters from plants that just bloomed this tick
+      if (stampChanged) {
+        const compGrid = runComposters(original.grid, stamped, now);
+        if (compGrid !== stamped) sim = { ...sim, grid: compGrid };
+      }
 
       // 2a. Build mutation-shield coverage once per garden (Scarecrow + Aegis)
       const shieldCoverage = buildShieldCoverage(sim.grid, now);

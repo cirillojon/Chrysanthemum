@@ -1,3 +1,22 @@
+## [v2.3.2] — 2026-05-02 — Bug Fixes & Balance
+
+### Changed
+- **Balance Scale reworked** — range fixed to 1 cell each side for all tiers; boost and slow values now scale per tier: Scale I 4×/0.5× (avg 2.25×), Scale II 6×/0.33× (avg 3.165×), Scale III 8×/0.25× (avg 4.125×)
+- **Shop seed prices display cleaner** — prices are now floored to 2 significant figures (e.g. 1,234 → 1,200)
+- **Scarecrow description corrected** — now correctly says "Blocks all mutations" (it has always blocked gear mutations too, not just weather)
+- **Fan description corrected** — effect rate now correctly reads "each hour" instead of "each minute"
+- **Garden Pin description corrected** — now references Lawn Mowers instead of Auto-Planters
+
+### Fixed
+- **Harvesting v2.3.1 flowers no longer fails** — harvest edge function was missing all 38 v2.3.1 species, returning "Unknown species" 400 errors on every harvest
+- **Marketplace price history shows the correct mutated price** — listing base_value now includes the mutation multiplier so the chart reflects the actual listed price
+- **Composter now generates fertilizer during offline ticks** — composter logic was client-side only; it now also runs in the offline cron processor
+- **Plot tooltip no longer shows Forge Haste or Seed Pouches** — speed boosts and seed pouches don't target individual plots and are now excluded from the per-plot consumable picker
+- **Plot tooltip scrolls when many consumables are present** — tooltip no longer extends off-screen on mobile with large consumable inventories
+- **Shop no longer flickers after restock** — stale server responses arriving after a client-side shop reset no longer overwrite the fresh shop list
+
+---
+
 ## [v2.3.1] — 2026-05-01 — Flower Expansion & Fan Fix
 
 ### Added

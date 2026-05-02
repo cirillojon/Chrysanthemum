@@ -14,6 +14,23 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.3.2",
+    title:   "Bug Fixes & Balance",
+    items: [
+      { type: "changed", text: "Balance Scale reworked — range fixed to 1 cell each side for all tiers; boost and slow now scale per tier: Scale I 4×/0.5× (avg 2.25×), Scale II 6×/0.33× (avg 3.165×), Scale III 8×/0.25× (avg 4.125×)" },
+      { type: "changed", text: "Shop seed prices are now floored to 2 significant figures (e.g. 1,234 → 1,200) for a cleaner shop UI" },
+      { type: "changed", text: "Scarecrow description corrected — now reads \"Blocks all mutations\" (it has always blocked gear mutations too, not just weather)" },
+      { type: "changed", text: "Fan description corrected — effect rate now reads \"each hour\" instead of \"each minute\"" },
+      { type: "changed", text: "Garden Pin description corrected — now references Lawn Mowers instead of Auto-Planters" },
+      { type: "fixed",   text: "Harvesting v2.3.1 flowers no longer fails — the harvest edge function was missing all 38 v2.3.1 species, returning \"Unknown species\" 400 errors on every harvest" },
+      { type: "fixed",   text: "Marketplace price history now shows the correct mutated price — listing base_value now includes the mutation multiplier so the chart reflects the actual listed price" },
+      { type: "fixed",   text: "Composter now generates fertilizer during offline ticks — composter logic was client-side only and is now also processed by the offline cron" },
+      { type: "fixed",   text: "Plot tooltip no longer shows Forge Haste or Seed Pouches — speed boosts and seed pouches don't target individual plots and are excluded from the per-plot consumable picker" },
+      { type: "fixed",   text: "Plot tooltip scrolls when many consumables are present — tooltip no longer extends off-screen on mobile with large consumable inventories" },
+      { type: "fixed",   text: "Shop no longer flickers after restock — stale server responses arriving after a client-side reset no longer overwrite the fresh shop list" },
+    ],
+  },
+  {
     version: "2.3.1",
     title:   "Flower Expansion & Fan Fix",
     items: [

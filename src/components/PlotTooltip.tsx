@@ -138,8 +138,10 @@ export function PlotTooltip({
     if (c.quantity <= 0) return false;
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
     if (!recipe) return false;
+    // Speed boosts and seed pouches don't target individual plots.
+    if (recipe.category === "speed_boost" || recipe.category === "seed_pouch") return false;
     // Allow null-tier plant utilities through; block all other null-tier items
-    // (seed pouches, speed boosts, etc. are handled elsewhere).
+    // (seed pouches, etc. are handled elsewhere).
     if (recipe.tier === null && !NULL_TIER_PLANT_CONSUMABLES.has(c.id)) return false;
 
     // Magnifying Glass, Garden Pin, and Ruler bypass the rarity gate — they work on any species
@@ -287,7 +289,7 @@ export function PlotTooltip({
       className={`absolute ${flipped ? "top-full mt-2" : "bottom-full mb-2"} left-1/2 z-40 pointer-events-none`}
       style={{ transform: `translateX(calc(-50% + ${nudge}px))` }}
     >
-      <div className="pointer-events-auto bg-card/80 backdrop-blur-sm border border-border rounded-xl p-3 shadow-xl w-48 space-y-2">
+      <div className="pointer-events-auto bg-card/80 backdrop-blur-sm border border-border rounded-xl p-3 shadow-xl w-48 space-y-2 max-h-[80vh] overflow-y-auto">
 
         {/* Header */}
         <div className="flex items-center gap-2">

@@ -297,6 +297,70 @@ Expired listings are now delivered via the mailbox instead of silently patching 
 
 ---
 
+## S. v2.3.2 — Harvest v2.3.1 Flowers (#175)
+
+`FLOWER_GROWTH_TIMES` in the harvest edge function was missing all 38 v2.3.1 species, causing a 400 "Unknown species" error.
+
+| # | Action | Expected |
+|---|--------|----------|
+| S1 | Harvest any v2.3.1 flower (e.g. **Galebloom**, **Infernopetal**, **Cloudveil**) manually or via bell | Harvest succeeds; bloom added to inventory; **no** "Unknown species" 400 in console |
+| S2 | Harvest a mutated v2.3.1 flower (e.g. Golden Galebloom) | Harvest succeeds with the correct mutation applied to the inventory bloom |
+| S3 | DevTools → Network → `harvest` response for a v2.3.1 flower | Response is `{ ok: true }` — no error body |
+
+---
+
+## T. v2.3.2 — Composter Offline Tick (#158)
+
+Composter logic was previously client-side only. It now also runs in `tick-offline-gardens`.
+
+| # | Action | Expected |
+|---|--------|----------|
+| T1 | Place a Composter next to several seeds. Navigate away for 30+ min. Return. | Some of the plots that bloomed while away have fertilizer applied (check plot tooltips) |
+| T2 | Place a Composter I (Uncommon, 3×3 range) next to a bloom that blooms offline. Return. | Fertilizer roll occurred; rarity matches Uncommon tier (Common/Uncommon fertilizers) |
+| T3 | Place a Composter III (Legendary, Diamond range) offline. | Range covers expected diamond-shaped cells; fertilizer is applied within range |
+| T4 | Place a Composter with its `maxStorage` already full (10 charges). Navigate away. | No additional fertilizer piles up beyond the storage cap after plants bloom offline |
+
+---
+
+## U. v2.3.2 — Plot Tooltip Consumable Filter (#177 / #173)
+
+Speed boosts (Forge Haste) and seed pouches should never appear in the per-plot consumable picker.
+
+| # | Action | Expected |
+|---|--------|----------|
+| U1 | Open a plot tooltip (growing or bloomed plant). Have **Forge Haste** consumables in inventory. | Forge Haste does **not** appear in the consumable list |
+| U2 | Same tooltip with any **Seed Pouch** in inventory. | Seed Pouch does **not** appear |
+| U3 | Open the tooltip with Frost Vials, Fertilizer, etc. in inventory. | Those consumables **do** appear (filter only removes speed boosts and seed pouches) |
+| U4 | Tooltip with many consumables (10+) visible. | Tooltip scrolls vertically; bottom items are accessible; tooltip does not extend off-screen |
+
+---
+
+## V. v2.3.2 — Shop Restock Flicker (#172)
+
+A stale server response was clobbering the client's freshly-restocked shop list, causing a visible flicker back to the old items.
+
+| # | Action | Expected |
+|---|--------|----------|
+| V1 | Wait for the seed shop to restock (or use the dev panel to force a restock). | Shop updates to new items **without** briefly showing the old shop list |
+| V2 | Wait for the supply shop to restock. | Supply shop updates cleanly — **no flicker** back to the pre-restock gear/consumable list |
+| V3 | Throttle to Slow 4G. Trigger a shop restock. Watch DevTools Network. | Even with slow responses arriving after the client reset, the new shop list holds |
+
+---
+
+## W. v2.3.2 — Balance Scale Rework (#181)
+
+Range is now fixed at 1 cell each side for all tiers. Boost/slow values increased per tier: Scale I 4×/0.5×, Scale II 6×/0.33×, Scale III 8×/0.25×.
+
+| # | Action | Expected |
+|---|--------|----------|
+| W1 | Place a **Balance Scale I** with one plant to its left and one to its right. Watch growth rates. | Boosted side grows **4×** faster than base; slowed side grows at **0.5×** base speed |
+| W2 | Wait for the hour to flip (or use dev panel to advance time). | The boost and slow **swap sides** |
+| W3 | Place a **Balance Scale II** and compare growth rates to Scale I. | Boosted side visibly faster (**6×**); slowed side more penalized (**0.33×**) than Scale I |
+| W4 | Place a **Balance Scale III** and compare. | Boosted side at **8×**; slowed side at **0.25×** |
+| W5 | Check gear tooltip descriptions for all three tiers. | Each description shows the correct boost and slow values for that tier |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```

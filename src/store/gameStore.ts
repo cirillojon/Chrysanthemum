@@ -338,6 +338,11 @@ export const SHOP_RARITY_WEIGHTS: Partial<Record<Rarity, number>> = {
  * tighter margin (0.85 → 15%). Stops bulk-buying high-rarity seeds from being
  * a free coin printer once the player can afford them.
  */
+export function floorToTwoSigFigs(n: number): number {
+  if (n < 100) return n;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(n)) - 1);
+  return Math.floor(n / magnitude) * magnitude;
+}
 const SEED_PRICE_RATIO: Record<Rarity, number> = {
   common:    0.65,
   uncommon:  0.68,
@@ -387,7 +392,7 @@ function generateShop(shopSlots: number = DEFAULT_SHOP_SLOTS): ShopSlot[] {
     usedIds.add(flower.id);
     chosen.push({
       speciesId: flower.id,
-      price:     Math.max(5, Math.floor(flower.sellValue * SEED_PRICE_RATIO[flower.rarity])),
+      price:     floorToTwoSigFigs(Math.max(5, Math.floor(flower.sellValue * SEED_PRICE_RATIO[flower.rarity]))),
       quantity:  Math.floor(Math.random() * 4) + 1,
     });
   }
@@ -996,14 +1001,14 @@ export function getPassiveGrowthMultiplier(
     // Phase 0 = left arm (dc < 0) boosted 3×; right arm (dc > 0) slowed 0.5×.
     // Phase 1 = flipped.
     if (isBalanceScale(def) && def.fanRange) {
-      const phase    = Math.floor(now / 3_600_000) % 2;
-      const dc       = col - sourceCol;
-      const inLeft   = dc < 0;
+      const phase     = Math.floor(now / 3_600_000) % 2;
+      const dc        = col - sourceCol;
+      const inLeft    = dc < 0;
       const isBoosted = phase === 0 ? inLeft : !inLeft;
       if (isBoosted) {
-        balanceScaleBoostMult = Math.max(balanceScaleBoostMult, 3.0);
+        balanceScaleBoostMult = Math.max(balanceScaleBoostMult, def.scaleBoostMult ?? 4.0);
       } else {
-        balanceScaleSlowMult = Math.min(balanceScaleSlowMult, 0.5);
+        balanceScaleSlowMult = Math.min(balanceScaleSlowMult, def.scaleSlowMult ?? 0.5);
       }
     }
   }
@@ -2044,14 +2049,16 @@ export function mergeServerResult<T extends Partial<GameState>>(
 ): GameState {
   const merged = { ...cur, ...result, ok: undefined } as GameState;
 
-  // Never let shop/supply reset timestamps roll backwards.  A stale server
-  // response (read from DB before an in-flight edgeSyncShop/edgeSyncSupplyShop
-  // write completes) would otherwise clobber the client's newer lastShopReset,
-  // causing the 1-second tick interval to fire a phantom restock — and the
-  // restock banner to reappear immediately after the user dismissed it.
+  // Never let shop/supply reset timestamps or shop lists roll backwards.
+  // A stale server response (read from DB before an in-flight edgeSyncShop/
+  // edgeSyncSupplyShop write completes) would otherwise clobber the client's
+  // new shop list with the old one — causing the visible flicker back to the
+  // pre-restock inventory.
   const r = result as Partial<GameState>;
   merged.lastShopReset   = Math.max(cur.lastShopReset,        r.lastShopReset   ?? 0);
   merged.lastSupplyReset = Math.max(cur.lastSupplyReset ?? 0, r.lastSupplyReset ?? 0);
+  if ((r.lastShopReset   ?? 0) < cur.lastShopReset)          merged.shop        = cur.shop;
+  if ((r.lastSupplyReset ?? 0) < (cur.lastSupplyReset ?? 0)) merged.supplyShop  = cur.supplyShop;
 
   if (result.grid) {
     // Identify the same plant by speciesId + timePlanted so we never copy a

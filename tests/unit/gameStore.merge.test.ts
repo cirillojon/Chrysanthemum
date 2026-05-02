@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   defaultState,
+  floorToTwoSigFigs,
   makeGrid,
   mergeServerResult,
   type GameState,
+  type ShopSlot,
 } from "../../src/store/gameStore";
 
 // ── Test helpers ────────────────────────────────────────────────────────────
@@ -144,7 +146,7 @@ describe("mergeServerResult — grid replacement preserves client-rolled mutatio
     expect(merged.grid[0][0].plant?.mutation).toBeUndefined();
   });
 
-  it("server's empty plot wins over a client plant (this is the bug WHY callers should return {})", () => {
+  it("server's empty plot wins over a client plant (this documents WHY callers should return {})", () => {
     // This documents the bug: if a Plant-All sibling's response includes a
     // grid where the cell is null but the client has it optimistically planted,
     // the server wins and the plant disappears. Callers avoid this by NOT
@@ -163,5 +165,78 @@ describe("mergeServerResult — grid replacement preserves client-rolled mutatio
     expect(merged.grid[0][0].plant?.speciesId).toBe("rose");
     // Daisy was wiped because server's grid wins on absence
     expect(merged.grid[0][1].plant).toBeNull();
+  });
+});
+
+// ── floorToTwoSigFigs ────────────────────────────────────────────────────────
+
+describe("floorToTwoSigFigs — shop seed price rounding (#174)", () => {
+  it("returns numbers below 100 unchanged", () => {
+    expect(floorToTwoSigFigs(0)).toBe(0);
+    expect(floorToTwoSigFigs(5)).toBe(5);
+    expect(floorToTwoSigFigs(99)).toBe(99);
+  });
+
+  it("returns exactly 100 as 100", () => {
+    expect(floorToTwoSigFigs(100)).toBe(100);
+  });
+
+  it("floors 3-digit numbers to 2 significant figures", () => {
+    expect(floorToTwoSigFigs(123)).toBe(120);
+    expect(floorToTwoSigFigs(999)).toBe(990);
+  });
+
+  it("floors 4-digit numbers to 2 significant figures", () => {
+    expect(floorToTwoSigFigs(1000)).toBe(1000);
+    expect(floorToTwoSigFigs(1234)).toBe(1200);
+    expect(floorToTwoSigFigs(9876)).toBe(9800);
+  });
+
+  it("floors 5-digit numbers to 2 significant figures", () => {
+    expect(floorToTwoSigFigs(10000)).toBe(10000);
+    expect(floorToTwoSigFigs(12345)).toBe(12000);
+    expect(floorToTwoSigFigs(98765)).toBe(98000);
+  });
+});
+
+// ── mergeServerResult — shop flicker (#172) ──────────────────────────────────
+
+describe("mergeServerResult — shop flicker protection (#172)", () => {
+  it("preserves client shop when server lastShopReset is stale", () => {
+    // Client just restocked (t=2000). A stale server response arrives that was
+    // read before the restock (t=1000). Without the guard, the server's old shop
+    // list would overwrite the client's fresh one, causing a visible flicker.
+    const clientShop: ShopSlot[] = [{ speciesId: "rose", price: 100, quantity: 3 }];
+    const serverShop: ShopSlot[] = [{ speciesId: "daisy", price: 50, quantity: 5 }];
+
+    const cur = baseState({ shop: clientShop, lastShopReset: 2000 });
+    const merged = mergeServerResult(cur, { shop: serverShop, lastShopReset: 1000 });
+
+    expect(merged.shop).toBe(clientShop);   // client shop reference preserved
+    expect(merged.lastShopReset).toBe(2000);
+  });
+
+  it("preserves client supplyShop when server lastSupplyReset is stale", () => {
+    const clientSupply: ShopSlot[] = [{ speciesId: "fan_uncommon", price: 200, quantity: 1, isGear: true }];
+    const serverSupply: ShopSlot[] = [{ speciesId: "fan_rare", price: 400, quantity: 1, isGear: true }];
+
+    const cur = baseState({ supplyShop: clientSupply, lastSupplyReset: 5000 });
+    const merged = mergeServerResult(cur, { supplyShop: serverSupply, lastSupplyReset: 3000 });
+
+    expect(merged.supplyShop).toBe(clientSupply);
+    expect(merged.lastSupplyReset).toBe(5000);
+  });
+
+  it("accepts server shop when server lastShopReset is newer (restock from another device)", () => {
+    // A second tab or device restocked the shop after this client's last reset.
+    // The server's newer shop should win.
+    const clientShop: ShopSlot[] = [{ speciesId: "rose", price: 100, quantity: 3 }];
+    const serverShop: ShopSlot[] = [{ speciesId: "daisy", price: 50, quantity: 5 }];
+
+    const cur = baseState({ shop: clientShop, lastShopReset: 1000 });
+    const merged = mergeServerResult(cur, { shop: serverShop, lastShopReset: 2000 });
+
+    expect(merged.shop).toEqual(serverShop); // server wins
+    expect(merged.lastShopReset).toBe(2000);
   });
 });

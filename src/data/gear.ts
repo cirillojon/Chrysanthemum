@@ -179,6 +179,10 @@ export interface GearDefinition {
   fanWindstruckChancePerTick?: number;
   /** Scarecrow: per-tick probability to strip an existing mutation from a covered plant */
   mutationStripChancePerTick?: number;
+  /** Balance scale: growth multiplier applied to the boosted side */
+  scaleBoostMult?: number;
+  /** Balance scale: growth multiplier applied to the slowed side */
+  scaleSlowMult?: number;
 }
 
 // ── Radius pattern helpers ─────────────────────────────────────────────────
@@ -444,7 +448,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   scarecrow_rare: {
     id:             "scarecrow_rare",
     name:           "Scarecrow I",
-    description:    "Blocks weather mutations on nearby plants. Has a 15% chance per hour to strip an existing mutation. Lasts 4 hours.",
+    description:    "Blocks all mutations on nearby plants. Has a 15% chance per hour to strip an existing mutation. Lasts 4 hours.",
     emoji:          "🧹",
     rarity:         "rare",
     shopPrice:      1400,
@@ -458,7 +462,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   scarecrow_legendary: {
     id:             "scarecrow_legendary",
     name:           "Scarecrow II",
-    description:    "Blocks weather mutations on nearby plants. Has a 25% chance per hour to strip an existing mutation. Lasts 8 hours.",
+    description:    "Blocks all mutations on nearby plants. Has a 25% chance per hour to strip an existing mutation. Lasts 8 hours.",
     emoji:          "🧹",
     rarity:         "legendary",
     shopPrice:      15_000,
@@ -472,7 +476,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   scarecrow_mythic: {
     id:             "scarecrow_mythic",
     name:           "Scarecrow III",
-    description:    "Blocks weather mutations on nearby plants in a wide area. Has a 40% chance per hour to strip an existing mutation. Lasts 12 hours.",
+    description:    "Blocks all mutations on nearby plants in a wide area. Has a 40% chance per hour to strip an existing mutation. Lasts 12 hours.",
     emoji:          "🧹",
     rarity:         "mythic",
     shopPrice:      100_000,
@@ -532,7 +536,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   fan_uncommon: {
     id:                    "fan_uncommon",
     name:                  "Fan I",
-    description:           "Blows in one direction across 2 plants. Low chance to strip Wet from blooms each minute. Very low chance to apply Windstruck to unmutated blooms. Lasts 2 hours.",
+    description:           "Blows in one direction across 2 plants. Low chance to strip Wet from blooms each hour. Very low chance to apply Windstruck to unmutated blooms. Lasts 2 hours.",
     emoji:                 "💨",
     rarity:                "uncommon",
     shopPrice:             600,
@@ -547,7 +551,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   fan_rare: {
     id:                    "fan_rare",
     name:                  "Fan II",
-    description:           "Blows in one direction across 3 plants. Moderate chance to strip Wet from blooms each minute. Very low chance to apply Windstruck to unmutated blooms. Lasts 4 hours.",
+    description:           "Blows in one direction across 3 plants. Moderate chance to strip Wet from blooms each hour. Very low chance to apply Windstruck to unmutated blooms. Lasts 4 hours.",
     emoji:                 "💨",
     rarity:                "rare",
     shopPrice:             2400,
@@ -562,7 +566,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   fan_legendary: {
     id:                    "fan_legendary",
     name:                  "Fan III",
-    description:           "Blows in one direction across 4 plants. High chance to strip Wet from blooms each minute. Very low chance to apply Windstruck to unmutated blooms. Lasts 8 hours.",
+    description:           "Blows in one direction across 4 plants. High chance to strip Wet from blooms each hour. Very low chance to apply Windstruck to unmutated blooms. Lasts 8 hours.",
     emoji:                 "💨",
     rarity:                "legendary",
     shopPrice:             16_000,
@@ -756,7 +760,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   balance_scale_legendary: {
     id:             "balance_scale_legendary",
     name:           "Balance Scale I",
-    description:    "Alternates every hour: the left cell grows 3× faster while the right cell grows 0.5× slower — then swaps. Lasts 8 hours.",
+    description:    "Alternates every hour: the left cell grows 4× faster while the right cell grows 0.5× slower — then swaps. Lasts 8 hours.",
     emoji:          "⚖️",
     rarity:         "legendary",
     shopPrice:      30_000,
@@ -764,32 +768,38 @@ export const GEAR: Record<GearType, GearDefinition> = {
     passiveSubtype: "balance_scale",
     durationMs:     DURATION_8H,
     fanRange:       1,
+    scaleBoostMult: 4.0,
+    scaleSlowMult:  0.5,
   },
 
   balance_scale_mythic: {
     id:             "balance_scale_mythic",
     name:           "Balance Scale II",
-    description:    "Alternates every hour: the 2 left cells grow 3× faster while the 2 right cells grow 0.5× slower — then swaps. Lasts 10 hours.",
+    description:    "Alternates every hour: the left cell grows 6× faster while the right cell grows 0.33× slower — then swaps. Lasts 10 hours.",
     emoji:          "⚖️",
     rarity:         "mythic",
     shopPrice:      200_000,
     category:       "passive",
     passiveSubtype: "balance_scale",
     durationMs:     10 * 60 * 60 * 1_000,
-    fanRange:       2,
+    fanRange:       1,
+    scaleBoostMult: 6.0,
+    scaleSlowMult:  0.33,
   },
 
   balance_scale_exalted: {
     id:             "balance_scale_exalted",
     name:           "Balance Scale III",
-    description:    "Alternates every hour: the 3 left cells grow 3× faster while the 3 right cells grow 0.5× slower — then swaps. Lasts 12 hours.",
+    description:    "Alternates every hour: the left cell grows 8× faster while the right cell grows 0.25× slower — then swaps. Lasts 12 hours.",
     emoji:          "⚖️",
     rarity:         "exalted",
     shopPrice:      1_200_000,
     category:       "passive",
     passiveSubtype: "balance_scale",
     durationMs:     DURATION_12H,
-    fanRange:       3,
+    fanRange:       1,
+    scaleBoostMult: 8.0,
+    scaleSlowMult:  0.25,
   },
 
   // ── Auto-Planter ─────────────────────────────────────────────────────────
