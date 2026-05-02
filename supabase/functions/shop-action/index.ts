@@ -20,17 +20,27 @@ const MUTATION_MULTIPLIERS: Record<string, number> = {
 
 // ── Flower sell values (mirrors src/data/flowers.ts) ─────────────────────────
 const FLOWER_SELL_VALUES: Record<string, number> = {
+  // ── Common ───────────────────────────────────────────────────────────────────
   quickgrass: 10, dustweed: 10, sprig: 12, dewdrop: 12, pebblebloom: 12,
   ember_moss: 12, dandelion: 13, clover: 13, violet: 14, lemongrass: 14,
   daisy: 14, honeywort: 14, buttercup: 14, dawnpetal: 15, poppy: 15,
   chamomile: 15, marigold: 16, sunflower: 17, coppercup: 17, ivybell: 17,
   thornberry: 18, saltmoss: 19, ashpetal: 19, snowdrift: 20,
+  // v2.3.1 commons
+  stormcap: 14, stardust: 16, cloudveil: 14, pepperbloom: 14, flurrysprig: 14,
+  showerbloom: 15, creamcap: 15, duskling: 16, moongrass: 16, owlsage: 17,
+  brewleaf: 17, hexblossom: 18, starfleck: 18, cometail: 19,
+  // ── Uncommon ─────────────────────────────────────────────────────────────────
   swiftbloom: 42, shortcress: 44, thornwhistle: 48, starwort: 50, mintleaf: 50,
   tulip: 50, inkbloom: 52, hyacinth: 53, snapdragon: 55, beebalm: 57,
   candleflower: 57, carnation: 59, ribbonweed: 60, hibiscus: 62, wildberry: 64,
   frostbell: 63, bluebell: 64, cherry_blossom: 66, rose: 67, peacockflower: 69,
   bamboo_bloom: 70, hummingbloom: 70, water_lily: 71, lanternflower: 73,
   dovebloom: 76, coral_bells: 78, sundew: 81, bubblebloom: 84,
+  // v2.3.1 uncommons
+  moonstrike: 56, glacierbud: 45, cloudgrass: 48, chimebloom: 51, evenfall: 54,
+  sundrift: 58, moonspan: 61, tanglewort: 66, medalwort: 74, topazbloom: 80,
+  // ── Rare ─────────────────────────────────────────────────────────────────────
   flashpetal: 250, rushwillow: 260, sweetheart_lily: 280, glassbell: 285,
   stormcaller: 290, lavender: 300, amber_crown: 300, peach_blossom: 300,
   foxglove: 320, butterbloom: 330, peony: 340, tidebloom: 350, starweave: 350,
@@ -38,6 +48,10 @@ const FLOWER_SELL_VALUES: Record<string, number> = {
   bird_of_paradise: 380, solarbell: 380, moonpetal: 390, orchid: 400,
   duskrose: 410, passionflower: 420, glasswing: 435, mirror_orchid: 450,
   stargazer_lily: 460, prism_lily: 480, dusk_orchid: 500,
+  // v2.3.1 rares
+  winterwood: 325, blazecrown: 265, terracotta: 275, frostmark: 310,
+  coldsnap: 340, voidpetal: 430,
+  // ── Legendary ────────────────────────────────────────────────────────────────
   firstbloom: 3_600, haste_lily: 3_800, verdant_crown: 4_200, ironwood_bloom: 4_300,
   sundial: 4_400, lotus: 4_500, candy_blossom: 4_700, prismbark: 4_700,
   dolphinia: 4_800, ghost_orchid: 4_800, nestbloom: 5_000, black_rose: 5_100,
@@ -45,6 +59,10 @@ const FLOWER_SELL_VALUES: Record<string, number> = {
   stargazer: 5_600, fullmoon_bloom: 5_700, ice_crown: 5_700, diamond_bloom: 6_000,
   oracle_eye: 6_300, halfmoon_bloom: 6_600, aurora_bloom: 6_700, mirrorpetal: 6_900,
   emberspark: 7_200,
+  // v2.3.1 legendaries
+  galebloom: 4_000, phoenix_lily: 22_000, eclipse_bloom: 24_000,
+  tempest_orchid: 26_000, blightmantle: 28_000, cosmosbloom: 30_000, dreamgust: 32_000,
+  // ── Mythic ───────────────────────────────────────────────────────────────────
   blink_rose: 50_000, dawnfire: 53_000, moonflower: 58_000, jellybloom: 59_000,
   celestial_bloom: 63_000, void_blossom: 69_000, seraph_wing: 77_000,
   solar_rose: 79_000, nebula_drift: 84_000, superbloom: 90_000,
@@ -53,6 +71,16 @@ const FLOWER_SELL_VALUES: Record<string, number> = {
   graveweb: 355_000, nightwing: 430_000, ashenveil: 465_000, voidfire: 500_000,
   dreambloom: 1_000_000, fairy_blossom: 1_200_000, lovebind: 1_350_000,
   eternal_heart: 1_550_000, nova_bloom: 1_800_000, princess_blossom: 2_000_000,
+  // v2.3.1 mythics
+  infernopetal: 51_000, anchorweed: 55_000, worldroot: 60_000,
+  clearingbloom: 65_000, permafrost: 71_000, frostspine: 75_000,
+  tempest_eye: 79_000, thundercrown: 81_000, moonsmile: 84_000,
+  dreamshade: 87_000, gravewilt: 93_000,
+  deeproot: 320_000, rimestorm: 365_000, solglow: 440_000,
+  islebloom: 1_400_000, moonrime: 1_650_000, shadowgale: 1_900_000,
+  solarburst: 130_000, tidalune: 150_000, whisperleaf: 170_000,
+  crystalmind: 190_000, void_chrysalis: 700_000, starloom: 800_000,
+  the_first_bloom: 5_000_000,
 };
 
 type Action = "buy" | "buy_all" | "sell" | "sell_all" | "sync";
