@@ -52,6 +52,8 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const bloomCount       = blooms.reduce((s, i) => s + i.quantity, 0);
   const supplyCount      = fertilizers.reduce((s, f) => s + f.quantity, 0)
                          + gearItems.reduce((s, g) => s + g.quantity, 0);
+  const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0);
+  const essenceCount     = (state.essences ?? []).reduce((s, e) => s + e.amount, 0);
 
   const q = search.toLowerCase();
   const filteredSeeds = q
@@ -222,6 +224,8 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
             {seedCount} seed{seedCount !== 1 ? "s" : ""} ·{" "}
             {bloomCount} bloom{bloomCount !== 1 ? "s" : ""}
             {supplyCount > 0 && <> · {supplyCount} supplies</>}
+            {consumableCount > 0 && <> · {consumableCount} consumable{consumableCount !== 1 ? "s" : ""}</>}
+            {essenceCount > 0 && <> · {essenceCount} essence{essenceCount !== 1 ? "s" : ""}</>}
           </p>
         </div>
       </div>
