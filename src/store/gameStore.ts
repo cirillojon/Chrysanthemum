@@ -338,7 +338,7 @@ export const SHOP_RARITY_WEIGHTS: Partial<Record<Rarity, number>> = {
  * tighter margin (0.85 → 15%). Stops bulk-buying high-rarity seeds from being
  * a free coin printer once the player can afford them.
  */
-function floorToTwoSigFigs(n: number): number {
+export function floorToTwoSigFigs(n: number): number {
   if (n < 100) return n;
   const magnitude = Math.pow(10, Math.floor(Math.log10(n)) - 1);
   return Math.floor(n / magnitude) * magnitude;
