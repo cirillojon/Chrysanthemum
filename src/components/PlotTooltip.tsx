@@ -105,8 +105,9 @@ export function PlotTooltip({
   const rarity        = RARITY_CONFIG[species.rarity];
   const isBloomed     = stage === "bloom";
   // A plant is "identified" (species known to this player) if it's already in the
-  // codex (harvested before) OR the player used a Magnifying Glass on this tile.
-  const isIdentified = state.discovered.includes(plant.speciesId) || !!plant.revealed;
+  // codex (harvested before), the player used a Magnifying Glass on this tile,
+  // or the plant has reached bloom (identity revealed at peak).
+  const isIdentified = state.discovered.includes(plant.speciesId) || !!plant.revealed || isBloomed;
   const hasFertilizer = !!plant.fertilizer;
   const availableFerts = state.fertilizers
     .filter((f) => f.quantity > 0)
