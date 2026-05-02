@@ -99,8 +99,18 @@ function formatDuration(ms: number): string {
 
 function formatDurationLabel(ms: number): string {
   if (ms <  60_000)    return `${Math.round(ms / 1000)}s`;
-  if (ms <  3_600_000) return `${Math.round(ms / 60_000)} min`;
-  if (ms < 86_400_000) return `${(ms / 3_600_000).toFixed(1).replace(".0", "")} hr`;
+  if (ms <  3_600_000) {
+    const totalSec = Math.round(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return s > 0 ? `${m}m ${s}s` : `${m} min`;
+  }
+  if (ms < 86_400_000) {
+    const totalMin = Math.round(ms / 60_000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h} hr`;
+  }
   return `${(ms / 86_400_000).toFixed(1).replace(".0", "")} day`;
 }
 
