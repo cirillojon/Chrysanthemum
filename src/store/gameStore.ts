@@ -1895,13 +1895,15 @@ export function harvestPlant(
     })
   );
 
-  // Update inventory
+  // Update inventory — normalise null/undefined so DB-loaded items (mutation: null)
+  // and fresh optimistic items (mutation: undefined) are treated as the same slot.
+  const normMut = mutation ?? null;
   const existing = state.inventory.find(
-    (i) => i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
+    (i) => i.speciesId === speciesId && (i.mutation ?? null) === normMut && !i.isSeed
   );
   let newInventory = existing
     ? state.inventory.map((i) =>
-        i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
+        i.speciesId === speciesId && (i.mutation ?? null) === normMut && !i.isSeed
           ? { ...i, quantity: i.quantity + 1 }
           : i
       )
@@ -1910,7 +1912,7 @@ export function harvestPlant(
   // Heirloom Charm: also return the seed (mirrors server logic; edgeHarvest strips
   // inventory from the response so this must be handled optimistically).
   if (plot.plant.heirloomActive) {
-    const seedIdx = newInventory.findIndex((i) => i.speciesId === speciesId && i.isSeed && !i.mutation);
+    const seedIdx = newInventory.findIndex((i) => i.speciesId === speciesId && i.isSeed && (i.mutation ?? null) === null);
     newInventory = seedIdx >= 0
       ? newInventory.map((i, idx) => idx === seedIdx ? { ...i, quantity: i.quantity + 1 } : i)
       : [...newInventory, { speciesId, quantity: 1, isSeed: true }];
