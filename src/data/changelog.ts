@@ -17,9 +17,15 @@ export const CHANGELOGS: ChangelogEntry[] = [
     version: "2.3.1",
     title:   "Flower Expansion & Fan Fix",
     items: [
-      { type: "added", text: "38 new flowers added across common, uncommon, rare, legendary, and mythic rarities; all edge functions updated to recognise the new species" },
-      { type: "fixed", text: "Fan no longer strips Windstruck — the strip branch was matching Windstruck (stored as a string) and removing it; fan now leaves any plant already carrying Windstruck alone" },
-      { type: "fixed", text: "Fan no longer re-applies Windstruck to a plant that already has it — the apply-Windstruck branch now only fires when the plant has no mutation at all" },
+      { type: "added",   text: "38 new flowers added across common, uncommon, rare, legendary, and mythic rarities; all edge functions updated to recognise the new species" },
+      { type: "added",   text: "Unknown seeds now reveal their real species name, emoji, rarity, and type in the plot tooltip as soon as they bloom — no Magnifying Glass needed" },
+      { type: "changed", text: "Weather mutation rates reduced ~1/3 — Rain/Tornado ~23% over the full event, Heatwave/Cold Front ~11%, rare weathers ~5%, Moonlit Night ~3.5% over 10 hours; Giant bloom chance 8% → 5.3%" },
+      { type: "fixed",   text: "Selling v2.3.1 flowers now awards the correct coins — shop-action was missing all 61 new species from its sell-value table, causing sells to remove the bloom but add 0 coins" },
+      { type: "fixed",   text: "Craft duration cards now show exact time (e.g. \"1m 30s\" instead of rounding to \"2 min\"; \"1h 30m\" instead of \"1h\")" },
+      { type: "fixed",   text: "Fan no longer strips Windstruck — the strip branch was matching Windstruck (stored as a string) and removing it; fan now leaves any plant already carrying Windstruck alone" },
+      { type: "fixed",   text: "Fan no longer re-applies Windstruck to a plant that already has it — the apply-Windstruck branch now only fires when the plant has no mutation at all" },
+      { type: "fixed",   text: "Profile garden now shows the correct seed / sprout / bloom emoji for each growth stage instead of always showing the seed emoji for non-bloomed plants" },
+      { type: "fixed",   text: "Exalted gear expiry bar in the profile garden is now the correct slate/white color instead of black" },
     ],
   },
   {

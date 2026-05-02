@@ -2,10 +2,18 @@
 
 ### Added
 - **38 new flowers** — added across common, uncommon, rare, legendary, and mythic rarities; all edge functions (`alchemy-sacrifice`, `botany-convert`, `alchemy-craft-seed`, `use-consumable`, `gear-action`) updated to recognise the new species
+- **Unknown seeds reveal at bloom** — when an unknown plant (???) reaches bloom stage, the plot tooltip now shows the real species name, emoji, rarity, and type badges; no Magnifying Glass required
+
+### Changed
+- **Weather mutation rates reduced ~1/3** — all per-tick rates cut by approximately a third; Rain / Tornado ~23% over the full event, Heatwave / Cold Front ~11%, rare weather events (Golden Hour, Prismatic Skies, Star Shower) ~5%, passive Moonlit Night ~3.5% over 10 hours; Giant bloom flat chance reduced from 8% → 5.3%
 
 ### Fixed
+- **v2.3.1 flowers now award correct coins on sell** — `shop-action` was missing all 61 new species from its sell-value table, causing sells to silently remove the bloom while adding 0 coins
+- **Craft duration display shows exact time** — recipe cards now show e.g. "1m 30s" instead of rounding up to "2 min"; hours display similarly (e.g. "1h 30m" instead of "1h")
 - **Fan no longer strips Windstruck** — the strip branch was matching Windstruck (stored as a string) and incorrectly removing it; fan now leaves any plant already carrying Windstruck alone
 - **Fan no longer re-applies Windstruck to a plant that already has it** — the apply-Windstruck branch fired even when the plant was already Windstruck; apply now only runs when the plant has no mutation at all
+- **Profile garden stage emoji** — the read-only garden on player profiles now shows the correct seed / sprout / bloom emoji for each growth stage instead of always showing the seed emoji for non-bloomed plants
+- **Profile garden Exalted gear bar** — the gear expiry progress bar for Exalted-rarity gear in the read-only profile garden is now the correct slate/white color instead of black
 
 ---
 
