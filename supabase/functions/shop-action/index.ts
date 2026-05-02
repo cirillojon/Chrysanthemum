@@ -14,8 +14,8 @@ function b64url(s: string): string {
 
 // ── Mutation value multipliers (mirrors src/data/flowers.ts) ─────────────────
 const MUTATION_MULTIPLIERS: Record<string, number> = {
-  golden: 4.0, rainbow: 3.0, giant: 2.0, moonlit: 2.5, frozen: 2.0,
-  scorched: 2.0, wet: 1.5, windstruck: 1.1, shocked: 2.5,
+  golden: 4.0, rainbow: 5.0, giant: 2.0, moonlit: 2.5, frozen: 2.0,
+  scorched: 2.0, wet: 1.1, windstruck: 0.7, shocked: 2.0,
 };
 
 // ── Flower sell values (mirrors src/data/flowers.ts) ─────────────────────────
