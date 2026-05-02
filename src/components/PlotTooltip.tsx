@@ -138,9 +138,8 @@ export function PlotTooltip({
     if (c.quantity <= 0) return false;
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
     if (!recipe) return false;
-    // Speed boosts (Forge Haste, Verdant Rush, Resonance Draft) are activated
-    // globally from the inventory — they don't target individual plots.
-    if (recipe.category === "speed_boost") return false;
+    // Speed boosts and seed pouches don't target individual plots.
+    if (recipe.category === "speed_boost" || recipe.category === "seed_pouch") return false;
     // Allow null-tier plant utilities through; block all other null-tier items
     // (seed pouches, etc. are handled elsewhere).
     if (recipe.tier === null && !NULL_TIER_PLANT_CONSUMABLES.has(c.id)) return false;
