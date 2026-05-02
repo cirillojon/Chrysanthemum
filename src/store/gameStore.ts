@@ -1899,13 +1899,22 @@ export function harvestPlant(
   const existing = state.inventory.find(
     (i) => i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
   );
-  const newInventory = existing
+  let newInventory = existing
     ? state.inventory.map((i) =>
         i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
           ? { ...i, quantity: i.quantity + 1 }
           : i
       )
     : [...state.inventory, { speciesId, quantity: 1, mutation, isSeed: false }];
+
+  // Heirloom Charm: also return the seed (mirrors server logic; edgeHarvest strips
+  // inventory from the response so this must be handled optimistically).
+  if (plot.plant.heirloomActive) {
+    const seedIdx = newInventory.findIndex((i) => i.speciesId === speciesId && i.isSeed && !i.mutation);
+    newInventory = seedIdx >= 0
+      ? newInventory.map((i, idx) => idx === seedIdx ? { ...i, quantity: i.quantity + 1 } : i)
+      : [...newInventory, { speciesId, quantity: 1, isSeed: true }];
+  }
 
   // Update codex — add base entry and mutation entry if new
   const newDiscovered = [...state.discovered];
