@@ -338,6 +338,11 @@ export const SHOP_RARITY_WEIGHTS: Partial<Record<Rarity, number>> = {
  * tighter margin (0.85 → 15%). Stops bulk-buying high-rarity seeds from being
  * a free coin printer once the player can afford them.
  */
+function floorToTwoSigFigs(n: number): number {
+  if (n < 100) return n;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(n)) - 1);
+  return Math.floor(n / magnitude) * magnitude;
+}
 const SEED_PRICE_RATIO: Record<Rarity, number> = {
   common:    0.65,
   uncommon:  0.68,
@@ -387,7 +392,7 @@ function generateShop(shopSlots: number = DEFAULT_SHOP_SLOTS): ShopSlot[] {
     usedIds.add(flower.id);
     chosen.push({
       speciesId: flower.id,
-      price:     Math.max(5, Math.floor(flower.sellValue * SEED_PRICE_RATIO[flower.rarity])),
+      price:     floorToTwoSigFigs(Math.max(5, Math.floor(flower.sellValue * SEED_PRICE_RATIO[flower.rarity]))),
       quantity:  Math.floor(Math.random() * 4) + 1,
     });
   }
