@@ -167,6 +167,64 @@ Throttle to **Slow 4G** (DevTools → Network → Throttling) for these.
 
 ---
 
+## J. Sell — v2.3.1 Flowers Award Correct Coins
+
+`shop-action` had missing entries for all v2.3.1 flowers — they were removed from inventory but awarded 0 coins.
+
+| # | Action | Expected |
+|---|--------|----------|
+| J1 | Sell a **Galebloom** (legendary, 4,000 sell value) from Inventory | Coins increase by **4,000** (or × mutation multiplier); bloom removed |
+| J2 | Sell any other v2.3.1 flower (e.g. Infernopetal, Anchorweed, Stormcap) | Coins increase by the correct sell value shown in the inventory card |
+| J3 | DevTools → Network → `shop-action` response for a v2.3.1 sell | `coins` field in response equals pre-sell coins + earned amount (not equal to pre-sell coins) |
+| J4 | Sell a v2.3.1 flower with a mutation (e.g. Golden Galebloom) | Coins increase by `sellValue × mutationMultiplier`; matches the "X 🟡 total" shown on the card |
+
+---
+
+## K. Weather Mutation Rates (v2.3.1 Balance)
+
+All weather mutation rates reduced by ~1/3. Mutations should still occur but feel rarer.
+
+| # | Action | Expected |
+|---|--------|----------|
+| K1 | Wait through a full **Rain** event (20 min) with several bloomed plants | Some plants receive Wet mutation; roughly 1-in-4 chance per plant (down from ~1-in-3) |
+| K2 | Wait through a full **Heatwave** or **Cold Front** (15 min) | Scorched / Frozen mutations appear occasionally; roughly ~11% per plant |
+| K3 | Wait through a **Tornado** (10 min) | Windstruck mutations apply to some bloomed plants; roughly ~23% per plant |
+| K4 | Wait through **Golden Hour**, **Prismatic Skies**, or **Star Shower** | Respective mutations appear on ~5% of bloomed plants |
+| K5 | Let a plant bloom overnight (10 hr) | Occasional passive Moonlit mutation (~3.5% chance over the night) |
+| K6 | DevTools Console: no JS errors or warnings during any weather event | Clean console throughout |
+
+---
+
+## L. Craft Duration Display
+
+`formatDurationLabel` previously rounded 1m 30s → "2 min". Now shows exact minutes + seconds and hours + minutes.
+
+| # | Action | Expected |
+|---|--------|----------|
+| L1 | Open crafting recipe for any **Uncommon** gear (e.g. Fan I, Composter I) | Duration shows **"1m 30s"** — not "2 min" |
+| L2 | Open crafting recipe for any **Rare** gear (e.g. Sprinkler I) | Duration shows **"5 min"** |
+| L3 | Open crafting recipe for any **Legendary** gear (e.g. Sprinkler II) | Duration shows **"25 min"** |
+| L4 | Open crafting recipe for any **Mythic** gear (e.g. Sprinkler III) | Duration shows **"1 hr"** |
+| L5 | Open crafting recipe for any **Exalted** gear (e.g. Sprinkler IV) | Duration shows **"3 hr"** |
+| L6 | Open crafting recipe for any **Prismatic** gear (e.g. Sprinkler V) | Duration shows **"6 hr"** |
+| L7 | Craft a quantity > 1 (e.g. 3× Fan I) | Duration shows e.g. **"4m 30s"** (3 × 1m 30s); per-item breakdown shows "1m 30s × 3" |
+
+---
+
+## M. Bloom Reveal — Unknown Seeds Show Species at Bloom
+
+Previously, seeds planted before their species was discovered stayed as "???" even at bloom stage.
+
+| # | Action | Expected |
+|---|--------|----------|
+| M1 | Plant a seed whose species is **not** in your codex. Let it grow to bloom. Open the plot tooltip. | Tooltip shows the **real species name**, emoji, rarity badge, and type badges — not "???" |
+| M2 | Same plant — check before bloom (seed or sprout stage) | Tooltip still shows **"???"** and seed/sprout emoji (species only revealed at bloom) |
+| M3 | Hover the bloomed plot while it shows the real name. Harvest it. Re-plant the same seed. | During re-grow the species is now in the codex, so it remains identified at all stages |
+| M4 | Use a **Magnifying Glass** on an unknown seed/sprout | Still works as before — reveals species before bloom |
+| M5 | Open the consumable picker on an unknown bloomed plant | Magnifying Glass **does not appear** (already revealed at bloom; no wasted glass) |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```

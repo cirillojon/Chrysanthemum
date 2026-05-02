@@ -423,7 +423,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               <span className="text-xl leading-none">
-                {isBloomed ? (species?.emoji[stage!] ?? "🌸") : "🌱"}
+                {species?.emoji[stage!] ?? "🌱"}
               </span>
 
               {/* Fertilizer — top-left */}
