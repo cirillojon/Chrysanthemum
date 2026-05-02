@@ -1396,7 +1396,7 @@ export function setDevShowGrowthDebug(v: boolean) {
   window.dispatchEvent(new CustomEvent("devGrowthDebugToggle", { detail: v }));
 }
 export function getDevShowGrowthDebug() { return _devShowGrowthDebug; }
-const GIANT_BLOOM_CHANCE   = 0.08;   // 8% flat, only at bloom transition
+const GIANT_BLOOM_CHANCE   = 0.0533; // ~5.3% flat, only at bloom transition
 
 function isNighttime(): boolean {
   const h = new Date().getHours();
