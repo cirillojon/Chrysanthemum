@@ -114,8 +114,8 @@ const OFFSETS_DIAMOND: [number, number][] = [
 
 // ── Gear definitions ───────────────────────────────────────────────────────
 interface GearDef {
-  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis" | "lawnmower" | "fan";
-  /** Radius offsets for radial gear (harvest bell, auto-planter, scarecrow). */
+  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis" | "lawnmower" | "fan" | "sprinkler_regular" | "sprinkler_mutation";
+  /** Radius offsets for radial gear (harvest bell, auto-planter, scarecrow, sprinklers). */
   offsets?: [number, number][];
   /** Line-of-sight cell count for directional gear (fan, aegis, lawnmower). */
   fanRange?: number;
@@ -126,6 +126,12 @@ interface GearDef {
   fanStripPerHour?: number;
   /** Fan only — cumulative Windstruck-apply chance per hour. */
   fanWindstruckPerHour?: number;
+  /** Regular sprinkler only — cumulative Wet chance per hour. */
+  wetPerHour?: number;
+  /** Mutation sprinkler only — which mutation to apply. */
+  mutationType?: string;
+  /** Mutation sprinkler only — cumulative mutation chance per hour. */
+  mutationPerHour?: number;
 }
 const GEAR_DEFS: Record<string, GearDef> = {
   harvest_bell_rare:      { subtype: "harvest_bell", offsets: OFFSETS_CROSS,   durationMs:  4 * 60 * 60 * 1_000 },
@@ -146,6 +152,17 @@ const GEAR_DEFS: Record<string, GearDef> = {
   // Fan — directional; strips Wet mutation or applies Windstruck to unmutated blooms
   fan_uncommon:           { subtype: "fan", fanRange: 2, durationMs: 2 * 60 * 60 * 1_000, fanStripPerHour: 0.50, fanWindstruckPerHour: 0.15 },
   fan_rare:               { subtype: "fan", fanRange: 3, durationMs: 4 * 60 * 60 * 1_000, fanStripPerHour: 0.70, fanWindstruckPerHour: 0.15 },
+  // Regular sprinklers — apply Wet to unmutated blooms
+  sprinkler_rare:         { subtype: "sprinkler_regular", offsets: OFFSETS_CROSS,   durationMs: 1 * 60 * 60 * 1_000, wetPerHour: 0.35 },
+  sprinkler_legendary:    { subtype: "sprinkler_regular", offsets: OFFSETS_3X3,     durationMs: 2 * 60 * 60 * 1_000, wetPerHour: 0.35 },
+  sprinkler_mythic:       { subtype: "sprinkler_regular", offsets: OFFSETS_DIAMOND, durationMs: 4 * 60 * 60 * 1_000, wetPerHour: 0.35 },
+  // Mutation sprinklers — 50% per hour to apply their mutation; Generator (shocked) requires Wet first
+  sprinkler_flame:     { subtype: "sprinkler_mutation", offsets: OFFSETS_3X3, durationMs: 2 * 60 * 60 * 1_000, mutationType: "scorched", mutationPerHour: 0.50 },
+  sprinkler_frost:     { subtype: "sprinkler_mutation", offsets: OFFSETS_3X3, durationMs: 2 * 60 * 60 * 1_000, mutationType: "frozen",   mutationPerHour: 0.50 },
+  sprinkler_lightning: { subtype: "sprinkler_mutation", offsets: OFFSETS_3X3, durationMs: 2 * 60 * 60 * 1_000, mutationType: "shocked",  mutationPerHour: 0.50 },
+  sprinkler_lunar:     { subtype: "sprinkler_mutation", offsets: OFFSETS_3X3, durationMs: 2 * 60 * 60 * 1_000, mutationType: "moonlit",  mutationPerHour: 0.50 },
+  sprinkler_midas:     { subtype: "sprinkler_mutation", offsets: OFFSETS_3X3, durationMs: 2 * 60 * 60 * 1_000, mutationType: "golden",   mutationPerHour: 0.50 },
+  sprinkler_prism:     { subtype: "sprinkler_mutation", offsets: OFFSETS_3X3, durationMs: 2 * 60 * 60 * 1_000, mutationType: "rainbow",  mutationPerHour: 0.50 },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -336,6 +353,72 @@ function rollFan(grid: Plot[][], now: number): { grid: Plot[][]; changed: boolea
           changed = true;
         }
         // Any other mutation or already Windstruck — fan does nothing
+      }
+    }
+  }
+
+  return { grid: changed ? next : grid, changed };
+}
+
+// ── Sprinklers (regular + mutation) ───────────────────────────────────────
+// Mirrors the client-side sprinkler tick in gameStore.ts.
+// Regular sprinklers apply Wet to unmutated blooms.
+// Mutation sprinklers apply their mutation to unmutated blooms, except
+// Generator (shocked) which upgrades Wet → Shocked.
+// Scarecrow blocks all sprinkler mutations.
+function rollSprinklers(grid: Plot[][], shieldCoverage: Map<string, CoverageEntry>, now: number): { grid: Plot[][]; changed: boolean } {
+  let changed = false;
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const next = grid.map(row => [...row.map(p => ({ ...p }))]);
+
+  for (let ri = 0; ri < rows; ri++) {
+    for (let ci = 0; ci < cols; ci++) {
+      const gear = grid[ri][ci]?.gear;
+      if (!gear) continue;
+      const def = GEAR_DEFS[gear.gearType];
+      if (!def) continue;
+      if (def.subtype !== "sprinkler_regular" && def.subtype !== "sprinkler_mutation") continue;
+      if (isExpired(gear, now)) continue;
+      if (!def.offsets) continue;
+
+      const wetPerMin      = def.wetPerHour      ? 1 - Math.pow(1 - def.wetPerHour,      1 / 60) : 0;
+      const mutPerMin      = def.mutationPerHour  ? 1 - Math.pow(1 - def.mutationPerHour, 1 / 60) : 0;
+      const isGenerator    = def.mutationType === "shocked";
+
+      for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols)) {
+        const plot = next[ar][ac];
+        if (!plot.plant || !plot.plant.bloomedAt) continue;
+        if (plot.plant.revealed) continue;
+        if (plot.plant.mutationBlocked) continue;
+
+        // Scarecrow blocks all gear mutations
+        const cov = shieldCoverage.get(`${ar},${ac}`);
+        if (cov?.hasShield) continue;
+
+        const mut = plot.plant.mutation;
+
+        if (def.subtype === "sprinkler_mutation") {
+          if (isGenerator) {
+            // Generator: Wet → Shocked only
+            if (mut === "wet" && Math.random() < mutPerMin) {
+              next[ar][ac] = { ...plot, plant: { ...plot.plant, mutation: "shocked" } };
+              changed = true;
+            }
+          } else {
+            // Other mutation sprinklers: unmutated blooms only
+            if (!mut && Math.random() < mutPerMin) {
+              next[ar][ac] = { ...plot, plant: { ...plot.plant, mutation: def.mutationType! } };
+              changed = true;
+            }
+          }
+        } else {
+          // Regular sprinkler: apply Wet to unmutated blooms
+          if (!mut && Math.random() < wetPerMin) {
+            next[ar][ac] = { ...plot, plant: { ...plot.plant, mutation: "wet" } };
+            changed = true;
+          }
+        }
       }
     }
   }
@@ -1096,6 +1179,10 @@ Deno.serve(async (req: Request) => {
       // 2d. Fan — strip Wet mutation or apply Windstruck to unmutated blooms
       const { grid: fanGrid, changed: fanChanged } = rollFan(sim.grid, now);
       if (fanChanged) sim = { ...sim, grid: fanGrid };
+
+      // 2e. Sprinklers — Wet (regular) and gear mutations (mutation sprinklers)
+      const { grid: sprinklerGrid, changed: sprinklerChanged } = rollSprinklers(sim.grid, shieldCoverage, now);
+      if (sprinklerChanged) sim = { ...sim, grid: sprinklerGrid };
 
       // 3. Harvest bell
       sim = runHarvestBells(sim, now);
