@@ -264,7 +264,11 @@ function affectedCells(
 // + strip pass can do O(1) lookups instead of re-scanning gear per cell.
 //   - hasShield: true if any unexpired Scarecrow OR Aegis covers this cell
 //   - stripPerHour: max scarecrowStripPerHour from any covering Scarecrow
-interface CoverageEntry { hasShield: boolean; stripPerHour: number }
+interface CoverageEntry {
+  hasShield: boolean;    // Scarecrow OR Aegis — blocks weather mutations
+  hasScarecrow: boolean; // Scarecrow only — blocks gear mutations (sprinklers) too
+  stripPerHour: number;
+}
 function buildShieldCoverage(grid: Plot[][], now: number): Map<string, CoverageEntry> {
   const rows = grid.length;
   const cols = grid[0]?.length ?? 0;
@@ -280,10 +284,13 @@ function buildShieldCoverage(grid: Plot[][], now: number): Map<string, CoverageE
 
       for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols, gear.direction)) {
         const key = `${ar},${ac}`;
-        const cur = map.get(key) ?? { hasShield: false, stripPerHour: 0 };
+        const cur = map.get(key) ?? { hasShield: false, hasScarecrow: false, stripPerHour: 0 };
         cur.hasShield = true;
-        if (def.subtype === "scarecrow" && (def.scarecrowStripPerHour ?? 0) > cur.stripPerHour) {
-          cur.stripPerHour = def.scarecrowStripPerHour ?? 0;
+        if (def.subtype === "scarecrow") {
+          cur.hasScarecrow = true;
+          if ((def.scarecrowStripPerHour ?? 0) > cur.stripPerHour) {
+            cur.stripPerHour = def.scarecrowStripPerHour ?? 0;
+          }
         }
         map.set(key, cur);
       }
@@ -392,9 +399,9 @@ function rollSprinklers(grid: Plot[][], shieldCoverage: Map<string, CoverageEntr
         if (plot.plant.revealed) continue;
         if (plot.plant.mutationBlocked) continue;
 
-        // Scarecrow blocks all gear mutations
+        // Scarecrow blocks all gear mutations; Aegis does NOT block sprinklers
         const cov = shieldCoverage.get(`${ar},${ac}`);
-        if (cov?.hasShield) continue;
+        if (cov?.hasScarecrow) continue;
 
         const mut = plot.plant.mutation;
 
