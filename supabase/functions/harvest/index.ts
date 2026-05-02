@@ -104,6 +104,26 @@ const FLOWER_GROWTH_TIMES: Record<string, { seed: number; sprout: number }> = {
   eternal_heart: { seed: 374_400_000, sprout: 748_800_000 }, moonrime: { seed: 385_000_000, sprout: 770_000_000 },
   nova_bloom: { seed: 403_200_000, sprout: 806_400_000 }, shadowgale: { seed: 415_000_000, sprout: 830_000_000 },
   princess_blossom: { seed: 432_000_000, sprout: 864_000_000 },
+  // v2.3.1 flowers
+  cloudveil: { seed: 83_000, sprout: 166_000 }, pepperbloom: { seed: 86_000, sprout: 172_000 },
+  showerbloom: { seed: 102_000, sprout: 204_000 }, creamcap: { seed: 108_000, sprout: 216_000 },
+  duskling: { seed: 112_000, sprout: 224_000 }, moongrass: { seed: 117_000, sprout: 234_000 },
+  owlsage: { seed: 122_000, sprout: 244_000 }, hexblossom: { seed: 135_000, sprout: 270_000 },
+  starfleck: { seed: 145_000, sprout: 290_000 }, cometail: { seed: 158_000, sprout: 316_000 },
+  flurrysprig: { seed: 93_000, sprout: 186_000 }, cloudgrass: { seed: 286_000, sprout: 572_000 },
+  glacierbud: { seed: 268_000, sprout: 536_000 }, brewleaf: { seed: 128_000, sprout: 256_000 },
+  chimebloom: { seed: 308_000, sprout: 616_000 }, evenfall: { seed: 328_000, sprout: 656_000 },
+  sundrift: { seed: 358_000, sprout: 716_000 }, moonspan: { seed: 378_000, sprout: 756_000 },
+  tanglewort: { seed: 418_000, sprout: 836_000 }, medalwort: { seed: 472_000, sprout: 944_000 },
+  topazbloom: { seed: 512_000, sprout: 1_024_000 }, blazecrown: { seed: 978_000, sprout: 1_956_000 },
+  terracotta: { seed: 1_050_000, sprout: 2_100_000 }, frostmark: { seed: 1_260_000, sprout: 2_520_000 },
+  coldsnap: { seed: 1_440_000, sprout: 2_880_000 }, voidpetal: { seed: 1_980_000, sprout: 3_960_000 },
+  galebloom: { seed: 6_200_000, sprout: 12_400_000 }, infernopetal: { seed: 19_800_000, sprout: 39_600_000 },
+  anchorweed: { seed: 25_200_000, sprout: 50_400_000 }, worldroot: { seed: 32_400_000, sprout: 64_800_000 },
+  clearingbloom: { seed: 39_600_000, sprout: 79_200_000 }, permafrost: { seed: 46_800_000, sprout: 93_600_000 },
+  frostspine: { seed: 50_400_000, sprout: 100_800_000 }, tempest_eye: { seed: 57_600_000, sprout: 115_200_000 },
+  thundercrown: { seed: 61_200_000, sprout: 122_400_000 }, moonsmile: { seed: 64_800_000, sprout: 129_600_000 },
+  dreamshade: { seed: 68_400_000, sprout: 136_800_000 }, gravewilt: { seed: 75_600_000, sprout: 151_200_000 },
 };
 
 // Max weather multiplier (thunderstorm 2×) used as grace factor
