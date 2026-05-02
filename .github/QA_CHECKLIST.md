@@ -225,11 +225,70 @@ Previously, seeds planted before their species was discovered stayed as "???" ev
 
 ---
 
+## N. Mutation Sell Multipliers
+
+Multipliers synced between client and server. Key values: Golden 4×, Rainbow 5×, Moonlit 2.5×, Shocked 2.5×, Frozen/Scorched/Giant 2×, Wet 1.1×, Windstruck 0.7×.
+
+| # | Action | Expected |
+|---|--------|----------|
+| N1 | Sell a **Golden** bloom (any species) | Coins increase by `sellValue × 4` |
+| N2 | Sell a **Rainbow** bloom | Coins increase by `sellValue × 5` |
+| N3 | Sell a **Shocked** bloom | Coins increase by `sellValue × 2.5` |
+| N4 | Sell a **Wet** bloom | Coins increase by `sellValue × 1.1` |
+| N5 | Sell a **Windstruck** bloom | Coins increase by `sellValue × 0.7` (less than base) |
+| N6 | DevTools → Network → `shop-action` response | `coins` field matches pre-sell coins + expected amount for each mutation tier |
+
+---
+
+## O. Weather Time Gating
+
+Golden Hour, Prismatic Skies, and Star Shower are now gated to correct Eastern Time windows (server extracts ET hour directly — no longer uses a hardcoded default).
+
+| # | Action | Expected |
+|---|--------|----------|
+| O1 | Check weather forecast between **5–7 AM ET** or **5–9 PM ET** | **Golden Hour** may appear in the forecast; Prismatic Skies and Star Shower do not |
+| O2 | Check forecast between **7 AM–5 PM ET** | **Prismatic Skies** may appear; Golden Hour and Star Shower do not |
+| O3 | Check forecast between **9 PM–5 AM ET** | **Star Shower** may appear; Golden Hour and Prismatic Skies do not |
+| O4 | Wait for a Golden Hour event to fire | Occurs only during a dawn, sunset, or dusk period |
+| O5 | DevTools Console during any weather advance | No errors; weather type matches the current ET time window |
+
+---
+
+## P. Fan — Wet Strip & Windstruck
+
+Fan now only strips the **Wet** mutation (not all mutations). Windstruck application uses a separate lower rate.
+
+| # | Action | Expected |
+|---|--------|----------|
+| P1 | Place a Fan next to a **Wet** bloomed plant | Wet mutation is stripped over time (50–80%/hr depending on tier); plant becomes unmutated |
+| P2 | Place a Fan next to a **Scorched** (or any non-Wet, non-Windstruck) bloomed plant | Fan does **nothing** — mutation stays |
+| P3 | Place a Fan next to an **unmutated** bloomed plant | Windstruck may appear at a low rate (~15%/hr); much rarer than Wet stripping |
+| P4 | Place a Fan next to a **Windstruck** plant | Fan does nothing — already Windstruck |
+| P5 | Navigate away. Return after 10+ minutes with a Fan active on a Wet plant | Wet was stripped during offline tick (server processed it) |
+
+---
+
+## Q. Sprinklers & Mutation Sprinklers — Offline
+
+Sprinklers now run during offline cron ticks. Scarecrow blocks all gear mutations; Aegis blocks weather only.
+
+| # | Action | Expected |
+|---|--------|----------|
+| Q1 | Place a **regular Sprinkler** next to unmutated blooms. Navigate away for 30+ min. Return. | Some blooms have the **Wet** mutation |
+| Q2 | Place a **Heater** (Scorched) or **Cooler** (Frozen) next to unmutated blooms. Navigate away. Return. | Some blooms carry the sprinkler's mutation |
+| Q3 | Place a **Generator** (Shocked) next to Wet blooms. Navigate away. Return. | Some Wet blooms upgraded to **Shocked** |
+| Q4 | Place a **Scarecrow** between an active mutation sprinkler and its target blooms. Navigate away. Return. | Blooms covered by the Scarecrow have **no new mutations** from the sprinkler |
+| Q5 | Place an **Aegis** between a mutation sprinkler and target blooms. Navigate away. Return. | Blooms covered by the Aegis **still receive** the sprinkler mutation (Aegis only blocks weather) |
+| Q6 | Place a **Scarecrow** during a Rain event. Navigate away. Return. | Blooms covered by the Scarecrow have **no Wet mutation** from rain |
+| Q7 | Place an **Aegis** during a Rain event. Navigate away. Return. | Blooms covered by the Aegis have **no Wet mutation** from rain (Aegis blocks weather) |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```
-npm run typecheck   # 0 errors
-npm run lint        # 0 warnings
-npm run test:ci     # all tests green
-npm run build       # clean Vite build
+npm run typecheck
+npm run lint
+npm run test:ci
+npm run build
 ```
