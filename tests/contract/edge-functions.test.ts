@@ -43,7 +43,7 @@ const fns = listEdgeFunctions();
  * CRON_SECRET) instead of the standard Bearer / Authorization header.
  * They are excluded from the Authorization-header assertion only.
  */
-const ADMIN_AUTH_FUNCTIONS = new Set(["admin-broadcast"]);
+const ADMIN_AUTH_FUNCTIONS = new Set(["admin-broadcast", "marketplace-expire"]);
 
 describe("Supabase edge function contract (regression)", () => {
   it("discovers at least one edge function", () => {
