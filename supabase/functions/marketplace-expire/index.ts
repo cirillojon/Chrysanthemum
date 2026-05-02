@@ -1,12 +1,12 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 // This function is called by GitHub Actions cron (not by the client).
-// It expects a secret Bearer token in the Authorization header matching
-// CRON_SECRET env var to prevent unauthorized invocations.
+// It expects the CRON_SECRET env var in the x-cron-secret header.
+// The Authorization header must carry the Supabase service role key (required by the gateway).
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
@@ -30,9 +30,9 @@ Deno.serve(async (req: Request) => {
 
   try {
     // ── Verify cron secret ────────────────────────────────────────────────────
-    const cronSecret = Deno.env.get("CRON_SECRET");
-    const authHeader = req.headers.get("Authorization");
-    if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    const cronSecret   = Deno.env.get("CRON_SECRET");
+    const cronHeader   = req.headers.get("x-cron-secret");
+    if (!cronSecret || cronHeader !== cronSecret) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
