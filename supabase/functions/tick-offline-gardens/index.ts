@@ -114,14 +114,18 @@ const OFFSETS_DIAMOND: [number, number][] = [
 
 // ── Gear definitions ───────────────────────────────────────────────────────
 interface GearDef {
-  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis" | "lawnmower";
+  subtype: "harvest_bell" | "auto_planter" | "scarecrow" | "aegis" | "lawnmower" | "fan";
   /** Radius offsets for radial gear (harvest bell, auto-planter, scarecrow). */
   offsets?: [number, number][];
-  /** Line-of-sight cell count for directional gear (aegis). */
+  /** Line-of-sight cell count for directional gear (fan, aegis, lawnmower). */
   fanRange?: number;
   durationMs: number;
   /** Scarecrow only — cumulative strip chance over a 1-hour window. */
   scarecrowStripPerHour?: number;
+  /** Fan only — cumulative Wet-strip chance per hour. */
+  fanStripPerHour?: number;
+  /** Fan only — cumulative Windstruck-apply chance per hour. */
+  fanWindstruckPerHour?: number;
 }
 const GEAR_DEFS: Record<string, GearDef> = {
   harvest_bell_rare:      { subtype: "harvest_bell", offsets: OFFSETS_CROSS,   durationMs:  4 * 60 * 60 * 1_000 },
@@ -139,6 +143,9 @@ const GEAR_DEFS: Record<string, GearDef> = {
   lawnmower_uncommon:     { subtype: "lawnmower", fanRange: 2, durationMs: 2 * 60 * 60 * 1_000 },
   lawnmower_rare:         { subtype: "lawnmower", fanRange: 3, durationMs: 4 * 60 * 60 * 1_000 },
   lawnmower_legendary:    { subtype: "lawnmower", fanRange: 4, durationMs: 8 * 60 * 60 * 1_000 },
+  // Fan — directional; strips Wet mutation or applies Windstruck to unmutated blooms
+  fan_uncommon:           { subtype: "fan", fanRange: 2, durationMs: 2 * 60 * 60 * 1_000, fanStripPerHour: 0.50, fanWindstruckPerHour: 0.15 },
+  fan_rare:               { subtype: "fan", fanRange: 3, durationMs: 4 * 60 * 60 * 1_000, fanStripPerHour: 0.70, fanWindstruckPerHour: 0.15 },
 };
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -291,6 +298,48 @@ function rollScarecrowStrip(grid: Plot[][], coverage: Map<string, CoverageEntry>
     }
     return plot;
   }));
+  return { grid: changed ? next : grid, changed };
+}
+
+// ── Fan strip / windstruck ─────────────────────────────────────────────────
+// Strips Wet mutation from blooms in the fan's path, or applies Windstruck
+// to unmutated blooms. Skips revealed plants and plants with other mutations.
+function rollFan(grid: Plot[][], now: number): { grid: Plot[][]; changed: boolean } {
+  let changed = false;
+  const rows = grid.length;
+  const cols = grid[0]?.length ?? 0;
+  const next = grid.map(row => [...row.map(p => ({ ...p }))]);
+
+  for (let ri = 0; ri < rows; ri++) {
+    for (let ci = 0; ci < cols; ci++) {
+      const gear = grid[ri][ci]?.gear;
+      if (!gear) continue;
+      const def = GEAR_DEFS[gear.gearType];
+      if (!def || def.subtype !== "fan" || !def.fanStripPerHour) continue;
+      if (isExpired(gear, now)) continue;
+      if (!gear.direction) continue;
+
+      const stripPerMin      = 1 - Math.pow(1 - (def.fanStripPerHour      ?? 0), 1 / 60);
+      const windstruckPerMin = 1 - Math.pow(1 - (def.fanWindstruckPerHour ?? 0), 1 / 60);
+
+      for (const [ar, ac] of affectedCells(gear.gearType, ri, ci, rows, cols, gear.direction)) {
+        const plot = next[ar][ac];
+        if (!plot.plant || !plot.plant.bloomedAt) continue;
+        if (plot.plant.revealed) continue;
+
+        const mut = plot.plant.mutation;
+        if (mut === "wet" && Math.random() < stripPerMin) {
+          next[ar][ac] = { ...plot, plant: { ...plot.plant, mutation: null } };
+          changed = true;
+        } else if (!mut && !plot.plant.mutationBlocked && Math.random() < windstruckPerMin) {
+          next[ar][ac] = { ...plot, plant: { ...plot.plant, mutation: "windstruck" } };
+          changed = true;
+        }
+        // Any other mutation or already Windstruck — fan does nothing
+      }
+    }
+  }
+
   return { grid: changed ? next : grid, changed };
 }
 
@@ -1043,6 +1092,10 @@ Deno.serve(async (req: Request) => {
       // 2c. Scarecrow strip — chance to remove existing mutations from covered plants
       const { grid: stripGrid, changed: stripChanged } = rollScarecrowStrip(sim.grid, shieldCoverage, now);
       if (stripChanged) sim = { ...sim, grid: stripGrid };
+
+      // 2d. Fan — strip Wet mutation or apply Windstruck to unmutated blooms
+      const { grid: fanGrid, changed: fanChanged } = rollFan(sim.grid, now);
+      if (fanChanged) sim = { ...sim, grid: fanGrid };
 
       // 3. Harvest bell
       sim = runHarvestBells(sim, now);

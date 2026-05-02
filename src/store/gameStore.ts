@@ -1638,18 +1638,13 @@ export function tickFanMutations(
 
       for (const { def } of sources) {
         if (!isFan(def) || !def.fanStripChancePerTick) continue;
-        if (Math.random() < def.fanStripChancePerTick) {
-          const mut = plot.plant.mutation;
-          if (typeof mut === "string" && mut !== "windstruck") {
-            // Strip any mutation except Windstruck
-            changed = true;
-            return { ...plot, plant: { ...plot.plant, mutation: null } };
-          } else if (!mut && !plot.plant.mutationBlocked) {
-            // No mutation at all — apply Windstruck (blocked by Purity Vial)
-            changed = true;
-            return { ...plot, plant: { ...plot.plant, mutation: "windstruck" as MutationType } };
-          }
-          // Plant already has Windstruck — fan does nothing
+        const mut = plot.plant.mutation;
+        if (mut === "wet" && def.fanStripChancePerTick && Math.random() < def.fanStripChancePerTick) {
+          changed = true;
+          return { ...plot, plant: { ...plot.plant, mutation: null } };
+        } else if (!mut && !plot.plant.mutationBlocked && def.fanWindstruckChancePerTick && Math.random() < def.fanWindstruckChancePerTick) {
+          changed = true;
+          return { ...plot, plant: { ...plot.plant, mutation: "windstruck" as MutationType } };
         }
       }
 
