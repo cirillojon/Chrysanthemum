@@ -45,6 +45,8 @@ interface Props {
   isHighlighted?:  boolean;
   /** True when this cell is covered by at least one active regular (growth) sprinkler. */
   isUnderSprinkler?: boolean;
+  /** True when this cell is covered by an active Aqueduct (displayed instead of sprinkler 💧). */
+  isUnderAqueduct?: boolean;
   /** Mutation sprinklers covering this cell — emoji for display, label for tooltip. */
   sprinklerMutations?: { emoji: string; label: string }[];
   /** True when this cell is within a scarecrow's radius. */
@@ -67,6 +69,8 @@ interface Props {
   balanceScaleSide?: "boost" | "slow";
   /** True when this cell is within an auto-planter's radius. */
   isUnderAutoPlanter?: boolean;
+  /** True when this cell is shielded by an active Aegis. */
+  isUnderAegis?: boolean;
   /** Direction a crossbreed particle should travel (toward the active cropsticks). */
   crossbreedDirection?: "up" | "down" | "left" | "right";
   /** True when this plant is actively serving as a Cropsticks cross-breed source — blocks manual harvest. */
@@ -82,9 +86,9 @@ export function PlotTile({
   plot, row, col,
   onEmptyClick, onHarvest, onHarvestStart, onHarvestEnd, harvestPending,
   isSelected, isHighlighted,
-  isUnderSprinkler, sprinklerMutations = [],
+  isUnderSprinkler, isUnderAqueduct, sprinklerMutations = [],
   isUnderScarecrow, isUnderComposter, isUnderGrowLamp,
-  isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, balanceScaleSide, isUnderAutoPlanter,
+  isUnderFan, fanDirection, isUnderHarvestBell, isUnderLawnmower, lawnmowerDirection, balanceScaleSide, isUnderAutoPlanter, isUnderAegis,
   crossbreedDirection, isCrossBreeding = false,
   onGearInspect, onGearInspectClose,
   cellSize = "w-16 h-16",
@@ -102,6 +106,15 @@ export function PlotTile({
   const passiveMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
   const boostMult   = plant ? getBoostMultiplier(getState().activeBoosts, "growth", now) : 1.0;
   const gearMult    = passiveMult * boostMult;
+  // Full multiplier shown on the ruler badge — mirrors computeGrowthMs so the
+  // displayed number matches actual growth speed (gear × Verdant Rush × fert ×
+  // weather × mastered).
+  const rulerMult = plant ? (() => {
+    const fMult = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1;
+    const mMult = (plant as PlantedFlower).masteredBonus ?? 1;
+    const wMult = WEATHER[activeWeather as WeatherType]?.growthMultiplier ?? 1;
+    return gearMult * fMult * mMult * wMult;
+  })() : gearMult;
   const stage    = plant ? getCurrentStage(plant, now, activeWeather, gearMult) : null;
   const progress = plant ? getStageProgress(plant, now, activeWeather, gearMult) : 0;
 
@@ -371,6 +384,7 @@ export function PlotTile({
           isCrossBreeding={isCrossBreeding}
           gearGrowthMultiplier={gearMult}
           isUnderSprinkler={isUnderSprinkler}
+          isUnderAqueduct={isUnderAqueduct}
           sprinklerMutations={sprinklerMutations}
           isUnderGrowLamp={isUnderGrowLamp}
           isUnderScarecrow={isUnderScarecrow}
@@ -379,12 +393,13 @@ export function PlotTile({
           isUnderHarvestBell={isUnderHarvestBell}
           isUnderLawnmower={isUnderLawnmower}
           balanceScaleSide={balanceScaleSide}
+          isUnderAegis={isUnderAegis}
         />
       )}
 
       <button
         onClick={handleClick}
-        style={isBloomed && isIdentified && species?.rarity === "prismatic"
+        style={isBloomed && species?.rarity === "prismatic"
           ? { animation: "rainbow-border-cycle 3s linear infinite, rainbow-bg-cycle 3s linear infinite, rainbow-glow-cycle 3s linear infinite" }
           : undefined
         }
@@ -401,19 +416,27 @@ export function PlotTile({
         `}
         title={
           isBloomed
-            ? `${isIdentified ? species?.name : "???"} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
+            ? `${species?.name} — ${plant.infused ? "Infused 💉 · " : ""}Tap for options`
             : open
             ? "Click to close"
             : `${isIdentified ? species?.name : "???"} — Click for options`
         }
       >
         {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide) && (
+        {settings.plotAnimations && !isCrossBreeding && (isUnderSprinkler || isUnderAqueduct || sprinklerMutations.length > 0 || isUnderGrowLamp || isUnderScarecrow || isUnderComposter || isUnderFan || isUnderAutoPlanter || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis) && (
           <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
             {/* Grow lamp: warm amber glow */}
             {isUnderGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
             {/* Sprinkler: 💧 drops falling */}
-            {isUnderSprinkler && (
+            {isUnderSprinkler && !isUnderAqueduct && (
+              <>
+                <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
+                <span className="gear-drop" style={{ left: "74%", animationDelay: "0s"    }}>💧</span>
+              </>
+            )}
+            {/* Aqueduct: 💧 drops falling (same water animation, takes priority over sprinkler) */}
+            {isUnderAqueduct && (
               <>
                 <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
                 <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
@@ -481,6 +504,14 @@ export function PlotTile({
                 <span className="gear-scale-slow" style={{ left: "76%", animationDelay: "0s"    }}>▾</span>
               </>
             )}
+            {/* Aegis: 🛡️ shields rising — weather mutations blocked */}
+            {isUnderAegis && (
+              <>
+                <span className="gear-aegis-shield" style={{ left: "15%", animationDelay: "-1.8s" }}>🛡️</span>
+                <span className="gear-aegis-shield" style={{ left: "50%", animationDelay: "-0.9s" }}>🛡️</span>
+                <span className="gear-aegis-shield" style={{ left: "76%", animationDelay: "0s"    }}>🛡️</span>
+              </>
+            )}
             {/* Fan: 💨 gusts drifting in the fan's direction */}
             {isUnderFan && (() => {
               const dir  = fanDirection ?? "right";
@@ -491,6 +522,16 @@ export function PlotTile({
                 <span key={i} className={cls} style={{ [axis]: pos, animationDelay: `${i * 0.65 - 1.3}s` }}>💨</span>
               ));
             })()}
+          </div>
+        )}
+
+        {/* Verdant Rush overlay — green sparkles while active growth boost is running */}
+        {settings.plotAnimations && boostMult > 1 && !isBloomed && (
+          <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
+            <div className="absolute inset-0 boost-verdant-glow" />
+            <span className="boost-verdant-spark" style={{ left: "15%", animationDelay: "-1.3s" }}>✦</span>
+            <span className="boost-verdant-spark" style={{ left: "50%", animationDelay: "-0.6s" }}>✦</span>
+            <span className="boost-verdant-spark" style={{ left: "78%", animationDelay: "0s"    }}>✦</span>
           </div>
         )}
 
@@ -519,7 +560,7 @@ export function PlotTile({
         )}
 
         <span className="text-2xl leading-none">
-          {isIdentified ? (species?.emoji[stage!] ?? "🌱") : (isBloomed ? "❓" : "🌱")}
+          {(isIdentified || isBloomed) ? (species?.emoji[stage!] ?? "🌱") : "🌱"}
         </span>
 
         {/* Fertilizer indicator — top-left */}
@@ -540,9 +581,10 @@ export function PlotTile({
         )}
 
         {/* Gear effect indicators — bottom-left row */}
-        {settings.plotGearIndicator && (isUnderSprinkler || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || plant.infused || plant.revealed || plant.showMultiplier) && (
+        {settings.plotGearIndicator && (isUnderSprinkler || isUnderAqueduct || sprinklerMutations.length > 0 || isUnderScarecrow || isUnderComposter || isUnderGrowLamp || isUnderFan || isUnderHarvestBell || isUnderLawnmower || !!balanceScaleSide || isUnderAegis || plant.infused || plant.revealed || plant.showMultiplier) && (
           <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2.5"}`}>
-            {isUnderSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
+            {isUnderAqueduct && <span className="text-[9px]" title="Under aqueduct">⛲</span>}
+            {isUnderSprinkler && !isUnderAqueduct && <span className="text-[9px]" title="Under sprinkler">💧</span>}
             {sprinklerMutations.map(({ emoji, label }, i) => (
               <span key={i} className="text-[9px]" title={label}>{emoji}</span>
             ))}
@@ -552,11 +594,12 @@ export function PlotTile({
             {isUnderFan && <span className="text-[9px]" title="In fan range">💨</span>}
             {isUnderHarvestBell && <span className="text-[9px]" title="Auto-harvest active">🔔</span>}
             {isUnderLawnmower && <span className="text-[9px]" title="Lawnmower — directional auto-harvest">🦼</span>}
+            {isUnderAegis && <span className="text-[9px]" title="Aegis — weather mutations blocked">🛡️</span>}
             {balanceScaleSide === "boost" && <span className="text-[9px]" title="Balance Scale — 3× growth boost">⚖️</span>}
             {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× growth penalty">⚖️</span>}
             {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
             {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
-            {plant.showMultiplier && <span className="text-[9px]" title={`Ruler — ${gearMult.toFixed(2)}× total gear growth`}>📏</span>}
+            {plant.showMultiplier && <span className="text-[9px]" title={`Ruler — ${rulerMult.toFixed(2)}× total growth (gear × fert × weather × mastered)`}>📏</span>}
           </div>
         )}
 
@@ -564,7 +607,7 @@ export function PlotTile({
         {plant.showMultiplier && !isBloomed && (
           <div className="absolute top-0.5 inset-x-0 flex justify-center pointer-events-none z-10">
             <span className="bg-amber-500/20 border border-amber-500/25 rounded px-0.5 text-[7px] font-mono leading-tight text-amber-300 whitespace-nowrap">
-              {gearMult.toFixed(2)}×
+              {rulerMult.toFixed(2)}×
             </span>
           </div>
         )}
@@ -608,7 +651,7 @@ export function PlotTile({
         ) : null}
 
         {/* Mutation emoji — bottom-right */}
-        {settings.plotMutationIndicator && isBloomed && isIdentified && (plant as PlantedFlower).mutation && (
+        {settings.plotMutationIndicator && isBloomed && (plant as PlantedFlower).mutation && (
           <span className="absolute -bottom-1 -right-1 text-sm leading-none">
             {MUTATIONS[(plant as PlantedFlower).mutation!].emoji}
           </span>

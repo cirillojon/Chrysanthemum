@@ -20,13 +20,13 @@ export interface GearRecipe {
 // ── Craft duration tiers (ms) ──────────────────────────────────────────────
 
 export const CRAFT_DURATION_MS = {
-  common:    1   * 60_000,           //  1 min
-  uncommon:  3   * 60_000,           //  3 min
-  rare:      10  * 60_000,           // 10 min
-  legendary: 45  * 60_000,           // 45 min
-  mythic:    2.5 * 60 * 60_000,      //  2.5 hr
-  exalted:   6   * 60 * 60_000,      //  6 hr
-  prismatic: 12  * 60 * 60_000,      // 12 hr
+  common:    0.5 * 60_000,           // 30 sec
+  uncommon:  1.5 * 60_000,           //  1m 30s
+  rare:      5   * 60_000,           //  5 min
+  legendary: 25  * 60_000,           // 25 min
+  mythic:    1   * 60 * 60_000,      //  1 hr
+  exalted:   3   * 60 * 60_000,      //  3 hr
+  prismatic: 6   * 60 * 60_000,      //  6 hr
 } as const;
 
 const DU = CRAFT_DURATION_MS.uncommon;
@@ -363,10 +363,10 @@ export function craftDurationFromRarity(rarity: Rarity): number {
 // take longer; rarer flowers also take longer. Mirrored in attune-start.
 
 const ATTUNEMENT_TIER_BASE_MS: Record<1 | 2 | 3 | 4, number> = {
-  1: 10  * 60_000, // 10 min
-  2: 30  * 60_000, // 30 min
-  3: 60  * 60_000, // 1 hr
-  4: 180 * 60_000, // 3 hr
+  1: 5  * 60_000,  //  5 min
+  2: 15 * 60_000,  // 15 min
+  3: 30 * 60_000,  // 30 min
+  4: 90 * 60_000,  //  1h 30m
 };
 
 const ATTUNEMENT_RARITY_MULT: Record<Rarity, number> = {

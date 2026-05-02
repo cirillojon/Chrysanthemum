@@ -43,6 +43,9 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   { id: "saltmoss",     rarity: "common",   types: ["tide"] },
   { id: "ashpetal",     rarity: "common",   types: ["shadow", "zephyr"] },
   { id: "snowdrift",    rarity: "common",   types: ["frost"] },
+  // COMMON — v2.3.0
+  { id: "stormcap",     rarity: "common",   types: ["storm"] },
+  { id: "stardust",     rarity: "common",   types: ["stellar"] },
   // UNCOMMON
   { id: "swiftbloom",     rarity: "uncommon", types: ["zephyr"] },
   { id: "shortcress",     rarity: "uncommon", types: ["grove"] },
@@ -72,6 +75,8 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   { id: "coral_bells",    rarity: "uncommon", types: ["tide", "fairy"] },
   { id: "sundew",         rarity: "uncommon", types: ["grove", "shadow"] },
   { id: "bubblebloom",    rarity: "uncommon", types: ["tide", "fairy"] },
+  // UNCOMMON — v2.3.0
+  { id: "moonstrike",    rarity: "uncommon", types: ["storm", "lunar"] },
   // RARE
   { id: "flashpetal",        rarity: "rare", types: ["storm"] },
   { id: "rushwillow",        rarity: "rare", types: ["zephyr", "tide"] },
@@ -101,6 +106,8 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   { id: "stargazer_lily",    rarity: "rare", types: ["stellar"] },
   { id: "prism_lily",        rarity: "rare", types: ["arcane", "stellar"] },
   { id: "dusk_orchid",       rarity: "rare", types: ["lunar", "solar"] },
+  // RARE — v2.3.0
+  { id: "winterwood",        rarity: "rare",      types: ["grove", "frost"] },
   // LEGENDARY
   { id: "firstbloom",       rarity: "legendary", types: ["solar", "fairy"] },
   { id: "haste_lily",       rarity: "legendary", types: ["zephyr", "storm"] },
@@ -163,6 +170,10 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   // EXALTED — Cropsticks recipe outputs (Tier 3)
   { id: "void_chrysalis", rarity: "exalted", types: ["arcane"]   },
   { id: "starloom",       rarity: "exalted", types: ["stellar"]  },
+  // EXALTED — v2.3.0
+  { id: "deeproot",       rarity: "exalted", types: ["tide",  "grove"]  },
+  { id: "rimestorm",      rarity: "exalted", types: ["frost", "storm"]  },
+  { id: "solglow",        rarity: "exalted", types: ["solar", "fairy"]  },
   // PRISMATIC
   { id: "dreambloom",        rarity: "prismatic", types: ["fairy", "arcane"] },
   { id: "fairy_blossom",     rarity: "prismatic", types: ["fairy"] },
@@ -172,6 +183,54 @@ const FLOWERS: { id: string; rarity: Rarity; types: FlowerType[] }[] = [
   { id: "princess_blossom",  rarity: "prismatic", types: ["fairy", "arcane"] },
   // PRISMATIC — Cropsticks recipe output (Tier 4)
   { id: "the_first_bloom", rarity: "prismatic", types: ["arcane", "stellar"] },
+  // PRISMATIC — v2.3.0
+  { id: "islebloom",       rarity: "prismatic", types: ["tide",   "grove"]  },
+  { id: "moonrime",        rarity: "prismatic", types: ["frost",  "lunar"]  },
+  { id: "shadowgale",      rarity: "prismatic", types: ["shadow", "zephyr"] },
+  // ── v2.3.1 — new flowers ─────────────────────────────────────────────────
+  // Common
+  { id: "cloudveil",    rarity: "common",    types: ["storm"] },
+  { id: "pepperbloom",  rarity: "common",    types: ["blaze"] },
+  { id: "flurrysprig",  rarity: "common",    types: ["frost"] },
+  { id: "showerbloom",  rarity: "common",    types: ["storm", "tide"] },
+  { id: "creamcap",     rarity: "common",    types: ["frost", "fairy"] },
+  { id: "duskling",     rarity: "common",    types: ["lunar"] },
+  { id: "moongrass",    rarity: "common",    types: ["lunar"] },
+  { id: "owlsage",      rarity: "common",    types: ["shadow", "arcane"] },
+  { id: "brewleaf",     rarity: "common",    types: ["arcane", "grove"] },
+  { id: "hexblossom",   rarity: "common",    types: ["arcane"] },
+  { id: "starfleck",    rarity: "common",    types: ["stellar"] },
+  { id: "cometail",     rarity: "common",    types: ["stellar"] },
+  // Uncommon
+  { id: "glacierbud",   rarity: "uncommon",  types: ["frost"] },
+  { id: "cloudgrass",   rarity: "uncommon",  types: ["storm"] },
+  { id: "chimebloom",   rarity: "uncommon",  types: ["storm", "arcane"] },
+  { id: "evenfall",     rarity: "uncommon",  types: ["lunar", "shadow"] },
+  { id: "sundrift",     rarity: "uncommon",  types: ["solar", "zephyr"] },
+  { id: "moonspan",     rarity: "uncommon",  types: ["lunar", "tide"] },
+  { id: "tanglewort",   rarity: "uncommon",  types: ["shadow"] },
+  { id: "medalwort",    rarity: "uncommon",  types: ["stellar"] },
+  { id: "topazbloom",   rarity: "uncommon",  types: ["stellar"] },
+  // Rare
+  { id: "blazecrown",   rarity: "rare",      types: ["blaze"] },
+  { id: "terracotta",   rarity: "rare",      types: ["grove", "blaze"] },
+  { id: "frostmark",    rarity: "rare",      types: ["frost"] },
+  { id: "coldsnap",     rarity: "rare",      types: ["frost", "storm"] },
+  { id: "voidpetal",    rarity: "rare",      types: ["shadow", "arcane"] },
+  // Legendary
+  { id: "galebloom",    rarity: "legendary", types: ["zephyr"] },
+  // Mythic
+  { id: "infernopetal", rarity: "mythic",    types: ["blaze"] },
+  { id: "anchorweed",   rarity: "mythic",    types: ["tide", "shadow"] },
+  { id: "worldroot",    rarity: "mythic",    types: ["grove", "arcane"] },
+  { id: "clearingbloom",rarity: "mythic",    types: ["grove", "solar"] },
+  { id: "permafrost",   rarity: "mythic",    types: ["frost"] },
+  { id: "frostspine",   rarity: "mythic",    types: ["frost", "storm"] },
+  { id: "tempest_eye",  rarity: "mythic",    types: ["storm"] },
+  { id: "thundercrown", rarity: "mythic",    types: ["storm"] },
+  { id: "moonsmile",    rarity: "mythic",    types: ["lunar", "fairy"] },
+  { id: "dreamshade",   rarity: "mythic",    types: ["fairy", "arcane"] },
+  { id: "gravewilt",    rarity: "mythic",    types: ["shadow"] },
 ];
 
 const FLOWER_MAP = new Map(FLOWERS.map((f) => [f.id, f]));

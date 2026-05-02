@@ -176,6 +176,7 @@ export interface GearDefinition {
   fanRange?: number;
   /** Fan: per-tick probability to strip mutation (or apply windstruck if none) */
   fanStripChancePerTick?: number;
+  fanWindstruckChancePerTick?: number;
   /** Scarecrow: per-tick probability to strip an existing mutation from a covered plant */
   mutationStripChancePerTick?: number;
 }
@@ -531,7 +532,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
   fan_uncommon: {
     id:                    "fan_uncommon",
     name:                  "Fan I",
-    description:           "Blows in one direction across 2 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 2 hours.",
+    description:           "Blows in one direction across 2 plants. Low chance to strip Wet from blooms each minute. Very low chance to apply Windstruck to unmutated blooms. Lasts 2 hours.",
     emoji:                 "💨",
     rarity:                "uncommon",
     shopPrice:             600,
@@ -539,13 +540,14 @@ export const GEAR: Record<GearType, GearDefinition> = {
     passiveSubtype:        "fan",
     durationMs:            DURATION_2H,
     fanRange:              2,
-    fanStripChancePerTick: perTickChance(0.50, DURATION_2H),
+    fanStripChancePerTick:       perTickChance(0.50, DURATION_2H),
+    fanWindstruckChancePerTick:  perTickChance(0.15, DURATION_2H),
   },
 
   fan_rare: {
     id:                    "fan_rare",
     name:                  "Fan II",
-    description:           "Blows in one direction across 3 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 4 hours.",
+    description:           "Blows in one direction across 3 plants. Moderate chance to strip Wet from blooms each minute. Very low chance to apply Windstruck to unmutated blooms. Lasts 4 hours.",
     emoji:                 "💨",
     rarity:                "rare",
     shopPrice:             2400,
@@ -553,13 +555,14 @@ export const GEAR: Record<GearType, GearDefinition> = {
     passiveSubtype:        "fan",
     durationMs:            DURATION_4H,
     fanRange:              3,
-    fanStripChancePerTick: perTickChance(0.70, DURATION_4H),
+    fanStripChancePerTick:       perTickChance(0.70, DURATION_4H),
+    fanWindstruckChancePerTick:  perTickChance(0.15, DURATION_4H),
   },
 
   fan_legendary: {
     id:                    "fan_legendary",
     name:                  "Fan III",
-    description:           "Blows in one direction across 4 plants. Strips mutations from blooms — or applies Windstruck if there's none. Lasts 8 hours.",
+    description:           "Blows in one direction across 4 plants. High chance to strip Wet from blooms each minute. Very low chance to apply Windstruck to unmutated blooms. Lasts 8 hours.",
     emoji:                 "💨",
     rarity:                "legendary",
     shopPrice:             16_000,
@@ -567,7 +570,8 @@ export const GEAR: Record<GearType, GearDefinition> = {
     passiveSubtype:        "fan",
     durationMs:            DURATION_8H,
     fanRange:              4,
-    fanStripChancePerTick: perTickChance(0.80, DURATION_8H),
+    fanStripChancePerTick:       perTickChance(0.80, DURATION_8H),
+    fanWindstruckChancePerTick:  perTickChance(0.15, DURATION_8H),
   },
 
   // ── Harvest Bell ─────────────────────────────────────────────────────────

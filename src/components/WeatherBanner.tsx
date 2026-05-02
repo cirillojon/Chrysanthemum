@@ -7,6 +7,8 @@ interface Props {
   isActive: boolean;
   msLeft: number;
   period: DayPeriodDefinition;
+  /** When true, hides the weather time countdown (e.g. when boosts fill the HUD). */
+  suppressTime?: boolean;
 }
 
 const SHORT_NAMES: Record<WeatherType, string> = {
@@ -58,7 +60,7 @@ const bgClass: Record<WeatherType, string> = {
   tornado:         "bg-stone-950/50",
 };
 
-export function WeatherBanner({ weatherType, isActive, msLeft, period }: Props) {
+export function WeatherBanner({ weatherType, isActive, msLeft, period, suppressTime = false }: Props) {
   const def = WEATHER[weatherType];
   const weatherActive = isActive && weatherType !== "clear";
 
@@ -81,8 +83,8 @@ export function WeatherBanner({ weatherType, isActive, msLeft, period }: Props) 
           <span className="opacity-40">·</span>
           <span className="text-sm">{def.emoji}</span>
           <span className="font-semibold hidden">{SHORT_NAMES[weatherType]}</span>
-          <span className="opacity-70 sm:hidden">{formatTimeLeftShort(msLeft)}</span>
-          <span className="opacity-70 hidden sm:inline">{formatTimeLeft(msLeft)}</span>
+          {!suppressTime && <span className="opacity-70 sm:hidden">{formatTimeLeftShort(msLeft)}</span>}
+          {!suppressTime && <span className="opacity-70 hidden sm:inline">{formatTimeLeft(msLeft)}</span>}
         </>
       )}
 

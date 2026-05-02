@@ -55,6 +55,25 @@ export const SPECIES_RARITY: Record<string, string> = {
   dreambloom: "prismatic",  fairy_blossom: "prismatic", lovebind: "prismatic",
   eternal_heart: "prismatic",nova_bloom: "prismatic",  princess_blossom: "prismatic",
   the_first_bloom: "prismatic",
+  // ── New common flowers ──────────────────────────────────────────────────
+  cloudveil: "common",      pepperbloom: "common",      flurrysprig: "common",
+  showerbloom: "common",    creamcap: "common",          duskling: "common",
+  moongrass: "common",      owlsage: "common",           brewleaf: "common",
+  hexblossom: "common",     starfleck: "common",         cometail: "common",
+  // ── New uncommon flowers ─────────────────────────────────────────────────
+  glacierbud: "uncommon",   cloudgrass: "uncommon",      chimebloom: "uncommon",
+  evenfall: "uncommon",     sundrift: "uncommon",         moonspan: "uncommon",
+  tanglewort: "uncommon",   medalwort: "uncommon",        topazbloom: "uncommon",
+  // ── New rare flowers ─────────────────────────────────────────────────────
+  blazecrown: "rare",       terracotta: "rare",           frostmark: "rare",
+  coldsnap: "rare",         voidpetal: "rare",
+  // ── New legendary flower ─────────────────────────────────────────────────
+  galebloom: "legendary",
+  // ── New mythic flowers ───────────────────────────────────────────────────
+  infernopetal: "mythic",   anchorweed: "mythic",        worldroot: "mythic",
+  clearingbloom: "mythic",  permafrost: "mythic",         frostspine: "mythic",
+  tempest_eye: "mythic",    thundercrown: "mythic",       moonsmile: "mythic",
+  dreamshade: "mythic",     gravewilt: "mythic",
 };
 
 export const SPECIES_TYPES: Record<string, string[]> = {
@@ -109,6 +128,25 @@ export const SPECIES_TYPES: Record<string, string[]> = {
   dreambloom: ["fairy","arcane"],    fairy_blossom: ["fairy"],            lovebind: ["fairy","arcane"],
   eternal_heart: ["fairy","solar"],  nova_bloom: ["stellar","storm","blaze"],princess_blossom: ["fairy","arcane"],
   the_first_bloom: ["arcane","stellar"],
+  // ── New common flowers ──────────────────────────────────────────────────
+  cloudveil: ["storm"],              pepperbloom: ["blaze"],              flurrysprig: ["frost"],
+  showerbloom: ["storm","tide"],     creamcap: ["frost","fairy"],          duskling: ["lunar"],
+  moongrass: ["lunar"],              owlsage: ["shadow","arcane"],         brewleaf: ["arcane","grove"],
+  hexblossom: ["arcane"],            starfleck: ["stellar"],               cometail: ["stellar"],
+  // ── New uncommon flowers ─────────────────────────────────────────────────
+  glacierbud: ["frost"],             cloudgrass: ["storm"],               chimebloom: ["storm","arcane"],
+  evenfall: ["lunar","shadow"],      sundrift: ["solar","zephyr"],         moonspan: ["lunar","tide"],
+  tanglewort: ["shadow"],            medalwort: ["stellar"],               topazbloom: ["stellar"],
+  // ── New rare flowers ─────────────────────────────────────────────────────
+  blazecrown: ["blaze"],             terracotta: ["grove","blaze"],        frostmark: ["frost"],
+  coldsnap: ["frost","storm"],       voidpetal: ["shadow","arcane"],
+  // ── New legendary flower ─────────────────────────────────────────────────
+  galebloom: ["zephyr"],
+  // ── New mythic flowers ───────────────────────────────────────────────────
+  infernopetal: ["blaze"],           anchorweed: ["tide","shadow"],        worldroot: ["grove","arcane"],
+  clearingbloom: ["grove","solar"],  permafrost: ["frost"],                frostspine: ["frost","storm"],
+  tempest_eye: ["storm"],            thundercrown: ["storm"],              moonsmile: ["lunar","fairy"],
+  dreamshade: ["fairy","arcane"],    gravewilt: ["shadow"],
 };
 
 export const INFUSE_GOLD_COST: Record<string, [number, number, number, number]> = {
@@ -151,10 +189,10 @@ export function computeTier(effectiveEssence: number): 1 | 2 | 3 | 4 {
 // ── Duration formula (mirrors src/data/gear-recipes.ts attunementDurationMs) ─
 
 const ATTUNEMENT_TIER_BASE_MS: Record<1 | 2 | 3 | 4, number> = {
-  1: 10  * 60_000,
-  2: 30  * 60_000,
-  3: 60  * 60_000,
-  4: 180 * 60_000,
+  1: 5  * 60_000,  //  5 min
+  2: 15 * 60_000,  // 15 min
+  3: 30 * 60_000,  // 30 min
+  4: 90 * 60_000,  //  1h 30m
 };
 
 const ATTUNEMENT_RARITY_MULT: Record<string, number> = {

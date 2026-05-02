@@ -30,7 +30,7 @@ import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType) => void }) {
-  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, user, requestSignIn } = useGame();
+  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, saveGridNow, user, requestSignIn } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -58,11 +58,19 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const latest  = getState();                            // always the freshest state
     let next = stampStageTransitions(latest, now, weather);
     next = tickWeatherMutations(next, weather);
+    // Track whether a sprinkler tick newly mutated any plant so we can flush to
+    // the DB — the server's harvest function reads plant.mutation from the DB,
+    // and sprinkler mutations are purely client-side until cloud-saved.
+    const beforeSprinkler = next;
     next = tickSprinklerMutations(next, weather);
+    const sprinklerMutated = next !== beforeSprinkler;
     next = tickScarecrowStrip(next, weather);
     next = tickFanMutations(next, weather);
     next = assignBloomMutations(next, weather);
     if (next !== latest) update(next);
+    // Persist sprinkler mutations to the DB immediately so harvest sees them.
+    // saveGridNow is a no-op for guests and during loading — safe to fire and forget.
+    if (sprinklerMutated) saveGridNow();
 
     // Bell harvests — throttled to 1 per GEAR_ACTION_INTERVAL_MS to prevent server races
     const bellTargets = findHarvestBellTargets(next, weather);
@@ -249,10 +257,11 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   }, [highlightSource, state.farmRows, state.farmSize, state.grid]);
 
   // Per-cell gear coverage — used for plant indicator icons
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, lawnmowerCoveredCells, balanceScaleCoveredCells, autoPlantCoveredCells } =
+  const { regularSprinklerKeys, aqueductCoveredCells, mutationSprinklerMap, scarecrowCoveredCells, composterCoveredCells, growLampKeys, fanCoveredCells, harvestBellCoveredCells, lawnmowerCoveredCells, balanceScaleCoveredCells, autoPlantCoveredCells, aegisCoveredCells } =
     useMemo(() => {
-      const regular  = new Set<string>();
-      const mutation = new Map<string, { emoji: string; label: string }[]>(); // cellKey → unique mutation sprinklers
+      const regular   = new Set<string>(); // sprinkler_regular only — excludes aqueduct
+      const aqueduct  = new Set<string>(); // aqueduct only — displayed separately from sprinkler
+      const mutation  = new Map<string, { emoji: string; label: string }[]>(); // cellKey → unique mutation sprinklers
       const scarecrow = new Set<string>();
       const composter = new Set<string>();
       const growLamp  = new Set<string>();
@@ -261,6 +270,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const lawnmower    = new Map<string, FanDirection>();
       const balanceScale = new Map<string, "boost" | "slow">();
       const autoPlanter  = new Set<string>();
+      const aegis        = new Set<string>();
       const now = Date.now();
       for (let ri = 0; ri < state.grid.length; ri++) {
         for (let ci = 0; ci < state.grid[ri].length; ci++) {
@@ -269,8 +279,10 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
           const def     = GEAR[g.gearType];
           const affected = getAffectedCells(g.gearType, ri, ci, state.farmRows, state.farmSize, g.direction);
           const keys    = affected.map(([r, c]) => `${r}-${c}`);
-          if (def.category === "sprinkler_regular" || def.passiveSubtype === "aqueduct") {
+          if (def.category === "sprinkler_regular" && def.passiveSubtype !== "aqueduct") {
             keys.forEach((k) => regular.add(k));
+          } else if (def.passiveSubtype === "aqueduct") {
+            keys.forEach((k) => aqueduct.add(k));
           } else if (def.category === "sprinkler_mutation" && def.mutationType) {
             const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
             const label = def.name;
@@ -305,10 +317,12 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             });
           } else if (def.passiveSubtype === "auto_planter") {
             keys.forEach((k) => autoPlanter.add(k));
+          } else if (def.passiveSubtype === "aegis") {
+            keys.forEach((k) => aegis.add(k));
           }
         }
       }
-      return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, lawnmowerCoveredCells: lawnmower, balanceScaleCoveredCells: balanceScale, autoPlantCoveredCells: autoPlanter };
+      return { regularSprinklerKeys: regular, aqueductCoveredCells: aqueduct, mutationSprinklerMap: mutation, scarecrowCoveredCells: scarecrow, composterCoveredCells: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellCoveredCells: harvestBell, lawnmowerCoveredCells: lawnmower, balanceScaleCoveredCells: balanceScale, autoPlantCoveredCells: autoPlanter, aegisCoveredCells: aegis };
     }, [state.grid, state.farmRows, state.farmSize]);
 
   // Plant cells adjacent to active cropsticks, mapped to the direction their
@@ -650,6 +664,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 isSelected={selectedPlot?.row === row && selectedPlot?.col === col}
                 isHighlighted={highlightedCells.has(`${row}-${col}`)}
                 isUnderSprinkler={regularSprinklerKeys.has(`${row}-${col}`)}
+                isUnderAqueduct={aqueductCoveredCells.has(`${row}-${col}`)}
                 sprinklerMutations={mutationSprinklerMap.get(`${row}-${col}`) ?? []}
                 isUnderScarecrow={scarecrowCoveredCells.has(`${row}-${col}`)}
                 isUnderComposter={composterCoveredCells.has(`${row}-${col}`)}
@@ -661,6 +676,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 lawnmowerDirection={lawnmowerCoveredCells.get(`${row}-${col}`)}
                 balanceScaleSide={balanceScaleCoveredCells.get(`${row}-${col}`)}
                 isUnderAutoPlanter={autoPlantCoveredCells.has(`${row}-${col}`)}
+                isUnderAegis={aegisCoveredCells.has(`${row}-${col}`)}
                 crossbreedDirection={crossbreedSourceCells.get(`${row}-${col}`)}
                 isCrossBreeding={crossbreedSourceCells.has(`${row}-${col}`)}
                 onGearInspect={(r, c, gt) => setHighlightSource({ row: r, col: c, gearType: gt })}

@@ -1,7 +1,9 @@
 -- Add last_seen_at to the leaderboard view so the client can show
 -- online / away / offline presence indicators next to each entry.
 
-CREATE OR REPLACE VIEW leaderboard AS
+DROP VIEW IF EXISTS leaderboard;
+
+CREATE VIEW leaderboard AS
 SELECT
   u.id,
   u.username,

@@ -81,6 +81,28 @@ const FLOWERS: { id: string; rarity: Rarity }[] = [
   { id: "dreambloom", rarity: "prismatic" }, { id: "fairy_blossom", rarity: "prismatic" },
   { id: "lovebind", rarity: "prismatic" }, { id: "eternal_heart", rarity: "prismatic" },
   { id: "nova_bloom", rarity: "prismatic" }, { id: "princess_blossom", rarity: "prismatic" },
+  // ── v2.3.1 — new flowers ─────────────────────────────────────────────────
+  { id: "cloudveil", rarity: "common" },    { id: "pepperbloom", rarity: "common" },
+  { id: "flurrysprig", rarity: "common" },  { id: "showerbloom", rarity: "common" },
+  { id: "creamcap", rarity: "common" },     { id: "duskling", rarity: "common" },
+  { id: "moongrass", rarity: "common" },    { id: "owlsage", rarity: "common" },
+  { id: "brewleaf", rarity: "common" },     { id: "hexblossom", rarity: "common" },
+  { id: "starfleck", rarity: "common" },    { id: "cometail", rarity: "common" },
+  { id: "glacierbud", rarity: "uncommon" }, { id: "cloudgrass", rarity: "uncommon" },
+  { id: "chimebloom", rarity: "uncommon" }, { id: "evenfall", rarity: "uncommon" },
+  { id: "sundrift", rarity: "uncommon" },   { id: "moonspan", rarity: "uncommon" },
+  { id: "tanglewort", rarity: "uncommon" }, { id: "medalwort", rarity: "uncommon" },
+  { id: "topazbloom", rarity: "uncommon" },
+  { id: "blazecrown", rarity: "rare" },     { id: "terracotta", rarity: "rare" },
+  { id: "frostmark", rarity: "rare" },      { id: "coldsnap", rarity: "rare" },
+  { id: "voidpetal", rarity: "rare" },
+  { id: "galebloom", rarity: "legendary" },
+  { id: "infernopetal", rarity: "mythic" }, { id: "anchorweed", rarity: "mythic" },
+  { id: "worldroot", rarity: "mythic" },    { id: "clearingbloom", rarity: "mythic" },
+  { id: "permafrost", rarity: "mythic" },   { id: "frostspine", rarity: "mythic" },
+  { id: "tempest_eye", rarity: "mythic" },  { id: "thundercrown", rarity: "mythic" },
+  { id: "moonsmile", rarity: "mythic" },    { id: "dreamshade", rarity: "mythic" },
+  { id: "gravewilt", rarity: "mythic" },
 ];
 
 const BOTANY_REQUIREMENTS: Partial<Record<Rarity, number>> = {

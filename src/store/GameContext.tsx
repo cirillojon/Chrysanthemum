@@ -40,6 +40,11 @@ interface GameContextValue {
   /** Re-reads the authoritative save from DB and replaces local state. Use when the client
    *  detects it's out of sync with the server (e.g. cron planted seeds the client doesn't know about). */
   reloadFromCloud: () => Promise<void>;
+  /** Flush the current grid to the cloud immediately. Used after client-side
+   *  mutation ticks (e.g. sprinkler mutations) so the mutation is in the DB
+   *  before the server's harvest function reads it. No-ops when not logged in
+   *  or saves are temporarily disabled. */
+  saveGridNow: () => Promise<void>;
   /** Optimistic action: applies newState immediately, calls serverFn, merges delta on success, rolls back on failure. */
   perform: <T extends Partial<GameState>>(
     optimisticState: GameState,
@@ -528,6 +533,18 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setState(fresh);
   }, [user]);
 
+  /** Persist the current grid to the DB immediately. Called by Garden after a
+   *  sprinkler mutation tick so that server-side harvest can read the mutation.
+   *  Skipped when not logged in or saves are disabled (loading / sign-out). */
+  const saveGridNow = useCallback(async () => {
+    if (!user || !saveEnabled.current) return;
+    const saved = await saveToCloud(user.id, stateRef.current);
+    if (saved) {
+      stateRef.current = { ...stateRef.current, serverUpdatedAt: saved };
+      setState((prev) => ({ ...prev, serverUpdatedAt: saved }));
+    }
+  }, [user]);
+
   // Global queue for harvest server calls — ensures they execute one at a time
   // so concurrent DB reads/writes don't overwrite each other's grid changes.
   const harvestQueue = useRef<Promise<unknown>>(Promise.resolve());
@@ -628,7 +645,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <GameContext.Provider value={{
-      state, update, getState, perform, awaitHarvests, queueWork, reloadFromCloud,
+      state, update, getState, perform, awaitHarvests, queueWork, reloadFromCloud, saveGridNow,
       offlineSummary, clearSummary: () => setOfflineSummary(EMPTY_SUMMARY),
       shopJustRestocked,   clearShopNotification:   () => setShopJustRestocked(false),
       supplyJustRestocked, clearSupplyNotification: () => setSupplyJustRestocked(false),

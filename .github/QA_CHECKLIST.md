@@ -167,11 +167,141 @@ Throttle to **Slow 4G** (DevTools → Network → Throttling) for these.
 
 ---
 
+## J. Sell — v2.3.1 Flowers Award Correct Coins
+
+`shop-action` had missing entries for all v2.3.1 flowers — they were removed from inventory but awarded 0 coins.
+
+| # | Action | Expected |
+|---|--------|----------|
+| J1 | Sell a **Galebloom** (legendary, 4,000 sell value) from Inventory | Coins increase by **4,000** (or × mutation multiplier); bloom removed |
+| J2 | Sell any other v2.3.1 flower (e.g. Infernopetal, Anchorweed, Stormcap) | Coins increase by the correct sell value shown in the inventory card |
+| J3 | DevTools → Network → `shop-action` response for a v2.3.1 sell | `coins` field in response equals pre-sell coins + earned amount (not equal to pre-sell coins) |
+| J4 | Sell a v2.3.1 flower with a mutation (e.g. Golden Galebloom) | Coins increase by `sellValue × mutationMultiplier`; matches the "X 🟡 total" shown on the card |
+
+---
+
+## K. Weather Mutation Rates (v2.3.1 Balance)
+
+All weather mutation rates reduced by ~1/3. Mutations should still occur but feel rarer.
+
+| # | Action | Expected |
+|---|--------|----------|
+| K1 | Wait through a full **Rain** event (20 min) with several bloomed plants | Some plants receive Wet mutation; roughly 1-in-4 chance per plant (down from ~1-in-3) |
+| K2 | Wait through a full **Heatwave** or **Cold Front** (15 min) | Scorched / Frozen mutations appear occasionally; roughly ~11% per plant |
+| K3 | Wait through a **Tornado** (10 min) | Windstruck mutations apply to some bloomed plants; roughly ~23% per plant |
+| K4 | Wait through **Golden Hour**, **Prismatic Skies**, or **Star Shower** | Respective mutations appear on ~5% of bloomed plants |
+| K5 | Let a plant bloom overnight (10 hr) | Occasional passive Moonlit mutation (~3.5% chance over the night) |
+| K6 | DevTools Console: no JS errors or warnings during any weather event | Clean console throughout |
+
+---
+
+## L. Craft Duration Display
+
+`formatDurationLabel` previously rounded 1m 30s → "2 min". Now shows exact minutes + seconds and hours + minutes.
+
+| # | Action | Expected |
+|---|--------|----------|
+| L1 | Open crafting recipe for any **Uncommon** gear (e.g. Fan I, Composter I) | Duration shows **"1m 30s"** — not "2 min" |
+| L2 | Open crafting recipe for any **Rare** gear (e.g. Sprinkler I) | Duration shows **"5 min"** |
+| L3 | Open crafting recipe for any **Legendary** gear (e.g. Sprinkler II) | Duration shows **"25 min"** |
+| L4 | Open crafting recipe for any **Mythic** gear (e.g. Sprinkler III) | Duration shows **"1 hr"** |
+| L5 | Open crafting recipe for any **Exalted** gear (e.g. Sprinkler IV) | Duration shows **"3 hr"** |
+| L6 | Open crafting recipe for any **Prismatic** gear (e.g. Sprinkler V) | Duration shows **"6 hr"** |
+| L7 | Craft a quantity > 1 (e.g. 3× Fan I) | Duration shows e.g. **"4m 30s"** (3 × 1m 30s); per-item breakdown shows "1m 30s × 3" |
+
+---
+
+## M. Bloom Reveal — Unknown Seeds Show Species at Bloom
+
+Previously, seeds planted before their species was discovered stayed as "???" even at bloom stage.
+
+| # | Action | Expected |
+|---|--------|----------|
+| M1 | Plant a seed whose species is **not** in your codex. Let it grow to bloom. Open the plot tooltip. | Tooltip shows the **real species name**, emoji, rarity badge, and type badges — not "???" |
+| M2 | Same plant — check before bloom (seed or sprout stage) | Tooltip still shows **"???"** and seed/sprout emoji (species only revealed at bloom) |
+| M3 | Hover the bloomed plot while it shows the real name. Harvest it. Re-plant the same seed. | During re-grow the species is now in the codex, so it remains identified at all stages |
+| M4 | Use a **Magnifying Glass** on an unknown seed/sprout | Still works as before — reveals species before bloom |
+| M5 | Open the consumable picker on an unknown bloomed plant | Magnifying Glass **does not appear** (already revealed at bloom; no wasted glass) |
+
+---
+
+## N. Mutation Sell Multipliers
+
+Multipliers synced between client and server. Key values: Golden 4×, Rainbow 5×, Moonlit 2.5×, Shocked 2.5×, Frozen/Scorched/Giant 2×, Wet 1.1×, Windstruck 0.7×.
+
+| # | Action | Expected |
+|---|--------|----------|
+| N1 | Sell a **Golden** bloom (any species) | Coins increase by `sellValue × 4` |
+| N2 | Sell a **Rainbow** bloom | Coins increase by `sellValue × 5` |
+| N3 | Sell a **Shocked** bloom | Coins increase by `sellValue × 2.5` |
+| N4 | Sell a **Wet** bloom | Coins increase by `sellValue × 1.1` |
+| N5 | Sell a **Windstruck** bloom | Coins increase by `sellValue × 0.7` (less than base) |
+| N6 | DevTools → Network → `shop-action` response | `coins` field matches pre-sell coins + expected amount for each mutation tier |
+
+---
+
+## O. Weather Time Gating
+
+Golden Hour, Prismatic Skies, and Star Shower are now gated to correct Eastern Time windows (server extracts ET hour directly — no longer uses a hardcoded default).
+
+| # | Action | Expected |
+|---|--------|----------|
+| O1 | Check weather forecast between **5–7 AM ET** or **5–9 PM ET** | **Golden Hour** may appear in the forecast; Prismatic Skies and Star Shower do not |
+| O2 | Check forecast between **7 AM–5 PM ET** | **Prismatic Skies** may appear; Golden Hour and Star Shower do not |
+| O3 | Check forecast between **9 PM–5 AM ET** | **Star Shower** may appear; Golden Hour and Prismatic Skies do not |
+| O4 | Wait for a Golden Hour event to fire | Occurs only during a dawn, sunset, or dusk period |
+| O5 | DevTools Console during any weather advance | No errors; weather type matches the current ET time window |
+
+---
+
+## P. Fan — Wet Strip & Windstruck
+
+Fan now only strips the **Wet** mutation (not all mutations). Windstruck application uses a separate lower rate.
+
+| # | Action | Expected |
+|---|--------|----------|
+| P1 | Place a Fan next to a **Wet** bloomed plant | Wet mutation is stripped over time (50–80%/hr depending on tier); plant becomes unmutated |
+| P2 | Place a Fan next to a **Scorched** (or any non-Wet, non-Windstruck) bloomed plant | Fan does **nothing** — mutation stays |
+| P3 | Place a Fan next to an **unmutated** bloomed plant | Windstruck may appear at a low rate (~15%/hr); much rarer than Wet stripping |
+| P4 | Place a Fan next to a **Windstruck** plant | Fan does nothing — already Windstruck |
+| P5 | Navigate away. Return after 10+ minutes with a Fan active on a Wet plant | Wet was stripped during offline tick (server processed it) |
+
+---
+
+## Q. Sprinklers & Mutation Sprinklers — Offline
+
+Sprinklers now run during offline cron ticks. Scarecrow blocks all gear mutations; Aegis blocks weather only.
+
+| # | Action | Expected |
+|---|--------|----------|
+| Q1 | Place a **regular Sprinkler** next to unmutated blooms. Navigate away for 30+ min. Return. | Some blooms have the **Wet** mutation |
+| Q2 | Place a **Heater** (Scorched) or **Cooler** (Frozen) next to unmutated blooms. Navigate away. Return. | Some blooms carry the sprinkler's mutation |
+| Q3 | Place a **Generator** (Shocked) next to Wet blooms. Navigate away. Return. | Some Wet blooms upgraded to **Shocked** |
+| Q4 | Place a **Scarecrow** between an active mutation sprinkler and its target blooms. Navigate away. Return. | Blooms covered by the Scarecrow have **no new mutations** from the sprinkler |
+| Q5 | Place an **Aegis** between a mutation sprinkler and target blooms. Navigate away. Return. | Blooms covered by the Aegis **still receive** the sprinkler mutation (Aegis only blocks weather) |
+| Q6 | Place a **Scarecrow** during a Rain event. Navigate away. Return. | Blooms covered by the Scarecrow have **no Wet mutation** from rain |
+| Q7 | Place an **Aegis** during a Rain event. Navigate away. Return. | Blooms covered by the Aegis have **no Wet mutation** from rain (Aegis blocks weather) |
+
+---
+
+## R. Marketplace — Expired Listing Mail-Back
+
+Expired listings are now delivered via the mailbox instead of silently patching `game_saves` inventory.
+
+| # | Action | Expected |
+|---|--------|----------|
+| R1 | Let a marketplace listing expire (or trigger the cron manually via GitHub Actions → workflow_dispatch) | Seller receives a "Listing Expired" mail with the correct item kind, species, mutation, and is_seed |
+| R2 | Open the expired-listing mail and press Claim | Item is added to the seller's inventory (flower/seed/gear/fertilizer/consumable as appropriate) |
+| R3 | Verify a fertilizer listing expires | Mail kind is `fertilizer`; claiming it increments the correct fertilizer type |
+| R4 | Verify a gear listing expires | Mail kind is `gear`; claiming it adds the gear to gear_inventory |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```
-npm run typecheck   # 0 errors
-npm run lint        # 0 warnings
-npm run test:ci     # all tests green
-npm run build       # clean Vite build
+npm run typecheck
+npm run lint
+npm run test:ci
+npm run build
 ```

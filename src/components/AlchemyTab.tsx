@@ -8,7 +8,7 @@ import {
 import { EssenceBank } from "./EssenceBank";
 import { YieldTableModal } from "./YieldTableModal";
 import { ROMAN } from "../data/consumables";
-import { sacrificeFlowers, type SacrificeEntry } from "../store/gameStore";
+import { sacrificeFlowers, getBoostMultiplier, type SacrificeEntry } from "../store/gameStore";
 import {
   edgeAlchemySacrifice,
   edgeAttuneStart, edgeAttuneCollect, edgeAttuneCancel, edgeUpgradeAttunementSlots,
@@ -81,10 +81,19 @@ function SacrificePreview({ selections }: { selections: SacrificeMap }) {
 
 type AlchemyView = "sacrifice" | "attune";
 
-export function AlchemyTab() {
+interface AlchemyTabProps {
+  /** Controlled view — passed from App for swipe navigation. */
+  activeView?:  AlchemyView;
+  onViewChange?: (view: AlchemyView) => void;
+}
+
+export function AlchemyTab({ activeView, onViewChange }: AlchemyTabProps = {}) {
   const { state, perform, getState, update } = useGame();
 
-  const [view, setView]             = useState<AlchemyView>("sacrifice");
+  const [localView, setLocalView] = useState<AlchemyView>("sacrifice");
+  // Use controlled view when provided by parent (swipe), otherwise local state
+  const view    = activeView  ?? localView;
+  const setView = (v: AlchemyView) => { setLocalView(v); onViewChange?.(v); };
   const [selections, setSelections] = useState<SacrificeMap>(new Map());
   const [activeRarities, setActiveRarities] = useState<Rarity[]>([]);
   const [activeTypes,    setActiveTypes]    = useState<FlowerType[]>([]);
@@ -695,9 +704,10 @@ export function AlchemyTab() {
         }
 
         // ── Attunement queue derived state ──────────────────────────────────
-        const attuneSlots    = state.attunementSlots ?? 0;
-        const attuneQueue    = state.attunementQueue ?? [];
-        const slotsAvailable = attuneSlots > 0 && attuneQueue.length < attuneSlots;
+        const attuneSlots        = state.attunementSlots ?? 0;
+        const attuneQueue        = state.attunementQueue ?? [];
+        const slotsAvailable     = attuneSlots > 0 && attuneQueue.length < attuneSlots;
+        const isResonanceActive  = getBoostMultiplier(state.activeBoosts ?? [], "attunement", attuneNow) > 1;
         const nextSlotUpgrade = getNextAttunementSlotUpgrade(attuneSlots);
         const canAffordSlot   = nextSlotUpgrade ? state.coins >= nextSlotUpgrade.cost : false;
         const atMaxSlots      = attuneSlots >= MAX_ATTUNEMENT_SLOTS;
@@ -757,7 +767,15 @@ export function AlchemyTab() {
                 };
                 const tierLabel = ROMAN[entry.tier as 1|2|3|4|5] ?? entry.tier;
                 return (
-                  <div key={entry.id} className="rounded-xl border border-border bg-card/40 px-3 py-2 space-y-1.5">
+                  <div key={entry.id} className={`relative rounded-xl border bg-card/40 px-3 py-2 space-y-1.5 overflow-hidden ${isResonanceActive && !isDone ? "border-violet-500/50" : "border-border"}`}>
+                    {/* Resonance Draft sparks — visible while boost is active and attunement is in-progress */}
+                    {isResonanceActive && !isDone && (
+                      <div className="absolute inset-0 pointer-events-none">
+                        <span className="boost-resonance-spark" style={{ left: "10%",  animationDelay: "-1.2s" }}>✦</span>
+                        <span className="boost-resonance-spark" style={{ left: "45%",  animationDelay: "-0.6s" }}>✦</span>
+                        <span className="boost-resonance-spark" style={{ left: "78%",  animationDelay: "0s"    }}>✦</span>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-lg leading-none shrink-0">{flower?.emoji.bloom ?? "🌸"}</span>

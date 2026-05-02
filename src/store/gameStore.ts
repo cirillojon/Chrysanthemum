@@ -1396,7 +1396,7 @@ export function setDevShowGrowthDebug(v: boolean) {
   window.dispatchEvent(new CustomEvent("devGrowthDebugToggle", { detail: v }));
 }
 export function getDevShowGrowthDebug() { return _devShowGrowthDebug; }
-const GIANT_BLOOM_CHANCE   = 0.08;   // 8% flat, only at bloom transition
+const GIANT_BLOOM_CHANCE   = 0.0533; // ~5.3% flat, only at bloom transition
 
 function isNighttime(): boolean {
   const h = new Date().getHours();
@@ -1632,21 +1632,19 @@ export function tickFanMutations(
       if (stage !== "bloom") return plot;
 
       // Purity Vial blocks windstruck; fans can still strip existing mutations
-      // but if plant has no mutation and is blocked, skip windstruck application
+      // but if plant has no mutation (or already windstruck) and is blocked,
+      // skip windstruck application.
       const sources = getGearAffectingCell(state.grid, ri, ci, now);
 
       for (const { def } of sources) {
         if (!isFan(def) || !def.fanStripChancePerTick) continue;
-        if (Math.random() < def.fanStripChancePerTick) {
-          if (typeof plot.plant.mutation === "string") {
-            // Strip the mutation (set to null — marks "Giant already tried")
-            changed = true;
-            return { ...plot, plant: { ...plot.plant, mutation: null } };
-          } else if (!plot.plant.mutationBlocked) {
-            // No mutation — apply Windstruck (blocked by Purity Vial)
-            changed = true;
-            return { ...plot, plant: { ...plot.plant, mutation: "windstruck" as MutationType } };
-          }
+        const mut = plot.plant.mutation;
+        if (mut === "wet" && def.fanStripChancePerTick && Math.random() < def.fanStripChancePerTick) {
+          changed = true;
+          return { ...plot, plant: { ...plot.plant, mutation: null } };
+        } else if (!mut && !plot.plant.mutationBlocked && def.fanWindstruckChancePerTick && Math.random() < def.fanWindstruckChancePerTick) {
+          changed = true;
+          return { ...plot, plant: { ...plot.plant, mutation: "windstruck" as MutationType } };
         }
       }
 
@@ -2045,6 +2043,16 @@ export function mergeServerResult<T extends Partial<GameState>>(
   result: T,
 ): GameState {
   const merged = { ...cur, ...result, ok: undefined } as GameState;
+
+  // Never let shop/supply reset timestamps roll backwards.  A stale server
+  // response (read from DB before an in-flight edgeSyncShop/edgeSyncSupplyShop
+  // write completes) would otherwise clobber the client's newer lastShopReset,
+  // causing the 1-second tick interval to fire a phantom restock — and the
+  // restock banner to reappear immediately after the user dismissed it.
+  const r = result as Partial<GameState>;
+  merged.lastShopReset   = Math.max(cur.lastShopReset,        r.lastShopReset   ?? 0);
+  merged.lastSupplyReset = Math.max(cur.lastSupplyReset ?? 0, r.lastSupplyReset ?? 0);
+
   if (result.grid) {
     // Identify the same plant by speciesId + timePlanted so we never copy a
     // mutation onto a different plant (e.g. after a harvest + re-plant).
@@ -2057,7 +2065,30 @@ export function mergeServerResult<T extends Partial<GameState>>(
           plot.plant.speciesId === curPlot.plant.speciesId &&
           plot.plant.timePlanted === curPlot.plant.timePlanted
         ) {
-          return { ...plot, plant: { ...plot.plant, mutation: curPlot.plant.mutation } };
+          return {
+            ...plot,
+            plant: {
+              ...plot.plant,
+              // Client-side mutation rolls are not in the DB yet — preserve them.
+              mutation:   curPlot.plant.mutation,
+              // masteredBonus is set at plant time by plant-seed using DB's discovered.
+              // Prefer client value (set during optimistic update) so the icon and
+              // multiplier survive a server grid replacement even if the DB row was
+              // written before discovered was fully persisted (e.g. dev-panel fillCodex
+              // before saveToCloud included discovered).  Server value is the fallback.
+              masteredBonus: curPlot.plant.masteredBonus ?? (plot.plant as PlantedFlower).masteredBonus,
+              // Client-computed progress fields — the server grid never carries these,
+              // so the merge must copy them over or gear changes wipe all growth progress
+              // (stampStageTransitions stamps bloomedAt before a removal, but the stamp
+              // would be discarded without this copy).
+              growthMs:   curPlot.plant.growthMs,
+              lastTickAt: curPlot.plant.lastTickAt,
+              // Prefer client's stamp (force-stamped before gear change); fall back to
+              // server's (may be set by tick-offline-gardens on an offline plant).
+              bloomedAt:  curPlot.plant.bloomedAt  ?? (plot.plant as PlantedFlower).bloomedAt,
+              sproutedAt: curPlot.plant.sproutedAt ?? (plot.plant as PlantedFlower).sproutedAt,
+            },
+          };
         }
         return plot;
       }),

@@ -99,8 +99,18 @@ function formatDuration(ms: number): string {
 
 function formatDurationLabel(ms: number): string {
   if (ms <  60_000)    return `${Math.round(ms / 1000)}s`;
-  if (ms <  3_600_000) return `${Math.round(ms / 60_000)} min`;
-  if (ms < 86_400_000) return `${(ms / 3_600_000).toFixed(1).replace(".0", "")} hr`;
+  if (ms <  3_600_000) {
+    const totalSec = Math.round(ms / 1000);
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return s > 0 ? `${m}m ${s}s` : `${m} min`;
+  }
+  if (ms < 86_400_000) {
+    const totalMin = Math.round(ms / 60_000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return m > 0 ? `${h}h ${m}m` : `${h} hr`;
+  }
   return `${(ms / 86_400_000).toFixed(1).replace(".0", "")} day`;
 }
 
@@ -329,7 +339,7 @@ function CollectToast({ emoji, name, onDone }: { emoji: string; name: string; on
 // ── Crafting queue panel ──────────────────────────────────────────────────────
 
 function QueueEntryRow({
-  entry, now, onCollect, onCancel, isCollecting, isCanceling,
+  entry, now, onCollect, onCancel, isCollecting, isCanceling, isBoosted,
 }: {
   entry:        CraftingQueueEntry;
   now:          number;
@@ -337,6 +347,7 @@ function QueueEntryRow({
   onCancel:     (id: string) => void;
   isCollecting: boolean;
   isCanceling:  boolean;
+  isBoosted:    boolean;
 }) {
   const { emoji, name } = queueEntryDisplay(entry);
   const startedAt = new Date(entry.startedAt).getTime();
@@ -350,7 +361,15 @@ function QueueEntryRow({
   const qty       = entry.quantity && entry.quantity > 1 ? entry.quantity : 1;
 
   return (
-    <div className="rounded-xl border border-border bg-card/40 px-3 py-2 space-y-1.5">
+    <div className={`relative rounded-xl border bg-card/40 px-3 py-2 space-y-1.5 overflow-hidden ${isBoosted && !isDone ? "border-orange-500/50" : "border-border"}`}>
+      {/* Forge Haste sparks — visible while boost is active and craft is in-progress */}
+      {isBoosted && !isDone && (
+        <div className="absolute inset-0 pointer-events-none">
+          <span className="boost-forge-spark" style={{ left: "10%",  animationDelay: "-1.2s" }}>✦</span>
+          <span className="boost-forge-spark" style={{ left: "45%",  animationDelay: "-0.6s" }}>✦</span>
+          <span className="boost-forge-spark" style={{ left: "78%",  animationDelay: "0s"    }}>✦</span>
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-lg leading-none shrink-0">{emoji}</span>
@@ -545,6 +564,14 @@ function CraftPopup({
   state:          GameState;
   slotsAvailable: boolean;
 }) {
+  // Lock body scroll while the popup is open so the underlying CraftingTab
+  // list doesn't jump when the sheet mounts / unmounts on mobile.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, []);
+
   const essences  = state.essences      ?? [];
   const gearInv   = state.gearInventory ?? [];
   const consum    = state.consumables   ?? [];
@@ -572,10 +599,113 @@ function CraftPopup({
   // All crafts now go into the queue — slot availability applies to all kinds
   const canAct = slotsAvailable && entry.canCraft && quantity >= 1 && quantity <= maxAffordable;
 
+  // Compute which specific ingredients are short so the button label is actionable
+  const craftBlockReason = useMemo((): string => {
+    if (entry.canCraft) return "";
+    const missing: string[] = [];
+
+    if (entry.kind === "gear" && gearRecipe) {
+      const coinNeed = gearRecipe.coinCost * quantity;
+      if (state.coins < coinNeed)
+        missing.push(`${(coinNeed - state.coins).toLocaleString()} coins`);
+      for (const ing of gearRecipe.ingredients) {
+        if (ing.kind === "essence") {
+          const have = essences.find((e) => e.type === ing.essenceType)?.amount ?? 0;
+          const need = ing.amount * quantity;
+          if (have < need) {
+            const cfg = FLOWER_TYPES[ing.essenceType as FlowerType];
+            missing.push(`${(need - have).toLocaleString()} ${cfg?.name ?? ing.essenceType} essence`);
+          }
+        } else if (ing.kind === "gear") {
+          const have = gearInv.find((g) => g.gearType === ing.gearType)?.quantity ?? 0;
+          const need = ing.quantity * quantity;
+          if (have < need)
+            missing.push(`${need - have} ${GEAR[ing.gearType].name}`);
+        } else if (ing.kind === "consumable") {
+          const have = consum.find((c) => c.id === ing.consumableId)?.quantity ?? 0;
+          const need = ing.quantity * quantity;
+          if (have < need) {
+            const src = CONSUMABLE_RECIPE_MAP[ing.consumableId as ConsumableId];
+            missing.push(`${need - have} ${src?.name ?? ing.consumableId}`);
+          }
+        }
+      }
+    } else if (entry.kind === "consumable") {
+      const id     = entry.id.replace("consumable:", "") as ConsumableId;
+      const recipe = CONSUMABLE_RECIPE_MAP[id];
+      if (recipe) {
+        const cost = recipe.cost;
+        if (cost.kind === "essence") {
+          for (const { type, amount } of cost.amounts) {
+            const have = essences.find((e) => e.type === type)?.amount ?? 0;
+            const need = amount * quantity;
+            if (have < need) {
+              const isUni = type === "universal";
+              const cfg   = isUni ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
+              missing.push(`${(need - have).toLocaleString()} ${cfg.name} essence`);
+            }
+          }
+        } else if ((cost.id as string).startsWith("fertilizer_")) {
+          const fertType = (cost.id as string).replace("fertilizer_", "");
+          const have     = ferts.find((f) => f.type === fertType)?.quantity ?? 0;
+          const need     = cost.quantity * quantity;
+          if (have < need) {
+            const fertDef = FERTILIZERS[fertType as keyof typeof FERTILIZERS];
+            missing.push(`${need - have} ${fertDef?.name ?? fertType}`);
+          }
+        } else {
+          const have = consum.find((c) => c.id === cost.id)?.quantity ?? 0;
+          const need = cost.quantity * quantity;
+          if (have < need) {
+            const src = CONSUMABLE_RECIPE_MAP[cost.id as ConsumableId];
+            missing.push(`${need - have} ${src?.name ?? cost.id}`);
+          }
+        }
+      }
+    } else if (entry.kind === "attunement") {
+      const tier   = parseInt(entry.id.replace("attunement:", ""), 10) as 1|2|3|4|5;
+      const recipe = ATTUNEMENT_RECIPES.find((r) => r.tier === tier);
+      if (recipe) {
+        const cost = recipe.cost;
+        if (cost.kind === "essence") {
+          for (const { type, amount } of cost.amounts) {
+            const have = essences.find((e) => e.type === type)?.amount ?? 0;
+            const need = amount * quantity;
+            if (have < need) {
+              const isUni = type === "universal";
+              const cfg   = isUni ? UNIVERSAL_ESSENCE_DISPLAY : FLOWER_TYPES[type as FlowerType];
+              missing.push(`${(need - have).toLocaleString()} ${cfg.name} essence`);
+            }
+          }
+        } else {
+          const prevRarity = TIER_RARITIES[cost.tier as 1|2|3|4|5];
+          const have       = infusers.find((i) => i.rarity === prevRarity)?.quantity ?? 0;
+          const need       = cost.quantity * quantity;
+          if (have < need)
+            missing.push(`${need - have} Infuser ${toRoman(cost.tier)}`);
+        }
+      }
+    } else if (entry.kind === "essence") {
+      for (const type of ALL_FLOWER_TYPES) {
+        const have = essences.find((e) => e.type === type)?.amount ?? 0;
+        const need = UNIVERSAL_ESSENCE_COST_PER_TYPE * quantity;
+        if (have < need) {
+          const cfg = FLOWER_TYPES[type];
+          missing.push(`${(need - have).toLocaleString()} ${cfg.name} essence`);
+        }
+      }
+    }
+
+    if (missing.length === 0) return "Missing ingredients";
+    if (missing.length === 1) return `Need ${missing[0]}`;
+    if (missing.length === 2) return `Need ${missing[0]} + ${missing[1]}`;
+    return `Need ${missing[0]} + ${missing.length - 1} more`;
+  }, [entry, gearRecipe, gearInv, essences, consum, ferts, infusers, quantity, state.coins]);
+
   let buttonLabel: string;
   if (isCrafting)           buttonLabel = "Starting…";
   else if (!slotsAvailable) buttonLabel = "No crafting slots available";
-  else if (!entry.canCraft) buttonLabel = "Missing ingredients or coins";
+  else if (!entry.canCraft) buttonLabel = craftBlockReason;
   else if (quantity > 1)    buttonLabel = `⏳ Craft ×${quantity}`;
   else                      buttonLabel = "⏳ Start Crafting";
 
@@ -702,7 +832,7 @@ function CraftPopup({
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden"
+        className="w-full sm:max-w-sm bg-card border border-border rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-y-auto max-h-[90dvh]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -872,6 +1002,7 @@ export function CraftingTab() {
   const craftingSlotCount = state.craftingSlotCount ?? 1;
   const slotsInUse        = craftingQueue.length;
   const slotsAvailable    = slotsInUse < craftingSlotCount;
+  const isForgeHasteActive = getBoostMultiplier(state.activeBoosts ?? [], "craft", now) > 1;
 
   const nextSlotUpgrade = CRAFTING_SLOT_UPGRADES.find((u) => u.slots > craftingSlotCount) ?? null;
 
@@ -1409,6 +1540,7 @@ export function CraftingTab() {
                 onCancel={handleCancel}
                 isCollecting={collectingId === qEntry.id}
                 isCanceling={cancelingId === qEntry.id}
+                isBoosted={isForgeHasteActive}
               />
             ) : (
               <EmptySlotRow key={`empty-${i}`} />

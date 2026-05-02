@@ -58,8 +58,9 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
   }, []);
 
   // Compute gear coverage in one pass
-  const { regularSprinklerKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, balanceScaleCells, autoPlanterKeys } = useMemo(() => {
+  const { regularSprinklerKeys, aqueductKeys, mutationSprinklerMap, scarecrowKeys, composterKeys, growLampKeys, fanCoveredCells, harvestBellKeys, lawnmowerCells, balanceScaleCells, autoPlanterKeys, aegisKeys } = useMemo(() => {
     const regular      = new Set<string>();
+    const aqueduct     = new Set<string>();
     const mutation     = new Map<string, string[]>();
     const scarecrow    = new Set<string>();
     const composter    = new Set<string>();
@@ -69,6 +70,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
     const lawnmower    = new Map<string, FanDirection>();
     const balanceScale = new Map<string, "boost" | "slow">();
     const autoPlanter  = new Set<string>();
+    const aegis        = new Set<string>();
     for (let ri = 0; ri < grid.length; ri++) {
       for (let ci = 0; ci < grid[ri].length; ci++) {
         const g = grid[ri][ci].gear;
@@ -76,8 +78,10 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
         const def      = GEAR[g.gearType];
         const affected = getAffectedCells(g.gearType, ri, ci, rows, farmSize, g.direction);
         const keys     = affected.map(([r, c]) => `${r}-${c}`);
-        if (def.category === "sprinkler_regular" || def.passiveSubtype === "aqueduct") {
+        if (def.category === "sprinkler_regular" && def.passiveSubtype !== "aqueduct") {
           keys.forEach((k) => regular.add(k));
+        } else if (def.passiveSubtype === "aqueduct") {
+          keys.forEach((k) => aqueduct.add(k));
         } else if (def.category === "sprinkler_mutation" && def.mutationType) {
           const emoji = MUTATIONS[def.mutationType as MutationType]?.emoji ?? "✨";
           keys.forEach((k) => {
@@ -109,10 +113,12 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           });
         } else if (def.passiveSubtype === "auto_planter") {
           keys.forEach((k) => autoPlanter.add(k));
+        } else if (def.passiveSubtype === "aegis") {
+          keys.forEach((k) => aegis.add(k));
         }
       }
     }
-    return { regularSprinklerKeys: regular, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, balanceScaleCells: balanceScale, autoPlanterKeys: autoPlanter };
+    return { regularSprinklerKeys: regular, aqueductKeys: aqueduct, mutationSprinklerMap: mutation, scarecrowKeys: scarecrow, composterKeys: composter, growLampKeys: growLamp, fanCoveredCells: fan, harvestBellKeys: harvestBell, lawnmowerCells: lawnmower, balanceScaleCells: balanceScale, autoPlanterKeys: autoPlanter, aegisKeys: aegis };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [grid, farmSize, rows]);
 
@@ -179,10 +185,12 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               ? Math.max(0, (gear.placedAt + def.durationMs - now) / def.durationMs)
               : null;
 
-            // Prismatic uses "rainbow-text" which doesn't follow text-* — map to gradient fill
+            // Prismatic uses "rainbow-text" and Exalted uses "text-black" — both need manual mapping
             const gearBarBg = gearRarity.color === "rainbow-text"
               ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
-              : gearRarity.color.replace("text-", "bg-");
+              : gearRarity.color === "text-black"
+                ? "bg-slate-300"
+                : gearRarity.color.replace("text-", "bg-");
 
             // Prismatic gear: drive all three rainbow animations via inline style so CSS
             // cascade order doesn't clobber them (inline style wins over class-based animation).
@@ -268,6 +276,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           const hasFert   = !!plant.fertilizer;
 
           const underSprinkler   = regularSprinklerKeys.has(cellKey);
+          const underAqueduct    = aqueductKeys.has(cellKey);
           const mutEmojis        = mutationSprinklerMap.get(cellKey) ?? [];
           const underScarecrow   = scarecrowKeys.has(cellKey);
           const underComposter   = composterKeys.has(cellKey);
@@ -279,6 +288,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
           const lawnmowerDir      = lawnmowerCells.get(cellKey);
           const balanceScaleSide  = balanceScaleCells.get(cellKey) as "boost" | "slow" | undefined;
           const underAutoPlanter  = autoPlanterKeys.has(cellKey);
+          const underAegis        = aegisKeys.has(cellKey);
 
           const crossbreedDirection = crossbreedSourceCells.get(cellKey);
           const prismaticStyle: React.CSSProperties | undefined =
@@ -301,10 +311,17 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               title={isBloomed ? `${species?.name} — bloomed` : "??? — growing"}
             >
               {/* ── Gear ambient animation overlay (clipped to cell) ── */}
-              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || !!balanceScaleSide || underFan) && (
+              {settings.plotAnimations && !crossbreedSourceCells.has(cellKey) && (underSprinkler || underAqueduct || mutEmojis.length > 0 || underGrowLamp || underScarecrow || underComposter || underAutoPlanter || underHarvestBell || underLawnmower || !!balanceScaleSide || underFan || underAegis) && (
                 <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none">
                   {underGrowLamp && <div className="absolute inset-0 gear-lamp-glow" />}
-                  {underSprinkler && (
+                  {underSprinkler && !underAqueduct && (
+                    <>
+                      <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
+                      <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
+                      <span className="gear-drop" style={{ left: "74%", animationDelay: "0s"    }}>💧</span>
+                    </>
+                  )}
+                  {underAqueduct && (
                     <>
                       <span className="gear-drop" style={{ left: "15%", animationDelay: "-1.2s" }}>💧</span>
                       <span className="gear-drop" style={{ left: "48%", animationDelay: "-0.6s" }}>💧</span>
@@ -374,6 +391,14 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                       <span className="gear-scale-slow" style={{ left: "76%", animationDelay: "0s"    }}>▾</span>
                     </>
                   )}
+                  {/* Aegis: 🛡️ shields rising — weather mutations blocked */}
+                  {underAegis && (
+                    <>
+                      <span className="gear-aegis-shield" style={{ left: "15%", animationDelay: "-1.8s" }}>🛡️</span>
+                      <span className="gear-aegis-shield" style={{ left: "50%", animationDelay: "-0.9s" }}>🛡️</span>
+                      <span className="gear-aegis-shield" style={{ left: "76%", animationDelay: "0s"    }}>🛡️</span>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -400,7 +425,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               <span className="text-xl leading-none">
-                {isBloomed ? (species?.emoji[stage!] ?? "🌸") : "🌱"}
+                {species?.emoji[stage!] ?? "🌱"}
               </span>
 
               {/* Fertilizer — top-left */}
@@ -418,9 +443,10 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               )}
 
               {/* Gear effect indicators — bottom-left */}
-              {settings.plotGearIndicator && (underSprinkler || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || !!balanceScaleSide || plant.infused || plant.revealed) && (
+              {settings.plotGearIndicator && (underSprinkler || underAqueduct || mutEmojis.length > 0 || underScarecrow || underComposter || underGrowLamp || underFan || underHarvestBell || underAutoPlanter || !!balanceScaleSide || underAegis || plant.infused || plant.revealed) && (
                 <div className={`absolute left-0.5 flex leading-none ${isBloomed ? "bottom-1" : "bottom-2"}`}>
-                  {underSprinkler && <span className="text-[9px]" title="Under sprinkler">💧</span>}
+                  {underAqueduct && <span className="text-[9px]" title="Under aqueduct">⛲</span>}
+                  {underSprinkler && !underAqueduct && <span className="text-[9px]" title="Under sprinkler">💧</span>}
                   {mutEmojis.map((emoji, i) => (
                     <span key={i} className="text-[9px]" title="Mutation sprinkler">{emoji}</span>
                   ))}
@@ -432,6 +458,7 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
                   {underAutoPlanter && <span className="text-[9px]" title="Auto-planter active">🌱</span>}
                   {balanceScaleSide === "boost" && <span className="text-[9px]" title="Balance Scale — 3× boost">⚖️</span>}
                   {balanceScaleSide === "slow"  && <span className="text-[9px]" title="Balance Scale — 0.5× slow">⚖️</span>}
+                  {underAegis && <span className="text-[9px]" title="Aegis — weather mutations blocked">🛡️</span>}
                   {plant.infused && <span className="text-[9px]" title="Infused — cross-breeding active">💉</span>}
                   {plant.revealed && <span className="text-[9px]" title="Species revealed — Magnifying Glass used">🔎</span>}
                 </div>

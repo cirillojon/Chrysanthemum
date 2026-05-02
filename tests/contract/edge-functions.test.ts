@@ -43,7 +43,7 @@ const fns = listEdgeFunctions();
  * CRON_SECRET) instead of the standard Bearer / Authorization header.
  * They are excluded from the Authorization-header assertion only.
  */
-const ADMIN_AUTH_FUNCTIONS = new Set(["admin-broadcast"]);
+const ADMIN_AUTH_FUNCTIONS = new Set(["admin-broadcast", "marketplace-expire"]);
 
 describe("Supabase edge function contract (regression)", () => {
   it("discovers at least one edge function", () => {
@@ -123,6 +123,50 @@ describe("Supabase edge function contract (regression)", () => {
       });
     });
   }
+});
+
+// ── alchemy-sacrifice — v2.3.0 flower catalogue parity ───────────────────────
+
+describe("alchemy-sacrifice — v2.3.0 new flowers present in FLOWERS array", () => {
+  const serverSrc = readFileSync(join(FUNCTIONS_DIR, "alchemy-sacrifice", "index.ts"), "utf8");
+
+  // These 10 species were added in v2.3.0 but were initially missing from the
+  // edge function's FLOWERS catalogue, causing "Unknown species" 400 errors.
+  const newFlowers = [
+    "stormcap", "stardust",          // common
+    "moonstrike",                    // uncommon
+    "winterwood",                    // rare
+    "deeproot", "rimestorm", "solglow", // exalted
+    "islebloom", "moonrime", "shadowgale", // prismatic
+  ];
+
+  for (const id of newFlowers) {
+    it(`includes ${id} in the FLOWERS catalogue`, () => {
+      expect(serverSrc).toMatch(new RegExp(`id:\\s*["']${id}["']`));
+    });
+  }
+});
+
+// ── alchemy-sacrifice — yield rate parity (v2.3.1 regression) ───────────────
+
+describe("alchemy-sacrifice — ESSENCE_YIELD parity with client (v2.3.1 regression)", () => {
+  const serverSrc = readFileSync(join(FUNCTIONS_DIR, "alchemy-sacrifice", "index.ts"), "utf8");
+
+  // Extract the server-side ESSENCE_YIELD block and assert the doubled rates are
+  // present. This test will fail if someone updates src/data/essences.ts without
+  // also updating the edge function (or vice-versa), preventing a silent divergence.
+  it("server has the current doubled yield rates (common=2, rare=8, prismatic=128)", () => {
+    expect(serverSrc).toMatch(/common:\s*2/);
+    expect(serverSrc).toMatch(/rare:\s*8/);
+    expect(serverSrc).toMatch(/prismatic:\s*128/);
+  });
+
+  it("does not contain the old halved rates (common=1, rare=4, prismatic=64)", () => {
+    // These are the pre-v2.3.0 values that caused the X/2 bug
+    expect(serverSrc).not.toMatch(/common:\s*1[,\s]/);
+    expect(serverSrc).not.toMatch(/rare:\s*4[,\s]/);
+    expect(serverSrc).not.toMatch(/prismatic:\s*64[,\s]/);
+  });
 });
 
 // ── use-consumable — v2.3.0 mutation vial guard ──────────────────────────────
