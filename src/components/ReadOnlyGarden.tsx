@@ -185,10 +185,12 @@ export function ReadOnlyGarden({ grid, farmSize, farmRows }: Props) {
               ? Math.max(0, (gear.placedAt + def.durationMs - now) / def.durationMs)
               : null;
 
-            // Prismatic uses "rainbow-text" which doesn't follow text-* — map to gradient fill
+            // Prismatic uses "rainbow-text" and Exalted uses "text-black" — both need manual mapping
             const gearBarBg = gearRarity.color === "rainbow-text"
               ? "bg-gradient-to-r from-pink-400 via-violet-400 to-sky-400"
-              : gearRarity.color.replace("text-", "bg-");
+              : gearRarity.color === "text-black"
+                ? "bg-slate-300"
+                : gearRarity.color.replace("text-", "bg-");
 
             // Prismatic gear: drive all three rainbow animations via inline style so CSS
             // cascade order doesn't clobber them (inline style wins over class-based animation).
