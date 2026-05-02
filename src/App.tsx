@@ -94,17 +94,17 @@ function AppInner() {
 
   // Harvest popups — keyed by "speciesId:mutation" so duplicates accumulate a count
   // and different species each get their own pill shown simultaneously.
-  type HarvestEntry = { speciesId: string; mutation?: MutationType; count: number };
+  type HarvestEntry = { speciesId: string; mutation?: MutationType; count: number; isSeed?: boolean };
   const [harvestQueue, setHarvestQueue] = useState<Map<string, HarvestEntry>>(new Map());
 
-  function pushHarvestPopup(speciesId: string, mutation?: MutationType) {
-    const key = `${speciesId}:${mutation ?? ""}`;
+  function pushHarvestPopup(speciesId: string, mutation?: MutationType, isSeed?: boolean) {
+    const key = isSeed ? `${speciesId}:seed` : `${speciesId}:${mutation ?? ""}`;
     setHarvestQueue((prev) => {
       const next     = new Map(prev);
       const existing = next.get(key);
       next.set(key, existing
         ? { ...existing, count: existing.count + 1 }
-        : { speciesId, mutation, count: 1 }
+        : { speciesId, mutation, count: 1, isSeed }
       );
       return next;
     });
@@ -937,6 +937,7 @@ function AppInner() {
               speciesId={entry.speciesId}
               mutation={entry.mutation}
               count={entry.count}
+              isSeed={entry.isSeed}
               onDone={() =>
                 setHarvestQueue((prev) => {
                   const next = new Map(prev);
