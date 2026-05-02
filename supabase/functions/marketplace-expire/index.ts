@@ -10,17 +10,28 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-interface InventoryItem  { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
-interface FertilizerItem { type: string; quantity: number; }
-interface GearItem       { gearType: string; quantity: number; }
-interface ConsumableItem { id: string; quantity: number; }
-
 interface ExpiredListing {
   id:         string;
   seller_id:  string;
   species_id: string;
   mutation:   string | null;
   is_seed:    boolean;
+}
+
+function itemKindFor(speciesId: string, isSeed: boolean): string {
+  if (speciesId.startsWith("fert:"))        return "fertilizer";
+  if (speciesId.startsWith("gear:"))        return "gear";
+  if (speciesId.startsWith("consumable:")) return "consumable";
+  if (isSeed)                               return "seed";
+  return "flower";
+}
+
+function itemLabelFor(speciesId: string, mutation: string | null, isSeed: boolean): string {
+  if (speciesId.startsWith("fert:"))        return speciesId.replace("fert:", "") + " fertilizer";
+  if (speciesId.startsWith("gear:"))        return speciesId.replace("gear:", "");
+  if (speciesId.startsWith("consumable:")) return speciesId.replace("consumable:", "");
+  const base = isSeed ? `${speciesId} seed` : speciesId;
+  return mutation ? `${mutation} ${base}` : base;
 }
 
 Deno.serve(async (req: Request) => {
@@ -63,81 +74,33 @@ Deno.serve(async (req: Request) => {
     }
 
     // ── Mark all as expired ───────────────────────────────────────────────────
-    const expiredIds = expired.map((l: ExpiredListing) => l.id);
+    const expiredIds = (expired as ExpiredListing[]).map((l) => l.id);
     await supabaseAdmin
       .from("marketplace_listings")
       .update({ status: "expired" })
       .in("id", expiredIds);
 
-    // ── Group items by seller and return to inventories ───────────────────────
-    const byseller: Record<string, ExpiredListing[]> = {};
-    for (const listing of expired as ExpiredListing[]) {
-      if (!byseller[listing.seller_id]) byseller[listing.seller_id] = [];
-      byseller[listing.seller_id].push(listing);
-    }
+    // ── Mail each item back to its seller ─────────────────────────────────────
+    const now = new Date().toISOString();
 
-    // Process each seller's returns
-    const returns = Object.entries(byseller).map(async ([sellerId, listings]) => {
-      const { data: saveData } = await supabaseAdmin
-        .from("game_saves")
-        .select("inventory, fertilizers, gear_inventory, consumables")
-        .eq("user_id", sellerId)
-        .single();
+    const mailInserts = (expired as ExpiredListing[]).map((listing) => {
+      const isSeed = listing.is_seed ?? false;
+      const kind   = itemKindFor(listing.species_id, isSeed);
+      const label  = itemLabelFor(listing.species_id, listing.mutation, isSeed);
 
-      if (!saveData) return;
-
-      let inventory     = [...(saveData.inventory     ?? []) as InventoryItem[]];
-      let fertilizers   = [...(saveData.fertilizers   ?? []) as FertilizerItem[]];
-      let gearInventory = [...(saveData.gear_inventory ?? []) as GearItem[]];
-      let consumables   = [...(saveData.consumables   ?? []) as ConsumableItem[]];
-
-      for (const listing of listings) {
-        const speciesId    = listing.species_id;
-        const isFertilizer = speciesId.startsWith("fert:");
-        const isGear       = speciesId.startsWith("gear:");
-        const isConsumable = speciesId.startsWith("consumable:");
-
-        if (isFertilizer) {
-          const fertType = speciesId.replace("fert:", "");
-          const existing = fertilizers.find((f) => f.type === fertType);
-          fertilizers = existing
-            ? fertilizers.map((f) => f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f)
-            : [...fertilizers, { type: fertType, quantity: 1 }];
-        } else if (isGear) {
-          const gearType = speciesId.replace("gear:", "");
-          const existing = gearInventory.find((g) => g.gearType === gearType);
-          gearInventory = existing
-            ? gearInventory.map((g) => g.gearType === gearType ? { ...g, quantity: g.quantity + 1 } : g)
-            : [...gearInventory, { gearType, quantity: 1 }];
-        } else if (isConsumable) {
-          const consumableId = speciesId.replace("consumable:", "");
-          const existing = consumables.find((c) => c.id === consumableId);
-          consumables = existing
-            ? consumables.map((c) => c.id === consumableId ? { ...c, quantity: c.quantity + 1 } : c)
-            : [...consumables, { id: consumableId, quantity: 1 }];
-        } else {
-          const mutation = listing.mutation ?? undefined;
-          const isSeed   = listing.is_seed ?? false;
-          const existing = inventory.find(
-            (i) => i.speciesId === speciesId && i.mutation === mutation && (i.isSeed ?? false) === isSeed
-          );
-          inventory = existing
-            ? inventory.map((i) =>
-                i.speciesId === speciesId && i.mutation === mutation && (i.isSeed ?? false) === isSeed
-                  ? { ...i, quantity: i.quantity + 1 }
-                  : i
-              )
-            : [...inventory, { speciesId, quantity: 1, mutation, isSeed }];
-        }
-      }
-
-      await supabaseAdmin
-        .from("game_saves")
-        .update({ inventory, fertilizers, gear_inventory: gearInventory, consumables, updated_at: new Date().toISOString() })
-        .eq("user_id", sellerId);
+      return supabaseAdmin.from("mailbox").insert({
+        user_id:    listing.seller_id,
+        subject:    "Listing Expired",
+        kind,
+        species_id: listing.species_id,
+        mutation:   listing.mutation ?? null,
+        is_seed:    isSeed,
+        message:    `Your ${label} listing has expired and been returned to you.`,
+        created_at: now,
+      });
     });
 
-    await Promise.allSettled(returns);
+    await Promise.allSettled(mailInserts);
 
     return new Response(
       JSON.stringify({ ok: true, expired: expired.length }),
