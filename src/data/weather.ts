@@ -104,7 +104,7 @@ export const WEATHER: Record<WeatherType, WeatherDefinition> = {
     emoji:           "🌈",
     description:     "Rainbow mutations are twice as likely. Only occurs during the day.",
     durationMs:      15 * 60_000,   // 15 minutes
-    chance:          10,
+    chance:          3,
     cooldownMs:      45 * 60_000,
     growthMultiplier: 1.0,
     mutationBoost:   { mutation: "rainbow", multiplier: 2.0 },
