@@ -347,6 +347,20 @@ A stale server response was clobbering the client's freshly-restocked shop list,
 
 ---
 
+## W. v2.3.2 — Balance Scale Rework (#181)
+
+Range is now fixed at 1 cell each side for all tiers. Boost/slow values increased per tier: Scale I 4×/0.5×, Scale II 6×/0.33×, Scale III 8×/0.25×.
+
+| # | Action | Expected |
+|---|--------|----------|
+| W1 | Place a **Balance Scale I** with one plant to its left and one to its right. Watch growth rates. | Boosted side grows **4×** faster than base; slowed side grows at **0.5×** base speed |
+| W2 | Wait for the hour to flip (or use dev panel to advance time). | The boost and slow **swap sides** |
+| W3 | Place a **Balance Scale II** and compare growth rates to Scale I. | Boosted side visibly faster (**6×**); slowed side more penalized (**0.33×**) than Scale I |
+| W4 | Place a **Balance Scale III** and compare. | Boosted side at **8×**; slowed side at **0.25×** |
+| W5 | Check gear tooltip descriptions for all three tiers. | Each description shows the correct boost and slow values for that tier |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```

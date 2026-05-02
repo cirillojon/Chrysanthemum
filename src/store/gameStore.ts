@@ -1001,14 +1001,14 @@ export function getPassiveGrowthMultiplier(
     // Phase 0 = left arm (dc < 0) boosted 3×; right arm (dc > 0) slowed 0.5×.
     // Phase 1 = flipped.
     if (isBalanceScale(def) && def.fanRange) {
-      const phase    = Math.floor(now / 3_600_000) % 2;
-      const dc       = col - sourceCol;
-      const inLeft   = dc < 0;
+      const phase     = Math.floor(now / 3_600_000) % 2;
+      const dc        = col - sourceCol;
+      const inLeft    = dc < 0;
       const isBoosted = phase === 0 ? inLeft : !inLeft;
       if (isBoosted) {
-        balanceScaleBoostMult = Math.max(balanceScaleBoostMult, 3.0);
+        balanceScaleBoostMult = Math.max(balanceScaleBoostMult, def.scaleBoostMult ?? 4.0);
       } else {
-        balanceScaleSlowMult = Math.min(balanceScaleSlowMult, 0.5);
+        balanceScaleSlowMult = Math.min(balanceScaleSlowMult, def.scaleSlowMult ?? 0.5);
       }
     }
   }
