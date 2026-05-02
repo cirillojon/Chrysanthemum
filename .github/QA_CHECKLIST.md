@@ -284,6 +284,19 @@ Sprinklers now run during offline cron ticks. Scarecrow blocks all gear mutation
 
 ---
 
+## R. Marketplace — Expired Listing Mail-Back
+
+Expired listings are now delivered via the mailbox instead of silently patching `game_saves` inventory.
+
+| # | Action | Expected |
+|---|--------|----------|
+| R1 | Let a marketplace listing expire (or trigger the cron manually via GitHub Actions → workflow_dispatch) | Seller receives a "Listing Expired" mail with the correct item kind, species, mutation, and is_seed |
+| R2 | Open the expired-listing mail and press Claim | Item is added to the seller's inventory (flower/seed/gear/fertilizer/consumable as appropriate) |
+| R3 | Verify a fertilizer listing expires | Mail kind is `fertilizer`; claiming it increments the correct fertilizer type |
+| R4 | Verify a gear listing expires | Mail kind is `gear`; claiming it adds the gear to gear_inventory |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```

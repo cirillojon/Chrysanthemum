@@ -28,6 +28,8 @@ export const CHANGELOGS: ChangelogEntry[] = [
       { type: "fixed",   text: "Weather time gating now uses real Eastern Time — advance_weather was defaulting to noon UTC, permanently locking out Golden Hour and Star Shower from ever being rolled" },
       { type: "fixed",   text: "Fan, regular sprinklers, and all 6 mutation sprinklers now run during offline cron ticks at correct per-minute rates" },
       { type: "fixed",   text: "Aegis no longer blocks sprinkler mutations during offline ticks — it now correctly blocks weather mutations only, matching its online behaviour" },
+      { type: "fixed",   text: "Expired marketplace listings are now mailed back to the seller via the standard mailbox instead of silently modifying inventory directly" },
+      { type: "fixed",   text: "Marketplace expire cron no longer returns 401 — the GitHub Actions workflow was using CRON_SECRET as a Bearer token (invalid JWT); it now uses the service role key as Bearer and passes CRON_SECRET via a custom x-cron-secret header" },
       { type: "fixed",   text: "Fan no longer strips Windstruck — the strip branch was matching Windstruck (stored as a string) and removing it; fan now leaves any plant already carrying Windstruck alone" },
       { type: "fixed",   text: "Fan no longer re-applies Windstruck to a plant that already has it — the apply-Windstruck branch now only fires when the plant has no mutation at all" },
       { type: "fixed",   text: "Profile garden now shows the correct seed / sprout / bloom emoji for each growth stage instead of always showing the seed emoji for non-bloomed plants" },
