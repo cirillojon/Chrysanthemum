@@ -174,7 +174,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Heirloom Charm (I–V) — growth ────────────────────────────────────────
   { id: "heirloom_charm_1", name: "Heirloom Charm I",   emoji: "🔮", tier: 1, rarity: "rare",      category: "growth",
     description: `Harvest a ${r(1)} bloom without consuming it — the seed is returned to your inventory.`,
-    cost: { kind: "essence", amounts: [{ type: "grove", amount: 4 }, { type: "stellar", amount: 4 }] } },
+    cost: { kind: "essence", amounts: [{ type: "fairy", amount: 4 }, { type: "stellar", amount: 4 }] } },
   { id: "heirloom_charm_2", name: "Heirloom Charm II",  emoji: "🔮", tier: 2, rarity: "legendary", category: "growth",
     description: `Harvest a ${r(2)} bloom without consuming it — the seed is returned to your inventory.`,
     cost: { kind: "consumable", id: "heirloom_charm_1", quantity: 2 } },
