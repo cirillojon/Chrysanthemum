@@ -529,8 +529,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     if (!user || !saveEnabled.current) return;
     const fresh = await loadCloudSave(user.id);
     if (!fresh) return;
-    stateRef.current = fresh;
-    setState(fresh);
+    // Route through mergeServerResult so shop/supply reset timestamps can never
+    // roll backwards — edgeSyncShop may not have committed to DB yet when a
+    // cropstick poll or error-recovery reload fires, so a raw setState(fresh)
+    // would briefly stamp the old shop over the client's already-ticked new shop.
+    setState((cur) => {
+      const next = mergeServerResult(cur, fresh);
+      stateRef.current = next;
+      return next;
+    });
   }, [user]);
 
   /** Persist the current grid to the DB immediately. Called by Garden after a
