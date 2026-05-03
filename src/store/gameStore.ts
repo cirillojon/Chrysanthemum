@@ -196,6 +196,9 @@ export interface GameState {
   // Codex — tracks every species + mutation combo ever harvested
   // Format: "speciesId" for base, "speciesId:mutationId" for mutated
   discovered: string[];
+  // Codex acknowledged — entries the user has opened in the Codex UI.
+  // Persisted to the cloud so "newly discovered" badges sync across devices.
+  codexAcked: string[];
   // Weather forecast — number of upcoming slots the player has purchased (0 = not unlocked)
   weatherForecastSlots: number;
   // Marketplace — number of active listing slots the player has purchased (0 = not unlocked)
@@ -518,6 +521,7 @@ export function defaultState(): GameState {
     lastShopReset:        now,
     lastSaved:            now,
     discovered:           [],
+    codexAcked:           [],
     weatherForecastSlots: 0,
     marketplaceSlots:     0,
     supplySlots:          DEFAULT_SUPPLY_SLOTS,
@@ -608,6 +612,7 @@ export function applyOfflineTick(
       row.map((plot) => plot.gear !== undefined ? plot : { ...plot, gear: null })
     ),
     discovered:           save.discovered           ?? [],
+    codexAcked:           save.codexAcked           ?? [],
     shopSlots:            save.shopSlots            ?? DEFAULT_SHOP_SLOTS,
     weatherForecastSlots: save.weatherForecastSlots ?? 0,
     supplySlots:          save.supplySlots          ?? DEFAULT_SUPPLY_SLOTS,
@@ -2070,6 +2075,12 @@ export function mergeServerResult<T extends Partial<GameState>>(
   merged.lastSupplyReset = Math.max(cur.lastSupplyReset ?? 0, r.lastSupplyReset ?? 0);
   if ((r.lastShopReset   ?? 0) < cur.lastShopReset)          merged.shop        = cur.shop;
   if ((r.lastSupplyReset ?? 0) < (cur.lastSupplyReset ?? 0)) merged.supplyShop  = cur.supplyShop;
+
+  // codexAcked is monotonically growing — union both sides so two active devices
+  // never clobber each other's acknowledgements.
+  if (r.codexAcked) {
+    merged.codexAcked = [...new Set([...(cur.codexAcked ?? []), ...r.codexAcked])];
+  }
 
   if (result.grid) {
     // Identify the same plant by speciesId + timePlanted so we never copy a

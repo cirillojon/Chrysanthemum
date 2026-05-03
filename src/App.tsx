@@ -57,7 +57,7 @@ export default function App() {
 
 function AppInner() {
   const {
-    state, offlineSummary, clearSummary,
+    state, update, offlineSummary, clearSummary,
     shopJustRestocked,   clearShopNotification,
     supplyJustRestocked, clearSupplyNotification,
     gearExpiry, clearGearExpiry,
@@ -218,56 +218,29 @@ function AppInner() {
   // the "newly discovered" indicators survive page reloads / new builds.
   // The set persists across tab navigations (badge sticks until user opens
   // the specific entry's card) and is invalidated on sign-out.
-  const codexAckKey = useMemo(
-    () => `chrysanthemum_codex_ack_${user?.id ?? "guest"}`,
-    [user?.id],
-  );
-  const [acknowledgedCodex, setAcknowledgedCodex] = useState<Set<string> | null>(null);
-
-  // Bootstrap the set: prefer the persisted localStorage copy; fall back to
-  // `state.discovered` (one-time bootstrap so first-time users of this feature
-  // don't see a giant badge on existing discoveries). Re-runs on user change.
-  useEffect(() => {
-    try {
-      const raw = localStorage.getItem(codexAckKey);
-      if (raw) {
-        setAcknowledgedCodex(new Set(JSON.parse(raw) as string[]));
-        return;
-      }
-    } catch { /* malformed JSON — fall through to bootstrap */ }
-    setAcknowledgedCodex(new Set(state.discovered ?? []));
-  }, [codexAckKey]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Persist the set whenever it changes. Skip the initial null state.
-  useEffect(() => {
-    if (acknowledgedCodex === null) return;
-    try {
-      localStorage.setItem(codexAckKey, JSON.stringify([...acknowledgedCodex]));
-    } catch { /* storage full — silently ignore, not a critical write */ }
-  }, [acknowledgedCodex, codexAckKey]);
-
+  // ── Codex unseen entries (badge + red dot + "newly discovered" labels) ───
+  // unseenCodex = state.discovered − state.codexAcked.
+  // codexAcked is persisted in the cloud save so badges sync across devices.
   const unseenCodex = useMemo<Set<string>>(() => {
-    if (!acknowledgedCodex) return new Set();
+    const acked = new Set(state.codexAcked ?? []);
     const out = new Set<string>();
     for (const id of state.discovered ?? []) {
-      if (!acknowledgedCodex.has(id)) out.add(id);
+      if (!acked.has(id)) out.add(id);
     }
     return out;
-  }, [state.discovered, acknowledgedCodex]);
+  }, [state.discovered, state.codexAcked]);
 
   // Codex calls this when the user expands a flower's card — marks every
   // entry belonging to that species (base + any mutations) as seen.
   const markCodexSeen = useCallback((speciesId: string) => {
-    setAcknowledgedCodex((prev) => {
-      if (!prev) return prev;
-      const next = new Set(prev);
-      const prefix = `${speciesId}:`;
-      for (const id of state.discovered ?? []) {
-        if (id === speciesId || id.startsWith(prefix)) next.add(id);
-      }
-      return next;
-    });
-  }, [state.discovered]);
+    const prefix = `${speciesId}:`;
+    const toAdd = (state.discovered ?? []).filter(
+      (id) => id === speciesId || id.startsWith(prefix)
+    );
+    if (toAdd.length === 0) return;
+    const next = [...new Set([...(state.codexAcked ?? []), ...toAdd])];
+    update({ ...state, codexAcked: next });
+  }, [state, update]);
 
   // Social tab badge = friend requests + unread mailbox
   // (gifts now arrive via mailbox so mailboxUnreadCount already includes them)
