@@ -145,7 +145,12 @@ export function PlotTooltip({
     if (recipe.tier === null && !NULL_TIER_PLANT_CONSUMABLES.has(c.id)) return false;
 
     // Magnifying Glass, Garden Pin, and Ruler bypass the rarity gate — they work on any species
-    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && c.id !== "ruler" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
+    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && c.id !== "ruler") {
+      const consumableRarityNum = RARITY_ORDER[recipe.rarity] ?? -1;
+      const plantRarityNum      = RARITY_ORDER[species.rarity] ?? 999;
+      const isVialOrHeirloom    = c.id.includes("_vial_") || c.id.startsWith("heirloom_charm_");
+      if (isVialOrHeirloom ? consumableRarityNum <= plantRarityNum : consumableRarityNum < plantRarityNum) return false;
+    }
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
