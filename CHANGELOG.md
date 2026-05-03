@@ -1,3 +1,23 @@
+## [v2.3.3] — 2026-05-02 — Quality of Life & Fixes
+
+### Added
+- **Inventory search bar** — each inventory tab (Seeds, Blooms, Supplies, Consumables, Essences) now has a search bar so you can quickly find items by name
+- **Inventory header counts consumables and essences** — the header line now shows total consumable and essence counts alongside seeds, blooms, and supplies
+- **Heirloom Charm harvest shows a seed toast** — harvesting a plant with an active Heirloom Charm now pops up a separate "+1 Seed" notification alongside the bloom notification
+- **Codex "newly discovered" badges sync across devices** — acknowledged entries are now persisted to the cloud save; opening a species card on one device clears the badge on all others
+
+### Changed
+- **Heirloom Charm I recipe updated** — ingredient changed from 4× Grove Essence to 4× Fairy Essence (4× Stellar Essence unchanged)
+
+### Fixed
+- **Heirloom Charm now correctly returns the seed on harvest** — the seed was only added server-side but never applied to the optimistic client state, so the inventory never updated until the next page reload
+- **Heirloom Charm no longer creates a duplicate bloom row** — harvesting a charm plant produced two separate bloom rows in inventory due to a `null` vs `undefined` mutation mismatch; normalised to `null` on both sides
+- **Plot tooltip no longer offers Heirloom Charm on a plant it's already applied to** — the charm option is now hidden once `heirloomActive` is set on the plant
+- **Shop no longer flickers after restock when reload-from-cloud fires** — `reloadFromCloud` was doing a raw state replacement that bypassed the shop forward-only guard; it now routes through `mergeServerResult` so a cropstick poll or error-recovery reload can never stamp old DB shop data over a freshly-restocked client shop
+- **Codex badges no longer flood all discoveries on a new device** — the acknowledged set was bootstrapped before the cloud save loaded, capturing an empty `discovered` list and permanently marking every species as unseen on that device
+
+---
+
 ## [v2.3.2] — 2026-05-02 — Bug Fixes & Balance
 
 ### Changed

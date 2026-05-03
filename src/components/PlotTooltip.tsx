@@ -149,8 +149,9 @@ export function PlotTooltip({
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
-    // Heirloom Charm only works on bloomed plants
+    // Heirloom Charm only works on bloomed plants, and only once per plant
     if (c.id.startsWith("heirloom_charm_") && !isBloomed) return false;
+    if (c.id.startsWith("heirloom_charm_") && plant.heirloomActive) return false;
     // Magnifying Glass: only usable when species is still unknown on this tile
     // (blocks if: already revealed via mag glass, plant is bloomed and now visible,
     //  or species already in codex so there's nothing left to reveal)

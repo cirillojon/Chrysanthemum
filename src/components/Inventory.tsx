@@ -31,9 +31,10 @@ interface Props {
 export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubTabView, activeTab, onTabChange }: Props) {
   const { state, perform, getState, awaitHarvests, update } = useGame();
   const [localTab, setLocalTab] = useState<Tab>(0);
+  const [search, setSearch] = useState("");
   // Use controlled tab when provided by parent (swipe), otherwise local state
   const tab    = activeTab  ?? localTab;
-  const setTab = (t: Tab) => { setLocalTab(t); onTabChange?.(t); };
+  const setTab = (t: Tab) => { setLocalTab(t); onTabChange?.(t); setSearch(""); };
   const [usingEclipse,        setUsingEclipse]        = useState<string | null>(null);
   const [openingPouch,        setOpeningPouch]        = useState<string | null>(null);
   const [activatingBoost,     setActivatingBoost]     = useState<string | null>(null);
@@ -51,6 +52,29 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const bloomCount       = blooms.reduce((s, i) => s + i.quantity, 0);
   const supplyCount      = fertilizers.reduce((s, f) => s + f.quantity, 0)
                          + gearItems.reduce((s, g) => s + g.quantity, 0);
+  const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0);
+  const essenceCount     = (state.essences ?? []).reduce((s, e) => s + e.amount, 0);
+
+  const q = search.toLowerCase();
+  const filteredSeeds = q
+    ? seeds.filter((i) => getFlower(i.speciesId)?.name.toLowerCase().includes(q))
+    : seeds;
+  const filteredBlooms = q
+    ? blooms.filter((i) => {
+        const name    = getFlower(i.speciesId)?.name.toLowerCase() ?? "";
+        const mutName = i.mutation ? (MUTATIONS[i.mutation as MutationType]?.name.toLowerCase() ?? "") : "";
+        return name.includes(q) || mutName.includes(q);
+      })
+    : blooms;
+  const filteredFertilizers = q
+    ? fertilizers.filter((f) => FERTILIZERS[f.type].name.toLowerCase().includes(q))
+    : fertilizers;
+  const filteredGear = q
+    ? gearItems.filter((g) => GEAR[g.gearType]?.name.toLowerCase().includes(q))
+    : gearItems;
+  const filteredConsumables = q
+    ? consumableItems.filter((c) => CONSUMABLE_RECIPE_MAP[c.id as ConsumableId]?.name.toLowerCase().includes(q))
+    : consumableItems;
 
 
   const totalBloomValue = blooms.reduce((sum, item) => {
@@ -200,6 +224,8 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
             {seedCount} seed{seedCount !== 1 ? "s" : ""} ·{" "}
             {bloomCount} bloom{bloomCount !== 1 ? "s" : ""}
             {supplyCount > 0 && <> · {supplyCount} supplies</>}
+            {consumableCount > 0 && <> · {consumableCount} consumable{consumableCount !== 1 ? "s" : ""}</>}
+            {essenceCount > 0 && <> · {essenceCount} essence{essenceCount !== 1 ? "s" : ""}</>}
           </p>
         </div>
       </div>
@@ -247,17 +273,42 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
         })}
       </div>
 
+      {/* Search bar — shown on all tabs except Essences */}
+      {tab !== 4 && (
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full bg-card/60 border border-border rounded-xl px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:border-primary/50 transition-colors"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground text-xs"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Tab content */}
       <div className="space-y-3">
 
         {/* ── Seeds ───────────────────────────────────────────────────────── */}
         {tab === 0 && (
-          seeds.length > 0 ? (
-            seeds.map((item, i) => (
+          filteredSeeds.length > 0 ? (
+            filteredSeeds.map((item, i) => (
               <SeedInventoryRow key={`seed-${item.speciesId}-${i}`} item={item} />
             ))
           ) : (
-            <EmptyTab emoji="🌱" message="No seeds in inventory" hint="Buy seeds from the Shop to get started." />
+            <EmptyTab
+              emoji="🌱"
+              message={q ? "No seeds match your search" : "No seeds in inventory"}
+              hint={q ? undefined : "Buy seeds from the Shop to get started."}
+            />
           )
         )}
 
@@ -271,12 +322,14 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
               >
                 Sell All — {totalBloomValue.toLocaleString()} 🟡
               </button>
-              {blooms.map((item, i) => (
+              {filteredBlooms.length > 0 ? filteredBlooms.map((item, i) => (
                 <InventoryItemCard
                   key={`bloom-${item.speciesId}-${item.mutation ?? "none"}-${i}`}
                   item={item}
                 />
-              ))}
+              )) : (
+                <EmptyTab emoji="🌸" message="No blooms match your search" />
+              )}
             </>
           ) : (
             <EmptyTab emoji="🌸" message="No blooms to sell" hint="Harvest fully-grown flowers from your Garden." />
@@ -285,9 +338,9 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
 
         {/* ── Consumables ─────────────────────────────────────────────────── */}
         {tab === 3 && (
-          consumableItems.length > 0 ? (
+          filteredConsumables.length > 0 ? (
             <ConsumablesTabContent
-              consumables={consumableItems}
+              consumables={filteredConsumables}
               lastEclipseTonic={state.lastEclipseTonic}
               usingEclipse={usingEclipse}
               openingPouch={openingPouch}
@@ -298,15 +351,19 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
               onActivateBoost={handleActivateBoost}
             />
           ) : (
-            <EmptyTab emoji="🧪" message="No consumables" hint="Craft consumables in the Alchemy lab." />
+            <EmptyTab
+              emoji="🧪"
+              message={q ? "No consumables match your search" : "No consumables"}
+              hint={q ? undefined : "Craft consumables in the Alchemy lab."}
+            />
           )
         )}
 
         {/* ── Supplies ────────────────────────────────────────────────────── */}
         {tab === 2 && (
-          fertilizers.length > 0 || gearItems.length > 0 ? (
+          filteredFertilizers.length > 0 || filteredGear.length > 0 ? (
             <>
-              {fertilizers.map((f) => {
+              {filteredFertilizers.map((f) => {
                 const fert       = FERTILIZERS[f.type];
                 const fertRarity = RARITY_CONFIG[fert.rarity];
                 return (
@@ -329,12 +386,16 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
                   </div>
                 );
               })}
-              {gearItems.map((g) => (
+              {filteredGear.map((g) => (
                 <GearInventoryRow key={g.gearType} item={g} />
               ))}
             </>
           ) : (
-            <EmptyTab emoji="🧪" message="No supplies" hint="Buy fertilizers and gear from the Supply Shop." />
+            <EmptyTab
+              emoji="⚙️"
+              message={q ? "No supplies match your search" : "No supplies"}
+              hint={q ? undefined : "Buy fertilizers and gear from the Supply Shop."}
+            />
           )
         )}
 
@@ -415,7 +476,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   );
 }
 
-function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hint: string }) {
+function EmptyTab({ emoji, message, hint }: { emoji: string; message: string; hint?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
       <span className="text-4xl">{emoji}</span>

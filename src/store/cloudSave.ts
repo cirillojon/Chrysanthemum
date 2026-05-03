@@ -130,6 +130,11 @@ export async function loadCloudSave(userId: string): Promise<GameState | null> {
       lastShopReset:        data.last_shop_reset,
       lastSaved:            data.last_saved,
       discovered:           (data.discovered as string[]) ?? [],
+      // Null means the column doesn't exist yet for this user (pre-v2.3.3 save).
+      // Bootstrap from discovered so existing users aren't flooded with badges.
+      codexAcked:           data.codex_acked != null
+                              ? (data.codex_acked as string[])
+                              : (data.discovered as string[] ?? []),
       weatherForecastSlots: (data.weather_forecast_slots as number) ?? 0,
       marketplaceSlots:     (data.marketplace_slots as number) ?? 0,
       // Farm Update fields
@@ -197,6 +202,7 @@ export async function saveToCloud(
     // to write to client state only, leaving the DB at the old count and making
     // plant-seed skip masteredBonus even after the codex was completed.
     discovered:             state.discovered        ?? [],
+    codex_acked:            state.codexAcked        ?? [],
     // Alchemy
     essences:               state.essences          ?? [],
     // Cross-breeding
@@ -296,6 +302,9 @@ export async function getPublicSave(userId: string): Promise<GameState | null> {
     lastShopReset:        data.last_shop_reset,
     lastSaved:            data.last_saved,
     discovered:           (data.discovered as string[]) ?? [],
+    codexAcked:           data.codex_acked != null
+                            ? (data.codex_acked as string[])
+                            : (data.discovered as string[] ?? []),
     weatherForecastSlots: (data.weather_forecast_slots as number) ?? 0,
     marketplaceSlots:     (data.marketplace_slots as number) ?? 2,
     gearInventory:        (data.gear_inventory  as GameState["gearInventory"])  ?? [],

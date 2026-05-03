@@ -5,10 +5,11 @@ interface Props {
   speciesId: string;
   mutation?: MutationType;
   count: number;
+  isSeed?: boolean;
   onDone: () => void;
 }
 
-export function HarvestPopup({ speciesId, mutation, count, onDone }: Props) {
+export function HarvestPopup({ speciesId, mutation, count, isSeed, onDone }: Props) {
   const [visible, setVisible] = useState(true);
   const species = getFlower(speciesId);
   const rarity  = species ? RARITY_CONFIG[species.rarity] : null;
@@ -40,11 +41,14 @@ export function HarvestPopup({ speciesId, mutation, count, onDone }: Props) {
       <div
         className={`flex items-center gap-1.5 bg-card border rounded-full px-3 py-1 shadow-lg ${rarity?.glow}`}
       >
-        <span className={`text-xs font-bold font-mono ${mut ? mut.color : rarity?.color}`}>
+        <span className={`text-xs font-bold font-mono ${isSeed ? "text-green-400" : mut ? mut.color : rarity?.color}`}>
           +{count}
         </span>
-        <span className="text-base">{species.emoji.bloom}</span>
-        {mut && (
+        <span className="text-base">{isSeed ? species.emoji.seed : species.emoji.bloom}</span>
+        {isSeed && (
+          <span className="text-xs font-bold font-mono text-green-400">Seed</span>
+        )}
+        {!isSeed && mut && (
           <span className={`text-xs font-bold font-mono ${mut.color}`}>
             {mut.emoji} {mut.name}
           </span>

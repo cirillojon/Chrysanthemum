@@ -196,6 +196,9 @@ export interface GameState {
   // Codex — tracks every species + mutation combo ever harvested
   // Format: "speciesId" for base, "speciesId:mutationId" for mutated
   discovered: string[];
+  // Codex acknowledged — entries the user has opened in the Codex UI.
+  // Persisted to the cloud so "newly discovered" badges sync across devices.
+  codexAcked: string[];
   // Weather forecast — number of upcoming slots the player has purchased (0 = not unlocked)
   weatherForecastSlots: number;
   // Marketplace — number of active listing slots the player has purchased (0 = not unlocked)
@@ -518,6 +521,7 @@ export function defaultState(): GameState {
     lastShopReset:        now,
     lastSaved:            now,
     discovered:           [],
+    codexAcked:           [],
     weatherForecastSlots: 0,
     marketplaceSlots:     0,
     supplySlots:          DEFAULT_SUPPLY_SLOTS,
@@ -608,6 +612,7 @@ export function applyOfflineTick(
       row.map((plot) => plot.gear !== undefined ? plot : { ...plot, gear: null })
     ),
     discovered:           save.discovered           ?? [],
+    codexAcked:           save.codexAcked           ?? [],
     shopSlots:            save.shopSlots            ?? DEFAULT_SHOP_SLOTS,
     weatherForecastSlots: save.weatherForecastSlots ?? 0,
     supplySlots:          save.supplySlots          ?? DEFAULT_SUPPLY_SLOTS,
@@ -1895,17 +1900,28 @@ export function harvestPlant(
     })
   );
 
-  // Update inventory
+  // Update inventory — normalise null/undefined so DB-loaded items (mutation: null)
+  // and fresh optimistic items (mutation: undefined) are treated as the same slot.
+  const normMut = mutation ?? null;
   const existing = state.inventory.find(
-    (i) => i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
+    (i) => i.speciesId === speciesId && (i.mutation ?? null) === normMut && !i.isSeed
   );
-  const newInventory = existing
+  let newInventory = existing
     ? state.inventory.map((i) =>
-        i.speciesId === speciesId && i.mutation === mutation && !i.isSeed
+        i.speciesId === speciesId && (i.mutation ?? null) === normMut && !i.isSeed
           ? { ...i, quantity: i.quantity + 1 }
           : i
       )
     : [...state.inventory, { speciesId, quantity: 1, mutation, isSeed: false }];
+
+  // Heirloom Charm: also return the seed (mirrors server logic; edgeHarvest strips
+  // inventory from the response so this must be handled optimistically).
+  if (plot.plant.heirloomActive) {
+    const seedIdx = newInventory.findIndex((i) => i.speciesId === speciesId && i.isSeed && (i.mutation ?? null) === null);
+    newInventory = seedIdx >= 0
+      ? newInventory.map((i, idx) => idx === seedIdx ? { ...i, quantity: i.quantity + 1 } : i)
+      : [...newInventory, { speciesId, quantity: 1, isSeed: true }];
+  }
 
   // Update codex — add base entry and mutation entry if new
   const newDiscovered = [...state.discovered];
@@ -2059,6 +2075,12 @@ export function mergeServerResult<T extends Partial<GameState>>(
   merged.lastSupplyReset = Math.max(cur.lastSupplyReset ?? 0, r.lastSupplyReset ?? 0);
   if ((r.lastShopReset   ?? 0) < cur.lastShopReset)          merged.shop        = cur.shop;
   if ((r.lastSupplyReset ?? 0) < (cur.lastSupplyReset ?? 0)) merged.supplyShop  = cur.supplyShop;
+
+  // codexAcked is monotonically growing — union both sides so two active devices
+  // never clobber each other's acknowledgements.
+  if (r.codexAcked) {
+    merged.codexAcked = [...new Set([...(cur.codexAcked ?? []), ...r.codexAcked])];
+  }
 
   if (result.grid) {
     // Identify the same plant by speciesId + timePlanted so we never copy a

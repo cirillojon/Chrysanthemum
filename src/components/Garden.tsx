@@ -29,7 +29,7 @@ import { MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
-export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType) => void }) {
+export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType, isSeed?: boolean) => void }) {
   const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, saveGridNow, user, requestSignIn } = useGame();
   useGrowthTick(5_000);
 
@@ -94,6 +94,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
           const savedCell          = cur.grid[row][col];
           const harvestedSpeciesId = savedCell.plant?.speciesId;
           const harvestedMutation  = savedCell.plant?.mutation ?? undefined;
+          const harvestedHeirloom  = savedCell.plant?.heirloomActive;
           const opt = harvestPlant(cur, row, col, weather);
           if (!opt) {
             harvestingPlots.current.delete(key);
@@ -111,6 +112,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 // Show harvest popup for bell auto-harvests just like manual ones
                 if (harvestedSpeciesId) {
                   onHarvestPopup(harvestedSpeciesId, harvestedMutation);
+                  if (harvestedHeirloom) onHarvestPopup(harvestedSpeciesId, undefined, true);
                 }
               },
               {
@@ -489,6 +491,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const savedCell           = cur.grid[row][col];
       const harvestedSpeciesId  = savedCell.plant?.speciesId;
       const harvestedMutation   = savedCell.plant?.mutation ?? undefined;
+      const harvestedHeirloom   = savedCell.plant?.heirloomActive;
       perform(
         opt.state,
         async () => {
@@ -504,6 +507,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
           // Collect All silently filled inventory with no visible feedback.
           if (harvestedSpeciesId) {
             onHarvestPopup(harvestedSpeciesId, harvestedMutation);
+            if (harvestedHeirloom) onHarvestPopup(harvestedSpeciesId, undefined, true);
           }
         },
         {
@@ -657,7 +661,10 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
                 row={row}
                 col={col}
                 onEmptyClick={() => handlePlotClick(row, col)}
-                onHarvest={(speciesId, mutation) => onHarvestPopup(speciesId, mutation)}
+                onHarvest={(speciesId, mutation, _isBloomPlaced, heirloomActive) => {
+                  onHarvestPopup(speciesId, mutation);
+                  if (heirloomActive) onHarvestPopup(speciesId, undefined, true);
+                }}
                 onHarvestStart={() => harvestingPlots.current.add(`${row}-${col}`)}
                 onHarvestEnd={() => harvestingPlots.current.delete(`${row}-${col}`)}
                 harvestPending={() => harvestingPlots.current.has(`${row}-${col}`)}
