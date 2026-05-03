@@ -1,3 +1,20 @@
+## [v2.3.5] — 2026-05-03 — Toast Notifications & Balance
+
+### Added
+- **Loss/gain toast notifications** — pill toasts now fire for every inventory change: planting seeds (red), harvesting blooms (red), placing gear (red), using a shovel (red), applying consumables (red), buying seeds or supply items (green), and spending crafting ingredients (red)
+- **Plant All loss toasts** — each seed species planted via Plant All shows a dedicated loss toast; repeated plants of the same species accumulate into a single count pill
+
+### Changed
+- **Golden Veil renamed** — the Midas Sprinkler was incorrectly named "Gold Vial"; it is now correctly called "Golden Veil"
+- **Balance — Vials & Heirloom Charms rarity nerf** — all mutation vials and Heirloom Charms now require the plant's rarity to be **strictly below** the consumable's tier; same-rarity plants are no longer valid targets (e.g. a Rare Frost Vial I no longer works on Rare plants)
+- **Balance — Seed Pouch upgrade cost increased** — upgrading any Seed Pouch (base or typed/elemental) now costs **4×** of the previous tier instead of 3×
+
+### Fixed
+- **iOS inputs no longer zoom the page** — input and textarea elements are set to 16px on mobile to prevent the browser auto-zoom on focus
+- **Weather Forecast panel scrolls correctly on mobile** — header is now sticky so it stays visible while scrolling through a long forecast list
+
+---
+
 ## [v2.3.4] — 2026-05-02 — Hotfix
 
 ### Fixed
