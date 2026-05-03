@@ -645,7 +645,7 @@ function ConsumablesTabContent({
           c.id.startsWith("resonance_draft_") ? "attunement" : null;
         const nowMs       = Date.now();
         const liveBoost   = boostType
-          ? activeBoosts.find((b) => b.type === boostType && new Date(b.expiresAt).getTime() > nowMs)
+          ? activeBoosts.find((b) => b.type === boostType && b.consumableId === c.id && new Date(b.expiresAt).getTime() > nowMs)
           : null;
 
         const consRarity   = RARITY_CONFIG[recipe.rarity];
