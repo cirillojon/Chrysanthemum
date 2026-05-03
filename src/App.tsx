@@ -58,7 +58,7 @@ export default function App() {
 
 function AppInner() {
   const {
-    state, update, offlineSummary, clearSummary,
+    state, update, getState, offlineSummary, clearSummary,
     shopJustRestocked,   clearShopNotification,
     supplyJustRestocked, clearSupplyNotification,
     gearExpiry, clearGearExpiry,
@@ -245,9 +245,15 @@ function AppInner() {
       supabase.from("game_saves")
         .update({ codex_acked: next })
         .eq("user_id", user.id)
-        .then(({ error }) => { if (error) console.error("Failed to persist codexAcked:", error); });
+        .select("updated_at")
+        .single()
+        .then(({ data, error }) => {
+          if (error) { console.error("Failed to persist codexAcked:", error); return; }
+          // Sync serverUpdatedAt so the next CAS save uses the correct DB timestamp.
+          if (data?.updated_at) update({ ...getState(), serverUpdatedAt: data.updated_at });
+        });
     }
-  }, [state, update, user]);
+  }, [state, update, getState, user]);
 
   // Social tab badge = friend requests + unread mailbox
   // (gifts now arrive via mailbox so mailboxUnreadCount already includes them)
