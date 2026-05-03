@@ -511,12 +511,12 @@ export function PlotTooltip({
               )}
               {balanceScaleSide === "boost" && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-400/10 border border-amber-400/20 text-[10px] text-amber-300">
-                  <span>⚖️</span><span>Scale 3× boost</span>
+                  <span>⚖️</span><span>Scale boost</span>
                 </span>
               )}
               {balanceScaleSide === "slow" && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-400/10 border border-slate-400/20 text-[10px] text-slate-400">
-                  <span>⚖️</span><span>Scale 0.5× slow</span>
+                  <span>⚖️</span><span>Scale slow</span>
                 </span>
               )}
               {isUnderAegis && (
