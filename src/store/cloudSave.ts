@@ -302,6 +302,9 @@ export async function getPublicSave(userId: string): Promise<GameState | null> {
     lastShopReset:        data.last_shop_reset,
     lastSaved:            data.last_saved,
     discovered:           (data.discovered as string[]) ?? [],
+    codexAcked:           data.codex_acked != null
+                            ? (data.codex_acked as string[])
+                            : (data.discovered as string[] ?? []),
     weatherForecastSlots: (data.weather_forecast_slots as number) ?? 0,
     marketplaceSlots:     (data.marketplace_slots as number) ?? 2,
     gearInventory:        (data.gear_inventory  as GameState["gearInventory"])  ?? [],
