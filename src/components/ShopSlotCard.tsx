@@ -244,9 +244,9 @@ export function ShopSlotCard({ slot }: Props) {
       },
       () => {
         flashBought();
-        const emoji = isNew ? "❓" : species.emoji.seed;
-        const label = isNew ? "??? Seed" : `${species.name} Seed`;
-        pushGenericToast(`gain:seed:${species.id}`, emoji, label, "text-green-400", "gain");
+        const emoji = isNew ? "❓" : species!.emoji.seed;
+        const label = isNew ? "??? Seed" : `${species!.name} Seed`;
+        pushGenericToast(`gain:seed:${species!.id}`, emoji, label, "text-green-400", "gain");
       },
       {
         serialize: true,
@@ -288,9 +288,9 @@ export function ShopSlotCard({ slot }: Props) {
       () => {
         flashBought();
         if (qty > 0) {
-          const emoji = isNew ? "❓" : species.emoji.seed;
-          const label = isNew ? "??? Seed" : `${species.name} Seed`;
-          pushGenericToast(`gain:seed:${species.id}`, emoji, label, "text-green-400", "gain", qty);
+          const emoji = isNew ? "❓" : species!.emoji.seed;
+          const label = isNew ? "??? Seed" : `${species!.name} Seed`;
+          pushGenericToast(`gain:seed:${species!.id}`, emoji, label, "text-green-400", "gain", qty);
         }
       },
       {

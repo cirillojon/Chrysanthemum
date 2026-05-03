@@ -21,6 +21,7 @@ const REQUIRED_EXPORTS = [
   "edgeUnpinPlant",
   // Shop
   "edgeBuyFlower",
+  "edgeBuyAllSeeds",
   "edgeBuyFertilizer",
   "edgeSellFlower",
   "edgeSyncShop",
@@ -36,6 +37,7 @@ const REQUIRED_EXPORTS = [
   "edgeSetFanDirection",
   // Supply shop
   "edgeBuyFromSupplyShop",
+  "edgeBuyAllFromSupplyShop",
   "edgeSyncSupplyShop",
   // Bulk sell
   "edgeSellAll",
