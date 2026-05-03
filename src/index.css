@@ -28,6 +28,13 @@
   --color-border:              hsl(var(--border));
 }
 
+/* ── Prevent iOS input zoom (#209) ────────────────────────────────────── */
+@media screen and (max-width: 768px) {
+  input, textarea, select {
+    font-size: 16px !important;
+  }
+}
+
 /* ── Prismatic / Rainbow animations ───────────────────────────────────── */
 @keyframes rainbow-cycle {
   0%   { color: #f87171; }

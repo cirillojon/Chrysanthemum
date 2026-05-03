@@ -361,7 +361,7 @@ Deno.serve(async (req: Request) => {
         });
       }
       const invItem = inventory.find(
-        (i) => i.speciesId === speciesId && i.mutation === (mutation ?? undefined) && !i.isSeed
+        (i) => i.speciesId === speciesId && (i.mutation ?? undefined) === (mutation ?? undefined) && !i.isSeed
       );
       if (!invItem || invItem.quantity < quantity) {
         return new Response(JSON.stringify({ error: `Insufficient inventory for ${speciesId}` }), {
@@ -377,7 +377,7 @@ Deno.serve(async (req: Request) => {
       // Consume flowers from inventory
       inventory = inventory
         .map((i) =>
-          i.speciesId === speciesId && i.mutation === (mutation ?? undefined) && !i.isSeed
+          i.speciesId === speciesId && (i.mutation ?? undefined) === (mutation ?? undefined) && !i.isSeed
             ? { ...i, quantity: i.quantity - quantity }
             : i
         )

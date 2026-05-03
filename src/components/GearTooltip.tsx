@@ -160,7 +160,7 @@ export function GearTooltip({ gear, row, col, onClose }: Props) {
 
   // Balance Scale: which side is currently boosting?
   const balanceScalePhase = def.passiveSubtype === "balance_scale"
-    ? Math.floor(now / 3_600_000) % 2
+    ? Math.floor((now - gear.placedAt) / 3_600_000) % 2
     : null;
 
   return (

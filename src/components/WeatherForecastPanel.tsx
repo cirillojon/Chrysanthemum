@@ -92,15 +92,20 @@ export function WeatherForecastPanel({ onClose }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 pt-16"
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-sm bg-card border border-border rounded-2xl shadow-2xl flex flex-col gap-4 p-5 max-h-[85vh] overflow-y-auto"
+        className="w-full sm:max-w-sm bg-card border border-border rounded-2xl shadow-2xl flex flex-col max-h-[80vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        {/* Mobile drag indicator */}
+        <div className="flex justify-center pt-3 pb-1 sm:hidden">
+          <div className="w-10 h-1 rounded-full bg-border" />
+        </div>
+
+        {/* Sticky header */}
+        <div className="flex items-center justify-between px-5 py-4 sticky top-0 bg-card rounded-t-2xl z-10 border-b border-border/40">
           <h2 className="font-bold text-base flex items-center gap-2">
             <span>🔭</span>
             <span>Weather Forecast</span>
@@ -112,6 +117,9 @@ export function WeatherForecastPanel({ onClose }: Props) {
             ✕
           </button>
         </div>
+
+        {/* Scrollable body */}
+        <div className="flex flex-col gap-4 p-5 overflow-y-auto">
 
         {/* Current weather */}
         <div className={`flex items-center gap-3 rounded-xl border p-3 ${bgClass[activeWeather]} ${accentClass[activeWeather]}`}>
@@ -214,6 +222,7 @@ export function WeatherForecastPanel({ onClose }: Props) {
             </p>
           </div>
         )}
+        </div>{/* end scrollable body */}
       </div>
     </div>
   );

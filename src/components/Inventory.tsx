@@ -47,12 +47,14 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const fertilizers     = state.fertilizers.filter((f) => f.quantity > 0);
   const gearItems       = (state.gearInventory ?? []).filter((g) => g.quantity > 0);
   const consumableItems = (state.consumables ?? []).filter((c) => c.quantity > 0);
+  const infuserItems    = (state.infusers   ?? []).filter((i) => i.quantity > 0);
 
   const seedCount        = seeds.reduce((s, i) => s + i.quantity, 0);
   const bloomCount       = blooms.reduce((s, i) => s + i.quantity, 0);
   const supplyCount      = fertilizers.reduce((s, f) => s + f.quantity, 0)
                          + gearItems.reduce((s, g) => s + g.quantity, 0);
-  const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0);
+  const consumableCount  = consumableItems.reduce((s, c) => s + c.quantity, 0)
+                         + infuserItems.reduce((s, i) => s + i.quantity, 0);
   const essenceCount     = (state.essences ?? []).reduce((s, e) => s + e.amount, 0);
 
   const q = search.toLowerCase();
@@ -75,6 +77,9 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
   const filteredConsumables = q
     ? consumableItems.filter((c) => CONSUMABLE_RECIPE_MAP[c.id as ConsumableId]?.name.toLowerCase().includes(q))
     : consumableItems;
+  const filteredInfusers = q
+    ? infuserItems.filter((i) => `${RARITY_CONFIG[i.rarity as keyof typeof RARITY_CONFIG]?.label ?? i.rarity} infuser`.includes(q))
+    : infuserItems;
 
 
   const totalBloomValue = blooms.reduce((sum, item) => {
@@ -338,18 +343,44 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
 
         {/* ── Consumables ─────────────────────────────────────────────────── */}
         {tab === 3 && (
-          filteredConsumables.length > 0 ? (
-            <ConsumablesTabContent
-              consumables={filteredConsumables}
-              lastEclipseTonic={state.lastEclipseTonic}
-              usingEclipse={usingEclipse}
-              openingPouch={openingPouch}
-              activatingBoost={activatingBoost}
-              activeBoosts={state.activeBoosts ?? []}
-              onUseEclipse={handleUseEclipseTonic}
-              onOpenPouch={handleOpenPouch}
-              onActivateBoost={handleActivateBoost}
-            />
+          filteredConsumables.length > 0 || filteredInfusers.length > 0 ? (
+            <>
+              {filteredInfusers.map((inf) => {
+                const rarity = RARITY_CONFIG[inf.rarity as keyof typeof RARITY_CONFIG];
+                return (
+                  <div
+                    key={inf.rarity}
+                    className={`flex items-center gap-4 bg-card/60 border rounded-xl px-4 py-3 border-border ${rarity?.glow ?? ""}`}
+                  >
+                    <span className="text-3xl flex-shrink-0">💉</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-semibold text-sm">{rarity?.label ?? inf.rarity} Infuser</h3>
+                        <span className={`text-xs font-mono ${rarity?.color ?? "text-muted-foreground"}`}>
+                          {rarity?.label ?? inf.rarity}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        ×{inf.quantity} · Apply to a bloomed plant to enable cross-breeding
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredConsumables.length > 0 && (
+                <ConsumablesTabContent
+                  consumables={filteredConsumables}
+                  lastEclipseTonic={state.lastEclipseTonic}
+                  usingEclipse={usingEclipse}
+                  openingPouch={openingPouch}
+                  activatingBoost={activatingBoost}
+                  activeBoosts={state.activeBoosts ?? []}
+                  onUseEclipse={handleUseEclipseTonic}
+                  onOpenPouch={handleOpenPouch}
+                  onActivateBoost={handleActivateBoost}
+                />
+              )}
+            </>
           ) : (
             <EmptyTab
               emoji="🧪"
@@ -614,7 +645,7 @@ function ConsumablesTabContent({
           c.id.startsWith("resonance_draft_") ? "attunement" : null;
         const nowMs       = Date.now();
         const liveBoost   = boostType
-          ? activeBoosts.find((b) => b.type === boostType && new Date(b.expiresAt).getTime() > nowMs)
+          ? activeBoosts.find((b) => b.type === boostType && b.consumableId === c.id && new Date(b.expiresAt).getTime() > nowMs)
           : null;
 
         const consRarity   = RARITY_CONFIG[recipe.rarity];

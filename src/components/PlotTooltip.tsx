@@ -63,7 +63,7 @@ export function PlotTooltip({
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell, isUnderLawnmower,
   balanceScaleSide, isUnderAegis,
 }: Props) {
-  const { state, getState, perform, update, activeWeather } = useGame();
+  const { state, getState, perform, update, activeWeather, pushHarvestPopup, pushGenericToast } = useGame();
   const [showFertPicker,    setShowFertPicker]    = useState(false);
   const [confirmRemove,     setConfirmRemove]     = useState(false);
   const [removing,          setRemoving]          = useState(false);
@@ -145,7 +145,12 @@ export function PlotTooltip({
     if (recipe.tier === null && !NULL_TIER_PLANT_CONSUMABLES.has(c.id)) return false;
 
     // Magnifying Glass, Garden Pin, and Ruler bypass the rarity gate — they work on any species
-    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && c.id !== "ruler" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
+    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && c.id !== "ruler") {
+      const consumableRarityNum = RARITY_ORDER[recipe.rarity] ?? -1;
+      const plantRarityNum      = RARITY_ORDER[species.rarity] ?? 999;
+      const isVialOrHeirloom    = c.id.includes("_vial_") || c.id.startsWith("heirloom_charm_");
+      if (isVialOrHeirloom ? consumableRarityNum <= plantRarityNum : consumableRarityNum < plantRarityNum) return false;
+    }
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;
@@ -212,7 +217,12 @@ export function PlotTooltip({
 
   function handleApplyFertilizer(type: FertilizerType) {
     const optimistic = applyFertilizer(state, row, col, type);
-    if (optimistic) perform(optimistic, () => edgeApplyFertilizer(row, col, type));
+    if (optimistic) {
+      const f = FERTILIZERS[type];
+      perform(optimistic, () => edgeApplyFertilizer(row, col, type), () => {
+        pushGenericToast(`loss:fert:${type}`, f.emoji, f.name, undefined, "loss");
+      });
+    }
     setShowFertPicker(false);
     onClose?.();
   }
@@ -225,10 +235,14 @@ export function PlotTooltip({
     const savedCell       = cur.grid[row][col];
     const savedConsumables = cur.consumables;
     setApplyingConsumable(consumableId);
+    const recipe = CONSUMABLE_RECIPE_MAP[consumableId as ConsumableId];
     perform(
       optimistic,
       () => edgeApplyPlantConsumable(row, col, consumableId),
-      () => setApplyingConsumable(null),
+      () => {
+        setApplyingConsumable(null);
+        if (recipe) pushGenericToast(`loss:consumable:${consumableId}`, recipe.emoji, recipe.name, undefined, "loss");
+      },
       {
         rollback: (c) => ({
           ...c,
@@ -262,7 +276,7 @@ export function PlotTooltip({
           setRemoving(false);
         }
       },
-      () => onClose?.(),
+      () => { onClose?.(); pushHarvestPopup(plant.speciesId, undefined, true); pushGenericToast("loss:shovel", "🥄", "Shovel", undefined, "loss"); },
       {
         rollback: (c) => ({
           ...c,
@@ -511,12 +525,12 @@ export function PlotTooltip({
               )}
               {balanceScaleSide === "boost" && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-amber-400/10 border border-amber-400/20 text-[10px] text-amber-300">
-                  <span>⚖️</span><span>Scale 3× boost</span>
+                  <span>⚖️</span><span>Scale boost</span>
                 </span>
               )}
               {balanceScaleSide === "slow" && (
                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-slate-400/10 border border-slate-400/20 text-[10px] text-slate-400">
-                  <span>⚖️</span><span>Scale 0.5× slow</span>
+                  <span>⚖️</span><span>Scale slow</span>
                 </span>
               )}
               {isUnderAegis && (

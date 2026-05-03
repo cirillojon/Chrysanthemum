@@ -46,6 +46,8 @@ type Tab = "weather" | "items" | "broadcast";
 export function DevWeatherPanel() {
   const { state, update, user } = useGame();
 
+  const [open, setOpen] = useState(false);
+
   // ── Weather tab state ──────────────────────────────────────────────────────
   const [cycling, setCycling]   = useState(false);
   const [current, setCurrent]   = useState<WeatherType | null>(null);
@@ -178,6 +180,13 @@ export function DevWeatherPanel() {
     const newState = { ...state, coins: state.coins + coins };
     await devSave(newState);
     showToast(`${coins >= 0 ? "+" : ""}${coins.toLocaleString()} coins`);
+  }
+
+  function forceShopRestock() {
+    // Set lastShopReset 10 s before the interval threshold so the shop restocks in ~10 s.
+    const SHOP_RESET_INTERVAL = 5 * 60 * 1_000;
+    update({ ...state, lastShopReset: Date.now() - (SHOP_RESET_INTERVAL - 10_000) });
+    showToast("Shop restocks in ~10s");
   }
 
   async function giveFertilizer() {
@@ -316,6 +325,18 @@ export function DevWeatherPanel() {
   );
 
   // ── Render ─────────────────────────────────────────────────────────────────
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="fixed bottom-4 left-4 z-[100] w-10 h-10 rounded-full bg-black/90 border border-yellow-500/40 text-yellow-400 text-lg shadow-2xl flex items-center justify-center hover:border-yellow-400/70 transition-colors"
+        title="Open Dev Panel"
+      >
+        ⚗️
+      </button>
+    );
+  }
+
   return (
     <div className="fixed bottom-4 left-4 z-[100] bg-black/90 border border-yellow-500/40 rounded-2xl p-4 w-76 shadow-2xl text-xs max-h-[90vh] flex flex-col">
 
@@ -323,6 +344,7 @@ export function DevWeatherPanel() {
       <div className="flex items-center gap-2 mb-3">
         <p className="font-bold text-yellow-400 flex-1">⚗️ Dev Panel</p>
         {toast && <span className="text-green-400 font-mono text-[10px] truncate">{toast}</span>}
+        <button onClick={() => setOpen(false)} className="text-white/40 hover:text-white/80 transition-colors leading-none">✕</button>
       </div>
 
       <div className="flex gap-1 mb-3">
@@ -631,6 +653,17 @@ export function DevWeatherPanel() {
                 {coins >= 0 ? "Give" : "Take"}
               </button>
             </div>
+          </div>
+
+          {/* Shop */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">Shop</p>
+            <button
+              onClick={forceShopRestock}
+              className="w-full py-1 bg-blue-500/20 border border-blue-500/40 text-blue-400 rounded-lg font-semibold hover:bg-blue-500/30 transition-all text-center"
+            >
+              🔄 Restock in 10s
+            </button>
           </div>
 
           {/* Fertilizer */}

@@ -993,7 +993,7 @@ export function getPassiveGrowthMultiplier(
   const sources = getGearAffectingCell(grid, row, col, now);
   let balanceScaleBoostMult = 1.0;
   let balanceScaleSlowMult  = 1.0;
-  for (const { def, sourceRow: _sourceRow, sourceCol, placedGear: _placedGear } of sources) {
+  for (const { def, sourceRow: _sourceRow, sourceCol, placedGear } of sources) {
     // Regular sprinkler / Aqueduct: take the highest multiplier across all covering sources
     if ((isRegularSprinkler(def) || isAqueduct(def)) && def.growthMultiplier) {
       bestSprinkler = Math.max(bestSprinkler, def.growthMultiplier);
@@ -1006,7 +1006,7 @@ export function getPassiveGrowthMultiplier(
     // Phase 0 = left arm (dc < 0) boosted 3×; right arm (dc > 0) slowed 0.5×.
     // Phase 1 = flipped.
     if (isBalanceScale(def) && def.fanRange) {
-      const phase     = Math.floor(now / 3_600_000) % 2;
+      const phase     = Math.floor((now - placedGear.placedAt) / 3_600_000) % 2;
       const dc        = col - sourceCol;
       const inLeft    = dc < 0;
       const isBoosted = phase === 0 ? inLeft : !inLeft;
@@ -2076,8 +2076,11 @@ export function mergeServerResult<T extends Partial<GameState>>(
   if ((r.lastShopReset   ?? 0) < cur.lastShopReset)          merged.shop        = cur.shop;
   if ((r.lastSupplyReset ?? 0) < (cur.lastSupplyReset ?? 0)) merged.supplyShop  = cur.supplyShop;
 
-  // codexAcked is monotonically growing — union both sides so two active devices
-  // never clobber each other's acknowledgements.
+  // discovered and codexAcked are monotonically growing — union both sides so
+  // concurrent harvests don't clobber each other's new entries client-side.
+  if (r.discovered) {
+    merged.discovered = [...new Set([...(cur.discovered ?? []), ...r.discovered])];
+  }
   if (r.codexAcked) {
     merged.codexAcked = [...new Set([...(cur.codexAcked ?? []), ...r.codexAcked])];
   }
@@ -2303,6 +2306,33 @@ export function buyAllFertilizer(
     shop:        newShop,
     fertilizers: newFertilizers,
   };
+}
+
+export function buyAllSeeds(state: GameState): GameState | null {
+  const slots = state.shop.filter(
+    (s) => !s.isFertilizer && !s.isEmpty && s.quantity > 0 && state.coins >= s.price
+  );
+  if (slots.length === 0) return null;
+  let next: GameState = state;
+  let bought = false;
+  for (const slot of slots) {
+    const after = buyAllFromShop(next, slot.speciesId!);
+    if (after) { next = after; bought = true; }
+  }
+  return bought ? next : null;
+}
+
+export function buyAllSupply(state: GameState): GameState | null {
+  const slots = (state.supplyShop ?? []).filter((s) => !s.isEmpty && s.quantity > 0);
+  if (slots.length === 0) return null;
+  let next: GameState = state;
+  let bought = false;
+  for (const slot of slots) {
+    if (next.coins < slot.price) continue;
+    const after = buyFromSupplyShop(next, slot.speciesId!);
+    if (after) { next = after; bought = true; }
+  }
+  return bought ? next : null;
 }
 
 export function applyFertilizer(

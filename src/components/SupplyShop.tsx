@@ -3,12 +3,14 @@ import { useGame } from "../store/GameContext";
 import {
   msUntilSupplyReset,
   buyFromSupplyShop,
+  buyAllSupply,
   upgradeSupplySlots,
   applyWindShear,
   applySlotLock,
 } from "../store/gameStore";
 import {
   edgeBuyFromSupplyShop,
+  edgeBuyAllFromSupplyShop,
   edgeUpgradeSupplySlots,
   edgeUseWindShear,
   edgeUseSlotLock,
@@ -50,7 +52,7 @@ function formatDuration(ms: number): string {
 // ── Individual supply slot card ─────────────────────────────────────────────
 
 function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolean }) {
-  const { state, perform, getState, user, requestSignIn } = useGame();
+  const { state, perform, getState, user, requestSignIn, pushGenericToast } = useGame();
   const [justBought,  setJustBought]  = useState(false);
   const [lockingSlot, setLockingSlot] = useState(false);
 
@@ -94,10 +96,23 @@ function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolea
     if (!user) { requestSignIn("to buy supplies"); return; }
     const optimistic = buyFromSupplyShop(state, slot.speciesId);
     if (!optimistic) return;
+    let toastEmoji = "";
+    let toastLabel = "";
+    let toastColor = "text-primary";
+    if (slot.isFertilizer && slot.fertilizerType) {
+      const f = FERTILIZERS[slot.fertilizerType];
+      toastEmoji = f.emoji; toastLabel = f.name; toastColor = RARITY_CONFIG[f.rarity].color;
+    } else if (slot.isGear && slot.gearType) {
+      const g = GEAR[slot.gearType];
+      toastEmoji = g.emoji; toastLabel = g.name; toastColor = RARITY_CONFIG[g.rarity].color;
+    } else if (slot.isConsumable && slot.consumableId) {
+      const r = CONSUMABLE_RECIPE_MAP[slot.consumableId as ConsumableId];
+      if (r) { toastEmoji = r.emoji; toastLabel = r.name; toastColor = RARITY_CONFIG[r.rarity].color; }
+    }
     perform(
       optimistic,
       () => edgeBuyFromSupplyShop(slot.speciesId),
-      undefined,
+      () => { if (toastEmoji) pushGenericToast(slot.speciesId!, toastEmoji, toastLabel, toastColor); },
       {
         rollback: (cur) => {
           const restoredShop = (cur.supplyShop ?? []).map((s) =>
@@ -378,10 +393,11 @@ function supplyUnlockSlots(rarity: Rarity): number | null {
 }
 
 export function SupplyShop() {
-  const { state, perform, getState, user, requestSignIn } = useGame();
+  const { state, perform, getState, user, requestSignIn, pushGenericToast } = useGame();
   const [countdown,     setCountdown]     = useState(() => msUntilSupplyReset(state));
   const [showRates,     setShowRates]     = useState(false);
   const [usingWindShear,setUsingWindShear]= useState(false);
+  const [buyingAll,     setBuyingAll]     = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setCountdown(msUntilSupplyReset(state)), 1_000);
@@ -474,7 +490,47 @@ export function SupplyShop() {
     );
   }
 
+  async function handleBuyAll() {
+    if (!user) { requestSignIn("to buy supplies"); return; }
+    if (buyingAll) return;
+    const cur = getState();
+    const optimistic = buyAllSupply(cur);
+    if (!optimistic) return;
+    // Collect display info for each slot we're about to buy
+    const toastItems = (cur.supplyShop ?? [])
+      .filter((s) => !s.isEmpty && s.quantity > 0 && cur.coins >= s.price)
+      .map((s): { key: string; emoji: string; label: string; color: string } | null => {
+        if (s.isFertilizer && s.fertilizerType) {
+          const f = FERTILIZERS[s.fertilizerType];
+          return { key: s.speciesId!, emoji: f.emoji, label: f.name, color: RARITY_CONFIG[f.rarity].color };
+        }
+        if (s.isGear && s.gearType) {
+          const g = GEAR[s.gearType];
+          return { key: s.speciesId!, emoji: g.emoji, label: g.name, color: RARITY_CONFIG[g.rarity].color };
+        }
+        if (s.isConsumable && s.consumableId) {
+          const r = CONSUMABLE_RECIPE_MAP[s.consumableId as ConsumableId];
+          if (r) return { key: s.speciesId!, emoji: r.emoji, label: r.name, color: RARITY_CONFIG[r.rarity].color };
+        }
+        return null;
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+    setBuyingAll(true);
+    try {
+      await perform(optimistic, () => edgeBuyAllFromSupplyShop(), () => {
+        for (const { key, emoji, label, color } of toastItems) {
+          pushGenericToast(key, emoji, label, color);
+        }
+      });
+    } finally {
+      setBuyingAll(false);
+    }
+  }
+
   const slots = state.supplyShop ?? [];
+  const affordableSupply  = slots.filter((s) => !s.isEmpty && s.quantity > 0 && state.coins >= s.price);
+  const buyAllOptimistic  = affordableSupply.length > 0 ? buyAllSupply(state) : null;
+  const buyAllCost        = buyAllOptimistic ? state.coins - buyAllOptimistic.coins : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -541,6 +597,16 @@ export function SupplyShop() {
       </div>
 
       {/* Slot grid */}
+      {affordableSupply.length > 0 && (
+        <button
+          onClick={handleBuyAll}
+          disabled={buyingAll}
+          className="w-full py-2.5 rounded-xl border border-primary text-primary text-sm font-semibold hover:bg-primary/10 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Buy All — {buyAllCost.toLocaleString()} 🟡
+        </button>
+      )}
+
       {slots.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {slots.map((slot) => (

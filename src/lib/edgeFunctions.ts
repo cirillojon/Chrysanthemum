@@ -5,7 +5,7 @@ const BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
 // ── Base fetch wrapper ────────────────────────────────────────────────────────
 
-async function callEdge<T>(name: string, body: unknown): Promise<T> {
+async function callEdge<T>(name: string, body: unknown, isRetry = false): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) throw new Error("Not authenticated");
@@ -18,6 +18,12 @@ async function callEdge<T>(name: string, body: unknown): Promise<T> {
     },
     body: JSON.stringify(body),
   });
+
+  // Stale access token — refresh once and retry.
+  if (res.status === 401 && !isRetry) {
+    await supabase.auth.refreshSession();
+    return callEdge(name, body, true);
+  }
 
   const json = await res.json();
   if (!res.ok || !json.ok) throw new Error(json.error ?? "Edge function error");
@@ -213,6 +219,14 @@ export interface SupplyBuyResult {
 
 export function edgeBuyFromSupplyShop(slotId: string) {
   return callEdge<SupplyBuyResult>("supply-action", { action: "buy", slotId });
+}
+
+export function edgeBuyAllSeeds() {
+  return callEdge<ShopActionResult>("shop-action", { action: "buy_all_seeds" });
+}
+
+export function edgeBuyAllFromSupplyShop() {
+  return callEdge<SupplyBuyResult>("supply-action", { action: "buy_all" });
 }
 
 export function edgeSyncSupplyShop(supplyShop: GameState["supplyShop"], lastSupplyReset: number) {

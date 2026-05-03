@@ -14,6 +14,19 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.3.5",
+    title:   "Toast Notifications & Balance",
+    items: [
+      { type: "added",   text: "Loss/gain toast notifications — pill toasts now fire for every inventory change: planting seeds, harvesting blooms, placing gear, using a shovel, applying consumables, buying from the shop or supply shop, and spending crafting ingredients" },
+      { type: "added",   text: "Plant All loss toasts — each seed species planted via Plant All shows a dedicated red loss toast; planting the same species multiple times accumulates into a single count pill" },
+      { type: "changed", text: "Golden Veil renamed — the Midas Sprinkler was incorrectly named \"Gold Vial\"; it is now correctly called \"Golden Veil\"" },
+      { type: "changed", text: "Balance — Vials & Heirloom Charms rarity nerf — all mutation vials and Heirloom Charms now require the plant's rarity to be strictly below the consumable's tier; same-rarity plants are no longer valid targets (e.g. a Rare Frost Vial I no longer works on Rare plants)" },
+      { type: "changed", text: "Balance — Seed Pouch upgrade cost increased from 3× to 4× of the previous tier (applies to all base and typed/elemental pouches)" },
+      { type: "fixed",   text: "iOS inputs no longer zoom the page — input elements are set to 16px on mobile to prevent the browser auto-zoom on focus" },
+      { type: "fixed",   text: "Weather Forecast panel scrolls correctly on mobile — the header is now sticky so it stays visible while scrolling through a long forecast list" },
+    ],
+  },
+  {
     version: "2.3.4",
     title:   "Hotfix",
     items: [

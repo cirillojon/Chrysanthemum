@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { useGame } from "../store/GameContext";
-import { msUntilShopReset, upgradeShopSlots, SHOP_RARITY_WEIGHTS } from "../store/gameStore";
-import { edgeUpgradeShopSlots } from "../lib/edgeFunctions";
+import { msUntilShopReset, upgradeShopSlots, buyAllSeeds, SHOP_RARITY_WEIGHTS } from "../store/gameStore";
+import { edgeUpgradeShopSlots, edgeBuyAllSeeds } from "../lib/edgeFunctions";
 import { getNextShopSlotUpgrade, MAX_SHOP_SLOTS } from "../data/upgrades";
 import { ShopSlotCard } from "./ShopSlotCard";
 import { SupplyShop } from "./SupplyShop";
 import { RatesModal } from "./RatesModal";
 import type { RateRow } from "./RatesModal";
+import { getFlower } from "../data/flowers";
 import type { Rarity } from "../data/flowers";
 
 function formatCountdown(ms: number): string {
@@ -32,14 +33,17 @@ interface ShopProps {
 }
 
 export function Shop({ view }: ShopProps) {
-  const { state, perform, user, requestSignIn } = useGame();
+  const { state, getState, perform, user, requestSignIn, pushGenericToast } = useGame();
   const [countdown,  setCountdown]  = useState(() => msUntilShopReset(state));
   const [showRates,  setShowRates]  = useState(false);
+  const [buyingAll,  setBuyingAll]  = useState(false);
 
+  // Use getState() to always read the latest state — avoids a stale closure where
+  // the interval captures an old lastShopReset and shows "00:00" after a restock.
   useEffect(() => {
-    const id = setInterval(() => setCountdown(msUntilShopReset(state)), 1_000);
+    const id = setInterval(() => setCountdown(msUntilShopReset(getState())), 1_000);
     return () => clearInterval(id);
-  }, [state.lastShopReset]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flowerSlots = state.shop.filter((s) => !s.isFertilizer);
   const activeCount = flowerSlots.filter((s) => !s.isEmpty).length;
@@ -53,6 +57,44 @@ export function Shop({ view }: ShopProps) {
     const optimistic = upgradeShopSlots(state);
     if (optimistic) perform(optimistic, () => edgeUpgradeShopSlots());
   }
+
+  async function handleBuyAll() {
+    if (!user) { requestSignIn("to buy seeds"); return; }
+    if (buyingAll) return;
+    const cur = getState();
+    const optimistic = buyAllSeeds(cur);
+    if (!optimistic) return;
+    // Compute per-species qty deltas for toast notifications
+    const seedDeltas = flowerSlots
+      .filter((s) => !s.isEmpty && s.quantity > 0 && cur.coins >= s.price && s.speciesId)
+      .map((s) => {
+        const before     = cur.inventory.find((i) => i.speciesId === s.speciesId && i.isSeed)?.quantity ?? 0;
+        const after      = optimistic.inventory.find((i) => i.speciesId === s.speciesId && i.isSeed)?.quantity ?? 0;
+        const sp         = getFlower(s.speciesId!);
+        const discovered = cur.discovered.includes(s.speciesId!);
+        return {
+          speciesId: s.speciesId!,
+          qty:       after - before,
+          emoji:     discovered && sp ? sp.emoji.seed : "❓",
+          label:     discovered && sp ? `${sp.name} Seed` : "??? Seed",
+        };
+      })
+      .filter((d) => d.qty > 0);
+    setBuyingAll(true);
+    try {
+      await perform(optimistic, () => edgeBuyAllSeeds(), () => {
+        for (const { speciesId, qty, emoji, label } of seedDeltas) {
+          pushGenericToast(`gain:seed:${speciesId}`, emoji, label, "text-green-400", "gain", qty);
+        }
+      });
+    } finally {
+      setBuyingAll(false);
+    }
+  }
+
+  const affordableSeeds  = flowerSlots.filter((s) => !s.isEmpty && s.quantity > 0 && state.coins >= s.price);
+  const buyAllOptimistic = affordableSeeds.length > 0 ? buyAllSeeds(state) : null;
+  const buyAllCost       = buyAllOptimistic ? state.coins - buyAllOptimistic.coins : 0;
 
   // Supply view is self-contained
   if (view === "supply") return <SupplyShop />;
@@ -101,6 +143,16 @@ export function Shop({ view }: ShopProps) {
           {state.coins.toLocaleString()} coins
         </span>
       </div>
+
+      {affordableSeeds.length > 0 && (
+        <button
+          onClick={handleBuyAll}
+          disabled={buyingAll}
+          className="w-full py-2.5 rounded-xl border border-primary text-primary text-sm font-semibold hover:bg-primary/10 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Buy All Seeds — {buyAllCost.toLocaleString()} 🟡
+        </button>
+      )}
 
       {flowerSlots.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

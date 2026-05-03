@@ -59,15 +59,15 @@ Deno.serve(async (req: Request) => {
     }
 
     const body = await req.json() as {
-      action:          "buy" | "sync";
+      action:          "buy" | "buy_all" | "sync";
       slotId?:         string;
       supplyShop?:     ShopSlot[];
       lastSupplyReset?: number;
     };
 
     const { action } = body;
-    if (!["buy", "sync"].includes(action)) {
-      return err("Invalid action — use buy | sync");
+    if (!["buy", "buy_all", "sync"].includes(action)) {
+      return err("Invalid action — use buy | buy_all | sync");
     }
 
     const supabaseAdmin = createClient(
@@ -182,6 +182,82 @@ Deno.serve(async (req: Request) => {
       });
 
       return json({ ok: true, coins, supplyShop, fertilizers, gearInventory, consumables, serverUpdatedAt: ud.updated_at });
+    }
+
+    // ── buy_all: atomically buy 1 of every affordable non-empty supply slot ─────
+    if (action === "buy_all") {
+      const [authResult, saveResult] = await Promise.all([
+        supabaseAdmin.auth.getUser(token),
+        supabaseAdmin
+          .from("game_saves")
+          .select("coins, supply_shop, fertilizers, gear_inventory, consumables, updated_at")
+          .eq("user_id", userId)
+          .single(),
+      ]);
+      if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
+        return err("Unauthorized", 401);
+      }
+      if (saveResult.error || !saveResult.data) return err("Save not found", 404);
+
+      const save2         = saveResult.data;
+      const prior2        = save2.updated_at as string;
+      let coins2          = save2.coins as number;
+      let supplyShop2     = [...(save2.supply_shop   ?? []) as ShopSlot[]];
+      let fertilizers2    = [...(save2.fertilizers   ?? []) as FertItem[]];
+      let gearInventory2  = [...(save2.gear_inventory ?? []) as GearInvItem[]];
+      let consumables2    = [...(save2.consumables   ?? []) as ConsumableItem[]];
+
+      const slots = supplyShop2.filter((s) => !s.isEmpty && s.quantity > 0);
+      let bought = false;
+      for (const slot of slots) {
+        if (coins2 < slot.price) continue;
+        coins2 -= slot.price;
+        supplyShop2 = supplyShop2.map((s) =>
+          s.speciesId === slot.speciesId ? { ...s, quantity: s.quantity - 1 } : s
+        );
+        if (slot.isFertilizer && slot.fertilizerType) {
+          const f = fertilizers2.find((x) => x.type === slot.fertilizerType);
+          fertilizers2 = f
+            ? fertilizers2.map((x) => x.type === slot.fertilizerType ? { ...x, quantity: x.quantity + 1 } : x)
+            : [...fertilizers2, { type: slot.fertilizerType, quantity: 1 }];
+        } else if (slot.isGear && slot.gearType) {
+          const g = gearInventory2.find((x) => x.gearType === slot.gearType);
+          gearInventory2 = g
+            ? gearInventory2.map((x) => x.gearType === slot.gearType ? { ...x, quantity: x.quantity + 1 } : x)
+            : [...gearInventory2, { gearType: slot.gearType, quantity: 1 }];
+        } else if (slot.isConsumable && slot.consumableId) {
+          const c = consumables2.find((x) => x.id === slot.consumableId);
+          consumables2 = c
+            ? consumables2.map((x) => x.id === slot.consumableId ? { ...x, quantity: x.quantity + 1 } : x)
+            : [...consumables2, { id: slot.consumableId, quantity: 1 }];
+        }
+        bought = true;
+      }
+      if (!bought) return err("Cannot afford any items");
+
+      const { data: ud2, error: ue2 } = await supabaseAdmin
+        .from("game_saves")
+        .update({
+          coins:          coins2,
+          supply_shop:    supplyShop2,
+          fertilizers:    fertilizers2,
+          gear_inventory: gearInventory2,
+          consumables:    consumables2,
+          updated_at:     new Date().toISOString(),
+        })
+        .eq("user_id", userId)
+        .eq("updated_at", prior2)
+        .select("updated_at")
+        .single();
+
+      if (ue2 || !ud2) return err("Save was modified by another action", 409);
+
+      void supabaseAdmin.from("action_log").insert({
+        user_id: userId, action: "supply_buy_all",
+        result:  { coins: coins2, slots: slots.length },
+      });
+
+      return json({ ok: true, coins: coins2, supplyShop: supplyShop2, fertilizers: fertilizers2, gearInventory: gearInventory2, consumables: consumables2, serverUpdatedAt: ud2.updated_at });
     }
 
     return err("Unhandled action");

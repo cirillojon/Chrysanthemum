@@ -389,7 +389,7 @@ export const GEAR: Record<GearType, GearDefinition> = {
 
   sprinkler_midas: {
     id:                    "sprinkler_midas",
-    name:                  "Gold Vial",
+    name:                  "Golden Veil",
     description:           "50% chance per hour to apply Gilded to nearby blooms. Lasts 2 hours.",
     emoji:                 "💰",
     rarity:                "exalted",
