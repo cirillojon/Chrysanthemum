@@ -7,6 +7,7 @@ import { ShopSlotCard } from "./ShopSlotCard";
 import { SupplyShop } from "./SupplyShop";
 import { RatesModal } from "./RatesModal";
 import type { RateRow } from "./RatesModal";
+import { getFlower } from "../data/flowers";
 import type { Rarity } from "../data/flowers";
 
 function formatCountdown(ms: number): string {
@@ -32,7 +33,7 @@ interface ShopProps {
 }
 
 export function Shop({ view }: ShopProps) {
-  const { state, getState, perform, user, requestSignIn, pushHarvestPopup } = useGame();
+  const { state, getState, perform, user, requestSignIn, pushGenericToast } = useGame();
   const [countdown,  setCountdown]  = useState(() => msUntilShopReset(state));
   const [showRates,  setShowRates]  = useState(false);
   const [buyingAll,  setBuyingAll]  = useState(false);
@@ -67,16 +68,23 @@ export function Shop({ view }: ShopProps) {
     const seedDeltas = flowerSlots
       .filter((s) => !s.isEmpty && s.quantity > 0 && cur.coins >= s.price && s.speciesId)
       .map((s) => {
-        const before = cur.inventory.find((i) => i.speciesId === s.speciesId && i.isSeed)?.quantity ?? 0;
-        const after  = optimistic.inventory.find((i) => i.speciesId === s.speciesId && i.isSeed)?.quantity ?? 0;
-        return { speciesId: s.speciesId!, qty: after - before };
+        const before     = cur.inventory.find((i) => i.speciesId === s.speciesId && i.isSeed)?.quantity ?? 0;
+        const after      = optimistic.inventory.find((i) => i.speciesId === s.speciesId && i.isSeed)?.quantity ?? 0;
+        const sp         = getFlower(s.speciesId!);
+        const discovered = cur.discovered.includes(s.speciesId!);
+        return {
+          speciesId: s.speciesId!,
+          qty:       after - before,
+          emoji:     discovered && sp ? sp.emoji.seed : "❓",
+          label:     discovered && sp ? `${sp.name} Seed` : "??? Seed",
+        };
       })
       .filter((d) => d.qty > 0);
     setBuyingAll(true);
     try {
       await perform(optimistic, () => edgeBuyAllSeeds(), () => {
-        for (const { speciesId, qty } of seedDeltas) {
-          pushHarvestPopup(speciesId, undefined, true, qty);
+        for (const { speciesId, qty, emoji, label } of seedDeltas) {
+          pushGenericToast(`gain:seed:${speciesId}`, emoji, label, "text-green-400", "gain", qty);
         }
       });
     } finally {

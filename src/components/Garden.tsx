@@ -411,7 +411,10 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
           }
         },
         () => {
-          if (sp) pushGenericToast(`loss:seed:${speciesId}`, sp.emoji.seed, `${sp.name} Seed`, "text-green-400", "loss");
+          const discovered = getState().discovered.includes(speciesId);
+          const emoji = discovered && sp ? sp.emoji.seed : "❓";
+          const label = discovered && sp ? `${sp.name} Seed` : "??? Seed";
+          pushGenericToast(`loss:seed:${speciesId}`, emoji, label, "text-green-400", "loss");
         },
       );
     }

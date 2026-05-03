@@ -39,7 +39,7 @@ function rarityBadgeClass(rarity: Rarity): string {
 }
 
 export function ShopSlotCard({ slot }: Props) {
-  const { state, getState, perform, user, requestSignIn, pushHarvestPopup } = useGame();
+  const { state, getState, perform, user, requestSignIn, pushGenericToast } = useGame();
   const [justBought, setJustBought] = useState(false);
   // Absolute per-card gate: blocks any buy while a server call is in-flight,
   // even if stateRef or queuing somehow lets a second request slip through.
@@ -242,7 +242,12 @@ export function ShopSlotCard({ slot }: Props) {
           buyingRef.current = false;
         }
       },
-      () => { flashBought(); pushHarvestPopup(slot.speciesId, undefined, true); },
+      () => {
+        flashBought();
+        const emoji = isNew ? "❓" : species.emoji.seed;
+        const label = isNew ? "??? Seed" : `${species.name} Seed`;
+        pushGenericToast(`gain:seed:${species.id}`, emoji, label, "text-green-400", "gain");
+      },
       {
         serialize: true,
         rollback: (c) => ({ ...c, coins: savedCoins, shop: savedShop, inventory: savedInventory }),
@@ -280,7 +285,14 @@ export function ShopSlotCard({ slot }: Props) {
           buyingRef.current = false;
         }
       },
-      () => { flashBought(); if (qty > 0) pushHarvestPopup(slot.speciesId, undefined, true, qty); },
+      () => {
+        flashBought();
+        if (qty > 0) {
+          const emoji = isNew ? "❓" : species.emoji.seed;
+          const label = isNew ? "??? Seed" : `${species.name} Seed`;
+          pushGenericToast(`gain:seed:${species.id}`, emoji, label, "text-green-400", "gain", qty);
+        }
+      },
       {
         serialize: true,
         rollback: (c) => ({ ...c, coins: savedCoins, shop: savedShop, inventory: savedInventory }),
