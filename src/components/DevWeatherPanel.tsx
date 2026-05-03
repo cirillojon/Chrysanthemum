@@ -180,6 +180,13 @@ export function DevWeatherPanel() {
     showToast(`${coins >= 0 ? "+" : ""}${coins.toLocaleString()} coins`);
   }
 
+  function forceShopRestock() {
+    // Set lastShopReset 10 s before the interval threshold so the shop restocks in ~10 s.
+    const SHOP_RESET_INTERVAL = 5 * 60 * 1_000;
+    update({ ...state, lastShopReset: Date.now() - (SHOP_RESET_INTERVAL - 10_000) });
+    showToast("Shop restocks in ~10s");
+  }
+
   async function giveFertilizer() {
     const newFertilizers = [...state.fertilizers];
     const existing = newFertilizers.find((f) => f.type === fertType);
@@ -631,6 +638,17 @@ export function DevWeatherPanel() {
                 {coins >= 0 ? "Give" : "Take"}
               </button>
             </div>
+          </div>
+
+          {/* Shop */}
+          <div className="bg-white/5 rounded-xl p-2.5 space-y-1.5">
+            <p className="text-yellow-400 font-semibold text-[10px] uppercase tracking-wide">Shop</p>
+            <button
+              onClick={forceShopRestock}
+              className="w-full py-1 bg-blue-500/20 border border-blue-500/40 text-blue-400 rounded-lg font-semibold hover:bg-blue-500/30 transition-all text-center"
+            >
+              🔄 Restock in 10s
+            </button>
           </div>
 
           {/* Fertilizer */}
