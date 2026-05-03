@@ -993,7 +993,7 @@ export function getPassiveGrowthMultiplier(
   const sources = getGearAffectingCell(grid, row, col, now);
   let balanceScaleBoostMult = 1.0;
   let balanceScaleSlowMult  = 1.0;
-  for (const { def, sourceRow: _sourceRow, sourceCol, placedGear: _placedGear } of sources) {
+  for (const { def, sourceRow: _sourceRow, sourceCol, placedGear } of sources) {
     // Regular sprinkler / Aqueduct: take the highest multiplier across all covering sources
     if ((isRegularSprinkler(def) || isAqueduct(def)) && def.growthMultiplier) {
       bestSprinkler = Math.max(bestSprinkler, def.growthMultiplier);
@@ -1006,7 +1006,7 @@ export function getPassiveGrowthMultiplier(
     // Phase 0 = left arm (dc < 0) boosted 3×; right arm (dc > 0) slowed 0.5×.
     // Phase 1 = flipped.
     if (isBalanceScale(def) && def.fanRange) {
-      const phase     = Math.floor(now / 3_600_000) % 2;
+      const phase     = Math.floor((now - placedGear.placedAt) / 3_600_000) % 2;
       const dc        = col - sourceCol;
       const inLeft    = dc < 0;
       const isBoosted = phase === 0 ? inLeft : !inLeft;
