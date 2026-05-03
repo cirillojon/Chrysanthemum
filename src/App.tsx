@@ -33,6 +33,7 @@ import { WeatherBanner } from "./components/WeatherBanner";
 import { WeatherForecastPanel } from "./components/WeatherForecastPanel";
 import { DayNightOverlay } from "./components/DayNightOverlay";
 import { useGame } from "./store/GameContext";
+import { supabase } from "./lib/supabase";
 import { SettingsProvider } from "./store/SettingsContext";
 import { useFriendRequests } from "./hooks/useFriendRequests";
 import { useGiftNotifications } from "./hooks/useGiftNotifications";
@@ -240,7 +241,13 @@ function AppInner() {
     if (toAdd.length === 0) return;
     const next = [...new Set([...(state.codexAcked ?? []), ...toAdd])];
     update({ ...state, codexAcked: next });
-  }, [state, update]);
+    if (user) {
+      supabase.from("game_saves")
+        .update({ codex_acked: next })
+        .eq("user_id", user.id)
+        .then(({ error }) => { if (error) console.error("Failed to persist codexAcked:", error); });
+    }
+  }, [state, update, user]);
 
   // Social tab badge = friend requests + unread mailbox
   // (gifts now arrive via mailbox so mailboxUnreadCount already includes them)
