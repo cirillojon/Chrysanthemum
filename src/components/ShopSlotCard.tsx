@@ -39,7 +39,7 @@ function rarityBadgeClass(rarity: Rarity): string {
 }
 
 export function ShopSlotCard({ slot }: Props) {
-  const { state, getState, perform, user, requestSignIn } = useGame();
+  const { state, getState, perform, user, requestSignIn, pushHarvestPopup } = useGame();
   const [justBought, setJustBought] = useState(false);
   // Absolute per-card gate: blocks any buy while a server call is in-flight,
   // even if stateRef or queuing somehow lets a second request slip through.
@@ -242,7 +242,7 @@ export function ShopSlotCard({ slot }: Props) {
           buyingRef.current = false;
         }
       },
-      () => flashBought(),
+      () => { flashBought(); pushHarvestPopup(slot.speciesId, undefined, true); },
       {
         serialize: true,
         rollback: (c) => ({ ...c, coins: savedCoins, shop: savedShop, inventory: savedInventory }),
@@ -256,6 +256,9 @@ export function ShopSlotCard({ slot }: Props) {
     const cur = getState();
     const optimistic = buyAllFromShop(cur, slot.speciesId);
     if (!optimistic) return;
+    const qty = optimistic.coins < cur.coins
+      ? Math.round((cur.coins - optimistic.coins) / slot.price)
+      : 0;
     buyingRef.current = true;
     const savedCoins     = cur.coins;
     const savedShop      = cur.shop;
@@ -277,7 +280,7 @@ export function ShopSlotCard({ slot }: Props) {
           buyingRef.current = false;
         }
       },
-      () => flashBought(),
+      () => { flashBought(); if (qty > 0) pushHarvestPopup(slot.speciesId, undefined, true, qty); },
       {
         serialize: true,
         rollback: (c) => ({ ...c, coins: savedCoins, shop: savedShop, inventory: savedInventory }),

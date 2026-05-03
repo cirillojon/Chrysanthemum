@@ -32,7 +32,7 @@ interface ShopProps {
 }
 
 export function Shop({ view }: ShopProps) {
-  const { state, getState, perform, user, requestSignIn } = useGame();
+  const { state, getState, perform, user, requestSignIn, pushHarvestPopup } = useGame();
   const [countdown,  setCountdown]  = useState(() => msUntilShopReset(state));
   const [showRates,  setShowRates]  = useState(false);
   const [buyingAll,  setBuyingAll]  = useState(false);
@@ -63,9 +63,22 @@ export function Shop({ view }: ShopProps) {
     const cur = getState();
     const optimistic = buyAllSeeds(cur);
     if (!optimistic) return;
+    // Compute per-species qty deltas for toast notifications
+    const seedDeltas = flowerSlots
+      .filter((s) => !s.isEmpty && s.quantity > 0 && cur.coins >= s.price && s.speciesId)
+      .map((s) => {
+        const before = cur.inventory.find((i) => i.speciesId === s.speciesId && i.isSeed)?.quantity ?? 0;
+        const after  = optimistic.inventory.find((i) => i.speciesId === s.speciesId && i.isSeed)?.quantity ?? 0;
+        return { speciesId: s.speciesId!, qty: after - before };
+      })
+      .filter((d) => d.qty > 0);
     setBuyingAll(true);
     try {
-      await perform(optimistic, () => edgeBuyAllSeeds());
+      await perform(optimistic, () => edgeBuyAllSeeds(), () => {
+        for (const { speciesId, qty } of seedDeltas) {
+          pushHarvestPopup(speciesId, undefined, true, qty);
+        }
+      });
     } finally {
       setBuyingAll(false);
     }

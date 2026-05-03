@@ -30,7 +30,7 @@ import { useTimeOfDay } from "../hooks/useTimeOfDay";
 import type { TimeOfDay } from "../hooks/useTimeOfDay";
 import type { WeatherType } from "../data/weather";
 import { queueEntryDisplay } from "../lib/craftDisplay";
-import { getFlower } from "../data/flowers";
+import { getFlower, type MutationType } from "../data/flowers";
 
 interface GameContextValue {
   state: GameState;
@@ -104,6 +104,10 @@ interface GameContextValue {
   buyForecastSlot: () => void;
   // Time of day (UTC-based, for weather gating)
   timeOfDay: TimeOfDay;
+  // Harvest / pickup popup pills shown over the UI
+  harvestPopups: Map<string, { speciesId: string; mutation?: MutationType; count: number; isSeed?: boolean }>;
+  pushHarvestPopup: (speciesId: string, mutation?: MutationType, isSeed?: boolean, qty?: number) => void;
+  dismissHarvestPopup: (key: string) => void;
 }
 
 const GameContext = createContext<GameContextValue | null>(null);
@@ -131,6 +135,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [shopJustRestocked,   setShopJustRestocked]   = useState(false);
   const [supplyJustRestocked, setSupplyJustRestocked] = useState(false);
   const [gearExpiry, setGearExpiry]                   = useState<{ gearType: string } | null>(null);
+  type HarvestEntry = { speciesId: string; mutation?: MutationType; count: number; isSeed?: boolean };
+  const [harvestPopups, setHarvestPopups] = useState<Map<string, HarvestEntry>>(new Map());
+  function pushHarvestPopup(speciesId: string, mutation?: MutationType, isSeed?: boolean, qty = 1) {
+    const key = isSeed ? `${speciesId}:seed` : `${speciesId}:${mutation ?? ""}`;
+    setHarvestPopups((prev) => {
+      const next = new Map(prev);
+      const existing = next.get(key);
+      next.set(key, existing ? { ...existing, count: existing.count + qty } : { speciesId, mutation, count: qty, isSeed });
+      return next;
+    });
+  }
   const [craftCompletions, setCraftCompletions]       = useState<{ id: string; emoji: string; name: string }[]>([]);
   const [attunementCompletions, setAttunementCompletions] = useState<{ id: string; emoji: string; name: string }[]>([]);
   const [user, setUser]                         = useState<User | null>(null);
@@ -678,6 +693,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       weatherForecast,
       buyForecastSlot,
       timeOfDay,
+      harvestPopups,
+      pushHarvestPopup,
+      dismissHarvestPopup: (key: string) =>
+        setHarvestPopups((prev) => { const next = new Map(prev); next.delete(key); return next; }),
     }}>
       {children}
     </GameContext.Provider>

@@ -63,7 +63,7 @@ export function PlotTooltip({
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell, isUnderLawnmower,
   balanceScaleSide, isUnderAegis,
 }: Props) {
-  const { state, getState, perform, update, activeWeather } = useGame();
+  const { state, getState, perform, update, activeWeather, pushHarvestPopup } = useGame();
   const [showFertPicker,    setShowFertPicker]    = useState(false);
   const [confirmRemove,     setConfirmRemove]     = useState(false);
   const [removing,          setRemoving]          = useState(false);
@@ -262,7 +262,7 @@ export function PlotTooltip({
           setRemoving(false);
         }
       },
-      () => onClose?.(),
+      () => { onClose?.(); pushHarvestPopup(plant.speciesId, undefined, true); },
       {
         rollback: (c) => ({
           ...c,

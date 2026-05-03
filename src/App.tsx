@@ -93,23 +93,7 @@ function AppInner() {
   const updateAvailable  = useVersionCheck();
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
 
-  // Harvest popups — keyed by "speciesId:mutation" so duplicates accumulate a count
-  // and different species each get their own pill shown simultaneously.
-  type HarvestEntry = { speciesId: string; mutation?: MutationType; count: number; isSeed?: boolean };
-  const [harvestQueue, setHarvestQueue] = useState<Map<string, HarvestEntry>>(new Map());
-
-  function pushHarvestPopup(speciesId: string, mutation?: MutationType, isSeed?: boolean) {
-    const key = isSeed ? `${speciesId}:seed` : `${speciesId}:${mutation ?? ""}`;
-    setHarvestQueue((prev) => {
-      const next     = new Map(prev);
-      const existing = next.get(key);
-      next.set(key, existing
-        ? { ...existing, count: existing.count + 1 }
-        : { speciesId, mutation, count: 1, isSeed }
-      );
-      return next;
-    });
-  }
+  const { harvestPopups, pushHarvestPopup, dismissHarvestPopup } = useGame();
 
   const [changelogEntry, setChangelogEntry] = useState<ChangelogEntry | null>(() => {
     const seen = localStorage.getItem("changelogSeenVersion");
@@ -915,22 +899,16 @@ function AppInner() {
       </main>
 
       {/* Harvest popups — one pill per unique species+mutation, stacked vertically */}
-      {harvestQueue.size > 0 && (
+      {harvestPopups.size > 0 && (
         <div className="fixed inset-0 pointer-events-none z-50 flex flex-col items-center justify-end pb-24 gap-2">
-          {[...harvestQueue.entries()].map(([key, entry]) => (
+          {[...harvestPopups.entries()].map(([key, entry]) => (
             <HarvestPopup
               key={key}
               speciesId={entry.speciesId}
               mutation={entry.mutation}
               count={entry.count}
               isSeed={entry.isSeed}
-              onDone={() =>
-                setHarvestQueue((prev) => {
-                  const next = new Map(prev);
-                  next.delete(key);
-                  return next;
-                })
-              }
+              onDone={() => dismissHarvestPopup(key)}
             />
           ))}
         </div>
