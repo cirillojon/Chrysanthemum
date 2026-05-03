@@ -14,6 +14,22 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.3.3",
+    title:   "Quality of Life & Fixes",
+    items: [
+      { type: "added",   text: "Inventory search bar — each tab (Seeds, Blooms, Supplies, Consumables, Essences) now has a search field to quickly find items by name" },
+      { type: "added",   text: "Inventory header now shows total consumable and essence counts alongside seeds, blooms, and supplies" },
+      { type: "added",   text: "Heirloom Charm harvest shows a separate \"+1 Seed\" toast alongside the bloom notification" },
+      { type: "added",   text: "Codex \"newly discovered\" badges now sync across devices — acknowledged entries are persisted to the cloud save so opening a card on one device clears the badge everywhere" },
+      { type: "changed", text: "Heirloom Charm I recipe updated — ingredient changed from 4× Grove Essence to 4× Fairy Essence (4× Stellar Essence unchanged)" },
+      { type: "fixed",   text: "Heirloom Charm now correctly returns the seed on harvest — the seed was added server-side but never applied to the optimistic client state, so the inventory only updated after a page reload" },
+      { type: "fixed",   text: "Heirloom Charm no longer creates a duplicate bloom row — a null vs undefined mutation mismatch caused two separate rows; both sides are now normalised to null" },
+      { type: "fixed",   text: "Plot tooltip no longer offers Heirloom Charm on a plant it's already applied to — the option is hidden once heirloomActive is set" },
+      { type: "fixed",   text: "Shop no longer flickers after restock when a cropstick poll or error-recovery reload fires — reloadFromCloud now routes through mergeServerResult and respects the shop forward-only guard" },
+      { type: "fixed",   text: "Codex badges no longer flood all discoveries on a new device — the acknowledged set was bootstrapped before the cloud save loaded, capturing an empty list and permanently marking every species as unseen" },
+    ],
+  },
+  {
     version: "2.3.2",
     title:   "Bug Fixes & Balance",
     items: [

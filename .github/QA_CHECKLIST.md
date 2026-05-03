@@ -361,6 +361,42 @@ Range is now fixed at 1 cell each side for all tiers. Boost/slow values increase
 
 ---
 
+## X. v2.3.3 — Heirloom Charm Fixes
+
+Seed now returned to inventory on harvest; duplicate bloom row fixed; seed toast fires; tooltip hides charm if already applied.
+
+| # | Action | Expected |
+|---|--------|----------|
+| X1 | Apply a Heirloom Charm to a growing plant, wait for it to bloom, then harvest it. Check inventory. | Inventory gains **both** a bloom entry **and** a seed entry for that species in one harvest |
+| X2 | Harvest the same species again without a charm. | Only one bloom row exists — no duplicate row created |
+| X3 | Harvest a plant with Heirloom Charm active. Watch for toast notifications. | Two toasts appear: one for the bloom (with rarity colour) and a separate **green "+1 Seed"** toast |
+| X4 | Open the plot tooltip on a plant that already has a Heirloom Charm applied. | **Heirloom Charm is not listed** in the consumable picker — it is hidden once `heirloomActive` is set |
+| X5 | Check the Heirloom Charm I recipe in the Craft tab. | Recipe requires **4× Fairy Essence** + 4× Stellar Essence (not Grove Essence) |
+
+---
+
+## Y. v2.3.3 — Inventory Search Bar & Header Counts
+
+| # | Action | Expected |
+|---|--------|----------|
+| Y1 | Open Inventory → Seeds tab. Type part of a flower name in the search bar. | List filters to matching seeds only; non-matching seeds are hidden |
+| Y2 | Clear the search. Switch to Blooms tab. Search for a species. | Blooms tab has its own independent search; results filter correctly |
+| Y3 | Search for a term with no matches on any tab. | Shows an empty state (no crash, no stale results) |
+| Y4 | Open Inventory with consumables and essences in your inventory. Check the header line. | Header reads something like **"124 seeds · 46 blooms · 145 supplies · 3 consumables · 12 essences"** |
+
+---
+
+## Z. v2.3.3 — Codex Badge Cross-Device Sync
+
+| # | Action | Expected |
+|---|--------|----------|
+| Z1 | Discover a new species on Device A. Open the Codex and expand that species card. | Badge clears on Device A |
+| Z2 | Open the same account on Device B (fresh load or tab refresh). | **No badge** for the already-acknowledged species — badge does not reappear |
+| Z3 | Sign in on a brand-new device that has never loaded this account. | No flood of "newly discovered" badges for previously known species — all existing discoveries are pre-acknowledged |
+| Z4 | Discover a new species (don't open the card yet). Open the app on another device. | The **new** species still shows a badge on both devices until the card is opened |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```
