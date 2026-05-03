@@ -2076,8 +2076,11 @@ export function mergeServerResult<T extends Partial<GameState>>(
   if ((r.lastShopReset   ?? 0) < cur.lastShopReset)          merged.shop        = cur.shop;
   if ((r.lastSupplyReset ?? 0) < (cur.lastSupplyReset ?? 0)) merged.supplyShop  = cur.supplyShop;
 
-  // codexAcked is monotonically growing — union both sides so two active devices
-  // never clobber each other's acknowledgements.
+  // discovered and codexAcked are monotonically growing — union both sides so
+  // concurrent harvests don't clobber each other's new entries client-side.
+  if (r.discovered) {
+    merged.discovered = [...new Set([...(cur.discovered ?? []), ...r.discovered])];
+  }
   if (r.codexAcked) {
     merged.codexAcked = [...new Set([...(cur.codexAcked ?? []), ...r.codexAcked])];
   }
