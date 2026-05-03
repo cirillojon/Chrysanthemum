@@ -1,0 +1,29 @@
+import { useEffect, useState } from "react";
+
+interface Props {
+  emoji: string;
+  label: string;
+  count: number;
+  color?: string;
+  onDone: () => void;
+}
+
+export function GenericToastPopup({ emoji, label, count, color = "text-primary", onDone }: Props) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    setVisible(true);
+    const timer = setTimeout(() => { setVisible(false); setTimeout(onDone, 300); }, 1_200);
+    return () => clearTimeout(timer);
+  }, [count]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  return (
+    <div className={`pointer-events-none transition-all duration-300 ${visible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"}`}>
+      <div className="flex items-center gap-1.5 bg-card border rounded-full px-3 py-1 shadow-lg">
+        <span className={`text-xs font-bold font-mono ${color}`}>+{count}</span>
+        <span className="text-base">{emoji}</span>
+        <span className={`text-xs font-bold font-mono ${color}`}>{label}</span>
+      </div>
+    </div>
+  );
+}

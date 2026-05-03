@@ -380,7 +380,7 @@ function supplyUnlockSlots(rarity: Rarity): number | null {
 }
 
 export function SupplyShop() {
-  const { state, perform, getState, user, requestSignIn } = useGame();
+  const { state, perform, getState, user, requestSignIn, pushGenericToast } = useGame();
   const [countdown,     setCountdown]     = useState(() => msUntilSupplyReset(state));
   const [showRates,     setShowRates]     = useState(false);
   const [usingWindShear,setUsingWindShear]= useState(false);
@@ -483,9 +483,32 @@ export function SupplyShop() {
     const cur = getState();
     const optimistic = buyAllSupply(cur);
     if (!optimistic) return;
+    // Collect display info for each slot we're about to buy
+    const toastItems = (cur.supplyShop ?? [])
+      .filter((s) => !s.isEmpty && s.quantity > 0 && cur.coins >= s.price)
+      .map((s): { key: string; emoji: string; label: string; color: string } | null => {
+        if (s.isFertilizer && s.fertilizerType) {
+          const f = FERTILIZERS[s.fertilizerType];
+          return { key: s.speciesId!, emoji: f.emoji, label: f.name, color: RARITY_CONFIG[f.rarity].color };
+        }
+        if (s.isGear && s.gearType) {
+          const g = GEAR[s.gearType];
+          return { key: s.speciesId!, emoji: g.emoji, label: g.name, color: RARITY_CONFIG[g.rarity].color };
+        }
+        if (s.isConsumable && s.consumableId) {
+          const r = CONSUMABLE_RECIPE_MAP[s.consumableId as ConsumableId];
+          if (r) return { key: s.speciesId!, emoji: r.emoji, label: r.name, color: RARITY_CONFIG[r.rarity].color };
+        }
+        return null;
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
     setBuyingAll(true);
     try {
-      await perform(optimistic, () => edgeBuyAllFromSupplyShop());
+      await perform(optimistic, () => edgeBuyAllFromSupplyShop(), () => {
+        for (const { key, emoji, label, color } of toastItems) {
+          pushGenericToast(key, emoji, label, color);
+        }
+      });
     } finally {
       setBuyingAll(false);
     }

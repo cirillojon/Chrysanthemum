@@ -45,6 +45,7 @@ import { useVersionCheck } from "./hooks/useVersionCheck";
 import { usePresence } from "./hooks/usePresence";
 import { UpdateBanner } from "./components/UpdateBanner";
 import { HarvestPopup } from "./components/HarvestPopup";
+import { GenericToastPopup } from "./components/GenericToastPopup";
 import { CHANGELOGS, LATEST_CHANGELOG_VERSION, type ChangelogEntry } from "./data/changelog";
 
 type Tab        = "garden" | "shop" | "inventory" | "social" | "codex" | "alchemy" | "craft";
@@ -93,7 +94,7 @@ function AppInner() {
   const updateAvailable  = useVersionCheck();
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
 
-  const { harvestPopups, pushHarvestPopup, dismissHarvestPopup } = useGame();
+  const { harvestPopups, pushHarvestPopup, dismissHarvestPopup, genericToasts, dismissGenericToast } = useGame();
 
   const [changelogEntry, setChangelogEntry] = useState<ChangelogEntry | null>(() => {
     const seen = localStorage.getItem("changelogSeenVersion");
@@ -899,7 +900,7 @@ function AppInner() {
       </main>
 
       {/* Harvest popups — one pill per unique species+mutation, stacked vertically */}
-      {harvestPopups.size > 0 && (
+      {(harvestPopups.size > 0 || genericToasts.size > 0) && (
         <div className="fixed inset-0 pointer-events-none z-50 flex flex-col items-center justify-end pb-24 gap-2">
           {[...harvestPopups.entries()].map(([key, entry]) => (
             <HarvestPopup
@@ -909,6 +910,16 @@ function AppInner() {
               count={entry.count}
               isSeed={entry.isSeed}
               onDone={() => dismissHarvestPopup(key)}
+            />
+          ))}
+          {[...genericToasts.entries()].map(([key, entry]) => (
+            <GenericToastPopup
+              key={key}
+              emoji={entry.emoji}
+              label={entry.label}
+              count={entry.count}
+              color={entry.color}
+              onDone={() => dismissGenericToast(key)}
             />
           ))}
         </div>
