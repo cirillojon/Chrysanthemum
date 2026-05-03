@@ -14,6 +14,15 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.3.4",
+    title:   "Hotfix",
+    items: [
+      { type: "fixed", text: "Lawnmower, Aqueduct, and Balance Scale crafting now works — all three gear families were missing from the server-side recipe tables, causing every craft attempt to return a 400 error" },
+      { type: "fixed", text: "Heirloom Charm I craft recipe corrected on server — alchemy-craft edge function still required 4× Grove Essence instead of 4× Fairy Essence" },
+      { type: "fixed", text: "Gear expiry toast no longer overlaps other notifications — it now stacks vertically with shop restock and craft completion banners (#191)" },
+    ],
+  },
+  {
     version: "2.3.3",
     title:   "Quality of Life & Fixes",
     items: [

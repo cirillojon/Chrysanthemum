@@ -1,3 +1,12 @@
+## [v2.3.4] — 2026-05-02 — Hotfix
+
+### Fixed
+- **Lawnmower, Aqueduct & Balance Scale crafting now works** — all three gear families were missing from the server-side recipe tables; attempts to craft them returned a 400 error
+- **Heirloom Charm I craft recipe corrected on server** — `alchemy-craft` edge function still required 4× Grove Essence instead of 4× Fairy Essence, causing crafts to fail
+- **Gear expiry toast no longer overlaps other notifications** — the gear expiry banner is now part of the shared notification stack and stacks vertically alongside shop restock and craft completion banners (#191)
+
+---
+
 ## [v2.3.3] — 2026-05-02 — Quality of Life & Fixes
 
 ### Added

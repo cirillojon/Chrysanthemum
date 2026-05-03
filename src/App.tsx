@@ -517,13 +517,16 @@ function AppInner() {
           vertically when multiple fire instead of rendering on top of each
           other. flex-col-reverse keeps the most recent banner closest to the
           anchor (bottom edge); older banners stack above. */}
-      {(shopJustRestocked || supplyJustRestocked || craftCompletions.length > 0 || attunementCompletions.length > 0) && (
+      {(shopJustRestocked || supplyJustRestocked || craftCompletions.length > 0 || attunementCompletions.length > 0 || !!gearExpiry) && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex flex-col-reverse items-center gap-2 pointer-events-none">
           {shopJustRestocked && (
             <ShopRestockBanner onDismiss={clearShopNotification} type="seeds" />
           )}
           {supplyJustRestocked && (
             <ShopRestockBanner onDismiss={clearSupplyNotification} type="supply" />
+          )}
+          {gearExpiry && (
+            <GearExpiryBanner gearType={gearExpiry.gearType} onDismiss={clearGearExpiry} />
           )}
           {craftCompletions.map((c) => (
             <CraftCompletionBanner
@@ -543,9 +546,6 @@ function AppInner() {
             />
           ))}
         </div>
-      )}
-      {gearExpiry && (
-        <GearExpiryBanner gearType={gearExpiry.gearType} onDismiss={clearGearExpiry} />
       )}
       {newRequest && (
         <FriendRequestNotification

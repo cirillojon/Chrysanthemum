@@ -69,6 +69,15 @@ const GEAR_RECIPES: GearRecipe[] = [
   { outputGearType: "aegis_legendary",       ingredients: [G("aegis_rare")],                                                                           coinCost: 15_000,  durationMs: DL },
   { outputGearType: "cropsticks",            ingredients: [E("grove", 4), E("tide", 4), E("arcane", 4), E("solar", 4)],                              coinCost: 20_000,  durationMs: DL },
   { outputGearType: "auto_planter_prismatic",ingredients: [G("sprinkler_prismatic", 1), G("harvest_bell_legendary", 1), E("universal", 10)],          coinCost: 500_000, durationMs: DP },
+  { outputGearType: "lawnmower_uncommon",    ingredients: [E("grove", 2), E("solar", 2)],                                                             coinCost: 200,     durationMs: DU },
+  { outputGearType: "lawnmower_rare",        ingredients: [G("lawnmower_uncommon")],                                                                   coinCost: 1_500,   durationMs: DR },
+  { outputGearType: "lawnmower_legendary",   ingredients: [G("lawnmower_rare")],                                                                       coinCost: 7_000,   durationMs: DL },
+  { outputGearType: "aqueduct_uncommon",     ingredients: [E("tide", 4), E("zephyr", 2)],                                                             coinCost: 2_000,   durationMs: DU },
+  { outputGearType: "aqueduct_rare",         ingredients: [G("aqueduct_uncommon")],                                                                    coinCost: 12_000,  durationMs: DR },
+  { outputGearType: "aqueduct_legendary",    ingredients: [G("aqueduct_rare")],                                                                        coinCost: 60_000,  durationMs: DL },
+  { outputGearType: "balance_scale_legendary",ingredients: [E("arcane", 8), E("solar", 4), E("shadow", 4)],                                           coinCost: 10_000,  durationMs: DL },
+  { outputGearType: "balance_scale_mythic",  ingredients: [G("balance_scale_legendary")],                                                              coinCost: 75_000,  durationMs: DM },
+  { outputGearType: "balance_scale_exalted", ingredients: [G("balance_scale_mythic")],                                                                 coinCost: 500_000, durationMs: DE },
 ];
 
 const GEAR_RECIPE_MAP = Object.fromEntries(GEAR_RECIPES.map((r) => [r.outputGearType, r]));
