@@ -423,6 +423,54 @@ Gear expiry banner was rendered outside the shared notification stack, causing i
 
 ---
 
+## AC. v2.3.5 — Toast Notifications
+
+Loss/gain pill toasts now fire for seeds, blooms, gear, consumables, fertilizer, and crafting costs.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AC1 | Plant a seed manually (tap plot → pick seed) | A **red "-1 [Seed Name] Seed"** toast appears at the bottom of the screen |
+| AC2 | Plant a seed whose species is undiscovered | Toast shows **"-1 ❓ ??? Seed"** in red |
+| AC3 | Click **Plant All** with several seeds in inventory | One red loss toast per species — toasts stack and accumulate count (e.g. "-3 🌸 Rose Seed") |
+| AC4 | Harvest a bloomed plant | A loss toast fires for the bloom (with rarity colour); **no** extra gain toast |
+| AC5 | Place a piece of gear on a plot | A red loss toast shows the gear emoji, name, and rarity colour |
+| AC6 | Use a Shovel to dig up a growing plant | A red **"-1 🥄 Shovel"** toast appears |
+| AC7 | Apply a consumable from the plot tooltip (e.g. Frost Vial) | A red loss toast for that consumable appears |
+| AC8 | Buy a seed from the Shop | A **green "+1 [Seed Name] Seed"** toast appears |
+| AC9 | Click **Buy All** for a seed in the Shop | Toast shows the total quantity purchased (e.g. "+5 🌸 Rose Seed") |
+| AC10 | Buy an item from the Supply Shop (fertilizer, gear, or consumable) | A green gain toast appears with the correct emoji and label |
+| AC11 | Craft a gear item in the Craft tab | Red loss toasts fire for each essence spent; a gain toast fires for the crafted item |
+| AC12 | Multiple rapid actions of the same type (e.g. Plant All 3 of the same seed) | Toasts **accumulate** into a single pill with the combined count rather than spawning duplicates |
+
+---
+
+## AD. v2.3.5 — Balance: Vials & Heirloom Charms Rarity Nerf
+
+Vials and Heirloom Charms now require the plant's rarity to be **strictly below** the consumable's tier (same-rarity no longer allowed).
+
+| # | Action | Expected |
+|---|--------|----------|
+| AD1 | Open a plot tooltip on a **Rare** plant with a **Rare (Tier I)** Frost Vial in inventory | Frost Vial **does not appear** in the consumable list |
+| AD2 | Same Rare plant with a **Legendary (Tier II)** Frost Vial | Frost Vial **does** appear and can be applied |
+| AD3 | Open a tooltip on a **Rare** bloom with a **Rare (Tier I)** Heirloom Charm | Heirloom Charm **does not appear** |
+| AD4 | Same bloom with a **Legendary (Tier II)** Heirloom Charm | Heirloom Charm **does** appear and can be applied |
+| AD5 | Check the description of any Tier I vial (e.g. Frost Vial I) in the Craft tab | Description reads **"Uncommon or lower"** (not "Rare or lower") |
+| AD6 | DevTools → Network: POST to `use-consumable` with a Tier I Rare vial targeting a Rare plant | Server returns **400** with "can't reach" error |
+
+---
+
+## AE. v2.3.5 — Balance: Seed Pouch Upgrade Cost
+
+Upgrading any Seed Pouch (base or typed) now costs **4×** of the previous tier instead of 3×.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AE1 | Open Craft tab → Consumables → **Seed Pouch II** recipe | Cost shows **4× Seed Pouch I** (not 3×) |
+| AE2 | Attempt to craft Seed Pouch II with only 3× Seed Pouch I in inventory | Craft button is **disabled** / server rejects the attempt |
+| AE3 | Check any **typed** Seed Pouch upgrade (e.g. Blaze Seed Pouch II) | Cost is also **4×** of the previous tier |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```
