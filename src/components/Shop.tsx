@@ -32,14 +32,16 @@ interface ShopProps {
 }
 
 export function Shop({ view }: ShopProps) {
-  const { state, perform, user, requestSignIn } = useGame();
+  const { state, getState, perform, user, requestSignIn } = useGame();
   const [countdown,  setCountdown]  = useState(() => msUntilShopReset(state));
   const [showRates,  setShowRates]  = useState(false);
 
+  // Use getState() to always read the latest state — avoids a stale closure where
+  // the interval captures an old lastShopReset and shows "00:00" after a restock.
   useEffect(() => {
-    const id = setInterval(() => setCountdown(msUntilShopReset(state)), 1_000);
+    const id = setInterval(() => setCountdown(msUntilShopReset(getState())), 1_000);
     return () => clearInterval(id);
-  }, [state.lastShopReset]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const flowerSlots = state.shop.filter((s) => !s.isFertilizer);
   const activeCount = flowerSlots.filter((s) => !s.isEmpty).length;
