@@ -39,7 +39,7 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "bloom_burst_4", cost: U("bloom_burst_3", 2) },
   { id: "bloom_burst_5", cost: U("bloom_burst_4", 2) },
   // Heirloom Charm
-  { id: "heirloom_charm_1", cost: E([{ type: "grove", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  { id: "heirloom_charm_1", cost: E([{ type: "fairy", amount: 4 }, { type: "stellar", amount: 4 }]) },
   { id: "heirloom_charm_2", cost: U("heirloom_charm_1", 2) },
   { id: "heirloom_charm_3", cost: U("heirloom_charm_2", 2) },
   { id: "heirloom_charm_4", cost: U("heirloom_charm_3", 2) },

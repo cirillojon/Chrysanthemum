@@ -57,6 +57,15 @@ const GEAR_RECIPES: GearRecipe[] = [
   { outputGearType: "aegis_legendary",       ingredients: [G("aegis_rare")] },
   { outputGearType: "cropsticks",            ingredients: [E("arcane", 4), E("stellar", 4), E("grove", 4)] },
   { outputGearType: "auto_planter_prismatic",ingredients: [G("sprinkler_prismatic", 1), G("harvest_bell_legendary", 1), E("universal", 10)] },
+  { outputGearType: "lawnmower_uncommon",    ingredients: [E("grove", 2), E("solar", 2)] },
+  { outputGearType: "lawnmower_rare",        ingredients: [G("lawnmower_uncommon")] },
+  { outputGearType: "lawnmower_legendary",   ingredients: [G("lawnmower_rare")] },
+  { outputGearType: "aqueduct_uncommon",     ingredients: [E("tide", 4), E("zephyr", 2)] },
+  { outputGearType: "aqueduct_rare",         ingredients: [G("aqueduct_uncommon")] },
+  { outputGearType: "aqueduct_legendary",    ingredients: [G("aqueduct_rare")] },
+  { outputGearType: "balance_scale_legendary",ingredients: [E("arcane", 8), E("solar", 4), E("shadow", 4)] },
+  { outputGearType: "balance_scale_mythic",  ingredients: [G("balance_scale_legendary")] },
+  { outputGearType: "balance_scale_exalted", ingredients: [G("balance_scale_mythic")] },
 ];
 
 const GEAR_RECIPE_MAP = Object.fromEntries(GEAR_RECIPES.map((r) => [r.outputGearType, r]));
