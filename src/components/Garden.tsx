@@ -582,6 +582,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const next   = plantSeed(before, row, col, speciesId);
       if (!next) continue; // someone already filled this plot or seed ran out
 
+      const sp = getFlower(speciesId);
       perform(
         next,
         async () => {
@@ -608,7 +609,12 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             throw e;
           }
         },
-        undefined,
+        () => {
+          const discovered = getState().discovered.includes(speciesId);
+          const emoji = discovered && sp ? sp.emoji.seed : "❓";
+          const label = discovered && sp ? `${sp.name} Seed` : "??? Seed";
+          pushGenericToast(`loss:seed:${speciesId}`, emoji, label, "text-green-400", "loss");
+        },
         {
           serialize: true,
           // Surgical rollback: undo ONLY this plot + this one seed. Doesn't
