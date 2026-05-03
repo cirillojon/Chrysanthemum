@@ -397,6 +397,32 @@ Seed now returned to inventory on harvest; duplicate bloom row fixed; seed toast
 
 ---
 
+## AA. v2.3.4 — Lawnmower, Aqueduct & Balance Scale Crafting
+
+Server-side recipe tables in `craft-start` and `craft-cancel` were missing all three gear families — attempts to craft them returned a 400 error.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AA1 | Open Craft tab → Gear. Start a **Lawnmower I** craft (requires Grove + Solar essence). | Craft queues successfully and completes after the timer |
+| AA2 | Upgrade Lawnmower I → II → III via the craft queue. | Each upgrade tier accepts the previous tier as ingredient and produces the next |
+| AA3 | Start an **Aqueduct I** craft (requires Tide + Zephyr essence). | Craft queues and completes correctly |
+| AA4 | Start a **Balance Scale I** craft (requires Arcane + Solar + Shadow essence). | Craft queues and completes correctly |
+| AA5 | Cancel an in-progress Lawnmower, Aqueduct, or Balance Scale craft. | Ingredients are refunded correctly |
+
+---
+
+## AB. v2.3.4 — Gear Expiry Toast Stacks With Other Notifications (#191)
+
+Gear expiry banner was rendered outside the shared notification stack, causing it to overlap shop restock and craft completion banners.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AB1 | Let a piece of gear expire while the seed shop restocks at the same time. | Both the gear expiry banner and shop restock banner appear **stacked vertically** — no overlap |
+| AB2 | Let gear expire while a craft completes. | Gear expiry and craft completion banners stack cleanly in the shared container |
+| AB3 | Trigger gear expiry on its own (no other notifications). | Gear expiry banner appears at the bottom centre, same position as other banners |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```
