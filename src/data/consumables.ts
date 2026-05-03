@@ -307,20 +307,20 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
     description: `Applies the Moonlit mutation to a ${r(5)} or lower plant.`,
     cost: { kind: "consumable", id: "moon_vial_4", quantity: 2 } },
 
-  // ── Golden Vial (I–V) — mutation_boost ───────────────────────────────────
-  { id: "golden_vial_1", name: "Golden Vial I",   emoji: "✨", tier: 1, rarity: "rare",      category: "mutation_boost",
+  // ── Golden Veil (I–V) — mutation_boost ───────────────────────────────────
+  { id: "golden_vial_1", name: "Golden Veil I",   emoji: "✨", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Applies the Golden mutation to a ${r(1)} or lower plant.`,
     cost: { kind: "essence", amounts: [{ type: "solar", amount: 4 }, { type: "stellar", amount: 4 }] } },
-  { id: "golden_vial_2", name: "Golden Vial II",  emoji: "✨", tier: 2, rarity: "legendary", category: "mutation_boost",
+  { id: "golden_vial_2", name: "Golden Veil II",  emoji: "✨", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Applies the Golden mutation to a ${r(2)} or lower plant.`,
     cost: { kind: "consumable", id: "golden_vial_1", quantity: 2 } },
-  { id: "golden_vial_3", name: "Golden Vial III", emoji: "✨", tier: 3, rarity: "mythic",    category: "mutation_boost",
+  { id: "golden_vial_3", name: "Golden Veil III", emoji: "✨", tier: 3, rarity: "mythic",    category: "mutation_boost",
     description: `Applies the Golden mutation to a ${r(3)} or lower plant.`,
     cost: { kind: "consumable", id: "golden_vial_2", quantity: 2 } },
-  { id: "golden_vial_4", name: "Golden Vial IV",  emoji: "✨", tier: 4, rarity: "exalted",   category: "mutation_boost",
+  { id: "golden_vial_4", name: "Golden Veil IV",  emoji: "✨", tier: 4, rarity: "exalted",   category: "mutation_boost",
     description: `Applies the Golden mutation to a ${r(4)} or lower plant.`,
     cost: { kind: "consumable", id: "golden_vial_3", quantity: 2 } },
-  { id: "golden_vial_5", name: "Golden Vial V",   emoji: "✨", tier: 5, rarity: "prismatic", category: "mutation_boost",
+  { id: "golden_vial_5", name: "Golden Veil V",   emoji: "✨", tier: 5, rarity: "prismatic", category: "mutation_boost",
     description: `Applies the Golden mutation to a ${r(5)} or lower plant.`,
     cost: { kind: "consumable", id: "golden_vial_4", quantity: 2 } },
 
