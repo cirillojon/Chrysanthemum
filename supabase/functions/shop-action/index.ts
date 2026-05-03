@@ -83,7 +83,7 @@ const FLOWER_SELL_VALUES: Record<string, number> = {
   the_first_bloom: 5_000_000,
 };
 
-type Action = "buy" | "buy_all" | "sell" | "sell_all" | "sync";
+type Action = "buy" | "buy_all" | "sell" | "sell_all" | "sync" | "buy_all_seeds";
 interface ShopSlot { speciesId: string; price: number; quantity: number; isFertilizer?: boolean; fertilizerType?: string; isEmpty?: boolean; }
 interface InventoryItem { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean; }
 interface FertilizerItem { type: string; quantity: number; }
@@ -119,7 +119,7 @@ Deno.serve(async (req: Request) => {
       shop?: ShopSlot[]; lastShopReset?: number;
     };
 
-    if (!["buy", "buy_all", "sell", "sell_all", "sync"].includes(body.action)) {
+    if (!["buy", "buy_all", "sell", "sell_all", "sync", "buy_all_seeds"].includes(body.action)) {
       return new Response(JSON.stringify({ error: "Invalid action" }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -233,6 +233,34 @@ Deno.serve(async (req: Request) => {
           : [...newInventory, { speciesId: body.speciesId, quantity: qty, isSeed: true }];
         logResult = { speciesId: body.speciesId, qty, coins };
       }
+    }
+
+    // ── buy_all_seeds: buy max affordable qty from every non-empty flower slot ─
+    if (action === "buy_all_seeds") {
+      const flowerSlots = newShop.filter((s) => !s.isFertilizer && !s.isEmpty && s.quantity > 0);
+      let bought = false;
+      for (const slot of flowerSlots) {
+        if (!slot.speciesId) continue;
+        const qty = Math.min(slot.quantity, Math.floor(coins / slot.price));
+        if (qty < 1) continue;
+        coins -= slot.price * qty;
+        newShop = newShop.map((s) =>
+          s.speciesId === slot.speciesId && !s.isFertilizer ? { ...s, quantity: s.quantity - qty } : s
+        );
+        const existing = newInventory.find((i) => i.speciesId === slot.speciesId && i.isSeed);
+        newInventory = existing
+          ? newInventory.map((i) =>
+              i.speciesId === slot.speciesId && i.isSeed ? { ...i, quantity: i.quantity + qty } : i
+            )
+          : [...newInventory, { speciesId: slot.speciesId, quantity: qty, isSeed: true }];
+        bought = true;
+      }
+      if (!bought) {
+        return new Response(JSON.stringify({ error: "Cannot afford any seeds" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      logResult = { slotsProcessed: flowerSlots.length };
     }
 
     // ── sell ──────────────────────────────────────────────────────────────────

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useGame } from "../store/GameContext";
-import { msUntilShopReset, upgradeShopSlots, SHOP_RARITY_WEIGHTS } from "../store/gameStore";
-import { edgeUpgradeShopSlots } from "../lib/edgeFunctions";
+import { msUntilShopReset, upgradeShopSlots, buyAllSeeds, SHOP_RARITY_WEIGHTS } from "../store/gameStore";
+import { edgeUpgradeShopSlots, edgeBuyAllSeeds } from "../lib/edgeFunctions";
 import { getNextShopSlotUpgrade, MAX_SHOP_SLOTS } from "../data/upgrades";
 import { ShopSlotCard } from "./ShopSlotCard";
 import { SupplyShop } from "./SupplyShop";
@@ -35,6 +35,7 @@ export function Shop({ view }: ShopProps) {
   const { state, getState, perform, user, requestSignIn } = useGame();
   const [countdown,  setCountdown]  = useState(() => msUntilShopReset(state));
   const [showRates,  setShowRates]  = useState(false);
+  const [buyingAll,  setBuyingAll]  = useState(false);
 
   // Use getState() to always read the latest state — avoids a stale closure where
   // the interval captures an old lastShopReset and shows "00:00" after a restock.
@@ -55,6 +56,24 @@ export function Shop({ view }: ShopProps) {
     const optimistic = upgradeShopSlots(state);
     if (optimistic) perform(optimistic, () => edgeUpgradeShopSlots());
   }
+
+  async function handleBuyAll() {
+    if (!user) { requestSignIn("to buy seeds"); return; }
+    if (buyingAll) return;
+    const cur = getState();
+    const optimistic = buyAllSeeds(cur);
+    if (!optimistic) return;
+    setBuyingAll(true);
+    try {
+      await perform(optimistic, () => edgeBuyAllSeeds());
+    } finally {
+      setBuyingAll(false);
+    }
+  }
+
+  const affordableSeeds  = flowerSlots.filter((s) => !s.isEmpty && s.quantity > 0 && state.coins >= s.price);
+  const buyAllOptimistic = affordableSeeds.length > 0 ? buyAllSeeds(state) : null;
+  const buyAllCost       = buyAllOptimistic ? state.coins - buyAllOptimistic.coins : 0;
 
   // Supply view is self-contained
   if (view === "supply") return <SupplyShop />;
@@ -103,6 +122,16 @@ export function Shop({ view }: ShopProps) {
           {state.coins.toLocaleString()} coins
         </span>
       </div>
+
+      {affordableSeeds.length > 0 && (
+        <button
+          onClick={handleBuyAll}
+          disabled={buyingAll}
+          className="w-full py-2.5 rounded-xl border border-primary text-primary text-sm font-semibold hover:bg-primary/10 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Buy All Seeds — {buyAllCost.toLocaleString()} 🟡
+        </button>
+      )}
 
       {flowerSlots.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

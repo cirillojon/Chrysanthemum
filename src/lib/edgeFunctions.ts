@@ -221,6 +221,14 @@ export function edgeBuyFromSupplyShop(slotId: string) {
   return callEdge<SupplyBuyResult>("supply-action", { action: "buy", slotId });
 }
 
+export function edgeBuyAllSeeds() {
+  return callEdge<ShopActionResult>("shop-action", { action: "buy_all_seeds" });
+}
+
+export function edgeBuyAllFromSupplyShop() {
+  return callEdge<SupplyBuyResult>("supply-action", { action: "buy_all" });
+}
+
 export function edgeSyncSupplyShop(supplyShop: GameState["supplyShop"], lastSupplyReset: number) {
   return callEdge<{ ok: true }>("supply-action", { action: "sync", supplyShop, lastSupplyReset });
 }

@@ -2308,6 +2308,33 @@ export function buyAllFertilizer(
   };
 }
 
+export function buyAllSeeds(state: GameState): GameState | null {
+  const slots = state.shop.filter(
+    (s) => !s.isFertilizer && !s.isEmpty && s.quantity > 0 && state.coins >= s.price
+  );
+  if (slots.length === 0) return null;
+  let next: GameState = state;
+  let bought = false;
+  for (const slot of slots) {
+    const after = buyAllFromShop(next, slot.speciesId!);
+    if (after) { next = after; bought = true; }
+  }
+  return bought ? next : null;
+}
+
+export function buyAllSupply(state: GameState): GameState | null {
+  const slots = (state.supplyShop ?? []).filter((s) => !s.isEmpty && s.quantity > 0);
+  if (slots.length === 0) return null;
+  let next: GameState = state;
+  let bought = false;
+  for (const slot of slots) {
+    if (next.coins < slot.price) continue;
+    const after = buyFromSupplyShop(next, slot.speciesId!);
+    if (after) { next = after; bought = true; }
+  }
+  return bought ? next : null;
+}
+
 export function applyFertilizer(
   state: GameState,
   row: number,

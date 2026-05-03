@@ -3,12 +3,14 @@ import { useGame } from "../store/GameContext";
 import {
   msUntilSupplyReset,
   buyFromSupplyShop,
+  buyAllSupply,
   upgradeSupplySlots,
   applyWindShear,
   applySlotLock,
 } from "../store/gameStore";
 import {
   edgeBuyFromSupplyShop,
+  edgeBuyAllFromSupplyShop,
   edgeUpgradeSupplySlots,
   edgeUseWindShear,
   edgeUseSlotLock,
@@ -382,6 +384,7 @@ export function SupplyShop() {
   const [countdown,     setCountdown]     = useState(() => msUntilSupplyReset(state));
   const [showRates,     setShowRates]     = useState(false);
   const [usingWindShear,setUsingWindShear]= useState(false);
+  const [buyingAll,     setBuyingAll]     = useState(false);
 
   useEffect(() => {
     const id = setInterval(() => setCountdown(msUntilSupplyReset(state)), 1_000);
@@ -474,7 +477,24 @@ export function SupplyShop() {
     );
   }
 
+  async function handleBuyAll() {
+    if (!user) { requestSignIn("to buy supplies"); return; }
+    if (buyingAll) return;
+    const cur = getState();
+    const optimistic = buyAllSupply(cur);
+    if (!optimistic) return;
+    setBuyingAll(true);
+    try {
+      await perform(optimistic, () => edgeBuyAllFromSupplyShop());
+    } finally {
+      setBuyingAll(false);
+    }
+  }
+
   const slots = state.supplyShop ?? [];
+  const affordableSupply  = slots.filter((s) => !s.isEmpty && s.quantity > 0 && state.coins >= s.price);
+  const buyAllOptimistic  = affordableSupply.length > 0 ? buyAllSupply(state) : null;
+  const buyAllCost        = buyAllOptimistic ? state.coins - buyAllOptimistic.coins : 0;
 
   return (
     <div className="flex flex-col gap-6">
@@ -541,6 +561,16 @@ export function SupplyShop() {
       </div>
 
       {/* Slot grid */}
+      {affordableSupply.length > 0 && (
+        <button
+          onClick={handleBuyAll}
+          disabled={buyingAll}
+          className="w-full py-2.5 rounded-xl border border-primary text-primary text-sm font-semibold hover:bg-primary/10 transition-colors text-center disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Buy All — {buyAllCost.toLocaleString()} 🟡
+        </button>
+      )}
+
       {slots.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {slots.map((slot) => (
