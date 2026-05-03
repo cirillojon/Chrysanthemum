@@ -108,8 +108,8 @@ interface GameContextValue {
   harvestPopups: Map<string, { speciesId: string; mutation?: MutationType; count: number; isSeed?: boolean }>;
   pushHarvestPopup: (speciesId: string, mutation?: MutationType, isSeed?: boolean, qty?: number) => void;
   dismissHarvestPopup: (key: string) => void;
-  genericToasts: Map<string, { emoji: string; label: string; count: number; color?: string }>;
-  pushGenericToast: (key: string, emoji: string, label: string, color?: string) => void;
+  genericToasts: Map<string, { emoji: string; label: string; count: number; color?: string; variant?: "gain" | "loss" }>;
+  pushGenericToast: (key: string, emoji: string, label: string, color?: string, variant?: "gain" | "loss", qty?: number) => void;
   dismissGenericToast: (key: string) => void;
 }
 
@@ -149,13 +149,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }
-  type GenericToastEntry = { emoji: string; label: string; count: number; color?: string };
+  type GenericToastEntry = { emoji: string; label: string; count: number; color?: string; variant?: "gain" | "loss" };
   const [genericToasts, setGenericToasts] = useState<Map<string, GenericToastEntry>>(new Map());
-  function pushGenericToast(key: string, emoji: string, label: string, color?: string) {
+  function pushGenericToast(key: string, emoji: string, label: string, color?: string, variant?: "gain" | "loss", qty = 1) {
     setGenericToasts((prev) => {
       const next = new Map(prev);
       const existing = next.get(key);
-      next.set(key, existing ? { ...existing, count: existing.count + 1 } : { emoji, label, count: 1, color });
+      next.set(key, existing ? { ...existing, count: existing.count + qty } : { emoji, label, count: qty, color, variant });
       return next;
     });
   }

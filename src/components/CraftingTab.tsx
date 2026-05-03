@@ -979,7 +979,7 @@ const FILTER_LABELS: { id: CraftFilter; label: string; emoji: string }[] = [
 ];
 
 export function CraftingTab() {
-  const { state, getState, update, perform } = useGame();
+  const { state, getState, update, perform, pushGenericToast } = useGame();
   const [filter,       setFilter]       = useState<CraftFilter>("all");
   const [search,       setSearch]       = useState("");
   const [selected,     setSelected]     = useState<CraftEntry | null>(null);
@@ -1105,6 +1105,17 @@ export function CraftingTab() {
               serverUpdatedAt: res.serverUpdatedAt,
             });
             closePopup();
+            for (const { type, amount } of essenceCosts) {
+              const ft = FLOWER_TYPES[type as FlowerType];
+              if (ft) pushGenericToast(`loss:craft:essence:${type}`, ft.emoji, `${ft.name} Essence`, ft.color, "loss", amount);
+            }
+            for (const { gearType: gt, quantity } of gearCosts) {
+              const gd = GEAR[gt]; pushGenericToast(`loss:craft:gear:${gt}`, gd.emoji, gd.name, RARITY_CONFIG[gd.rarity].color, "loss", quantity);
+            }
+            for (const { id: cid, quantity } of consumableCosts) {
+              const r = CONSUMABLE_RECIPE_MAP[cid as ConsumableId];
+              if (r) pushGenericToast(`loss:craft:consumable:${cid}`, r.emoji, r.name, RARITY_CONFIG[r.rarity].color, "loss", quantity);
+            }
           },
         );
 
@@ -1149,6 +1160,10 @@ export function CraftingTab() {
               serverUpdatedAt: res.serverUpdatedAt,
             });
             closePopup();
+            for (const { type, amount } of essenceCosts) {
+              const ft = FLOWER_TYPES[type as FlowerType];
+              if (ft) pushGenericToast(`loss:craft:essence:${type}`, ft.emoji, `${ft.name} Essence`, ft.color, "loss", amount);
+            }
           },
         );
 
@@ -1224,6 +1239,19 @@ export function CraftingTab() {
               serverUpdatedAt: res.serverUpdatedAt,
             });
             closePopup();
+            for (const { type, amount } of essenceCosts) {
+              const ft = FLOWER_TYPES[type as FlowerType];
+              if (ft) pushGenericToast(`loss:craft:essence:${type}`, ft.emoji, `${ft.name} Essence`, ft.color, "loss", amount);
+            }
+            for (const { id: cid, quantity } of consumableCosts) {
+              if (cid.startsWith("fertilizer_")) {
+                const f = FERTILIZERS[cid.replace("fertilizer_", "") as import("../data/upgrades").FertilizerType];
+                if (f) pushGenericToast(`loss:craft:fert:${cid}`, f.emoji, f.name, undefined, "loss", quantity);
+              } else {
+                const r = CONSUMABLE_RECIPE_MAP[cid as ConsumableId];
+                if (r) pushGenericToast(`loss:craft:consumable:${cid}`, r.emoji, r.name, RARITY_CONFIG[r.rarity].color, "loss", quantity);
+              }
+            }
           },
         );
 
@@ -1290,6 +1318,13 @@ export function CraftingTab() {
               serverUpdatedAt: res.serverUpdatedAt,
             });
             closePopup();
+            for (const { type, amount } of essenceCosts) {
+              const ft = FLOWER_TYPES[type as FlowerType];
+              if (ft) pushGenericToast(`loss:craft:essence:${type}`, ft.emoji, `${ft.name} Essence`, ft.color, "loss", amount);
+            }
+            for (const { rarity, quantity } of attunementCosts) {
+              pushGenericToast(`loss:craft:infuser:${rarity}`, "💉", `${RARITY_CONFIG[rarity as Rarity].label} Infuser`, RARITY_CONFIG[rarity as Rarity].color, "loss", quantity);
+            }
           },
         );
       }

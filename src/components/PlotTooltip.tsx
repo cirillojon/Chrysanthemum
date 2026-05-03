@@ -63,7 +63,7 @@ export function PlotTooltip({
   isUnderGrowLamp, isUnderScarecrow, isUnderComposter, isUnderFan, isUnderHarvestBell, isUnderLawnmower,
   balanceScaleSide, isUnderAegis,
 }: Props) {
-  const { state, getState, perform, update, activeWeather, pushHarvestPopup } = useGame();
+  const { state, getState, perform, update, activeWeather, pushHarvestPopup, pushGenericToast } = useGame();
   const [showFertPicker,    setShowFertPicker]    = useState(false);
   const [confirmRemove,     setConfirmRemove]     = useState(false);
   const [removing,          setRemoving]          = useState(false);
@@ -212,7 +212,12 @@ export function PlotTooltip({
 
   function handleApplyFertilizer(type: FertilizerType) {
     const optimistic = applyFertilizer(state, row, col, type);
-    if (optimistic) perform(optimistic, () => edgeApplyFertilizer(row, col, type));
+    if (optimistic) {
+      const f = FERTILIZERS[type];
+      perform(optimistic, () => edgeApplyFertilizer(row, col, type), () => {
+        pushGenericToast(`loss:fert:${type}`, f.emoji, f.name, undefined, "loss");
+      });
+    }
     setShowFertPicker(false);
     onClose?.();
   }
@@ -225,10 +230,14 @@ export function PlotTooltip({
     const savedCell       = cur.grid[row][col];
     const savedConsumables = cur.consumables;
     setApplyingConsumable(consumableId);
+    const recipe = CONSUMABLE_RECIPE_MAP[consumableId as ConsumableId];
     perform(
       optimistic,
       () => edgeApplyPlantConsumable(row, col, consumableId),
-      () => setApplyingConsumable(null),
+      () => {
+        setApplyingConsumable(null);
+        if (recipe) pushGenericToast(`loss:consumable:${consumableId}`, recipe.emoji, recipe.name, undefined, "loss");
+      },
       {
         rollback: (c) => ({
           ...c,
@@ -262,7 +271,7 @@ export function PlotTooltip({
           setRemoving(false);
         }
       },
-      () => { onClose?.(); pushHarvestPopup(plant.speciesId, undefined, true); },
+      () => { onClose?.(); pushHarvestPopup(plant.speciesId, undefined, true); pushGenericToast("loss:shovel", "🥄", "Shovel", undefined, "loss"); },
       {
         rollback: (c) => ({
           ...c,

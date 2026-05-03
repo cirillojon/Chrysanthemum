@@ -919,6 +919,7 @@ function AppInner() {
               label={entry.label}
               count={entry.count}
               color={entry.color}
+              variant={entry.variant}
               onDone={() => dismissGenericToast(key)}
             />
           ))}

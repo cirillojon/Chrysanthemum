@@ -25,12 +25,12 @@ import {
 import { edgePlantSeed, edgePlantBloom, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
 import { getAffectedCells, GEAR, isGearExpired } from "../data/gear";
-import { MUTATIONS } from "../data/flowers";
+import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
 import type { MutationType } from "../data/flowers";
 import type { GearType, FanDirection } from "../data/gear";
 
 export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string, mutation?: MutationType, isSeed?: boolean) => void }) {
-  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, saveGridNow, user, requestSignIn } = useGame();
+  const { state, update, perform, getState, awaitHarvests, activeWeather, reloadFromCloud, saveGridNow, user, requestSignIn, pushGenericToast } = useGame();
   useGrowthTick(5_000);
 
   const [showGrowthDebug, setShowGrowthDebug] = useState(getDevShowGrowthDebug());
@@ -390,6 +390,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const { row, col } = selectedPlot;
     const optimistic = plantSeed(state, row, col, speciesId);
     if (optimistic) {
+      const sp = getFlower(speciesId);
       perform(
         optimistic,
         async () => {
@@ -409,6 +410,9 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             throw e;
           }
         },
+        () => {
+          if (sp) pushGenericToast(`loss:seed:${speciesId}`, sp.emoji.seed, `${sp.name} Seed`, "text-green-400", "loss");
+        },
       );
     }
     setSelectedPlot(null);
@@ -418,7 +422,16 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     if (!selectedPlot) return;
     const { row, col } = selectedPlot;
     const optimistic = plantBloom(state, row, col, speciesId, mutation);
-    if (optimistic) perform(optimistic, () => edgePlantBloom(row, col, speciesId, mutation));
+    if (optimistic) {
+      const sp = getFlower(speciesId);
+      perform(
+        optimistic,
+        () => edgePlantBloom(row, col, speciesId, mutation),
+        () => {
+          if (sp) pushGenericToast(`loss:bloom:${speciesId}:${mutation ?? ""}`, sp.emoji.bloom, sp.name, RARITY_CONFIG[sp.rarity].color, "loss");
+        },
+      );
+    }
     setSelectedPlot(null);
   }
 
@@ -438,10 +451,11 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
   function placeGearAt(row: number, col: number, gearType: GearType, direction?: FanDirection) {
     const optimistic = placeGear(getState(), row, col, gearType, direction);
     if (!optimistic) return;
+    const gearDef = GEAR[gearType];
     perform(
       optimistic,
       () => edgePlaceGear(row, col, gearType, direction),
-      undefined,
+      () => pushGenericToast(`loss:gear:${gearType}`, gearDef.emoji, gearDef.name, RARITY_CONFIG[gearDef.rarity].color, "loss"),
       {
         rollback: (cur) => ({
           ...cur,
