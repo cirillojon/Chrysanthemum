@@ -52,7 +52,7 @@ function formatDuration(ms: number): string {
 // ── Individual supply slot card ─────────────────────────────────────────────
 
 function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolean }) {
-  const { state, perform, getState, user, requestSignIn } = useGame();
+  const { state, perform, getState, user, requestSignIn, pushGenericToast } = useGame();
   const [justBought,  setJustBought]  = useState(false);
   const [lockingSlot, setLockingSlot] = useState(false);
 
@@ -96,10 +96,23 @@ function SupplyCard({ slot, hasSlotLock }: { slot: ShopSlot; hasSlotLock: boolea
     if (!user) { requestSignIn("to buy supplies"); return; }
     const optimistic = buyFromSupplyShop(state, slot.speciesId);
     if (!optimistic) return;
+    let toastEmoji = "";
+    let toastLabel = "";
+    let toastColor = "text-primary";
+    if (slot.isFertilizer && slot.fertilizerType) {
+      const f = FERTILIZERS[slot.fertilizerType];
+      toastEmoji = f.emoji; toastLabel = f.name; toastColor = RARITY_CONFIG[f.rarity].color;
+    } else if (slot.isGear && slot.gearType) {
+      const g = GEAR[slot.gearType];
+      toastEmoji = g.emoji; toastLabel = g.name; toastColor = RARITY_CONFIG[g.rarity].color;
+    } else if (slot.isConsumable && slot.consumableId) {
+      const r = CONSUMABLE_RECIPE_MAP[slot.consumableId as ConsumableId];
+      if (r) { toastEmoji = r.emoji; toastLabel = r.name; toastColor = RARITY_CONFIG[r.rarity].color; }
+    }
     perform(
       optimistic,
       () => edgeBuyFromSupplyShop(slot.speciesId),
-      undefined,
+      () => { if (toastEmoji) pushGenericToast(slot.speciesId!, toastEmoji, toastLabel, toastColor); },
       {
         rollback: (cur) => {
           const restoredShop = (cur.supplyShop ?? []).map((s) =>
