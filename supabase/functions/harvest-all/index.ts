@@ -186,168 +186,175 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ── Auth + save + all plant_timings in parallel ───────────────────────────
-    const [authResult, saveResult, timingsResult] = await Promise.all([
-      supabaseAdmin.auth.getUser(token),
-      supabaseAdmin.from("game_saves").select("coins, grid, inventory, discovered, updated_at").eq("user_id", userId).single(),
-      supabaseAdmin.from("plant_timings").select("row, col, planted_at").eq("user_id", userId),
-    ]);
-
+    // ── Verify JWT once, then retry read→process→write on 409 conflict ──────────
+    const authResult = await supabaseAdmin.auth.getUser(token);
     if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (saveResult.error || !saveResult.data) {
-      return new Response(JSON.stringify({ error: "Save not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
 
-    const save = saveResult.data;
-    const priorUpdatedAt = save.updated_at as string;
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      // ── Load save + plant_timings fresh each attempt ──────────────────────
+      const [saveResult, timingsResult] = await Promise.all([
+        supabaseAdmin.from("game_saves").select("coins, grid, inventory, discovered, updated_at").eq("user_id", userId).single(),
+        supabaseAdmin.from("plant_timings").select("row, col, planted_at").eq("user_id", userId),
+      ]);
 
-    // Build a fast timing lookup: timingMap[row][col] = planted_at ms
-    const timingMap: Record<number, Record<number, number>> = {};
-    for (const t of (timingsResult.data ?? [])) {
-      if (!timingMap[t.row]) timingMap[t.row] = {};
-      timingMap[t.row][t.col] = new Date(t.planted_at).getTime();
-    }
+      if (saveResult.error || !saveResult.data) {
+        return new Response(JSON.stringify({ error: "Save not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (timingsResult.error) {
+        return new Response(JSON.stringify({ error: "Failed to load plant timings" }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
 
-    const grid = save.grid as GridCell[][];
-    let inventory = (save.inventory ?? []) as { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean }[];
-    const discovered = [...((save.discovered ?? []) as string[])];
+      const save = saveResult.data;
+      const priorUpdatedAt = save.updated_at as string;
 
-    const now = Date.now();
-    const nowIso = new Date(now).toISOString();
+      // Build timing lookup: timingMap[row][col] = planted_at ms
+      const timingMap: Record<number, Record<number, number>> = {};
+      for (const t of timingsResult.data) {
+        if (!timingMap[t.row]) timingMap[t.row] = {};
+        timingMap[t.row][t.col] = new Date(t.planted_at).getTime();
+      }
 
-    // Plots to delete from plant_timings after a successful write
-    const harvestedPlots: { row: number; col: number }[] = [];
-    // plant_timings rows that need backfilling (missing entry)
-    const backfillTimings: { row: number; col: number }[] = [];
+      const grid = save.grid as GridCell[][];
+      let inventory = (save.inventory ?? []) as { speciesId: string; quantity: number; mutation?: string; isSeed?: boolean }[];
+      const discovered = [...((save.discovered ?? []) as string[])];
 
-    // ── Process each plot ─────────────────────────────────────────────────────
-    for (const { row, col } of plots) {
-      const plot = grid[row]?.[col];
-      if (!plot) continue;
+      const now = Date.now();
+      const nowIso = new Date(now).toISOString();
 
-      // Already harvested — skip idempotently (client optimistic state is correct)
-      if (!plot.plant) continue;
+      const harvestedPlots: { row: number; col: number }[] = [];
+      const backfillTimings: { row: number; col: number }[] = [];
 
-      const plant = plot.plant;
+      // ── Process each plot ───────────────────────────────────────────────────
+      for (const { row, col } of plots) {
+        const plot = grid[row]?.[col];
+        if (!plot) continue;
 
-      // Skip cross-breed sources
-      if (isActiveCrossbreedSource(grid, row, col, plant)) continue;
+        // Already harvested — skip idempotently
+        if (!plot.plant) continue;
 
-      // Bloom check using server-authoritative planted_at
-      const growthTimes = FLOWER_GROWTH_TIMES[plant.speciesId];
-      if (!growthTimes) continue; // unknown species — skip
+        const plant = plot.plant;
 
-      const isBloomPlaced = plant.timePlanted === 0;
-      const authoritativePlantedAt = timingMap[row]?.[col] ?? null;
+        if (isActiveCrossbreedSource(grid, row, col, plant)) continue;
 
-      if (authoritativePlantedAt === null) {
-        // Missing timing entry — backfill and skip (same pattern as single harvest)
-        backfillTimings.push({ row, col });
+        const growthTimes = FLOWER_GROWTH_TIMES[plant.speciesId];
+        if (!growthTimes) continue;
+
+        const isBloomPlaced = plant.timePlanted === 0;
+        const authoritativePlantedAt = timingMap[row]?.[col] ?? null;
+
+        if (authoritativePlantedAt === null) {
+          backfillTimings.push({ row, col });
+          grid[row][col] = { ...plot, plant: null };
+          harvestedPlots.push({ row, col });
+          continue;
+        }
+
+        if (!isBloomPlaced) {
+          const totalGrowthMs  = growthTimes.seed + growthTimes.sprout;
+          const fertMultiplier = plant.fertilizer ? (FERTILIZER_MULTIPLIERS[plant.fertilizer] ?? 1.0) : 1.0;
+          const masteredBonus  = Math.min(plant.masteredBonus ?? 1.0, 1.25);
+          const minBloomTime   = authoritativePlantedAt + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
+          if (now < minBloomTime) continue;
+        }
+
+        let mutation: string | undefined;
+        if (plant.mutationBlocked) {
+          mutation = undefined;
+        } else if (plant.forcedMutation === "giant") {
+          mutation = "giant";
+        } else {
+          mutation = (plant.mutation as string | null | undefined) ?? undefined;
+        }
+
+        const { speciesId } = plant;
+
+        const normMut = mutation ?? null;
+        const existingIdx = inventory.findIndex(
+          (i) => i.speciesId === speciesId && (i.mutation ?? null) === normMut && !i.isSeed
+        );
+        inventory = existingIdx >= 0
+          ? inventory.map((i, idx) => idx === existingIdx ? { ...i, quantity: i.quantity + 1 } : i)
+          : [...inventory, { speciesId, quantity: 1, mutation, isSeed: false }];
+
+        if (plant.heirloomActive) {
+          const seedIdx = inventory.findIndex((i) => i.speciesId === speciesId && i.isSeed && !i.mutation);
+          inventory = seedIdx >= 0
+            ? inventory.map((i, idx) => idx === seedIdx ? { ...i, quantity: i.quantity + 1 } : i)
+            : [...inventory, { speciesId, quantity: 1, isSeed: true }];
+        }
+
+        if (!discovered.includes(speciesId)) discovered.push(speciesId);
+        if (mutation) {
+          const mutKey = `${speciesId}:${mutation}`;
+          if (!discovered.includes(mutKey)) discovered.push(mutKey);
+        }
+
         grid[row][col] = { ...plot, plant: null };
         harvestedPlots.push({ row, col });
-        continue;
       }
 
-      if (!isBloomPlaced) {
-        const totalGrowthMs  = growthTimes.seed + growthTimes.sprout;
-        const fertMultiplier = plant.fertilizer ? (FERTILIZER_MULTIPLIERS[plant.fertilizer] ?? 1.0) : 1.0;
-        const masteredBonus  = Math.min(plant.masteredBonus ?? 1.0, 1.25);
-        const minBloomTime   = authoritativePlantedAt + totalGrowthMs / (fertMultiplier * masteredBonus * MAX_WEATHER_MULTIPLIER);
-        if (now < minBloomTime) continue; // not bloomed yet — skip
+      if (harvestedPlots.length === 0) {
+        return new Response(
+          JSON.stringify({ ok: true, inventory, discovered, serverUpdatedAt: priorUpdatedAt }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      // ── Compute mutation ──────────────────────────────────────────────────
-      let mutation: string | undefined;
-      if (plant.mutationBlocked) {
-        mutation = undefined;
-      } else if (plant.forcedMutation === "giant") {
-        mutation = "giant";
-      } else {
-        mutation = (plant.mutation as string | null | undefined) ?? undefined;
+      // ── DB write ────────────────────────────────────────────────────────────
+      const { data: updateData, error: updateError } = await supabaseAdmin
+        .from("game_saves")
+        .update({ grid, inventory, discovered, updated_at: nowIso })
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
+
+      if (updateError || !updateData) {
+        // 409 conflict — another action modified the save; retry with fresh data
+        if (attempt < MAX_ATTEMPTS - 1) continue;
+        return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
 
-      const { speciesId } = plant;
+      // ── Cleanup plant_timings ──────────────────────────────────────────────
+      void (async () => {
+        const deletes = harvestedPlots
+          .filter((p) => !backfillTimings.some((b) => b.row === p.row && b.col === p.col))
+          .map((p) =>
+            supabaseAdmin.from("plant_timings").delete().eq("user_id", userId).eq("row", p.row).eq("col", p.col)
+          );
+        const upserts = backfillTimings.map((p) =>
+          supabaseAdmin.from("plant_timings").upsert({ user_id: userId, row: p.row, col: p.col, planted_at: nowIso })
+        );
+        await Promise.all([...deletes, ...upserts]);
+      })();
 
-      // ── Update running inventory ──────────────────────────────────────────
-      const normMut = mutation ?? null;
-      const existingIdx = inventory.findIndex(
-        (i) => i.speciesId === speciesId && (i.mutation ?? null) === normMut && !i.isSeed
-      );
-      inventory = existingIdx >= 0
-        ? inventory.map((i, idx) => idx === existingIdx ? { ...i, quantity: i.quantity + 1 } : i)
-        : [...inventory, { speciesId, quantity: 1, mutation, isSeed: false }];
+      void supabaseAdmin.from("action_log").insert({
+        user_id: userId, action: "harvest_all",
+        payload: { plots: harvestedPlots },
+        result:  { count: harvestedPlots.length },
+      });
 
-      // Heirloom Charm — return seed
-      if (plant.heirloomActive) {
-        const seedIdx = inventory.findIndex((i) => i.speciesId === speciesId && i.isSeed && !i.mutation);
-        inventory = seedIdx >= 0
-          ? inventory.map((i, idx) => idx === seedIdx ? { ...i, quantity: i.quantity + 1 } : i)
-          : [...inventory, { speciesId, quantity: 1, isSeed: true }];
-      }
-
-      // ── Update running discovered ─────────────────────────────────────────
-      if (!discovered.includes(speciesId)) discovered.push(speciesId);
-      if (mutation) {
-        const mutKey = `${speciesId}:${mutation}`;
-        if (!discovered.includes(mutKey)) discovered.push(mutKey);
-      }
-
-      // ── Clear plot from grid ──────────────────────────────────────────────
-      grid[row][col] = { ...plot, plant: null };
-      harvestedPlots.push({ row, col });
-    }
-
-    if (harvestedPlots.length === 0) {
       return new Response(
-        JSON.stringify({ ok: true, inventory, discovered, serverUpdatedAt: priorUpdatedAt }),
+        JSON.stringify({ ok: true, inventory, discovered, serverUpdatedAt: updateData.updated_at }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ── Single DB write ───────────────────────────────────────────────────────
-    const { data: updateData, error: updateError } = await supabaseAdmin
-      .from("game_saves")
-      .update({ grid, inventory, discovered, updated_at: nowIso })
-      .eq("user_id", userId)
-      .eq("updated_at", priorUpdatedAt)
-      .select("updated_at")
-      .single();
-
-    if (updateError || !updateData) {
-      return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
-        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    // ── Cleanup plant_timings ─────────────────────────────────────────────────
-    void (async () => {
-      const deletes = harvestedPlots
-        .filter((p) => !backfillTimings.some((b) => b.row === p.row && b.col === p.col))
-        .map((p) =>
-          supabaseAdmin.from("plant_timings").delete().eq("user_id", userId).eq("row", p.row).eq("col", p.col)
-        );
-      const upserts = backfillTimings.map((p) =>
-        supabaseAdmin.from("plant_timings").upsert({ user_id: userId, row: p.row, col: p.col, planted_at: nowIso })
-      );
-      await Promise.all([...deletes, ...upserts]);
-    })();
-
-    void supabaseAdmin.from("action_log").insert({
-      user_id: userId, action: "harvest_all",
-      payload: { plots: harvestedPlots },
-      result:  { count: harvestedPlots.length },
+    // Exhausted retries (should be unreachable — loop always returns)
+    return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+      status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
-    return new Response(
-      JSON.stringify({ ok: true, inventory, discovered, serverUpdatedAt: updateData.updated_at }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (err) {
     console.error("harvest-all error:", err);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
