@@ -594,66 +594,89 @@ Deno.serve(async (req: Request) => {
       const advanceHours = ECLIPSE_ADVANCE_HOURS[consumableId];
       if (!advanceHours) return err(`Unknown Eclipse Tonic: ${consumableId}`);
 
-      const today           = new Date().toISOString().slice(0, 10);
-      const lastEclipseTonic = save.last_eclipse_tonic as string | null;
-      if (lastEclipseTonic === today) {
-        return err("Eclipse Tonic already used today. Try again tomorrow.", 429);
+      const advanceMs = advanceHours * 60 * 60 * 1_000;
+      const today     = new Date().toISOString().slice(0, 10);
+
+      // Use the save already read for attempt 0; re-read on retries.
+      let currentSave        = save;
+      let currentConsumables = consumables;
+      let currentPriorAt     = priorUpdatedAt;
+
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        if (attempt > 0) {
+          const reread = await supabaseAdmin
+            .from("game_saves")
+            .select("consumables, updated_at, grid, last_eclipse_tonic")
+            .eq("user_id", userId)
+            .single();
+          if (reread.error || !reread.data) return err("Save not found", 404);
+          currentSave        = reread.data;
+          currentConsumables = (reread.data.consumables ?? []) as ConsumableEntry[];
+          currentPriorAt     = reread.data.updated_at as string;
+        }
+
+        const lastEclipseTonic = currentSave.last_eclipse_tonic as string | null;
+        if (lastEclipseTonic === today) {
+          return err("Eclipse Tonic already used today. Try again tomorrow.", 429);
+        }
+
+        const newConsumables = deductConsumable(currentConsumables, consumableId);
+        if (!newConsumables) return err("Not enough consumables");
+
+        const grid = (currentSave.grid ?? []) as GridCell[][];
+
+        const newGrid = grid.map((row) =>
+          row.map((cell) => {
+            if (!cell.plant) return cell;
+            const p = cell.plant;
+            if (p.timePlanted === 0) return cell; // bloom-placed sentinel — skip
+            return {
+              ...cell,
+              plant: {
+                ...p,
+                timePlanted: p.timePlanted - advanceMs,
+                ...(p.sproutedAt != null ? { sproutedAt: p.sproutedAt - advanceMs } : {}),
+                ...(p.bloomedAt  != null ? { bloomedAt:  p.bloomedAt  - advanceMs } : {}),
+                ...(p.lastTickAt != null ? { lastTickAt: p.lastTickAt - advanceMs } : {}),
+              },
+            };
+          })
+        );
+
+        const { data: ud, error: ue } = await supabaseAdmin
+          .from("game_saves")
+          .update({
+            grid:               newGrid,
+            consumables:        newConsumables,
+            last_eclipse_tonic: today,
+            updated_at:         new Date().toISOString(),
+          })
+          .eq("user_id", userId)
+          .eq("updated_at", currentPriorAt)
+          .select("updated_at")
+          .single();
+
+        if (ue || !ud) {
+          if (attempt < MAX_ATTEMPTS - 1) continue;
+          return err("Save conflict — please retry", 409);
+        }
+
+        void supabaseAdmin.from("action_log").insert({
+          user_id: userId, action: "use_consumable",
+          payload: { action, consumableId, advanceHours },
+        });
+
+        return json({
+          ok: true,
+          grid: newGrid,
+          consumables: newConsumables,
+          lastEclipseTonic: today,
+          serverUpdatedAt: ud.updated_at,
+        });
       }
 
-      const newConsumables = deductConsumable(consumables, consumableId);
-      if (!newConsumables) return err("Not enough consumables");
-
-      const advanceMs = advanceHours * 60 * 60 * 1_000;
-      const grid      = (save.grid ?? []) as GridCell[][];
-
-      const newGrid = grid.map((row) =>
-        row.map((cell) => {
-          if (!cell.plant) return cell;
-          const p = cell.plant;
-          return {
-            ...cell,
-            plant: {
-              ...p,
-              timePlanted: p.timePlanted - advanceMs,
-              // Shift explicit stage timestamps backward so the client's stage
-              // detection and progress bar immediately reflect the new growth.
-              ...(p.sproutedAt != null ? { sproutedAt: p.sproutedAt - advanceMs } : {}),
-              ...(p.bloomedAt  != null ? { bloomedAt:  p.bloomedAt  - advanceMs } : {}),
-              // Also shift the growthMs checkpoint window so the delta-based
-              // system advances by the same amount.
-              ...(p.lastTickAt != null ? { lastTickAt: p.lastTickAt - advanceMs } : {}),
-            },
-          };
-        })
-      );
-
-      const { data: ud, error: ue } = await supabaseAdmin
-        .from("game_saves")
-        .update({
-          grid:               newGrid,
-          consumables:        newConsumables,
-          last_eclipse_tonic: today,
-          updated_at:         new Date().toISOString(),
-        })
-        .eq("user_id", userId)
-        .eq("updated_at", priorUpdatedAt)
-        .select("updated_at")
-        .single();
-
-      if (ue || !ud) return err("Save conflict — please retry", 409);
-
-      void supabaseAdmin.from("action_log").insert({
-        user_id: userId, action: "use_consumable",
-        payload: { action, consumableId, advanceHours },
-      });
-
-      return json({
-        ok: true,
-        grid: newGrid,
-        consumables: newConsumables,
-        lastEclipseTonic: today,
-        serverUpdatedAt: ud.updated_at,
-      });
+      return err("Save conflict — please retry", 409);
     }
 
     // ── Action: wind_shear ────────────────────────────────────────────────────

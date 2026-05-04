@@ -189,6 +189,20 @@ export function DevWeatherPanel() {
     showToast("Shop restocks in ~10s");
   }
 
+  async function resetEclipseCooldown() {
+    if (!user) return;
+    const newUpdatedAt = new Date().toISOString();
+    const { data, error } = await supabase
+      .from("game_saves")
+      .update({ last_eclipse_tonic: null, updated_at: newUpdatedAt })
+      .eq("user_id", user.id)
+      .select("updated_at")
+      .single();
+    if (error || !data) { showToast(`✗ ${error?.message ?? "save failed"}`); return; }
+    update({ ...state, lastEclipseTonic: null, serverUpdatedAt: data.updated_at as string });
+    showToast("🌒 Eclipse Tonic cooldown reset");
+  }
+
   async function giveFertilizer() {
     const newFertilizers = [...state.fertilizers];
     const existing = newFertilizers.find((f) => f.type === fertType);
@@ -663,6 +677,12 @@ export function DevWeatherPanel() {
               className="w-full py-1 bg-blue-500/20 border border-blue-500/40 text-blue-400 rounded-lg font-semibold hover:bg-blue-500/30 transition-all text-center"
             >
               🔄 Restock in 10s
+            </button>
+            <button
+              onClick={resetEclipseCooldown}
+              className="w-full py-1 bg-purple-500/20 border border-purple-500/40 text-purple-300 rounded-lg font-semibold hover:bg-purple-500/30 transition-all text-center"
+            >
+              🌒 Reset Eclipse Tonic Cooldown
             </button>
           </div>
 
