@@ -2826,19 +2826,26 @@ export function applyEclipseTonic(
 
   const newGrid = after.grid.map((row) =>
     row.map((plot) => {
-      if (!plot.plant) return plot;
+      // Advance gear timestamps — placedAt drives expiry and Balance Scale phase;
+      // crossbreedStartedAt drives cropsticks breeding progress.
+      const g = plot.gear;
+      const newGear = g ? {
+        ...g,
+        placedAt: g.placedAt - advanceMs,
+        ...(g.crossbreedStartedAt != null ? { crossbreedStartedAt: g.crossbreedStartedAt - advanceMs } : {}),
+      } : g;
+
+      if (!plot.plant) return newGear !== g ? { ...plot, gear: newGear } : plot;
       const p = plot.plant;
-      if (p.timePlanted === 0) return plot; // bloom-placed sentinel — skip
+      if (p.timePlanted === 0) return { ...plot, gear: newGear }; // bloom-placed sentinel — skip plant
       return {
         ...plot,
+        gear: newGear,
         plant: {
           ...p,
           timePlanted: p.timePlanted - advanceMs,
           sproutedAt:  p.sproutedAt  != null ? p.sproutedAt  - advanceMs : undefined,
           bloomedAt:   p.bloomedAt   != null ? p.bloomedAt   - advanceMs : undefined,
-          // lastTickAt is the checkpoint used by computeGrowthMs for delta-based
-          // growth (offline-ticked plants). Must be shifted so gear-boosted plants
-          // advance correctly — without this, timePlanted shift has no effect on them.
           lastTickAt:  p.lastTickAt  != null ? p.lastTickAt  - advanceMs : undefined,
         },
       };

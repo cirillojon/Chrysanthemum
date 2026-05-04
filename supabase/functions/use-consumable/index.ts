@@ -295,7 +295,8 @@ type PlantData = {
   pinned?:          boolean;
   [key: string]: unknown;
 };
-type GridCell = { id: string; plant: PlantData | null; gear?: unknown };
+type PlacedGearData = { gearType: string; placedAt: number; crossbreedStartedAt?: number; [key: string]: unknown };
+type GridCell = { id: string; plant: PlantData | null; gear?: PlacedGearData | null };
 type ShopSlot = {
   speciesId: string;
   price:     number;
@@ -628,11 +629,19 @@ Deno.serve(async (req: Request) => {
 
         const newGrid = grid.map((row) =>
           row.map((cell) => {
-            if (!cell.plant) return cell;
+            const g = cell.gear;
+            const newGear = g ? {
+              ...g,
+              placedAt: g.placedAt - advanceMs,
+              ...(g.crossbreedStartedAt != null ? { crossbreedStartedAt: g.crossbreedStartedAt - advanceMs } : {}),
+            } : g;
+
+            if (!cell.plant) return newGear !== g ? { ...cell, gear: newGear } : cell;
             const p = cell.plant;
-            if (p.timePlanted === 0) return cell; // bloom-placed sentinel — skip
+            if (p.timePlanted === 0) return { ...cell, gear: newGear }; // bloom-placed sentinel — skip plant
             return {
               ...cell,
+              gear: newGear,
               plant: {
                 ...p,
                 timePlanted: p.timePlanted - advanceMs,
