@@ -251,14 +251,7 @@ Deno.serve(async (req: Request) => {
         const isBloomPlaced = plant.timePlanted === 0;
         const authoritativePlantedAt = timingMap[row]?.[col] ?? null;
 
-        if (authoritativePlantedAt === null) {
-          backfillTimings.push({ row, col });
-          grid[row][col] = { ...plot, plant: null };
-          harvestedPlots.push({ row, col });
-          continue;
-        }
-
-        if (!isBloomPlaced) {
+        if (!isBloomPlaced && authoritativePlantedAt != null) {
           const totalGrowthMs  = growthTimes.seed + growthTimes.sprout;
           const fertMultiplier = plant.fertilizer ? (FERTILIZER_MULTIPLIERS[plant.fertilizer] ?? 1.0) : 1.0;
           const masteredBonus  = Math.min(plant.masteredBonus ?? 1.0, 1.25);
@@ -298,6 +291,7 @@ Deno.serve(async (req: Request) => {
           if (!discovered.includes(mutKey)) discovered.push(mutKey);
         }
 
+        if (authoritativePlantedAt == null) backfillTimings.push({ row, col });
         grid[row][col] = { ...plot, plant: null };
         harvestedPlots.push({ row, col });
       }
