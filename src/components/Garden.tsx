@@ -509,6 +509,14 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
       const harvestedSpeciesId  = savedCell.plant?.speciesId;
       const harvestedMutation   = savedCell.plant?.mutation ?? undefined;
       const harvestedHeirloom   = savedCell.plant?.heirloomActive;
+
+      // Fire popups immediately so all notifications appear at once rather
+      // than trickling in as each server call resolves.
+      if (harvestedSpeciesId) {
+        onHarvestPopup(harvestedSpeciesId, harvestedMutation);
+        if (harvestedHeirloom) onHarvestPopup(harvestedSpeciesId, undefined, true);
+      }
+
       perform(
         opt.state,
         async () => {
@@ -518,15 +526,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             harvestingPlots.current.delete(`${row}-${col}`);
           }
         },
-        () => {
-          // Fire the harvest popup on success — same pattern as PlotTile's
-          // manual harvest and Garden.tsx's bell auto-harvest. Without this
-          // Collect All silently filled inventory with no visible feedback.
-          if (harvestedSpeciesId) {
-            onHarvestPopup(harvestedSpeciesId, harvestedMutation);
-            if (harvestedHeirloom) onHarvestPopup(harvestedSpeciesId, undefined, true);
-          }
-        },
+        undefined,
         {
           serialize: true,
           rollback: (c) => ({
@@ -577,12 +577,21 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     // optimistic) so we don't block on concurrent changes. perform() with
     // serialize:true chains everything through harvestQueue — same fence
     // signOut() waits on, so in-flight plants finish before the session ends.
+    const discoveredSet = new Set(getState().discovered);
     for (const { row, col, speciesId } of planted) {
       const before = getState();
       const next   = plantSeed(before, row, col, speciesId);
       if (!next) continue; // someone already filled this plot or seed ran out
 
       const sp = getFlower(speciesId);
+
+      // Fire all seed-loss toasts immediately so they appear at once rather
+      // than trickling in as each server call resolves.
+      const discovered = discoveredSet.has(speciesId);
+      const emoji = discovered && sp ? sp.emoji.seed : "❓";
+      const label = discovered && sp ? `${sp.name} Seed` : "??? Seed";
+      pushGenericToast(`loss:seed:${speciesId}`, emoji, label, "text-green-400", "loss");
+
       perform(
         next,
         async () => {
@@ -609,12 +618,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             throw e;
           }
         },
-        () => {
-          const discovered = getState().discovered.includes(speciesId);
-          const emoji = discovered && sp ? sp.emoji.seed : "❓";
-          const label = discovered && sp ? `${sp.name} Seed` : "??? Seed";
-          pushGenericToast(`loss:seed:${speciesId}`, emoji, label, "text-green-400", "loss");
-        },
+        undefined,
         {
           serialize: true,
           // Surgical rollback: undo ONLY this plot + this one seed. Doesn't
