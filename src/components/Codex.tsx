@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { FLOWERS, MUTATIONS, RARITY_CONFIG, FLOWER_TYPES } from "../data/flowers";
 import type { Rarity, MutationType, FlowerType } from "../data/flowers";
 import { FlowerTypeBadges } from "./FlowerTypeBadges";
@@ -10,7 +10,7 @@ import {
 import { useGame } from "../store/GameContext";
 
 type FilterRarity = Rarity | "all";
-type FilterStatus = "all" | "discovered" | "undiscovered";
+type FilterStatus = "all" | "discovered" | "undiscovered" | "new";
 
 /** Format a growth-time millisecond duration for the codex stats panel.
  *  Shows d/h/m/s so times above 24 h read as days rather than raw hours. */
@@ -67,6 +67,12 @@ export function Codex({ discoveredOverride, compact = false, unseenEntries, mark
   const found    = discovered.length;
   const pct      = total > 0 ? Math.round((found / total) * 100) : 0;
 
+  useEffect(() => {
+    if (filterStatus === "new" && (unseenEntries?.size ?? 0) === 0) {
+      setFilterStatus("all");
+    }
+  }, [unseenEntries?.size, filterStatus])
+
   const filtered = useMemo(() => {
     return FLOWERS.filter((f) => {
       if (filterRarity !== "all" && f.rarity !== filterRarity) return false;
@@ -80,6 +86,7 @@ export function Codex({ discoveredOverride, compact = false, unseenEntries, mark
       const { found: specFound } = getSpeciesCompletion(discovered, f.id);
       if (filterStatus === "discovered"   && specFound === 0) return false;
       if (filterStatus === "undiscovered" && specFound > 0)   return false;
+      if (filterStatus === "new" && !freshlyDiscovered.has(f.id) && !(Object.keys(MUTATIONS) as MutationType[]).some((m) => freshlyDiscovered.has(`${f.id}:${m}`))) return false;
 
       if (search.trim()) {
         const q = search.toLowerCase();
@@ -234,6 +241,24 @@ export function Codex({ discoveredOverride, compact = false, unseenEntries, mark
               {s === "all" ? "All" : s === "discovered" ? "✓ Found" : "? Missing"}
             </button>
           ))}
+          <div className="relative">
+            {(unseenEntries?.size ?? 0) > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 z-10 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-card shadow-[0_0_8px_rgba(239,68,68,0.6)]" />    
+              )}
+              <button
+                disabled={(unseenEntries?.size ?? 0) === 0}
+                onClick={() => setFilterStatus("new")}
+                className={`
+                  px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed
+                  ${filterStatus === "new"
+                    ? "bg-primary/20 border border-primary/50 text-primary"
+                    : "bg-card/60 border border-border text-muted-foreground hover:border-primary/30"
+                  }
+                `}
+                >
+                  ✦ New
+              </button>
+          </div>
         </div>
       </div>
 
