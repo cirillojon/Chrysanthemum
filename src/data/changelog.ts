@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.3.7",
+    title:   "Harvest All Fix & Codex New Filter",
+    items: [
+      { type: "added", text: "Codex \"New\" filter — a ✦ New tab shows only newly discovered species, with a red dot indicator that clears as entries are acknowledged and auto-resets to All when empty" },
+      { type: "fixed", text: "Harvest All no longer silently drops blooms for plants that were planted via Plant All — all blooms are correctly awarded regardless of how the plant was planted" },
+    ],
+  },
+  {
     version: "2.3.6",
     title:   "Eclipse Tonic Fixes & Recipe Rebalance",
     items: [
