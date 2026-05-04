@@ -10,7 +10,6 @@ import {
   upgradeFarm,
   harvestPlant,
   plantAll,
-  rollbackPlantOne,
   assignBloomMutations,
   tickWeatherMutations,
   tickSprinklerMutations,
@@ -22,7 +21,7 @@ import {
   placeGear,
   getDevShowGrowthDebug,
 } from "../store/gameStore";
-import { edgePlantSeed, edgePlantBloom, edgeUpgradeFarm, edgeHarvest, edgePlaceGear } from "../lib/edgeFunctions";
+import { edgePlantSeed, edgePlantBloom, edgeUpgradeFarm, edgeHarvest, edgeHarvestAll, edgePlantAll, edgePlaceGear } from "../lib/edgeFunctions";
 import { getNextUpgrade, getCurrentTier } from "../data/upgrades";
 import { getAffectedCells, GEAR, isGearExpired } from "../data/gear";
 import { getFlower, RARITY_CONFIG, MUTATIONS } from "../data/flowers";
@@ -483,72 +482,59 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
 
   function handleCollectAll() {
     const currentState = getState();
-    const bloomed: { row: number; col: number }[] = [];
+
+    // Collect all bloomed plots and their harvest metadata upfront.
+    const toHarvest: {
+      row: number; col: number;
+      speciesId: string; mutation: MutationType | undefined; heirloomActive: boolean;
+    }[] = [];
+
+    let optState = currentState;
     for (let ri = 0; ri < currentState.grid.length; ri++) {
       for (let ci = 0; ci < currentState.grid[ri].length; ci++) {
         const p = currentState.grid[ri][ci];
-        // Skip cross-breeding plants — they're active Cropsticks sources and must not be harvested
-        if (p.plant && !crossbreedSourceCells.has(`${ri}-${ci}`) && getCurrentStage(p.plant, Date.now(), activeWeather) === "bloom") {
-          bloomed.push({ row: ri, col: ci });
-        }
+        if (!p.plant || crossbreedSourceCells.has(`${ri}-${ci}`)) continue;
+        if (getCurrentStage(p.plant, Date.now(), activeWeather) !== "bloom") continue;
+        if (harvestingPlots.current.has(`${ri}-${ci}`)) continue;
+
+        const next = harvestPlant(optState, ri, ci, activeWeather);
+        if (!next) continue;
+
+        toHarvest.push({
+          row: ri, col: ci,
+          speciesId:    p.plant.speciesId,
+          mutation:     p.plant.mutation ?? undefined,
+          heirloomActive: !!p.plant.heirloomActive,
+        });
+        optState = next.state;
+        harvestingPlots.current.add(`${ri}-${ci}`);
       }
     }
-    if (bloomed.length === 0) return;
+    if (toHarvest.length === 0) return;
 
-    for (const { row, col } of bloomed) {
-      if (harvestingPlots.current.has(`${row}-${col}`)) continue;
-      harvestingPlots.current.add(`${row}-${col}`);
-
-      const cur = getState();
-      const opt = harvestPlant(cur, row, col, activeWeather);
-      if (!opt) {
-        harvestingPlots.current.delete(`${row}-${col}`);
-        continue;
-      }
-      const savedCell           = cur.grid[row][col];
-      const harvestedSpeciesId  = savedCell.plant?.speciesId;
-      const harvestedMutation   = savedCell.plant?.mutation ?? undefined;
-      const harvestedHeirloom   = savedCell.plant?.heirloomActive;
-      perform(
-        opt.state,
-        async () => {
-          try {
-            return await edgeHarvest(row, col);
-          } finally {
-            harvestingPlots.current.delete(`${row}-${col}`);
-          }
-        },
-        () => {
-          // Fire the harvest popup on success — same pattern as PlotTile's
-          // manual harvest and Garden.tsx's bell auto-harvest. Without this
-          // Collect All silently filled inventory with no visible feedback.
-          if (harvestedSpeciesId) {
-            onHarvestPopup(harvestedSpeciesId, harvestedMutation);
-            if (harvestedHeirloom) onHarvestPopup(harvestedSpeciesId, undefined, true);
-          }
-        },
-        {
-          serialize: true,
-          rollback: (c) => ({
-            ...c,
-            grid: c.grid.map((r2, ri2) =>
-              r2.map((p2, ci2) => ri2 === row && ci2 === col ? savedCell : p2)
-            ),
-            inventory: harvestedSpeciesId
-              ? c.inventory
-                  .map((item) =>
-                    item.speciesId === harvestedSpeciesId &&
-                    item.mutation  === harvestedMutation  &&
-                    !item.isSeed
-                      ? { ...item, quantity: item.quantity - 1 }
-                      : item
-                  )
-                  .filter((item) => item.quantity > 0)
-              : c.inventory,
-          }),
-        }
-      );
+    // Fire all popups immediately — one batch round-trip, no per-plot wait.
+    for (const { speciesId, mutation, heirloomActive } of toHarvest) {
+      onHarvestPopup(speciesId, mutation);
+      if (heirloomActive) onHarvestPopup(speciesId, undefined, true);
     }
+
+    const plots = toHarvest.map(({ row, col }) => ({ row, col }));
+
+    perform(
+      optState,
+      async () => {
+        try {
+          return await edgeHarvestAll(plots);
+        } finally {
+          for (const { row, col } of plots) harvestingPlots.current.delete(`${row}-${col}`);
+        }
+      },
+      undefined,
+      {
+        serialize: true,
+        rollback: () => currentState,
+      }
+    );
   }
 
   async function handlePlantAll() {
@@ -558,71 +544,42 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const optimistic = plantAll(currentState);
     if (optimistic === currentState) return;
 
-    // Diff what plantAll() decided to place so we can drive per-plot perform() calls.
-    // Each plot is its OWN serialized perform with a per-plot rollback so a single
-    // server failure can't wipe out the rest of the batch (or any concurrent state
-    // changes like harvests that landed during the chain).
     const planted: { row: number; col: number; speciesId: string }[] = [];
     for (let ri = 0; ri < optimistic.grid.length; ri++) {
       for (let ci = 0; ci < optimistic.grid[ri].length; ci++) {
         const wasEmpty  = !currentState.grid[ri]?.[ci]?.plant;
         const nowFilled = optimistic.grid[ri]?.[ci]?.plant;
-        if (wasEmpty && nowFilled) {
-          planted.push({ row: ri, col: ci, speciesId: nowFilled.speciesId });
-        }
+        if (wasEmpty && nowFilled) planted.push({ row: ri, col: ci, speciesId: nowFilled.speciesId });
       }
     }
+    if (planted.length === 0) return;
 
-    // Build each plant's optimistic state from the running state (not the bulk
-    // optimistic) so we don't block on concurrent changes. perform() with
-    // serialize:true chains everything through harvestQueue — same fence
-    // signOut() waits on, so in-flight plants finish before the session ends.
-    for (const { row, col, speciesId } of planted) {
-      const before = getState();
-      const next   = plantSeed(before, row, col, speciesId);
-      if (!next) continue; // someone already filled this plot or seed ran out
-
+    // Fire all toasts immediately.
+    const discoveredSet = new Set(currentState.discovered);
+    for (const { speciesId } of planted) {
       const sp = getFlower(speciesId);
-      perform(
-        next,
-        async () => {
-          try {
-            await edgePlantSeed(row, col, speciesId);
-            // Discard grid + inventory from the response — perform()'s success-
-            // merge would otherwise replace the client's grid with the server's,
-            // which only contains plants up to THIS call's write moment. Sibling
-            // Plant All entries that were optimistically placed but haven't
-            // hit the server yet would briefly disappear, then reappear as
-            // each later call returns. Matches the auto-planter's pattern.
-            return {};
-          } catch (e) {
-            // "Plot already occupied" means the server thinks this plot is
-            // planted but our client thinks it's empty — a desync, usually from
-            // a previous network failure where the server wrote but we never
-            // got the response and rolled back locally. The rollback below will
-            // still fire (clearing the plot + refunding the seed), but immediately
-            // after we reload from cloud to overwrite local state with the
-            // authoritative version. Mirrors the auto-planter's recovery path.
-            if ((e as Error).message?.includes("Plot already occupied")) {
-              reloadFromCloud();
-            }
-            throw e;
-          }
-        },
-        () => {
-          const discovered = getState().discovered.includes(speciesId);
-          const emoji = discovered && sp ? sp.emoji.seed : "❓";
-          const label = discovered && sp ? `${sp.name} Seed` : "??? Seed";
-          pushGenericToast(`loss:seed:${speciesId}`, emoji, label, "text-green-400", "loss");
-        },
-        {
-          serialize: true,
-          // Surgical rollback: undo ONLY this plot + this one seed. Doesn't
-          // touch the rest of the grid or any other concurrent inventory changes.
-          rollback: (c) => rollbackPlantOne(c, row, col, speciesId),
-        },
-      );
+      const disc  = discoveredSet.has(speciesId);
+      const emoji = disc && sp ? sp.emoji.seed : "❓";
+      const label = disc && sp ? `${sp.name} Seed` : "??? Seed";
+      pushGenericToast(`loss:seed:${speciesId}`, emoji, label, "text-green-400", "loss");
     }
+
+    perform(
+      optimistic,
+      async () => {
+        try {
+          return await edgePlantAll(planted);
+        } catch (e) {
+          if ((e as Error).message?.includes("Plot already occupied")) reloadFromCloud();
+          throw e;
+        }
+      },
+      undefined,
+      {
+        serialize: true,
+        rollback: () => currentState,
+      }
+    );
   }
 
   const bloomedCount = state.grid

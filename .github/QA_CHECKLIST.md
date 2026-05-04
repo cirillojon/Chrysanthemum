@@ -371,7 +371,7 @@ Seed now returned to inventory on harvest; duplicate bloom row fixed; seed toast
 | X2 | Harvest the same species again without a charm. | Only one bloom row exists — no duplicate row created |
 | X3 | Harvest a plant with Heirloom Charm active. Watch for toast notifications. | Two toasts appear: one for the bloom (with rarity colour) and a separate **green "+1 Seed"** toast |
 | X4 | Open the plot tooltip on a plant that already has a Heirloom Charm applied. | **Heirloom Charm is not listed** in the consumable picker — it is hidden once `heirloomActive` is set |
-| X5 | Check the Heirloom Charm I recipe in the Craft tab. | Recipe requires **4× Fairy Essence** + 4× Stellar Essence (not Grove Essence) |
+| X5 | Check the Heirloom Charm I recipe in the Craft tab. | Recipe requires **8× Fairy + 4× Stellar + 4× Arcane Essence** (see AG1 for v2.3.6 update) |
 
 ---
 
@@ -468,6 +468,36 @@ Upgrading any Seed Pouch (base or typed) now costs **4×** of the previous tier 
 | AE1 | Open Craft tab → Consumables → **Seed Pouch II** recipe | Cost shows **4× Seed Pouch I** (not 3×) |
 | AE2 | Attempt to craft Seed Pouch II with only 3× Seed Pouch I in inventory | Craft button is **disabled** / server rejects the attempt |
 | AE3 | Check any **typed** Seed Pouch upgrade (e.g. Blaze Seed Pouch II) | Cost is also **4×** of the previous tier |
+
+---
+
+## AF. v2.3.6 — Eclipse Tonic Fixes
+
+Eclipse Tonic now shifts all farm timestamps (plants + gear), applies immediately without a refresh, retries on save conflicts, and is excluded from plot tooltips.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AF1 | Have an Eclipse Tonic in inventory. Open the plot tooltip on any growing or bloomed plant. | Eclipse Tonic **does not appear** in the consumable picker |
+| AF2 | Use an Eclipse Tonic from the Inventory panel. Watch the garden immediately after. | Growth bars and gear timers **update instantly** — no page refresh required |
+| AF3 | Use an Eclipse Tonic while a harvest is in progress (rapid back-to-back actions). | Tonic applies successfully — it does not silently fail or roll back |
+| AF4 | Place a Sprinkler or other gear on a plot. Use an Eclipse Tonic. | Gear's remaining duration **decreases** by the tonic's advance amount (gear is affected) |
+| AF5 | Place a gear with crossbreed progress (Balance Scale). Use an Eclipse Tonic. | Crossbreed phase advances in step with the tonic's shift |
+| AF6 | Have a bloom-placed plant (sentinel `timePlanted = 0`). Use an Eclipse Tonic. | Bloom-placed plant is **not corrupted** — it remains in its bloomed state |
+| AF7 | Dev panel (Items tab → Shop section) → click **Reset Eclipse Cooldown**. | Toast confirms cooldown reset; Eclipse Tonic is immediately usable again |
+
+---
+
+## AG. v2.3.6 — Balance: Tier I Consumable Recipe Costs
+
+Heirloom Charm I, Moon Vial I, Rainbow Vial I, and Gold Vial I have updated essence costs.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AG1 | Open Craft tab → Consumables → **Heirloom Charm I** recipe | Cost shows **8× Fairy + 4× Stellar + 4× Arcane Essence** |
+| AG2 | Open Craft tab → Consumables → **Moon Vial I** recipe | Cost shows **8× Lunar + 4× Arcane Essence** |
+| AG3 | Open Craft tab → Consumables → **Rainbow Vial I** recipe | Cost shows **2× Universal Essence** |
+| AG4 | Open Craft tab → Consumables → **Gold Vial I** recipe | Cost shows **8× Solar + 8× Stellar Essence** |
+| AG5 | Attempt to craft Heirloom Charm I without the required essences | Craft button is **disabled**; server rejects the attempt with 400 |
 
 ---
 

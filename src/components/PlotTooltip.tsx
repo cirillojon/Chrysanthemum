@@ -138,19 +138,15 @@ export function PlotTooltip({
     if (c.quantity <= 0) return false;
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
     if (!recipe) return false;
-    // Speed boosts and seed pouches don't target individual plots.
+    // Speed boosts, seed pouches, and Eclipse Tonics don't target individual plots.
     if (recipe.category === "speed_boost" || recipe.category === "seed_pouch") return false;
+    if (c.id.startsWith("eclipse_tonic_")) return false;
     // Allow null-tier plant utilities through; block all other null-tier items
     // (seed pouches, etc. are handled elsewhere).
     if (recipe.tier === null && !NULL_TIER_PLANT_CONSUMABLES.has(c.id)) return false;
 
     // Magnifying Glass, Garden Pin, and Ruler bypass the rarity gate — they work on any species
-    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && c.id !== "ruler") {
-      const consumableRarityNum = RARITY_ORDER[recipe.rarity] ?? -1;
-      const plantRarityNum      = RARITY_ORDER[species.rarity] ?? 999;
-      const isVialOrHeirloom    = c.id.includes("_vial_") || c.id.startsWith("heirloom_charm_");
-      if (isVialOrHeirloom ? consumableRarityNum <= plantRarityNum : consumableRarityNum < plantRarityNum) return false;
-    }
+    if (c.id !== "magnifying_glass" && c.id !== "garden_pin" && c.id !== "ruler" && (RARITY_ORDER[recipe.rarity] ?? -1) < (RARITY_ORDER[species.rarity] ?? 999)) return false;
 
     // Bloom Burst only works on non-bloomed plants
     if (c.id.startsWith("bloom_burst_") && isBloomed) return false;

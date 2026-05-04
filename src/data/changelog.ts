@@ -14,6 +14,20 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.3.6",
+    title:   "Eclipse Tonic Fixes & Recipe Rebalance",
+    items: [
+      { type: "fixed",   text: "Eclipse Tonic now applies immediately — growth bars and gear timers update the moment the tonic is used; no page refresh required" },
+      { type: "fixed",   text: "Eclipse Tonic no longer silently fails — the edge function retries up to 3 times on save conflicts, preventing rollbacks during concurrent actions" },
+      { type: "fixed",   text: "Eclipse Tonic now advances gear timers — sprinklers, Balance Scales, and other placed gear are fully affected alongside plants" },
+      { type: "fixed",   text: "Eclipse Tonic no longer appears in plot tooltips — it targets the whole farm and is not a per-plot consumable" },
+      { type: "changed", text: "Balance — Heirloom Charm I recipe updated to 8× Fairy + 4× Stellar + 4× Arcane Essence" },
+      { type: "changed", text: "Balance — Moon Vial I recipe updated to 8× Lunar + 4× Arcane Essence" },
+      { type: "changed", text: "Balance — Rainbow Vial I recipe updated to 2× Universal Essence" },
+      { type: "changed", text: "Balance — Gold Vial I recipe updated to 8× Solar + 8× Stellar Essence" },
+    ],
+  },
+  {
     version: "2.3.5",
     title:   "Toast Notifications & Balance",
     items: [

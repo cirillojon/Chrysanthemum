@@ -1,3 +1,19 @@
+## [v2.3.6] — 2026-05-03 — Eclipse Tonic Fixes & Recipe Rebalance
+
+### Changed
+- **Balance — Heirloom Charm I recipe** — now costs 8× Fairy + 4× Stellar + 4× Arcane Essence (was 4× Fairy + 4× Stellar)
+- **Balance — Moon Vial I recipe** — now costs 8× Lunar + 4× Arcane Essence (was 8× Lunar only)
+- **Balance — Rainbow Vial I recipe** — now costs 2× Universal Essence (was 1× Universal)
+- **Balance — Gold Vial I recipe** — now costs 8× Solar + 8× Stellar Essence (was 8× Solar only)
+
+### Fixed
+- **Eclipse Tonic now applies immediately** — growth bars and gear timers update the moment the tonic is used; no page refresh required
+- **Eclipse Tonic no longer silently fails** — the edge function now retries up to 3 times on save conflicts, preventing rollbacks during concurrent actions
+- **Eclipse Tonic now advances gear timers** — `placedAt` and `crossbreedStartedAt` are shifted so sprinklers, Balance Scales, and other gear are fully affected
+- **Eclipse Tonic no longer appears in plot tooltips** (#215) — it targets the whole farm and is not a per-plot consumable
+
+---
+
 ## [v2.3.5] — 2026-05-03 — Toast Notifications & Balance
 
 ### Added

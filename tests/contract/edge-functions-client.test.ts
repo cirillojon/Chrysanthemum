@@ -14,8 +14,10 @@ import * as edgeFunctions from "../../src/lib/edgeFunctions";
 const REQUIRED_EXPORTS = [
   // Core gameplay
   "edgeHarvest",
+  "edgeHarvestAll",
   "edgePlantSeed",
   "edgePlantBloom",
+  "edgePlantAll",
   "edgeRemovePlant",
   "edgeApplyFertilizer",
   "edgeUnpinPlant",

@@ -143,6 +143,7 @@ export function Inventory({ newSeeds = 0, newBlooms = 0, newSupplies = 0, onSubT
       () => edgeUseEclipseTonic(consumableId),
       () => setUsingEclipse(null),
       {
+        serialize: true,
         rollback: (c) => ({
           ...c,
           grid: savedGrid,
