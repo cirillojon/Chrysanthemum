@@ -10,7 +10,6 @@ import {
   upgradeFarm,
   harvestPlant,
   plantAll,
-  rollbackPlantOne,
   assignBloomMutations,
   tickWeatherMutations,
   tickSprinklerMutations,
@@ -487,7 +486,7 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     // Collect all bloomed plots and their harvest metadata upfront.
     const toHarvest: {
       row: number; col: number;
-      speciesId: string; mutation: string | undefined; heirloomActive: boolean;
+      speciesId: string; mutation: MutationType | undefined; heirloomActive: boolean;
     }[] = [];
 
     let optState = currentState;
