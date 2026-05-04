@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { initSentry, Sentry } from "../_shared/sentry.ts";
 
 // This function is called by GitHub Actions cron (not by the client).
 // It expects the CRON_SECRET env var in the x-cron-secret header.
@@ -35,6 +36,7 @@ function itemLabelFor(speciesId: string, mutation: string | null, isSeed: boolea
 }
 
 Deno.serve(async (req: Request) => {
+  initSentry();
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -109,6 +111,8 @@ Deno.serve(async (req: Request) => {
 
   } catch (err) {
     console.error("marketplace-expire error:", err);
+    Sentry.captureException(err);
+    await Sentry.flush(2000);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

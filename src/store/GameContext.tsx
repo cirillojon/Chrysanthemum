@@ -31,6 +31,7 @@ import type { TimeOfDay } from "../hooks/useTimeOfDay";
 import type { WeatherType } from "../data/weather";
 import { queueEntryDisplay } from "../lib/craftDisplay";
 import { getFlower, type MutationType } from "../data/flowers";
+import * as Sentry from "@sentry/react";
 
 interface GameContextValue {
   state: GameState;
@@ -352,6 +353,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (event === "SIGNED_IN") {
           if (!initialSessionFired.current) return;
           await loadUserSession(session?.user ?? null);
+          if (session?.user) Sentry.setUser({ id: session.user.id, username: profile?.username });
           return;
         }
 
@@ -381,6 +383,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           setCraftCompletions([]);
           setTimeout(() => { saveEnabled.current = true; }, 500);
           setAuthLoading(false);
+          Sentry.setUser(null);
           return;
         }
 

@@ -1,5 +1,6 @@
 import { supabase } from "./supabase";
 import type { GameState } from "../store/gameStore";
+import * as Sentry from "@sentry/react"
 
 const BASE_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`;
 
@@ -26,7 +27,12 @@ async function callEdge<T>(name: string, body: unknown, isRetry = false): Promis
   }
 
   const json = await res.json();
-  if (!res.ok || !json.ok) throw new Error(json.error ?? "Edge function error");
+  if (!res.ok || !json.ok) {
+    Sentry.captureException(new Error(json.error ?? "Edge function error"), {
+      extra: { edgeFunction: name, status: res.status },
+    });
+    throw new Error(json.error ?? "Edge function error");
+  }
   return json as T;
 }
 

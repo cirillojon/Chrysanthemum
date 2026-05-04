@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { initSentry, Sentry } from "../_shared/sentry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -309,6 +310,7 @@ type GridCell    = { id: string; plant: PlantData | null; gear?: unknown };
 // ── Handler ───────────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
+  initSentry();
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -435,6 +437,8 @@ Deno.serve(async (req: Request) => {
 
   } catch (e) {
     console.error("apply-infuser error:", e);
+    Sentry.captureException(e);
+    await Sentry.flush(2000);
     return err("Internal server error", 500);
   }
 });

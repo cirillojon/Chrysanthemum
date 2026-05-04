@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { initSentry, Sentry } from "../_shared/sentry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -19,6 +20,7 @@ interface InventoryItem {
 }
 
 Deno.serve(async (req: Request) => {
+  initSentry();
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -170,6 +172,8 @@ Deno.serve(async (req: Request) => {
 
   } catch (err) {
     console.error("claim-gift error:", err);
+    Sentry.captureException(err);
+    await Sentry.flush(2000);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

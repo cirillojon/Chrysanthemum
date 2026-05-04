@@ -1,4 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { initSentry, Sentry } from "../_shared/sentry.ts";
+initSentry();
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
