@@ -3,7 +3,7 @@
 ### Changed
 - **Balance — Heirloom Charm I recipe** — now costs 8× Fairy + 4× Stellar + 4× Arcane Essence (was 4× Fairy + 4× Stellar)
 - **Balance — Moon Vial I recipe** — now costs 8× Lunar + 4× Arcane Essence (was 8× Lunar only)
-- **Balance — Rainbow Vial I recipe** — now costs 2× Universal Essence (was 4× Universal)
+- **Balance — Rainbow Vial I recipe** — now costs 2× Universal Essence (was 1× Universal)
 - **Balance — Gold Vial I recipe** — now costs 8× Solar + 8× Stellar Essence (was 8× Solar only)
 
 ### Fixed
