@@ -22,9 +22,9 @@ jobs:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           pg_dump \
-            --host=db.mptgiyvpogloymlrwncb.supabase.co \
-            --port=5432 \
-            --username=postgres \
+            --host=${{ secrets.SUPABASE_DB_HOST }} \
+            --port=6543 \
+            --username=postgres.mptgiyvpogloymlrwncb \
             --dbname=postgres \
             --no-owner \
             --no-acl \
