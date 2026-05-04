@@ -43,6 +43,20 @@ export interface HarvestResult {
   serverUpdatedAt: string;
 }
 
+export interface HarvestAllResult {
+  ok:         true;
+  inventory:  GameState["inventory"];
+  discovered: GameState["discovered"];
+  serverUpdatedAt: string;
+}
+
+export interface PlantAllResult {
+  ok:        true;
+  // grid intentionally omitted — mutations live only in client state.
+  inventory: GameState["inventory"];
+  serverUpdatedAt: string;
+}
+
 export interface SellAllResult {
   ok:          true;
   coins:       number;
@@ -87,6 +101,14 @@ export interface UpgradeResult {
 }
 
 // ── Typed callers ─────────────────────────────────────────────────────────────
+
+export function edgeHarvestAll(plots: { row: number; col: number }[]) {
+  return callEdge<HarvestAllResult>("harvest-all", { plots });
+}
+
+export function edgePlantAll(plots: { row: number; col: number; speciesId: string }[]) {
+  return callEdge<PlantAllResult>("plant-all", { plots });
+}
 
 export async function edgeHarvest(row: number, col: number): Promise<Omit<HarvestResult, "inventory">> {
   // Strip inventory from the merge delta. Each serialized harvest returns the DB
