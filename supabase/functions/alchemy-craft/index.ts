@@ -39,7 +39,7 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "bloom_burst_4", cost: U("bloom_burst_3", 2) },
   { id: "bloom_burst_5", cost: U("bloom_burst_4", 2) },
   // Heirloom Charm
-  { id: "heirloom_charm_1", cost: E([{ type: "fairy", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  { id: "heirloom_charm_1", cost: E([{ type: "fairy", amount: 8 }, { type: "stellar", amount: 4 }, { type: "arcane", amount: 4 }]) },
   { id: "heirloom_charm_2", cost: U("heirloom_charm_1", 2) },
   { id: "heirloom_charm_3", cost: U("heirloom_charm_2", 2) },
   { id: "heirloom_charm_4", cost: U("heirloom_charm_3", 2) },
@@ -81,19 +81,19 @@ const CONSUMABLE_RECIPES: ConsumableRecipeDef[] = [
   { id: "storm_vial_4", cost: U("storm_vial_3", 2) },
   { id: "storm_vial_5", cost: U("storm_vial_4", 2) },
   // Moon Vial
-  { id: "moon_vial_1", cost: E([{ type: "lunar", amount: 8 }]) },
+  { id: "moon_vial_1", cost: E([{ type: "lunar", amount: 8 }, { type: "arcane", amount: 4 }]) },
   { id: "moon_vial_2", cost: U("moon_vial_1", 2) },
   { id: "moon_vial_3", cost: U("moon_vial_2", 2) },
   { id: "moon_vial_4", cost: U("moon_vial_3", 2) },
   { id: "moon_vial_5", cost: U("moon_vial_4", 2) },
   // Golden Vial
-  { id: "golden_vial_1", cost: E([{ type: "solar", amount: 4 }, { type: "stellar", amount: 4 }]) },
+  { id: "golden_vial_1", cost: E([{ type: "solar", amount: 8 }, { type: "stellar", amount: 8 }]) },
   { id: "golden_vial_2", cost: U("golden_vial_1", 2) },
   { id: "golden_vial_3", cost: U("golden_vial_2", 2) },
   { id: "golden_vial_4", cost: U("golden_vial_3", 2) },
   { id: "golden_vial_5", cost: U("golden_vial_4", 2) },
   // Rainbow Vial
-  { id: "rainbow_vial_1", cost: E([{ type: "universal", amount: 1 }]) },
+  { id: "rainbow_vial_1", cost: E([{ type: "universal", amount: 2 }]) },
   { id: "rainbow_vial_2", cost: U("rainbow_vial_1", 2) },
   { id: "rainbow_vial_3", cost: U("rainbow_vial_2", 2) },
   { id: "rainbow_vial_4", cost: U("rainbow_vial_3", 2) },

@@ -174,7 +174,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Heirloom Charm (I–V) — growth ────────────────────────────────────────
   { id: "heirloom_charm_1", name: "Heirloom Charm I",   emoji: "🔮", tier: 1, rarity: "rare",      category: "growth",
     description: `Harvest a ${r(1)} bloom without consuming it — the seed is returned to your inventory.`,
-    cost: { kind: "essence", amounts: [{ type: "fairy", amount: 4 }, { type: "stellar", amount: 4 }] } },
+    cost: { kind: "essence", amounts: [{ type: "fairy", amount: 8 }, { type: "stellar", amount: 4 }, { type: "arcane", amount: 4 }] } },
   { id: "heirloom_charm_2", name: "Heirloom Charm II",  emoji: "🔮", tier: 2, rarity: "legendary", category: "growth",
     description: `Harvest a ${r(2)} bloom without consuming it — the seed is returned to your inventory.`,
     cost: { kind: "consumable", id: "heirloom_charm_1", quantity: 2 } },
@@ -293,7 +293,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Moon Vial (I–V) — mutation_boost ─────────────────────────────────────
   { id: "moon_vial_1", name: "Moon Vial I",   emoji: "🌙", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Applies the Moonlit mutation to a ${r(1)} or lower plant.`,
-    cost: { kind: "essence", amounts: [{ type: "lunar", amount: 8 }] } },
+    cost: { kind: "essence", amounts: [{ type: "lunar", amount: 8 }, { type: "arcane", amount: 4 }] } },
   { id: "moon_vial_2", name: "Moon Vial II",  emoji: "🌙", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Applies the Moonlit mutation to a ${r(2)} or lower plant.`,
     cost: { kind: "consumable", id: "moon_vial_1", quantity: 2 } },
@@ -310,7 +310,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Golden Vial (I–V) — mutation_boost ───────────────────────────────────
   { id: "golden_vial_1", name: "Golden Vial I",   emoji: "✨", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Applies the Golden mutation to a ${r(1)} or lower plant.`,
-    cost: { kind: "essence", amounts: [{ type: "solar", amount: 4 }, { type: "stellar", amount: 4 }] } },
+    cost: { kind: "essence", amounts: [{ type: "solar", amount: 8 }, { type: "stellar", amount: 8 }] } },
   { id: "golden_vial_2", name: "Golden Vial II",  emoji: "✨", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Applies the Golden mutation to a ${r(2)} or lower plant.`,
     cost: { kind: "consumable", id: "golden_vial_1", quantity: 2 } },
@@ -327,7 +327,7 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
   // ── Rainbow Vial (I–V) — mutation_boost ──────────────────────────────────
   { id: "rainbow_vial_1", name: "Rainbow Vial I",   emoji: "🌈", tier: 1, rarity: "rare",      category: "mutation_boost",
     description: `Applies the Rainbow mutation to a ${r(1)} or lower plant.`,
-    cost: { kind: "essence", amounts: [{ type: "universal", amount: 1 }] } },
+    cost: { kind: "essence", amounts: [{ type: "universal", amount: 2 }] } },
   { id: "rainbow_vial_2", name: "Rainbow Vial II",  emoji: "🌈", tier: 2, rarity: "legendary", category: "mutation_boost",
     description: `Applies the Rainbow mutation to a ${r(2)} or lower plant.`,
     cost: { kind: "consumable", id: "rainbow_vial_1", quantity: 2 } },
