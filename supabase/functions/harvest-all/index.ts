@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { initSentry, Sentry } from "../_shared/sentry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -153,6 +154,7 @@ function isActiveCrossbreedSource(grid: GridCell[][], row: number, col: number, 
 }
 
 Deno.serve(async (req: Request) => {
+  initSentry();
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -251,14 +253,7 @@ Deno.serve(async (req: Request) => {
         const isBloomPlaced = plant.timePlanted === 0;
         const authoritativePlantedAt = timingMap[row]?.[col] ?? null;
 
-        if (authoritativePlantedAt === null) {
-          backfillTimings.push({ row, col });
-          grid[row][col] = { ...plot, plant: null };
-          harvestedPlots.push({ row, col });
-          continue;
-        }
-
-        if (!isBloomPlaced) {
+        if (!isBloomPlaced && authoritativePlantedAt != null) {
           const totalGrowthMs  = growthTimes.seed + growthTimes.sprout;
           const fertMultiplier = plant.fertilizer ? (FERTILIZER_MULTIPLIERS[plant.fertilizer] ?? 1.0) : 1.0;
           const masteredBonus  = Math.min(plant.masteredBonus ?? 1.0, 1.25);
@@ -298,6 +293,7 @@ Deno.serve(async (req: Request) => {
           if (!discovered.includes(mutKey)) discovered.push(mutKey);
         }
 
+        if (authoritativePlantedAt == null) backfillTimings.push({ row, col });
         grid[row][col] = { ...plot, plant: null };
         harvestedPlots.push({ row, col });
       }
@@ -357,6 +353,8 @@ Deno.serve(async (req: Request) => {
     });
   } catch (err) {
     console.error("harvest-all error:", err);
+    Sentry.captureException(err);
+    await Sentry.flush(2000);
     return new Response(JSON.stringify({ error: "Internal server error" }), {
       status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

@@ -1,3 +1,13 @@
+## [v2.3.7] — 2026-05-04 — Harvest All Fix & Codex New Filter
+
+### Added
+- **Codex "New" filter** — a ✦ New tab on the Codex status bar shows only newly discovered species; the tab has a red dot indicator, auto-resets to All once all entries are acknowledged, and is disabled when there is nothing new
+
+### Fixed
+- **Harvest All no longer drops blooms** — plants without a `plant_timings` row (e.g. planted via Plant All) were being cleared from the garden without their bloom being added to inventory; all blooms are now correctly awarded regardless of how the plant was planted
+
+---
+
 ## [v2.3.6] — 2026-05-03 — Eclipse Tonic Fixes & Recipe Rebalance
 
 ### Changed

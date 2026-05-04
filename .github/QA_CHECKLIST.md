@@ -501,6 +501,32 @@ Heirloom Charm I, Moon Vial I, Rainbow Vial I, and Gold Vial I have updated esse
 
 ---
 
+## AH. v2.3.7 — Harvest All Bloom Fix
+
+Blooms on plots that were missing a `plant_timings` row (e.g. planted via Plant All) were silently discarded — the plot cleared but no bloom was added to inventory.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AH1 | Fill the entire farm using **Plant All**, wait for all plants to bloom, then click **Harvest All** | Inventory gains **one bloom per plot** — no blooms are silently dropped |
+| AH2 | Repeat with a mix of manually planted and Plant All planted flowers | All blooms appear in inventory regardless of how the seed was planted |
+| AH3 | Check inventory count before and after Harvest All on a full farm | Count increases by exactly the number of bloomed plots |
+
+---
+
+## AI. v2.3.7 — Codex "New" Filter
+
+A **New** filter tab has been added to the Codex status bar showing only newly discovered species. The tab has a red dot indicator and disables itself when there is nothing new.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AI1 | Discover a new flower for the first time. Open the Codex. | A red dot appears above the **✦ New** filter tab |
+| AI2 | Click the **✦ New** tab | Only newly discovered species are shown |
+| AI3 | Expand every card shown in the **✦ New** tab | Red dot disappears and the tab **auto-resets to All** once the last entry is acknowledged |
+| AI4 | Open Codex with no new discoveries | **✦ New** tab is greyed out and non-clickable |
+| AI5 | Acknowledge all new entries, navigate away, return to Codex | **✦ New** tab is still disabled — no stale dot |
+
+---
+
 ## Automated Gates (CI — must pass before merge)
 
 ```

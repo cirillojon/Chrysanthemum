@@ -4,6 +4,7 @@ import {
   computeTier, attunementDurationMs,
   deductOne, type InvItem,
 } from "../_shared/alchemyAttuneData.ts";
+import { initSentry, Sentry } from "../_shared/sentry.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -33,6 +34,7 @@ interface AttunementQueueEntry {
 }
 
 Deno.serve(async (req: Request) => {
+  initSentry();
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
 
   try {
@@ -173,6 +175,8 @@ Deno.serve(async (req: Request) => {
 
   } catch (e) {
     console.error("attune-start error:", e);
+    Sentry.captureException(e);
+    await Sentry.flush(2000);
     return err("Internal server error", 500);
   }
 });
