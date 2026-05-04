@@ -447,17 +447,10 @@ Deno.serve(async (req: Request) => {
         // All plant-targeting consumables match DOWNWARD — a higher-tier consumable
         // works on lower-rarity plants (e.g. Mythic vial → Rare plant). Tier 1
         // (Rare) is still the floor, so Common/Uncommon plants stay excluded.
-        // Vials and heirloom charms require STRICTLY higher rarity (same-rarity no longer allowed).
         const RARITY_ORDER: Record<string, number> = {
           common: 0, uncommon: 1, rare: 2, legendary: 3, mythic: 4, exalted: 5, prismatic: 6,
         };
-        const isVialOrHeirloom = consumableId.includes("_vial_") || consumableId.startsWith("heirloom_charm_");
-        const consumableRarityNum = RARITY_ORDER[requiredRarity] ?? -1;
-        const plantRarityNum      = RARITY_ORDER[rarity] ?? 999;
-        const blocked = isVialOrHeirloom
-          ? consumableRarityNum <= plantRarityNum
-          : consumableRarityNum < plantRarityNum;
-        if (blocked) {
+        if ((RARITY_ORDER[requiredRarity] ?? -1) < (RARITY_ORDER[rarity] ?? 999)) {
           return err(`This ${requiredRarity} consumable can't reach ${rarity} plants`);
         }
       }
