@@ -138,8 +138,9 @@ export function PlotTooltip({
     if (c.quantity <= 0) return false;
     const recipe = CONSUMABLE_RECIPE_MAP[c.id as ConsumableId];
     if (!recipe) return false;
-    // Speed boosts and seed pouches don't target individual plots.
+    // Speed boosts, seed pouches, and Eclipse Tonics don't target individual plots.
     if (recipe.category === "speed_boost" || recipe.category === "seed_pouch") return false;
+    if (c.id.startsWith("eclipse_tonic_")) return false;
     // Allow null-tier plant utilities through; block all other null-tier items
     // (seed pouches, etc. are handled elsewhere).
     if (recipe.tier === null && !NULL_TIER_PLANT_CONSUMABLES.has(c.id)) return false;
