@@ -1,9 +1,16 @@
 import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 
 function formatCoins(n: number): string {
-  if (n >= 1_000_000) return `${Math.floor(n / 1_000_000)}m`;
-  if (n >= 1_000)     return `${Math.floor(n / 1_000)}k`;
-  return n.toString();
+  function floorSigFigs(x: number, digits: number): string {
+    if (x === 0) return "0";
+    const exp     = Math.floor(Math.log10(x));
+    const factor  = Math.pow(10, exp - digits + 1);
+    const floored = Math.floor(x / factor) * factor;
+    return floored.toPrecision(digits).replace(/\.?0+$/, "");
+  }
+  if (n >= 1_000_000) return `${floorSigFigs(n / 1_000_000, 3)}m`;
+  if (n >= 1_000)     return `${floorSigFigs(n / 1_000, 3)}k`;
+  return Math.floor(n).toString();
 }
 import { useSwipe } from "./hooks/useSwipe";
 import { Garden } from "./components/Garden";
