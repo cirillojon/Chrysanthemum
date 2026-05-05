@@ -59,7 +59,7 @@ export interface HarvestAllResult {
 export interface PlantAllResult {
   ok:        true;
   // grid intentionally omitted — mutations live only in client state.
-  inventory: GameState["inventory"];
+  // inventory intentionally omitted from merge delta — see edgePlantAll.
   serverUpdatedAt: string;
 }
 
@@ -112,8 +112,14 @@ export function edgeHarvestAll(plots: { row: number; col: number }[]) {
   return callEdge<HarvestAllResult>("harvest-all", { plots });
 }
 
-export function edgePlantAll(plots: { row: number; col: number; speciesId: string }[]) {
-  return callEdge<PlantAllResult>("plant-all", { plots });
+export async function edgePlantAll(plots: { row: number; col: number; speciesId: string }[]): Promise<PlantAllResult> {
+  // Strip inventory from the merge delta. plant-all returns the full DB inventory
+  // snapshot at the time it runs — if that snapshot pre-dates harvest-all's write
+  // propagating, merging it would silently overwrite the client's just-harvested
+  // blooms with a stale list. The client's optimistic plantAll() already consumed
+  // the correct seeds; we only need serverUpdatedAt to keep the CAS cursor in sync.
+  const { inventory: _omit, ...delta } = await callEdge<PlantAllResult & { inventory: unknown }>("plant-all", { plots });
+  return delta as PlantAllResult;
 }
 
 export async function edgeHarvest(row: number, col: number): Promise<Omit<HarvestResult, "inventory">> {
