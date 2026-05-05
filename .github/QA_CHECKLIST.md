@@ -143,6 +143,9 @@ Throttle to **Slow 4G** (DevTools → Network → Throttling) for these.
 | I6 | Place a 3× Grow Lamp or Mythic Sprinkler next to a plant that is very close to bloom (< 5 s remaining). Watch it cross into bloom stage. Immediately remove the gear. | Stage stays **bloom** — does not revert to sprout or seed |
 | I7 | Same as I6 but remove the gear **while the plant is still a sprout** with high multiplier. | Stage stays **sprout** — does not revert to seed |
 | I8 | DevTools Console: look for any errors during I6 / I7 | No errors, no warnings about unexpected stage transitions |
+| I9 | Place a Balance Scale next to two mid-growth plants. Note the progress bars. Remove the scale. | Progress bars on **both** plants continue smoothly — boosted plant does **not** jump backwards, slowed plant does **not** jump forwards |
+| I10 | Same as I9 but wait for the Balance Scale to **expire naturally** rather than removing it manually. | Same result — no progress snap when the gear expires |
+| I11 | Place a Balance Scale, remove it, then immediately place a new one in the same cell. | Both actions succeed without 400/409 errors; second placement takes effect and plants respond to new scale |
 
 ---
 
@@ -524,6 +527,20 @@ A **New** filter tab has been added to the Codex status bar showing only newly d
 | AI3 | Expand every card shown in the **✦ New** tab | Red dot disappears and the tab **auto-resets to All** once the last entry is acknowledged |
 | AI4 | Open Codex with no new discoveries | **✦ New** tab is greyed out and non-clickable |
 | AI5 | Acknowledge all new entries, navigate away, return to Codex | **✦ New** tab is still disabled — no stale dot |
+
+---
+
+## AJ. Bug #222 — Gear Removal Progress Bar Continuity
+
+Growth multiplier changes (gear removed or expired) previously caused the progress bar to snap: boosted plants jumped backwards, slowed plants jumped forwards. Fixed by time-weighting the gear multiplier across the checkpoint delta.
+
+| # | Action | Expected |
+|---|--------|----------|
+| AJ1 | Place a **Balance Scale I** next to two plants (~30–50% grown). Let them grow for ~10 s. Remove the scale. | Progress bars on both plants continue from where they were — no backward/forward snap on removal |
+| AJ2 | Repeat AJ1 with a **Sprinkler** (any tier) covering a plant. Remove it mid-growth. | Progress bar continues smoothly — no regression |
+| AJ3 | Place a short-duration sprinkler next to a plant. Let it **expire naturally**. | Progress bar does not snap at the moment of expiry |
+| AJ4 | Remove a Balance Scale, then immediately place a new one in the same cell. | Second `gear-action` place succeeds — no `400 "Cell already has gear"` or `409` cascade in DevTools Network |
+| AJ5 | DevTools Network: inspect the `gear-action` remove call after AJ1. | Returns **200 OK**; if a CAS retry was needed the response JSON contains `retried: true` in the action log (check Supabase `action_log` table) |
 
 ---
 
