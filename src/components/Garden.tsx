@@ -457,7 +457,14 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const gearDef = GEAR[gearType];
     perform(
       optimistic,
-      () => edgePlaceGear(row, col, gearType, direction),
+      async () => {
+        try {
+          return await edgePlaceGear(row, col, gearType, direction);
+        } catch (e) {
+          if ((e as Error).message?.includes("Cell already has gear")) reloadFromCloud();
+          throw e;
+        }
+      },
       () => pushGenericToast(`loss:gear:${gearType}`, gearDef.emoji, gearDef.name, RARITY_CONFIG[gearDef.rarity].color, "loss"),
       {
         rollback: (cur) => ({
