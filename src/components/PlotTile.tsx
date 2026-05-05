@@ -5,6 +5,7 @@ import {
   getCurrentStage,
   getStageProgress,
   getPassiveGrowthMultiplier,
+  getEffectiveGrowthMultiplier,
   getBoostMultiplier,
   harvestPlant,
 } from "../store/gameStore";
@@ -103,7 +104,15 @@ export function PlotTile({
 
   // gearMult already folds Verdant Rush in so PlotTooltip downstream gets the
   // combined multiplier without needing a separate prop for activeBoosts.
-  const passiveMult = plant ? getPassiveGrowthMultiplier(getState().grid, row, col, now) : 1.0;
+  // Use the time-weighted multiplier so the live progress bar doesn't jump when
+  // a gear expires mid-delta (between the last stamp and this render).
+  const passiveMult = plant
+    ? getEffectiveGrowthMultiplier(
+        getState().grid, row, col,
+        (plant as PlantedFlower).lastTickAt ?? now,  // from: last saved checkpoint
+        now,                                          // to:   current render time
+      )
+    : 1.0;
   const boostMult   = plant ? getBoostMultiplier(getState().activeBoosts, "growth", now) : 1.0;
   const gearMult    = passiveMult * boostMult;
   // Full multiplier shown on the ruler badge — mirrors computeGrowthMs so the

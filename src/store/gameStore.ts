@@ -1021,6 +1021,65 @@ export function getPassiveGrowthMultiplier(
   return bestSprinkler * bestLamp * balanceScaleBoostMult * balanceScaleSlowMult;
 }
 
+/**
+ * Returns the gear growth multiplier for the time window [from, to], correctly
+ * handling the case where a gear expires mid-window.
+ *
+ * Without this, removing or expiring a gear causes a visible progress-bar jump:
+ *   computeGrowthMs = growthMs + delta × currentMult
+ * If the multiplier drops from 4× to 1× but delta is still "since last stamp"
+ * (~1 s), the whole second suddenly counts at 1× instead of 4× — regression.
+ *
+ * This function detects any gear that was active at `from` but expires before
+ * `to`, then splits the delta at that boundary:
+ *   effective = (preMult × activeTime + postMult × expiredTime) / totalTime
+ *
+ * Both the stamp (stampStageTransitions) and the live display (PlotTile) use
+ * this so the progress bar never snaps on gear removal or expiry.
+ */
+export function getEffectiveGrowthMultiplier(
+  grid: Plot[][],
+  row: number,
+  col: number,
+  from: number,
+  to: number,
+): number {
+  // Zero-width window — no growth to attribute, avoid divide-by-zero
+  if (from >= to) return 1.0;
+
+  // Ask: which gears were affecting this cell at the START of the window?
+  // getGearAffectingCell already skips expired gear, so passing `from` (not
+  // `to`) gives us gears that were alive when the window opened.
+  const activeSources = getGearAffectingCell(grid, row, col, from);
+
+  // Find the earliest expiry that falls strictly inside (from, to]
+  // — that's the moment the multiplier changes mid-delta.
+  let earliestExpiry = Infinity;
+  for (const { def, placedGear } of activeSources) {
+    if (!def.durationMs) continue;                        // permanent gear, never expires
+    const tExpire = placedGear.placedAt + def.durationMs;
+    if (tExpire > from && tExpire <= to) {
+      earliestExpiry = Math.min(earliestExpiry, tExpire);
+    }
+  }
+
+  // No gear expires mid-window — fall back to the existing single-point lookup
+  if (earliestExpiry === Infinity) {
+    return getPassiveGrowthMultiplier(grid, row, col, to);
+  }
+
+  // A gear expires at `earliestExpiry`. Split the delta there:
+  //   [from … earliestExpiry]  — gear active, use preMult
+  //   [earliestExpiry … to]    — gear gone,   use postMult
+  // Passing `from` to getPassiveGrowthMultiplier sees the gear as alive;
+  // passing `earliestExpiry` sees it as just-expired (isGearExpired returns
+  // true at that exact ms), so we get the correct post-removal multiplier.
+  const span     = to - from;
+  const preMult  = getPassiveGrowthMultiplier(grid, row, col, from);
+  const postMult = getPassiveGrowthMultiplier(grid, row, col, earliestExpiry);
+  return (preMult * (earliestExpiry - from) + postMult * (to - earliestExpiry)) / span;
+}
+
 function computeGrowthMs(
   plant: PlantedFlower,
   now: number,
@@ -1288,7 +1347,14 @@ export function stampStageTransitions(
       const species = getFlower(plant.speciesId);
       if (!species) return plot;
 
-      const gearMult           = getPassiveGrowthMultiplier(state.grid, ri, ci, now);
+      // Time-weighted multiplier: if a gear expired between lastTickAt and now,
+      // only the active portion of the delta is boosted — prevents the progress
+      // bar from snapping when a gear expires mid-checkpoint.
+      const gearMult           = getEffectiveGrowthMultiplier(
+        state.grid, ri, ci,
+        plant.lastTickAt ?? now,  // from: start of the un-stamped window
+        now,                       // to:   current moment
+      );
       const fertMultiplier     = plant.fertilizer ? FERTILIZERS[plant.fertilizer].speedMultiplier : 1.0;
       const weatherMultiplier  = WEATHER[weatherType].growthMultiplier;
       const masteredMultiplier = plant.masteredBonus ?? 1.0;

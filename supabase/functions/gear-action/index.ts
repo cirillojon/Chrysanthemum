@@ -506,7 +506,59 @@ Deno.serve(async (req: Request) => {
         .select("updated_at")
         .single();
 
-      if (ue || !ud) return err("Save was modified by another action", 409);
+      if (ue || !ud) {
+        // CAS miss — a concurrent write (cloud-save, sprinkler mutation, etc.)
+        // bumped updated_at between our read and this write.  Re-read the latest
+        // save and retry once so rapid remove → place sequences don't dead-lock.
+        const { data: fresh, error: freshErr } = await supabaseAdmin
+          .from("game_saves")
+          .select("grid, gear_inventory, fertilizers, updated_at")
+          .eq("user_id", userId)
+          .single();
+        if (freshErr || !fresh) return err("Failed to reload save", 500);
+
+        const freshGrid = fresh.grid as GridCell[][];
+        const freshCell = freshGrid[row]?.[col];
+
+        // Another action already removed this gear — treat as success so the
+        // client's optimistic state stays consistent.
+        if (!freshCell?.gear || freshCell.gear.gearType !== gearType) {
+          return json({
+            ok: true, grid: freshGrid,
+            gearInventory: fresh.gear_inventory as GearInvItem[],
+            fertilizers:   fresh.fertilizers   as FertItem[],
+            serverUpdatedAt: fresh.updated_at as string,
+          });
+        }
+
+        // Gear is still there — recompute from the fresh state and retry.
+        const retryStored = freshCell.gear.storedFertilizers ?? [];
+        let retryFertilizers = (fresh.fertilizers ?? []) as FertItem[];
+        for (const fertType of retryStored) {
+          const fert = retryFertilizers.find((f) => f.type === fertType);
+          retryFertilizers = fert
+            ? retryFertilizers.map((f) => f.type === fertType ? { ...f, quantity: f.quantity + 1 } : f)
+            : [...retryFertilizers, { type: fertType, quantity: 1 }];
+        }
+        const retryGrid = freshGrid.map((r, ri) =>
+          r.map((p, ci) => ri === row && ci === col ? { ...p, gear: null } : p)
+        );
+
+        const { data: retryUd, error: retryUe } = await supabaseAdmin
+          .from("game_saves")
+          .update({ grid: retryGrid, fertilizers: retryFertilizers, updated_at: new Date().toISOString() })
+          .eq("user_id", userId)
+          .eq("updated_at", fresh.updated_at as string)
+          .select("updated_at")
+          .single();
+        if (retryUe || !retryUd) return err("Save was modified by another action", 409);
+
+        void supabaseAdmin.from("action_log").insert({
+          user_id: userId, action: "gear_remove",
+          payload: { gearType, row, col }, result: { storedReturned: retryStored.length, gearDestroyed: true, retried: true },
+        });
+        return json({ ok: true, grid: retryGrid, gearInventory, fertilizers: retryFertilizers, serverUpdatedAt: retryUd.updated_at });
+      }
 
       void supabaseAdmin.from("action_log").insert({
         user_id: userId, action: "gear_remove",
