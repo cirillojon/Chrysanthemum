@@ -8,6 +8,7 @@ import {
   buyFromSupplyShop,
   collectFromComposter,
   defaultState,
+  getEffectiveGrowthMultiplier,
   getExpiredGear,
   getPassiveGrowthMultiplier,
   harvestAll,
@@ -531,5 +532,90 @@ describe("applyFertilizer (regression)", () => {
       fertilizers: [{ type: "basic", quantity: 2 }],
     });
     expect(applyFertilizer(s0, 0, 0, "basic")).toBeNull();
+  });
+});
+
+// ── getEffectiveGrowthMultiplier (Bug #222 regression) ───────────────────
+
+describe("getEffectiveGrowthMultiplier (regression)", () => {
+  // Find a sprinkler with a known duration and growth multiplier
+  const sprinklerDef = Object.values(GEAR).find(
+    (g) => g.category === "sprinkler_regular" && g.growthMultiplier && g.durationMs,
+  )!;
+
+  function gridWithSprinklerAt(placedAt: number) {
+    // Sprinkler at (0,1) affects (0,0) via its radius
+    return [
+      [
+        { id: "0-0", plant: null, gear: null },
+        { id: "0-1", plant: null, gear: { gearType: sprinklerDef.id, placedAt } },
+        { id: "0-2", plant: null, gear: null },
+      ],
+    ] as ReturnType<typeof defaultState>["grid"];
+  }
+
+  it("returns 1.0 for a zero-width window (from >= to)", () => {
+    const grid = gridWithSprinklerAt(0);
+    const now = Date.now();
+    expect(getEffectiveGrowthMultiplier(grid, 0, 0, now, now)).toBe(1.0);
+    expect(getEffectiveGrowthMultiplier(grid, 0, 0, now + 1, now)).toBe(1.0);
+  });
+
+  it("matches getPassiveGrowthMultiplier when no gear expires mid-window", () => {
+    // Gear was placed recently and has plenty of duration left
+    const placedAt = Date.now();
+    const grid = gridWithSprinklerAt(placedAt);
+    const from = placedAt + 1_000;
+    const to   = placedAt + 2_000;
+    const effective = getEffectiveGrowthMultiplier(grid, 0, 0, from, to);
+    const passive   = getPassiveGrowthMultiplier(grid, 0, 0, to);
+    expect(effective).toBeCloseTo(passive, 6);
+  });
+
+  it("returns 1.0 across the board when gear is already expired at `from`", () => {
+    const placedAt = 0;
+    const expiry   = placedAt + sprinklerDef.durationMs!;
+    const grid = gridWithSprinklerAt(placedAt);
+    // Window starts after expiry — gear was gone for the whole delta
+    const from = expiry + 1_000;
+    const to   = expiry + 2_000;
+    expect(getEffectiveGrowthMultiplier(grid, 0, 0, from, to)).toBe(1.0);
+  });
+
+  it("returns a time-weighted average when gear expires mid-window (Bug #222 core case)", () => {
+    // Gear placed at t=0, expires at t=durationMs.
+    // Window spans [durationMs - 500ms, durationMs + 500ms] — half active, half expired.
+    const placedAt = 0;
+    const expiry   = sprinklerDef.durationMs!;          // e.g. 3 600 000 ms
+    const from     = expiry - 500;
+    const to       = expiry + 500;
+
+    const grid = gridWithSprinklerAt(placedAt);
+
+    const effective = getEffectiveGrowthMultiplier(grid, 0, 0, from, to);
+    const preMult   = getPassiveGrowthMultiplier(grid, 0, 0, from);    // boosted
+    const postMult  = getPassiveGrowthMultiplier(grid, 0, 0, expiry);  // 1.0
+
+    const expected = (preMult * 500 + postMult * 500) / 1_000;
+    expect(effective).toBeCloseTo(expected, 6);
+
+    // Must be strictly between post (1.0) and pre (>1.0) — never snaps to either extreme
+    expect(effective).toBeGreaterThan(postMult);
+    expect(effective).toBeLessThan(preMult);
+  });
+
+  it("returns the full boost when gear expires exactly at `to`", () => {
+    // Expiry sits at the very end of the window — entire delta should be boosted
+    const placedAt = 0;
+    const expiry   = sprinklerDef.durationMs!;
+    const from     = expiry - 1_000;
+    const to       = expiry;                             // expires at the boundary
+
+    const grid = gridWithSprinklerAt(placedAt);
+
+    const effective = getEffectiveGrowthMultiplier(grid, 0, 0, from, to);
+    const preMult   = getPassiveGrowthMultiplier(grid, 0, 0, from);
+    // The entire 1000ms window the gear was alive — result should equal preMult
+    expect(effective).toBeCloseTo(preMult, 6);
   });
 });
