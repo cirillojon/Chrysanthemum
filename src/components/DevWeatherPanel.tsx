@@ -10,7 +10,7 @@ import { GEAR } from "../data/gear";
 import type { GearType } from "../data/gear";
 import { CONSUMABLE_RECIPES, type ConsumableId } from "../data/consumables";
 import { useGame } from "../store/GameContext";
-import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug } from "../store/gameStore";
+import { codexKey, setDevMutationMultiplier, getDevMutationMultiplier, setDevShowGrowthDebug, getDevShowGrowthDebug, forceRefreshSupplyShop } from "../store/gameStore";
 import type { GameState } from "../store/gameStore";
 import { saveToCloud } from "../store/cloudSave";
 import {
@@ -187,6 +187,11 @@ export function DevWeatherPanel() {
     const SHOP_RESET_INTERVAL = 5 * 60 * 1_000;
     update({ ...state, lastShopReset: Date.now() - (SHOP_RESET_INTERVAL - 10_000) });
     showToast("Shop restocks in ~10s");
+  }
+
+  function forceSupplyRestock() {
+    update(forceRefreshSupplyShop(state));
+    showToast("Supply shop restocked!");
   }
 
   async function resetEclipseCooldown() {
@@ -676,7 +681,13 @@ export function DevWeatherPanel() {
               onClick={forceShopRestock}
               className="w-full py-1 bg-blue-500/20 border border-blue-500/40 text-blue-400 rounded-lg font-semibold hover:bg-blue-500/30 transition-all text-center"
             >
-              🔄 Restock in 10s
+              🔄 Seed Shop — Restock in 10s
+            </button>
+            <button
+              onClick={forceSupplyRestock}
+              className="w-full py-1 bg-blue-500/20 border border-blue-500/40 text-blue-400 rounded-lg font-semibold hover:bg-blue-500/30 transition-all text-center"
+            >
+              🔄 Supply Shop — Restock Now
             </button>
             <button
               onClick={resetEclipseCooldown}
