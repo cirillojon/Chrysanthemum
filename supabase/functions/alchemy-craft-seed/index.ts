@@ -216,11 +216,11 @@ const FLOWERS: { id: string; rarity: Rarity; types: string[] }[] = [
 type RarityWeight = [Rarity, number];
 
 const POUCH_RARITY_WEIGHTS: Record<number, RarityWeight[]> = {
-  1: [["rare",      95], ["legendary",  5]],
-  2: [["legendary", 95], ["mythic",     5]],
-  3: [["mythic",    95], ["exalted",    5]],
-  4: [["exalted",   95], ["prismatic",  5]],
-  5: [["prismatic", 100]],
+  1: [["common", 40], ["uncommon", 30], ["rare", 20], ["legendary",  8], ["mythic",   2]],
+  2: [["common", 15], ["uncommon", 25], ["rare", 30], ["legendary", 20], ["mythic",   8], ["exalted",  2]],
+  3: [["common",  5], ["uncommon", 10], ["rare", 20], ["legendary", 30], ["mythic",  25], ["exalted",  8], ["prismatic", 2]],
+  4: [["common",  1], ["uncommon",  4], ["rare", 10], ["legendary", 20], ["mythic",  30], ["exalted", 25], ["prismatic", 10]],
+  5: [                ["uncommon",  1], ["rare",  4], ["legendary", 10], ["mythic",  20], ["exalted", 35], ["prismatic", 30]],
 };
 
 /** Validates generic (`seed_pouch_N`) and typed (`seed_pouch_TYPE_N`) pouch IDs. */
