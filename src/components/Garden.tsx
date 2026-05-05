@@ -307,9 +307,10 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             const dir = g.direction ?? "right";
             keys.forEach((k) => lawnmower.set(k, dir));
           } else if (def.passiveSubtype === "balance_scale") {
-            // Phase synced to the real-world clock so it never flickers due to
-            // server/client clock skew or placedAt unit mismatches.
-            const phase  = Math.floor(now / 3_600_000) % 2;
+            // Must use placedAt-relative phase to match gameStore's growth computation.
+            // Wall-clock phase was wrong: it drifted from the actual effect whenever the
+            // scale was placed mid-hour, causing boost/slow labels to be flipped (#221).
+            const phase  = Math.floor((now - (g.placedAt ?? 0)) / 3_600_000) % 2;
             affected.forEach(([r, c]) => {
               const dc      = c - ci;
               const inLeft  = dc < 0;
