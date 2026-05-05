@@ -1,3 +1,11 @@
+## [v2.3.8] — 2026-05-05 — Gear Removal & Progress Fixes
+
+### Fixed
+- **Progress bar no longer snaps when a growth-multiplier gear is removed or expires** — removing or expiring a Balance Scale or sprinkler mid-growth previously caused boosted plants to jump backward and slowed plants to jump forward; the tick now uses a time-weighted multiplier that correctly amortises the boost/slow over the exact window it was active (#222)
+- **No more 400/409 errors when rapidly re-placing gear in the same cell** — `gear-action:remove` now retries on save conflicts (matching the existing retry in `gear-action:place`), so a remove → immediate re-place sequence no longer fails with "Cell already has gear" or "Save was modified by another action"
+
+---
+
 ## [v2.3.7] — 2026-05-04 — Harvest All Fix & Codex New Filter
 
 ### Added

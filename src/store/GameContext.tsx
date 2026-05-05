@@ -422,6 +422,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return () => window.removeEventListener("storage", handleStorage);
   }, [user]);
 
+
   // ── Auto-save ─────────────────────────────────────────────────────────────
   // Signed-in users: writes are now owned by Edge Functions (server-authoritative).
   // We keep a localStorage shadow only so the correct save can be recovered if a
@@ -570,6 +571,25 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       return next;
     });
   }, [user]);
+
+  
+  // ── Tab visibility resync ─────────────────────────────────────────────
+  // When the tab has been hidden for >60 s the server may have changed state
+  // (cron harvest/plant, gear placement) that the stale client can't see.
+  // Reload on return so the user never interacts with an out-of-date grid.
+  useEffect(() => {
+    let hiddenAt = 0;
+    function handleVisibility() {
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+      } else if (hiddenAt > 0 && Date.now() - hiddenAt > 60_000) {
+        reloadFromCloud();
+        hiddenAt = 0;
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [reloadFromCloud]);
 
   /** Persist the current grid to the DB immediately. Called by Garden after a
    *  sprinkler mutation tick so that server-side harvest can read the mutation.

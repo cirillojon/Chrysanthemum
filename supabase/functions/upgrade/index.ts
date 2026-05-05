@@ -38,10 +38,12 @@ const SHOP_SLOT_UPGRADES = [
 
 // ── Supply slot upgrades (mirrors src/data/upgrades.ts) ──────────────────────
 const SUPPLY_SLOT_UPGRADES = [
-  { slots: 3, cost: 15_000  },
-  { slots: 4, cost: 50_000  },
-  { slots: 5, cost: 150_000 },
-  { slots: 6, cost: 350_000 },
+  { slots: 3, cost: 15_000    },
+  { slots: 4, cost: 50_000    },
+  { slots: 5, cost: 150_000   },
+  { slots: 6, cost: 350_000   },
+  { slots: 7, cost: 800_000   },
+  { slots: 8, cost: 2_000_000 },
 ];
 
 // ── Crafting slot upgrades (mirrors src/data/gear-recipes.ts) ─────────────────

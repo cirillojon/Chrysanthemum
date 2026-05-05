@@ -69,7 +69,7 @@ export interface Fertilizer {
 // ── Supply shop slot upgrades ─────────────────────────────────────────────
 
 export const DEFAULT_SUPPLY_SLOTS = 2;
-export const MAX_SUPPLY_SLOTS     = 6;
+export const MAX_SUPPLY_SLOTS     = 8;
 
 export interface SupplySlotUpgrade {
   slots: number; // total slots after this upgrade
@@ -81,6 +81,8 @@ export const SUPPLY_SLOT_UPGRADES: SupplySlotUpgrade[] = [
   { slots: 4, cost: 50_000  }, // unlocks Mythic tier
   { slots: 5, cost: 150_000 }, // unlocks Exalted tier
   { slots: 6, cost: 350_000 }, // unlocks Prismatic tier
+  { slots: 7, cost: 800_000 },
+  { slots: 8, cost: 2_000_000 },
 ];
 
 export const getNextSupplySlotUpgrade = (currentSlots: number): SupplySlotUpgrade | null =>

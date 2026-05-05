@@ -307,9 +307,10 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
             const dir = g.direction ?? "right";
             keys.forEach((k) => lawnmower.set(k, dir));
           } else if (def.passiveSubtype === "balance_scale") {
-            // Phase synced to the real-world clock so it never flickers due to
-            // server/client clock skew or placedAt unit mismatches.
-            const phase  = Math.floor(now / 3_600_000) % 2;
+            // Must use placedAt-relative phase to match gameStore's growth computation.
+            // Wall-clock phase was wrong: it drifted from the actual effect whenever the
+            // scale was placed mid-hour, causing boost/slow labels to be flipped (#221).
+            const phase  = Math.floor((now - (g.placedAt ?? 0)) / 3_600_000) % 2;
             affected.forEach(([r, c]) => {
               const dc      = c - ci;
               const inLeft  = dc < 0;
@@ -456,7 +457,14 @@ export function Garden({ onHarvestPopup }: { onHarvestPopup: (speciesId: string,
     const gearDef = GEAR[gearType];
     perform(
       optimistic,
-      () => edgePlaceGear(row, col, gearType, direction),
+      async () => {
+        try {
+          return await edgePlaceGear(row, col, gearType, direction);
+        } catch (e) {
+          if ((e as Error).message?.includes("Cell already has gear")) reloadFromCloud();
+          throw e;
+        }
+      },
       () => pushGenericToast(`loss:gear:${gearType}`, gearDef.emoji, gearDef.name, RARITY_CONFIG[gearDef.rarity].color, "loss"),
       {
         rollback: (cur) => ({

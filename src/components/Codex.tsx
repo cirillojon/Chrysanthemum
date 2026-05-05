@@ -68,10 +68,10 @@ export function Codex({ discoveredOverride, compact = false, unseenEntries, mark
   const pct      = total > 0 ? Math.round((found / total) * 100) : 0;
 
   useEffect(() => {
-    if (filterStatus === "new" && (unseenEntries?.size ?? 0) === 0) {
+    if (filterStatus === "new" && freshlyDiscovered.size === 0) {
       setFilterStatus("all");
     }
-  }, [unseenEntries?.size, filterStatus])
+  }, [freshlyDiscovered.size, filterStatus])
 
   const filtered = useMemo(() => {
     return FLOWERS.filter((f) => {

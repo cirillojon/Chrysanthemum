@@ -628,13 +628,19 @@ export function SupplyShop() {
             {!atMaxSlots && (
               <span className={`font-mono ${maxRarityConfig.color}`}>{maxRarityConfig.label}</span>
             )}
-            {!atMaxSlots && (
-              <> tier — upgrade to {nextSlotUpgrade!.slots} slots, unlock{" "}
-                <span className={`font-mono ${RARITY_CONFIG[getMaxSupplyRarity(nextSlotUpgrade!.slots)].color}`}>
-                  {RARITY_CONFIG[getMaxSupplyRarity(nextSlotUpgrade!.slots)].label}
-                </span>
-              </>
-            )}
+            {!atMaxSlots && (() => {
+              const nextRarity = getMaxSupplyRarity(nextSlotUpgrade!.slots);
+              const unlocksNew = nextRarity !== maxRarity;
+              return (
+                <> tier — upgrade to {nextSlotUpgrade!.slots} slots{unlocksNew && (
+                  <>, unlock{" "}
+                    <span className={`font-mono ${RARITY_CONFIG[nextRarity].color}`}>
+                      {RARITY_CONFIG[nextRarity].label}
+                    </span>
+                  </>
+                )}</>
+              );
+            })()}
           </p>
         </div>
         {!atMaxSlots && (

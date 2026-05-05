@@ -374,55 +374,55 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
 
   // ── Verdant Rush (I–V) — speed_boost ─────────────────────────────────────
   // Doubles growth speed for all garden plots for a limited time.
-  { id: "verdant_rush_1", name: "Verdant Rush I",   emoji: "🌿", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,
+  { id: "verdant_rush_1", name: "Verdant Rush I",   emoji: "🌿", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,   shopPrice: 2_000,
     description: "Doubles growth speed for all plants in your garden for 30 minutes.",
     cost: { kind: "essence", amounts: [{ type: "grove", amount: 4 }, { type: "zephyr", amount: 4 }] } },
-  { id: "verdant_rush_2", name: "Verdant Rush II",  emoji: "🌿", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,
+  { id: "verdant_rush_2", name: "Verdant Rush II",  emoji: "🌿", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,  shopPrice: 8_000,
     description: "Doubles growth speed for all plants in your garden for 1 hour.",
     cost: { kind: "consumable", id: "verdant_rush_1", quantity: 2 } },
-  { id: "verdant_rush_3", name: "Verdant Rush III", emoji: "🌿", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,
+  { id: "verdant_rush_3", name: "Verdant Rush III", emoji: "🌿", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,  shopPrice: 40_000,
     description: "Doubles growth speed for all plants in your garden for 3 hours.",
     cost: { kind: "consumable", id: "verdant_rush_2", quantity: 2 } },
-  { id: "verdant_rush_4", name: "Verdant Rush IV",  emoji: "🌿", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,
+  { id: "verdant_rush_4", name: "Verdant Rush IV",  emoji: "🌿", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,  shopPrice: 200_000,
     description: "Doubles growth speed for all plants in your garden for 8 hours.",
     cost: { kind: "consumable", id: "verdant_rush_3", quantity: 2 } },
-  { id: "verdant_rush_5", name: "Verdant Rush V",   emoji: "🌿", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000,
+  { id: "verdant_rush_5", name: "Verdant Rush V",   emoji: "🌿", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000, shopPrice: 1_000_000,
     description: "Doubles growth speed for all plants in your garden for 24 hours.",
     cost: { kind: "consumable", id: "verdant_rush_4", quantity: 2 } },
 
   // ── Forge Haste (I–V) — speed_boost ──────────────────────────────────────
   // Doubles crafting speed for all queued crafts for a limited time.
-  { id: "forge_haste_1", name: "Forge Haste I",   emoji: "⚒️", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,
+  { id: "forge_haste_1", name: "Forge Haste I",   emoji: "⚒️", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,   shopPrice: 2_000,
     description: "Doubles crafting speed for all queued crafts for 30 minutes.",
     cost: { kind: "essence", amounts: [{ type: "blaze", amount: 4 }, { type: "storm", amount: 4 }] } },
-  { id: "forge_haste_2", name: "Forge Haste II",  emoji: "⚒️", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,
+  { id: "forge_haste_2", name: "Forge Haste II",  emoji: "⚒️", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,  shopPrice: 8_000,
     description: "Doubles crafting speed for all queued crafts for 1 hour.",
     cost: { kind: "consumable", id: "forge_haste_1", quantity: 2 } },
-  { id: "forge_haste_3", name: "Forge Haste III", emoji: "⚒️", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,
+  { id: "forge_haste_3", name: "Forge Haste III", emoji: "⚒️", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,  shopPrice: 40_000,
     description: "Doubles crafting speed for all queued crafts for 3 hours.",
     cost: { kind: "consumable", id: "forge_haste_2", quantity: 2 } },
-  { id: "forge_haste_4", name: "Forge Haste IV",  emoji: "⚒️", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,
+  { id: "forge_haste_4", name: "Forge Haste IV",  emoji: "⚒️", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,  shopPrice: 200_000,
     description: "Doubles crafting speed for all queued crafts for 8 hours.",
     cost: { kind: "consumable", id: "forge_haste_3", quantity: 2 } },
-  { id: "forge_haste_5", name: "Forge Haste V",   emoji: "⚒️", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000,
+  { id: "forge_haste_5", name: "Forge Haste V",   emoji: "⚒️", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000, shopPrice: 1_000_000,
     description: "Doubles crafting speed for all queued crafts for 24 hours.",
     cost: { kind: "consumable", id: "forge_haste_4", quantity: 2 } },
 
   // ── Resonance Draft (I–V) — speed_boost ──────────────────────────────────
   // Doubles attunement speed for all active attunement slots for a limited time.
-  { id: "resonance_draft_1", name: "Resonance Draft I",   emoji: "🌀", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,
+  { id: "resonance_draft_1", name: "Resonance Draft I",   emoji: "🌀", tier: 1, rarity: "rare",      category: "speed_boost", boostDurationMs: 30 * 60 * 1_000,   shopPrice: 2_000,
     description: "Doubles attunement speed for all active attunement slots for 30 minutes.",
     cost: { kind: "essence", amounts: [{ type: "stellar", amount: 4 }, { type: "arcane", amount: 4 }] } },
-  { id: "resonance_draft_2", name: "Resonance Draft II",  emoji: "🌀", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,
+  { id: "resonance_draft_2", name: "Resonance Draft II",  emoji: "🌀", tier: 2, rarity: "legendary", category: "speed_boost", boostDurationMs:  1 * 60 * 60 * 1_000,  shopPrice: 8_000,
     description: "Doubles attunement speed for all active attunement slots for 1 hour.",
     cost: { kind: "consumable", id: "resonance_draft_1", quantity: 2 } },
-  { id: "resonance_draft_3", name: "Resonance Draft III", emoji: "🌀", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,
+  { id: "resonance_draft_3", name: "Resonance Draft III", emoji: "🌀", tier: 3, rarity: "mythic",    category: "speed_boost", boostDurationMs:  3 * 60 * 60 * 1_000,  shopPrice: 40_000,
     description: "Doubles attunement speed for all active attunement slots for 3 hours.",
     cost: { kind: "consumable", id: "resonance_draft_2", quantity: 2 } },
-  { id: "resonance_draft_4", name: "Resonance Draft IV",  emoji: "🌀", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,
+  { id: "resonance_draft_4", name: "Resonance Draft IV",  emoji: "🌀", tier: 4, rarity: "exalted",   category: "speed_boost", boostDurationMs:  8 * 60 * 60 * 1_000,  shopPrice: 200_000,
     description: "Doubles attunement speed for all active attunement slots for 8 hours.",
     cost: { kind: "consumable", id: "resonance_draft_3", quantity: 2 } },
-  { id: "resonance_draft_5", name: "Resonance Draft V",   emoji: "🌀", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000,
+  { id: "resonance_draft_5", name: "Resonance Draft V",   emoji: "🌀", tier: 5, rarity: "prismatic", category: "speed_boost", boostDurationMs: 24 * 60 * 60 * 1_000, shopPrice: 1_000_000,
     description: "Doubles attunement speed for all active attunement slots for 24 hours.",
     cost: { kind: "consumable", id: "resonance_draft_4", quantity: 2 } },
 
@@ -457,20 +457,20 @@ export const CONSUMABLE_RECIPES: ConsumableRecipe[] = [
 
   // ── Seed Pouch (I–V) — seed_pouch ────────────────────────────────────────
   { id: "seed_pouch_1", name: "Seed Pouch I",   emoji: "🎁", tier: 1, rarity: "rare",      category: "seed_pouch",
-    description: `Open from your inventory for a random ${r(1)}+ seed.`,
+    description: "Open from your inventory for a random seed of any rarity — higher tiers roll better odds.",
     cost: { kind: "essence", amounts: [{ type: "universal", amount: 1 }] } },
   { id: "seed_pouch_2", name: "Seed Pouch II",  emoji: "🎁", tier: 2, rarity: "legendary", category: "seed_pouch",
-    description: `Open from your inventory for a random ${r(2)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_1", quantity: 3 } },
+    description: "Open from your inventory for a random seed of any rarity — higher tiers roll better odds.",
+    cost: { kind: "consumable", id: "seed_pouch_1", quantity: 2 } },
   { id: "seed_pouch_3", name: "Seed Pouch III", emoji: "🎁", tier: 3, rarity: "mythic",    category: "seed_pouch",
-    description: `Open from your inventory for a random ${r(3)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_2", quantity: 3 } },
+    description: "Open from your inventory for a random seed of any rarity — higher tiers roll better odds.",
+    cost: { kind: "consumable", id: "seed_pouch_2", quantity: 2 } },
   { id: "seed_pouch_4", name: "Seed Pouch IV",  emoji: "🎁", tier: 4, rarity: "exalted",   category: "seed_pouch",
-    description: `Open from your inventory for a random ${r(4)}+ seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_3", quantity: 3 } },
+    description: "Open from your inventory for a random seed of any rarity — higher tiers roll better odds.",
+    cost: { kind: "consumable", id: "seed_pouch_3", quantity: 2 } },
   { id: "seed_pouch_5", name: "Seed Pouch V",   emoji: "🎁", tier: 5, rarity: "prismatic", category: "seed_pouch",
-    description: `Open from your inventory for a random ${r(5)} seed.`,
-    cost: { kind: "consumable", id: "seed_pouch_4", quantity: 3 } },
+    description: "Open from your inventory for a random seed of any rarity — higher tiers roll better odds.",
+    cost: { kind: "consumable", id: "seed_pouch_4", quantity: 2 } },
 ];
 
 // ── Typed Seed Pouches (per-type I–V) ─────────────────────────────────────
@@ -500,10 +500,10 @@ for (const t of TYPED_POUCH_TYPES) {
       tier,
       rarity: TIER_RARITIES[tier],
       category: "seed_pouch",
-      description: `Open for a random ${r(tier)}+ ${label} seed.`,
+      description: `Open for a random ${label} seed of any rarity — higher tiers roll better odds.`,
       cost: tier === 1
         ? { kind: "essence", amounts: [{ type: t as EssenceType, amount: 16 }] }
-        : { kind: "consumable", id: prevId!, quantity: 3 },
+        : { kind: "consumable", id: prevId!, quantity: 2 },
     });
   }
 }

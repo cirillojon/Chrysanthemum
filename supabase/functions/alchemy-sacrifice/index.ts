@@ -322,100 +322,112 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // ── Verify JWT + load save in parallel ────────────────────────────────────
-    const [authResult, saveResult] = await Promise.all([
-      supabaseAdmin.auth.getUser(token),
-      supabaseAdmin
-        .from("game_saves")
-        .select("inventory, essences, updated_at")
-        .eq("user_id", userId)
-        .single(),
-    ]);
-
+    // ── Verify JWT (once — tokens don't rotate mid-request) ───────────────────
+    const authResult = await supabaseAdmin.auth.getUser(token);
     if (authResult.error || !authResult.data.user || authResult.data.user.id !== userId) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), {
         status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-    if (saveResult.error || !saveResult.data) {
-      return new Response(JSON.stringify({ error: "Save not found" }), {
-        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+
+    // ── CAS retry loop ────────────────────────────────────────────────────────
+    // Each attempt re-reads the save to get a fresh updated_at cursor.
+    // If a concurrent write (e.g. sell) wins the CAS race we retry rather than
+    // immediately surfacing a 409 to the user.
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      const saveResult = await supabaseAdmin
+        .from("game_saves")
+        .select("inventory, essences, updated_at")
+        .eq("user_id", userId)
+        .single();
+
+      if (saveResult.error || !saveResult.data) {
+        return new Response(JSON.stringify({ error: "Save not found" }), {
+          status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const save          = saveResult.data;
+      const priorUpdatedAt = save.updated_at as string;
+
+      let inventory = (save.inventory ?? []) as InventoryItem[];
+      let essences  = (save.essences  ?? []) as EssenceItem[];
+
+      // ── Validate each sacrifice entry ─────────────────────────────────────────
+      for (const { speciesId, mutation, quantity } of sacrifices) {
+        if (!Number.isInteger(quantity) || quantity < 1) {
+          return new Response(JSON.stringify({ error: `Invalid quantity for ${speciesId}` }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const flower = FLOWER_MAP.get(speciesId);
+        if (!flower) {
+          return new Response(JSON.stringify({ error: `Unknown species: ${speciesId}` }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        const invItem = inventory.find(
+          (i) => i.speciesId === speciesId && (i.mutation ?? undefined) === (mutation ?? undefined) && !i.isSeed
+        );
+        if (!invItem || invItem.quantity < quantity) {
+          return new Response(JSON.stringify({ error: `Insufficient inventory for ${speciesId}` }), {
+            status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      // ── Apply sacrifices ──────────────────────────────────────────────────────
+      for (const { speciesId, mutation, quantity } of sacrifices) {
+        const flower = FLOWER_MAP.get(speciesId)!;
+
+        // Consume flowers from inventory
+        inventory = inventory
+          .map((i) =>
+            i.speciesId === speciesId && (i.mutation ?? undefined) === (mutation ?? undefined) && !i.isSeed
+              ? { ...i, quantity: i.quantity - quantity }
+              : i
+          )
+          .filter((i) => i.quantity > 0);
+
+        // Calculate and merge essence yield
+        const yields = calculateYield(flower.types, flower.rarity, quantity);
+        essences     = mergeEssences(essences, yields);
+      }
+
+      // ── Write to DB (optimistic-concurrency guard on updated_at) ─────────────
+      const { data: updateData, error: updateError } = await supabaseAdmin
+        .from("game_saves")
+        .update({ inventory, essences, updated_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("updated_at", priorUpdatedAt)
+        .select("updated_at")
+        .single();
+
+      if (updateError || !updateData) {
+        if (attempt < MAX_ATTEMPTS - 1) continue;   // retry with fresh read
+        return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
+          status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      void supabaseAdmin.from("action_log").insert({
+        user_id: userId,
+        action:  "alchemy_sacrifice",
+        payload: { sacrifices },
+        result:  { essencesAdded: essences },
       });
-    }
 
-    const save = saveResult.data;
-    const priorUpdatedAt = save.updated_at as string;
-
-    let inventory = (save.inventory ?? []) as InventoryItem[];
-    let essences  = (save.essences  ?? []) as EssenceItem[];
-
-    // ── Validate each sacrifice entry ─────────────────────────────────────────
-    for (const { speciesId, mutation, quantity } of sacrifices) {
-      if (!Number.isInteger(quantity) || quantity < 1) {
-        return new Response(JSON.stringify({ error: `Invalid quantity for ${speciesId}` }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const flower = FLOWER_MAP.get(speciesId);
-      if (!flower) {
-        return new Response(JSON.stringify({ error: `Unknown species: ${speciesId}` }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const invItem = inventory.find(
-        (i) => i.speciesId === speciesId && (i.mutation ?? undefined) === (mutation ?? undefined) && !i.isSeed
+      return new Response(
+        JSON.stringify({ ok: true, inventory, essences, serverUpdatedAt: updateData.updated_at }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
-      if (!invItem || invItem.quantity < quantity) {
-        return new Response(JSON.stringify({ error: `Insufficient inventory for ${speciesId}` }), {
-          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
     }
 
-    // ── Apply sacrifices ──────────────────────────────────────────────────────
-    for (const { speciesId, mutation, quantity } of sacrifices) {
-      const flower = FLOWER_MAP.get(speciesId)!;
-
-      // Consume flowers from inventory
-      inventory = inventory
-        .map((i) =>
-          i.speciesId === speciesId && (i.mutation ?? undefined) === (mutation ?? undefined) && !i.isSeed
-            ? { ...i, quantity: i.quantity - quantity }
-            : i
-        )
-        .filter((i) => i.quantity > 0);
-
-      // Calculate and merge essence yield
-      const yields = calculateYield(flower.types, flower.rarity, quantity);
-      essences     = mergeEssences(essences, yields);
-    }
-
-    // ── Write to DB (optimistic-concurrency guard on updated_at) ─────────────
-    const { data: updateData, error: updateError } = await supabaseAdmin
-      .from("game_saves")
-      .update({ inventory, essences, updated_at: new Date().toISOString() })
-      .eq("user_id", userId)
-      .eq("updated_at", priorUpdatedAt)
-      .select("updated_at")
-      .single();
-
-    if (updateError || !updateData) {
-      return new Response(JSON.stringify({ error: "Save was modified by another action" }), {
-        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    void supabaseAdmin.from("action_log").insert({
-      user_id: userId,
-      action:  "alchemy_sacrifice",
-      payload: { sacrifices },
-      result:  { essencesAdded: essences },
+    // Unreachable — loop always returns or continues to exhaustion
+    return new Response(JSON.stringify({ error: "Unexpected retry exhaustion" }), {
+      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-
-    return new Response(
-      JSON.stringify({ ok: true, inventory, essences, serverUpdatedAt: updateData.updated_at }),
-      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
   } catch (err) {
     console.error("alchemy-sacrifice error:", err);
     Sentry.captureException(err);

@@ -14,6 +14,14 @@ export interface ChangelogEntry {
 // Most recent version first — update this with every release
 export const CHANGELOGS: ChangelogEntry[] = [
   {
+    version: "2.3.8",
+    title:   "Gear Removal & Progress Fixes",
+    items: [
+      { type: "fixed", text: "Progress bar no longer snaps when a growth-multiplier gear is removed or expires mid-growth — the tick now uses a time-weighted multiplier that correctly amortises the boost/slow over the exact window the gear was active (#222)" },
+      { type: "fixed", text: "No more 400/409 errors when rapidly re-placing gear in the same cell — gear-action:remove now retries on save conflicts, matching the existing retry in gear-action:place" },
+    ],
+  },
+  {
     version: "2.3.7",
     title:   "Harvest All Fix & Codex New Filter",
     items: [
